@@ -113,6 +113,77 @@ class BpmFormDataSourceSqlValidatorTest {
         assertTrue(params.isEmpty());
     }
 
+    // ==================== 字符串字面量不应触发词法守卫 (C-1 regression) ====================
+
+    @Test
+    void acceptsLiteralContainingDoubleDash() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE name = 'hello -- world'");
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void acceptsLiteralContainingHash() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE tag = '%#tag%'");
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void acceptsLiteralContainingBlockComment() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE note = 'some /* comment */ text'");
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void acceptsLiteralContainingDangerousFunctionName() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE label = 'SLEEP(1)'");
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void acceptsLiteralContainingIntoOutfile() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE path = 'INTO OUTFILE /tmp/x'");
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void acceptsLiteralContainingSemicolon() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE code = 'a;b'");
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void doesNotExtractPhantomParameterFromLiteral() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE name = ':phantom' AND id = :realParam");
+        assertEquals(Set.of("realParam"), params);
+    }
+
+    @Test
+    void acceptsLiteralWithEscapedSingleQuotes() {
+        Set<String> params = validator.validateAndExtractParameters(
+                "SELECT * FROM t WHERE name = 'it''s -- fine'");
+        assertTrue(params.isEmpty());
+    }
+
+    @Test
+    void rejectsRealCommentAfterStringLiteral() {
+        assertThrows(ServiceException.class,
+                () -> validator.validateAndExtractParameters(
+                        "SELECT * FROM t WHERE name = 'safe' -- real comment"));
+    }
+
+    @Test
+    void rejectsDoubleDashAtEndOfString() {
+        assertThrows(ServiceException.class,
+                () -> validator.validateAndExtractParameters("SELECT * FROM t--"));
+    }
+
     // ==================== INSERT/DROP/ALTER 等也应拒绝 ====================
 
     @ParameterizedTest

@@ -69,6 +69,19 @@ public interface ErrorCodeConstants {
     ErrorCode FORM_NOT_EXISTS = new ErrorCode(1_009_010_000, "动态表单不存在");
     ErrorCode FORM_FIELD_REPEAT = new ErrorCode(1_009_010_001, "表单项({}) 和 ({}) 使用了相同的字段名({})");
 
+    // ========== 动态表单数据源 1-009-010-010 ~ 1-009-010-020 ==========
+    ErrorCode BPM_DATA_SOURCE_SQL_INVALID = new ErrorCode(1_009_010_010, "数据源 SQL 不合法");
+    ErrorCode BPM_DATA_SOURCE_SQL_READ_ONLY = new ErrorCode(1_009_010_011, "数据源 SQL 仅允许 SELECT 查询");
+    ErrorCode BPM_DATA_SOURCE_PARAM_MISSING = new ErrorCode(1_009_010_012, "数据源参数({})缺失");
+    ErrorCode BPM_DATA_SOURCE_PARAM_TYPE_MISMATCH = new ErrorCode(1_009_010_013, "数据源参数({})类型不匹配");
+    ErrorCode BPM_DATA_SOURCE_PARAM_RESERVED = new ErrorCode(1_009_010_014, "数据源参数({})为系统保留参数，不允许客户端覆盖");
+    ErrorCode BPM_DATA_SOURCE_UNPUBLISHED = new ErrorCode(1_009_010_015, "数据源未发布");
+    ErrorCode BPM_DATA_SOURCE_TIMEOUT = new ErrorCode(1_009_010_016, "数据源查询超时");
+    ErrorCode BPM_DATA_SOURCE_ROW_LIMIT = new ErrorCode(1_009_010_017, "数据源查询结果超出行数限制");
+    ErrorCode BPM_DATA_SOURCE_IN_USE = new ErrorCode(1_009_010_018, "数据源正在使用中，不允许删除");
+    ErrorCode BPM_DATA_SOURCE_DEPENDENCY_CYCLE = new ErrorCode(1_009_010_019, "数据源存在循环依赖");
+    ErrorCode BPM_DATA_SOURCE_RESULT_MAPPING_MISMATCH = new ErrorCode(1_009_010_020, "数据源查询结果与字段映射不匹配");
+
     // ========== 用户组模块 1-009-011-000 ==========
     ErrorCode USER_GROUP_NOT_EXISTS = new ErrorCode(1_009_011_000, "用户分组不存在");
     ErrorCode USER_GROUP_IS_DISABLE = new ErrorCode(1_009_011_001, "名字为【{}】的用户分组已被禁用");
@@ -87,17 +100,5 @@ public interface ErrorCodeConstants {
 
     // ========== BPM 流程表达式 1-009-014-000 ==========
     ErrorCode PROCESS_EXPRESSION_NOT_EXISTS = new ErrorCode(1_009_014_000, "流程表达式不存在");
-
-    // ========== 动态表单数据源 1-009-010-010 ~ 1-009-010-019 ==========
-    ErrorCode BPM_DATA_SOURCE_SQL_INVALID = new ErrorCode(1_009_010_010, "数据源 SQL 不合法");
-    ErrorCode BPM_DATA_SOURCE_SQL_READ_ONLY = new ErrorCode(1_009_010_011, "数据源 SQL 仅允许 SELECT 查询");
-    ErrorCode BPM_DATA_SOURCE_PARAM_MISSING = new ErrorCode(1_009_010_012, "数据源参数({})缺失");
-    ErrorCode BPM_DATA_SOURCE_PARAM_TYPE_MISMATCH = new ErrorCode(1_009_010_013, "数据源参数({})类型不匹配");
-    ErrorCode BPM_DATA_SOURCE_PARAM_RESERVED = new ErrorCode(1_009_010_014, "数据源参数({})为系统保留参数，不允许客户端覆盖");
-    ErrorCode BPM_DATA_SOURCE_UNPUBLISHED = new ErrorCode(1_009_010_015, "数据源未发布");
-    ErrorCode BPM_DATA_SOURCE_TIMEOUT = new ErrorCode(1_009_010_016, "数据源查询超时");
-    ErrorCode BPM_DATA_SOURCE_ROW_LIMIT = new ErrorCode(1_009_010_017, "数据源查询结果超出行数限制");
-    ErrorCode BPM_DATA_SOURCE_IN_USE = new ErrorCode(1_009_010_018, "数据源正在使用中，不允许删除");
-    ErrorCode BPM_DATA_SOURCE_DEPENDENCY_CYCLE = new ErrorCode(1_009_010_019, "数据源存在循环依赖");
 
 }

@@ -63,28 +63,33 @@ public class BpmFormDataSourceSqlValidator {
 
         String trimmed = sql.trim();
 
-        // 2. 词法守卫：分号、注释、INTO OUTFILE、危险函数
-        if (LEXICAL_DENY_PATTERN.matcher(trimmed).find()) {
+        // 2. 掩码字符串字面量：将单引号内的内容替换为空格，
+        //    这样词法守卫和参数提取只扫描 SQL 结构部分，不会被字面量干扰。
+        //    支持 '' 转义（SQL 标准的单引号转义方式）。
+        String masked = maskStringLiterals(trimmed);
+
+        // 3. 词法守卫：分号、注释、INTO OUTFILE、危险函数（在掩码后的 SQL 上检测）
+        if (LEXICAL_DENY_PATTERN.matcher(masked).find()) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.BPM_DATA_SOURCE_SQL_INVALID);
         }
-        if (INTO_OUTFILE_PATTERN.matcher(trimmed).find()) {
+        if (INTO_OUTFILE_PATTERN.matcher(masked).find()) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.BPM_DATA_SOURCE_SQL_INVALID);
         }
-        if (DANGEROUS_FUNCTION_PATTERN.matcher(trimmed).find()) {
+        if (DANGEROUS_FUNCTION_PATTERN.matcher(masked).find()) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.BPM_DATA_SOURCE_SQL_INVALID);
         }
 
-        // 3. 提取命名参数（在 AST 解析前，因为 JSqlParser 可能不认 :param 语法）
+        // 4. 提取命名参数（在掩码后的 SQL 上提取，避免字面量中的 :phantom 参数）
         LinkedHashSet<String> parameters = new LinkedHashSet<>();
-        Matcher paramMatcher = NAMED_PARAM_PATTERN.matcher(trimmed);
+        Matcher paramMatcher = NAMED_PARAM_PATTERN.matcher(masked);
         while (paramMatcher.find()) {
             parameters.add(paramMatcher.group(1));
         }
 
-        // 4. 将 :param 替换为 ? 以便 JSqlParser 能正确解析
+        // 5. 将 :param 替换为 ? 以便 JSqlParser 能正确解析
         String normalizedSql = NAMED_PARAM_PATTERN.matcher(trimmed).replaceAll("?");
 
-        // 5. AST 解析
+        // 6. AST 解析
         Statement statement;
         try {
             statement = CCJSqlParserUtil.parse(normalizedSql);
@@ -92,11 +97,53 @@ public class BpmFormDataSourceSqlValidator {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.BPM_DATA_SOURCE_SQL_INVALID);
         }
 
-        // 6. 只允许 SELECT（包括 WITH ... SELECT）
+        // 7. 只允许 SELECT（包括 WITH ... SELECT）
         if (!(statement instanceof Select)) {
             throw ServiceExceptionUtil.exception(ErrorCodeConstants.BPM_DATA_SOURCE_SQL_READ_ONLY);
         }
 
         return parameters;
+    }
+
+    /**
+     * 将 SQL 中单引号括起来的字符串字面量内容替换为空格，保留引号本身。
+     * 支持 SQL 标准的 '' 转义（两个连续单引号表示一个字面量单引号）。
+     * <p>
+     * 例如: {@code SELECT * FROM t WHERE name = 'hello -- world'}
+     * 变为: {@code SELECT * FROM t WHERE name = '               '}
+     * <p>
+     * 这样词法守卫在掩码后的字符串上工作，不会误判字面量中的内容。
+     *
+     * @param sql 原始 SQL
+     * @return 字面量内容被空格替换后的 SQL
+     */
+    static String maskStringLiterals(String sql) {
+        StringBuilder sb = new StringBuilder(sql.length());
+        boolean inString = false;
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (c == '\'') {
+                if (inString) {
+                    // 检查是否为 '' 转义
+                    if (i + 1 < sql.length() && sql.charAt(i + 1) == '\'') {
+                        // '' 转义：用两个空格替代，保持位置对齐
+                        sb.append("  ");
+                        i++; // 跳过下一个引号
+                        continue;
+                    }
+                    // 字符串结束
+                    inString = false;
+                }  else {
+                    // 字符串开始
+                    inString = true;
+                }
+                sb.append(c); // 保留引号本身
+            } else if (inString) {
+                sb.append(' '); // 替换字面量内容为空格
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }

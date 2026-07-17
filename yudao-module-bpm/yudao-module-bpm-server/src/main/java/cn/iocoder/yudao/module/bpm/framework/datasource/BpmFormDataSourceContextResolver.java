@@ -14,6 +14,16 @@ import java.util.Set;
  *
  * 注入服务端保留参数（tenantId / userId / deptId / companyId），
  * 拒绝浏览器端对保留参数的覆盖。绝不记录原始参数值。
+ *
+ * <p><b>类型说明：</b>
+ * <ul>
+ *   <li>tenantId — {@code Long}，来自 {@code LoginUser#getTenantId()}</li>
+ *   <li>userId — {@code Long}，来自 {@code LoginUser#getId()}</li>
+ *   <li>deptId — {@code String}，来自 {@code LoginUser#getInfo()} 返回的
+ *       {@code Map<String, String>}，因此注入类型为 String 而非 Long。
+ *       下游 SQL 参数绑定时需注意这一类型差异。</li>
+ *   <li>companyId — {@code Long}，来自 {@code LoginUser#getContext("companyId", Long.class)}</li>
+ * </ul>
  */
 public class BpmFormDataSourceContextResolver {
 
