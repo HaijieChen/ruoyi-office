@@ -36,7 +36,7 @@ Apply migration twice, verify backup checksum and restore procedure, publish con
 
 | Requirement or risk | Test level | Command or case | Result |
 |---|---|---|---|
-| Current baseline | build/test | BPM compile/tests and frontend form-create Vitest/typecheck | pending |
+| Current baseline | build/test | BPM form tests pass outside sandbox; full frontend typecheck has recorded unrelated errors | recorded |
 | SQL safety | unit/security | `BpmFormDataSourceSqlValidatorTest` | pending |
 | Tenant/read-only/limits | integration/security | execution service tests plus SELECT-only DB smoke | pending |
 | Linkage determinism | unit/component | form-create data-source Vitest | pending |

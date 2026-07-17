@@ -2,7 +2,7 @@
 
 - Baseline commit: `98d215569`
 - Integration branch: `codex/oa-platform-production`
-- Overall status: baseline verification
+- Overall status: implementation
 
 ## Workstreams
 
@@ -18,7 +18,8 @@
 
 ## Regression results
 
-Pending baseline and stream-specific evidence.
+- Backend baseline: existing `BpmFormServiceTest` passes when run outside the attachment-restricted sandbox (6 tests, 0 failures/errors).
+- Frontend baseline: full workspace `vue-tsc` currently fails in unrelated IoT, mall, WMS, OA, and shared modules. New work is gated by focused Vitest plus comparison against this recorded baseline; the change must not introduce errors in owned paths.
 
 ## Remaining risks
 
