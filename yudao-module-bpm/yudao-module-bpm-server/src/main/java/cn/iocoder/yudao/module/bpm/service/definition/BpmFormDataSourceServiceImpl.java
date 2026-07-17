@@ -328,7 +328,7 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
             for (SchemaField field : fields) {
                 String type = StringUtils.hasText(field.getType()) ? field.getType().toUpperCase(Locale.ROOT) : null;
                 String mask = StringUtils.hasText(field.getMask()) ? field.getMask() : field.getMaskStrategy();
-                if (!StringUtils.hasText(field.getName()) || !names.add(field.getName())
+                if (!BpmFormDataSourceSchemaRules.isSafeFieldName(field.getName()) || !names.add(field.getName())
                         || type == null || !SCHEMA_TYPES.contains(type)
                         || StringUtils.hasText(mask) && !MASK_STRATEGIES.contains(mask.toUpperCase(Locale.ROOT))) {
                     throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);

@@ -210,6 +210,48 @@ class BpmFormDataSourceServiceTest {
     }
 
     @Test
+    void saveDraft_rejectsSchemaNamesThatRuntimeCannotAddress() {
+        when(dataSourceMapper.selectByIdForUpdate(10L)).thenReturn(source(10L, null));
+        BpmFormDataSourceVersionSaveReqVO unsafeParameter = sqlVersionReq(
+                "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
+                .setParameterSchema("""
+                        [{"name":"tenantId","type":"LONG","required":true},
+                         {"name":"customer-id","type":"LONG","required":false}]
+                        """);
+        ServiceException parameterError = assertThrows(ServiceException.class,
+                () -> service.saveDraft(10L, unsafeParameter));
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), parameterError.getCode());
+
+        BpmFormDataSourceVersionSaveReqVO unsafeResult = sqlVersionReq(
+                "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
+                .setResultSchema("[{\"name\":\"keeper.name\",\"type\":\"STRING\"}]")
+                .setLabelField("keeper.name").setValueField("keeper.name");
+        ServiceException resultError = assertThrows(ServiceException.class,
+                () -> service.saveDraft(10L, unsafeResult));
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), resultError.getCode());
+
+        BpmFormDataSourceVersionSaveReqVO prototypeResult = sqlVersionReq(
+                "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
+                .setResultSchema("[{\"name\":\"constructor\",\"type\":\"STRING\"}]")
+                .setLabelField("constructor").setValueField("constructor");
+        ServiceException prototypeError = assertThrows(ServiceException.class,
+                () -> service.saveDraft(10L, prototypeResult));
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), prototypeError.getCode());
+
+        String overlongName = "a".repeat(64);
+        BpmFormDataSourceVersionSaveReqVO overlongResult = sqlVersionReq(
+                "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
+                .setResultSchema("[{\"name\":\"" + overlongName + "\",\"type\":\"STRING\"}]")
+                .setLabelField(overlongName).setValueField(overlongName);
+        ServiceException overlongError = assertThrows(ServiceException.class,
+                () -> service.saveDraft(10L, overlongResult));
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), overlongError.getCode());
+
+        verify(versionMapper, never()).insert(any(BpmFormDataSourceVersionDO.class));
+        verify(versionMapper, never()).updateDraft(any(BpmFormDataSourceVersionDO.class));
+    }
+
+    @Test
     void saveDraft_validatesDictionaryAndPlatformApiTypedConfiguration() {
         BpmFormDataSourceDO dictionary = source(10L, null).setType(BpmFormDataSourceProvider.TYPE_DICT);
         BpmFormDataSourceDO platformApi = source(11L, null).setType(BpmFormDataSourceProvider.TYPE_PLATFORM_API);

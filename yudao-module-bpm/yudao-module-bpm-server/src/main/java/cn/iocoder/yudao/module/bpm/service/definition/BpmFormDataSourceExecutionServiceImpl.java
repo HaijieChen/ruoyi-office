@@ -30,7 +30,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.*;
@@ -49,7 +48,6 @@ public class BpmFormDataSourceExecutionServiceImpl implements BpmFormDataSourceE
     private static final int MAX_REQUEST_COLLECTION_SIZE = 200;
     private static final int MAX_REQUEST_STRING_LENGTH = 4096;
     private static final long MAX_REQUEST_APPROXIMATE_BYTES = 64L * 1024L;
-    private static final Pattern SAFE_REQUEST_KEY = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]{0,63}$");
     private static final Set<String> RESERVED_PARAMS = Set.of("tenantId", "userId", "deptId", "companyId");
 
     private final BpmFormDataSourceMapper dataSourceMapper;
@@ -244,7 +242,7 @@ public class BpmFormDataSourceExecutionServiceImpl implements BpmFormDataSourceE
             budget.addBytes(2); // braces
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (!(entry.getKey() instanceof String key) || key.length() > MAX_REQUEST_KEY_LENGTH
-                        || !SAFE_REQUEST_KEY.matcher(key).matches()) {
+                        || !BpmFormDataSourceSchemaRules.isSafeFieldName(key)) {
                     throw ServiceExceptionUtil.exception(BPM_DATA_SOURCE_PARAM_INVALID);
                 }
                 budget.addKey();
@@ -472,8 +470,12 @@ public class BpmFormDataSourceExecutionServiceImpl implements BpmFormDataSourceE
         }
         try {
             List<SchemaField> fields = JsonUtils.parseArray(json, SchemaField.class);
-            if (fields.stream().anyMatch(field -> !StringUtils.hasText(field.getName()))) {
-                throw ServiceExceptionUtil.exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+            Set<String> names = new HashSet<>();
+            for (SchemaField field : fields) {
+                if (!BpmFormDataSourceSchemaRules.isSafeFieldName(field.getName())
+                        || !names.add(field.getName())) {
+                    throw ServiceExceptionUtil.exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+                }
             }
             return fields;
         } catch (ServiceException ex) {

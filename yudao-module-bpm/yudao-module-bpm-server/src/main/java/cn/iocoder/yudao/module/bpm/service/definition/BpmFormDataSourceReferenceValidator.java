@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.BPM_DATA_SOURCE_FORM_NOT_REFERENCED;
@@ -27,6 +28,7 @@ import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.FORM_NOT_EXIS
 public class BpmFormDataSourceReferenceValidator {
 
     static final String REMOTE_COMPONENT_TYPE = "RemoteDataSourceSelect";
+    private static final Set<String> SCOPED_RULE_COMPONENTS = Set.of("group", "subForm");
 
     private final BpmFormService formService;
 
@@ -61,7 +63,7 @@ public class BpmFormDataSourceReferenceValidator {
      * <p>Package visibility is intentional: Task 5's save-time linkage validator can reuse the
      * same strict component recognition without widening the runtime API.</p>
      */
-    ReferenceParseResult parseReferences(List<String> fields) {
+    static ReferenceParseResult parseReferences(List<String> fields) {
         if (fields == null || fields.isEmpty()) {
             return ReferenceParseResult.valid(List.of());
         }
@@ -71,12 +73,12 @@ public class BpmFormDataSourceReferenceValidator {
             if (root == null) {
                 return ReferenceParseResult.invalid();
             }
-            collectReferences(root, references);
+            walkRules(root, (node, scoped) -> collectReference(node, references));
         }
         return ReferenceParseResult.valid(references);
     }
 
-    private static JsonNode readObject(String fieldJson) {
+    static JsonNode readObject(String fieldJson) {
         if (fieldJson == null || fieldJson.isBlank()) {
             return null;
         }
@@ -92,11 +94,7 @@ public class BpmFormDataSourceReferenceValidator {
         }
     }
 
-    private static void collectReferences(JsonNode node, List<FormDataSourceReference> references) {
-        if (!node.isObject()) {
-            return;
-        }
-
+    private static void collectReference(JsonNode node, List<FormDataSourceReference> references) {
         JsonNode typeNode = node.get("type");
         JsonNode fieldNode = node.get("field");
         JsonNode propsNode = node.get("props");
@@ -109,9 +107,54 @@ public class BpmFormDataSourceReferenceValidator {
             }
         }
 
-        JsonNode childrenNode = node.get("children");
-        if (childrenNode != null && childrenNode.isArray()) {
-            childrenNode.forEach(child -> collectReferences(child, references));
+    }
+
+    /** Walk the actual rule containers emitted by FcDesigner {@code getRule()}. */
+    static void walkRules(JsonNode root, RuleVisitor visitor) {
+        walkRuleContainer(root, false, visitor);
+    }
+
+    private static void walkRuleContainer(JsonNode container, boolean scoped, RuleVisitor visitor) {
+        if (container == null) {
+            return;
+        }
+        if (container.isArray()) {
+            container.forEach(item -> walkRuleContainer(item, scoped, visitor));
+            return;
+        }
+        if (!container.isObject()) {
+            // Text/HTML/button children are valid form-create leaves and never represent a field rule.
+            return;
+        }
+
+        visitor.visit(container, scoped);
+        walkRuleContainer(container.get("children"), scoped, visitor);
+
+        String type = text(container.get("type"));
+        JsonNode props = container.get("props");
+        if (props != null && props.isObject()) {
+            if (SCOPED_RULE_COMPONENTS.contains(type)) {
+                walkRuleContainer(props.get("rule"), true, visitor);
+            }
+            if ("tableForm".equals(type)) {
+                JsonNode columns = props.get("columns");
+                if (columns != null && columns.isArray()) {
+                    columns.forEach(column -> {
+                        if (column.isObject()) {
+                            walkRuleContainer(column.get("rule"), true, visitor);
+                        }
+                    });
+                }
+            }
+        }
+
+        JsonNode controls = container.get("control");
+        if (controls != null && controls.isArray()) {
+            controls.forEach(control -> {
+                if (control.isObject()) {
+                    walkRuleContainer(control.get("rule"), scoped, visitor);
+                }
+            });
         }
     }
 
@@ -121,6 +164,15 @@ public class BpmFormDataSourceReferenceValidator {
 
     private static boolean isNonBlankText(JsonNode node) {
         return node != null && node.isTextual() && !node.textValue().isBlank();
+    }
+
+    private static String text(JsonNode node) {
+        return node != null && node.isTextual() ? node.textValue() : null;
+    }
+
+    @FunctionalInterface
+    interface RuleVisitor {
+        void visit(JsonNode node, boolean scoped);
     }
 
     record FormDataSourceReference(String field, String sourceCode) {

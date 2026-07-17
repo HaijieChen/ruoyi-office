@@ -48,6 +48,34 @@ class BpmFormDataSourceReferenceValidatorTest {
     }
 
     @Test
+    void shouldFindReferencesInCanonicalFormCreateRuleContainers() {
+        storedForm.set(form(List.of("""
+                {"type":"group","props":{"rule":[
+                  {"type":"RemoteDataSourceSelect","field":"groupSealIds",
+                   "props":{"dataSourceCode":"group_source"}}
+                ]}}
+                """, """
+                {"type":"tableForm","field":"rows","props":{"columns":[
+                  {"label":"印章","rule":[
+                    {"type":"RemoteDataSourceSelect","field":"rowSealIds",
+                     "props":{"dataSourceCode":"table_source"}}
+                  ]}
+                ]}}
+                """, """
+                {"type":"select","field":"mode","control":[
+                  {"value":"seal","rule":[
+                    {"type":"RemoteDataSourceSelect","field":"controlledSealIds",
+                     "props":{"dataSourceCode":"control_source"}}
+                  ]}
+                ]}
+                """)));
+
+        assertDoesNotThrow(() -> validator.validateFormReference(7L, "group_source"));
+        assertDoesNotThrow(() -> validator.validateFormReference(7L, "table_source"));
+        assertDoesNotThrow(() -> validator.validateFormReference(7L, "control_source"));
+    }
+
+    @Test
     void shouldRejectMissingForm() {
         storedForm.set(null);
 

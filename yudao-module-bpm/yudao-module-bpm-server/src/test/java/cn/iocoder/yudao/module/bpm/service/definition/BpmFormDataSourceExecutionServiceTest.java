@@ -186,6 +186,28 @@ class BpmFormDataSourceExecutionServiceTest {
     }
 
     @Test
+    void execute_rejectsPersistedSchemaNamesThatRuntimeCannotAddress() {
+        mockPublishedSource(parameterSchema(param("constructor", "STRING", false)), "[]", false, 0);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.execute("employees", Map.of(), loginUser(1L, 7L), null, null, null));
+
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), error.getCode());
+        verify(provider, never()).execute(any());
+    }
+
+    @Test
+    void execute_rejectsPersistedSchemaNamesThatExceedThePersistenceContract() {
+        mockPublishedSource(parameterSchema(param("a".repeat(64), "STRING", false)), "[]", false, 0);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.execute("employees", Map.of(), loginUser(1L, 7L), null, null, null));
+
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), error.getCode());
+        verify(provider, never()).execute(any());
+    }
+
+    @Test
     void execute_successWritesAuditAndCapsProviderResult() {
         mockPublishedSource("[]", "[]", false, 0);
         when(provider.execute(any())).thenReturn(new BpmFormDataSourceQueryResult(
@@ -347,8 +369,8 @@ class BpmFormDataSourceExecutionServiceTest {
     @Test
     void execute_rejectsUnsafeRequestShapesBeforeProviderInvocation() {
         String longKey = "a".repeat(65);
-        mockPublishedSource(parameterSchema(
-                untypedParam("payload"), untypedParam("bad-key"), untypedParam(longKey)), "[]", false, 0);
+        // Unsafe names can no longer enter a published schema; they remain untrusted request-shape probes here.
+        mockPublishedSource(parameterSchema(untypedParam("payload")), "[]", false, 0);
         Map<String, Object> cyclic = new LinkedHashMap<>();
         cyclic.put("self", cyclic);
         List<String> overTotalSize = IntStream.range(0, 17).mapToObj(ignored -> "x".repeat(4096)).toList();

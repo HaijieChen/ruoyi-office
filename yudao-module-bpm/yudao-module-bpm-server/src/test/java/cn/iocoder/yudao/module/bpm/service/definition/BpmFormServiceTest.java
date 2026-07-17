@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author 宇擎源码
  */
-@Import(BpmFormServiceImpl.class)
+@Import({BpmFormServiceImpl.class, BpmFormLinkageValidator.class})
 public class BpmFormServiceTest extends BaseDbUnitTest {
 
     @Resource
@@ -54,6 +54,20 @@ public class BpmFormServiceTest extends BaseDbUnitTest {
         // 校验记录的属性是否正确
         BpmFormDO form = formMapper.selectById(formId);
         assertPojoEquals(reqVO, form);
+    }
+
+    @Test
+    public void testCreateForm_missingDataSource() {
+        BpmFormSaveReqVO reqVO = randomPojo(BpmFormSaveReqVO.class, o -> {
+            o.setConf("{}");
+            o.setFields(List.of("""
+                    {"type":"RemoteDataSourceSelect","field":"sealIds",
+                     "props":{"dataSourceCode":"missing_source"}}
+                    """));
+        });
+
+        assertServiceException(() -> formService.createForm(reqVO),
+                cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.BPM_DATA_SOURCE_UNPUBLISHED);
     }
 
     @Test
