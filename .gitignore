@@ -65,6 +65,7 @@ package-lock.json
 functions/mock
 .temp/**
 .codex-tmp/
+.pnpm-store/
 
 # umi
 .umi
