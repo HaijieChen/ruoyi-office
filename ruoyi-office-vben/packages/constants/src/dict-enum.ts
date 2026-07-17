@@ -9,6 +9,7 @@ const COMMON_DICT = {
 /** ========== SYSTEM - 系统模块 ========== */
 const SYSTEM_DICT = {
   SYSTEM_USER_SEX: 'system_user_sex',
+  SYSTEM_DEPT_ORG_TYPE: 'system_dept_org_type', // 组织类型
   SYSTEM_MENU_TYPE: 'system_menu_type',
   SYSTEM_ROLE_TYPE: 'system_role_type',
   SYSTEM_DATA_SCOPE: 'system_data_scope',
