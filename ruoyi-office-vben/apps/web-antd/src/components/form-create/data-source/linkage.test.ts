@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { applyDependencyChange, buildDependencyOrder } from './linkage';
 
 describe('buildDependencyOrder', () => {
+  it('returns an empty order for an empty linkage graph', () => {
+    expect(buildDependencyOrder([])).toEqual([]);
+  });
+
   it('orders dependencies before their consumers', () => {
     expect(
       buildDependencyOrder([
@@ -57,6 +61,23 @@ describe('applyDependencyChange', () => {
     });
   });
 
+  it('clear-and-reload clears a single target value', () => {
+    expect(
+      applyDependencyChange({
+        currentValue: 1,
+        multiple: false,
+        options: [{ id: 1, keeperName: '张三' }],
+        outputMappings: { keeperName: 'keeperName' },
+        strategy: 'clear-and-reload',
+        valueField: 'id',
+      }),
+    ).toEqual({
+      mappedValues: { keeperName: undefined },
+      reload: true,
+      value: undefined,
+    });
+  });
+
   it('keep-and-revalidate retains only values present in the new options', () => {
     const currentValue = [1, 3];
     const result = applyDependencyChange({
@@ -100,6 +121,23 @@ describe('applyDependencyChange', () => {
     expect(
       applyDependencyChange({
         currentValue: 9,
+        multiple: false,
+        options: [{ id: 2, keeperName: '李四' }],
+        outputMappings: { keeperName: 'keeperName' },
+        strategy: 'keep-and-revalidate',
+        valueField: 'id',
+      }),
+    ).toEqual({
+      mappedValues: { keeperName: undefined },
+      reload: true,
+      value: undefined,
+    });
+  });
+
+  it('keeps an undefined single value cleared while revalidating', () => {
+    expect(
+      applyDependencyChange({
+        currentValue: undefined,
         multiple: false,
         options: [{ id: 2, keeperName: '李四' }],
         outputMappings: { keeperName: 'keeperName' },
