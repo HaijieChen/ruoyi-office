@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.IntStream;
 
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -204,7 +205,8 @@ class BpmFormDataSourceExecutionServiceTest {
 
     @Test
     void execute_cacheIsTenantAndUserIsolatedButParameterOrderStable() {
-        mockPublishedSource("[]", "[]", true, 60);
+        mockPublishedSource(parameterSchema(param("a", "INTEGER", false), param("b", "INTEGER", false)),
+                "[]", true, 60);
         when(provider.execute(any())).thenAnswer(invocation -> {
             BpmFormDataSourceExecutionContext context = invocation.getArgument(0);
             return new BpmFormDataSourceQueryResult(
@@ -240,6 +242,27 @@ class BpmFormDataSourceExecutionServiceTest {
     }
 
     @Test
+    void executeVersion_trialRunBypassesCacheButKeepsProjectionAndAudit() {
+        BpmFormDataSourceDO source = source();
+        BpmFormDataSourceVersionDO draft = version("[]",
+                resultSchema(resultField("name", "STRING", null)),
+                "{\"sql\":\"SELECT name, secret FROM employee\"}", 60).setStatus(1);
+        when(provider.execute(any())).thenReturn(new BpmFormDataSourceQueryResult(
+                List.of(linkedMap("name", "Alice", "secret", "must-not-leak")), 1, 1));
+
+        BpmFormDataSourceQueryResult first = service.executeVersion(source, draft, Map.of(),
+                loginUser(1L, 7L), null, null, null, false);
+        BpmFormDataSourceQueryResult second = service.executeVersion(source, draft, Map.of(),
+                loginUser(1L, 7L), null, null, null, false);
+
+        assertEquals(Map.of("name", "Alice"), first.getRows().get(0));
+        assertEquals(Map.of("name", "Alice"), second.getRows().get(0));
+        verify(provider, times(2)).execute(any());
+        verify(redisTemplate, never()).opsForValue();
+        verify(logMapper, times(2)).insert(argThat((BpmFormDataSourceLogDO log) -> log.getSuccess()));
+    }
+
+    @Test
     void execute_masksBeforeCacheAndCachedValueCannotBeMutatedByCaller() {
         mockPublishedSource("[]", resultSchema(resultField("phone", "STRING", "PHONE")), false, 60);
         Map<String, Object> providerRow = new LinkedHashMap<>();
@@ -260,7 +283,7 @@ class BpmFormDataSourceExecutionServiceTest {
 
     @Test
     void execute_failureIsNotCachedAndAuditContainsNoRawValuesOrSql() {
-        mockPublishedSource("[]", "[]", false, 60);
+        mockPublishedSource(parameterSchema(param("keyword", "STRING", false)), "[]", false, 60);
         when(provider.execute(any())).thenThrow(new ServiceException(99123, "SECRET_VALUE SELECT * FROM private_table"));
 
         assertThrows(ServiceException.class, () -> service.execute(
@@ -305,6 +328,68 @@ class BpmFormDataSourceExecutionServiceTest {
         verify(logMapper).insert(argThat((BpmFormDataSourceLogDO log) -> !log.getSuccess()
                 && String.valueOf(BPM_DATA_SOURCE_PARAM_RESERVED.getCode()).equals(log.getErrorCode())
                 && !log.getParameterDigest().contains("999")));
+    }
+
+    @Test
+    void execute_unknownClientParameterIsRejectedBeforeProviderInvocation() {
+        mockPublishedSource(parameterSchema(param("keyword", "STRING", false)), "[]", false, 0);
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.execute(
+                "employees", Map.of("unexpected", "smuggled"), loginUser(1L, 7L), null, null, null));
+
+        assertEquals(BPM_DATA_SOURCE_PARAM_INVALID.getCode(), error.getCode());
+        verify(provider, never()).execute(any());
+        verify(logMapper).insert(argThat((BpmFormDataSourceLogDO log) -> !log.getSuccess()
+                && String.valueOf(BPM_DATA_SOURCE_PARAM_INVALID.getCode()).equals(log.getErrorCode())
+                && !log.getParameterDigest().contains("smuggled")));
+    }
+
+    @Test
+    void execute_rejectsUnsafeRequestShapesBeforeProviderInvocation() {
+        String longKey = "a".repeat(65);
+        mockPublishedSource(parameterSchema(
+                untypedParam("payload"), untypedParam("bad-key"), untypedParam(longKey)), "[]", false, 0);
+        Map<String, Object> cyclic = new LinkedHashMap<>();
+        cyclic.put("self", cyclic);
+        List<String> overTotalSize = IntStream.range(0, 17).mapToObj(ignored -> "x".repeat(4096)).toList();
+        List<Map<String, Object>> invalidRequests = List.of(
+                Map.of("bad-key", 1),
+                Map.of(longKey, 1),
+                Map.of("payload", Map.of("a", Map.of("b", Map.of("c", Map.of("d", 1))))),
+                Map.of("payload", Collections.nCopies(201, 1)),
+                Map.of("payload", new int[201]),
+                Map.of("payload", "x".repeat(4097)),
+                Map.of("payload", overTotalSize),
+                Map.of("payload", new Object()),
+                Map.of("payload", cyclic),
+                Map.of("payload", Double.NaN));
+
+        invalidRequests.forEach(request -> {
+            ServiceException error = assertThrows(ServiceException.class, () -> service.execute(
+                    "employees", request, loginUser(1L, 7L), null, null, null));
+            assertEquals(BPM_DATA_SOURCE_PARAM_INVALID.getCode(), error.getCode());
+        });
+
+        verify(provider, never()).execute(any());
+        verify(logMapper, times(invalidRequests.size())).insert(
+                argThat((BpmFormDataSourceLogDO log) -> !log.getSuccess()
+                        && String.valueOf(BPM_DATA_SOURCE_PARAM_INVALID.getCode()).equals(log.getErrorCode())));
+    }
+
+    @Test
+    void execute_rejectsMoreThanFiftyDeclaredClientKeys() {
+        List<Map<String, Object>> schema = IntStream.range(0, 51)
+                .mapToObj(index -> untypedParam("p" + index)).toList();
+        Map<String, Object> parameters = IntStream.range(0, 51).boxed().collect(
+                LinkedHashMap::new, (map, index) -> map.put("p" + index, index), Map::putAll);
+        mockPublishedSource(cn.iocoder.yudao.framework.common.util.json.JsonUtils.toJsonString(schema),
+                "[]", false, 0);
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.execute(
+                "employees", parameters, loginUser(1L, 7L), null, null, null));
+
+        assertEquals(BPM_DATA_SOURCE_PARAM_INVALID.getCode(), error.getCode());
+        verify(provider, never()).execute(any());
     }
 
     @Test
@@ -433,6 +518,21 @@ class BpmFormDataSourceExecutionServiceTest {
     }
 
     @Test
+    void platformApiProvider_rejectsPostEvenForAllowedPath() {
+        BpmFormDataSourceProperties properties = new BpmFormDataSourceProperties();
+        properties.getApi().setBaseUrl("http://127.0.0.1:48080");
+        properties.getApi().setAllowedPaths(List.of("/admin-api/system/dept/simple-list"));
+        HttpClient httpClient = mock(HttpClient.class);
+        BpmPlatformApiDataSourceProvider apiProvider = new BpmPlatformApiDataSourceProvider(properties, httpClient);
+
+        ServiceException error = assertThrows(ServiceException.class, () -> apiProvider.execute(context(3,
+                sourceConfig("/admin-api/system/dept/simple-list", "POST"), null, null, Map.of(), null)));
+
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), error.getCode());
+        verifyNoInteractions(httpClient);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void platformApiProvider_rejectsResponseLargerThanByteLimit() throws Exception {
         BpmFormDataSourceProperties properties = new BpmFormDataSourceProperties();
@@ -516,6 +616,10 @@ class BpmFormDataSourceExecutionServiceTest {
 
     private static Map<String, Object> param(String name, String type, boolean required) {
         return linkedMap("name", name, "type", type, "required", required);
+    }
+
+    private static Map<String, Object> untypedParam(String name) {
+        return linkedMap("name", name, "required", false);
     }
 
     private static Map<String, Object> resultField(String name, String type, String mask) {

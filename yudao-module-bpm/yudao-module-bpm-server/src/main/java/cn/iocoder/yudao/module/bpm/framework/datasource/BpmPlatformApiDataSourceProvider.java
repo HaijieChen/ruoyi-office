@@ -32,7 +32,7 @@ import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.*;
 public class BpmPlatformApiDataSourceProvider implements BpmFormDataSourceProvider {
 
     private static final Pattern SAFE_PATH = Pattern.compile("^/[A-Za-z0-9_/-]+$");
-    private static final Set<String> METHODS = Set.of("GET", "POST");
+    private static final Set<String> METHODS = Set.of("GET");
     private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
 
     private final BpmFormDataSourceProperties properties;
@@ -97,12 +97,9 @@ public class BpmPlatformApiDataSourceProvider implements BpmFormDataSourceProvid
             builder.header("Authorization", context.getAuthorization());
         }
         builder.header(HEADER_TENANT_ID, String.valueOf(context.getTenantId()));
-        if ("GET".equals(method)) {
-            builder.uri(withQuery(target, context.getParameters())).GET();
-        } else {
-            builder.uri(target).header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(JsonUtils.toJsonString(context.getParameters())));
-        }
+        // The allow-list currently identifies paths only, so a write method cannot be authorized independently.
+        // Keep this provider read-only until configuration supports explicit method-and-path pairs.
+        builder.uri(withQuery(target, context.getParameters())).GET();
         return builder.build();
     }
 

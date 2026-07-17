@@ -69,7 +69,7 @@ public interface ErrorCodeConstants {
     ErrorCode FORM_NOT_EXISTS = new ErrorCode(1_009_010_000, "动态表单不存在");
     ErrorCode FORM_FIELD_REPEAT = new ErrorCode(1_009_010_001, "表单项({}) 和 ({}) 使用了相同的字段名({})");
 
-    // ========== 动态表单数据源 1-009-010-010 ~ 1-009-010-020 ==========
+    // ========== 动态表单数据源 1-009-010-010 ~ 1-009-010-030 ==========
     ErrorCode BPM_DATA_SOURCE_SQL_INVALID = new ErrorCode(1_009_010_010, "数据源 SQL 不合法");
     ErrorCode BPM_DATA_SOURCE_SQL_READ_ONLY = new ErrorCode(1_009_010_011, "数据源 SQL 仅允许 SELECT 查询");
     ErrorCode BPM_DATA_SOURCE_PARAM_MISSING = new ErrorCode(1_009_010_012, "数据源参数({})缺失");
@@ -83,6 +83,14 @@ public interface ErrorCodeConstants {
     ErrorCode BPM_DATA_SOURCE_RESULT_MAPPING_MISMATCH = new ErrorCode(1_009_010_020, "数据源查询结果与字段映射不匹配");
     ErrorCode BPM_DATA_SOURCE_CONFIG_INVALID = new ErrorCode(1_009_010_021, "数据源配置不合法");
     ErrorCode BPM_DATA_SOURCE_EXECUTION_FAILED = new ErrorCode(1_009_010_022, "数据源执行失败");
+    ErrorCode BPM_DATA_SOURCE_NOT_EXISTS = new ErrorCode(1_009_010_023, "数据源不存在");
+    ErrorCode BPM_DATA_SOURCE_CODE_DUPLICATE = new ErrorCode(1_009_010_024, "数据源标识({})已存在");
+    ErrorCode BPM_DATA_SOURCE_VERSION_NOT_EXISTS = new ErrorCode(1_009_010_025, "数据源版本不存在");
+    ErrorCode BPM_DATA_SOURCE_VERSION_STATE_INVALID = new ErrorCode(1_009_010_026, "数据源版本状态不允许当前操作");
+    ErrorCode BPM_DATA_SOURCE_FORM_NOT_REFERENCED = new ErrorCode(1_009_010_027, "表单未引用该数据源");
+    ErrorCode BPM_DATA_SOURCE_VERSION_CONFLICT = new ErrorCode(1_009_010_028, "数据源版本并发冲突，请刷新后重试");
+    ErrorCode BPM_DATA_SOURCE_FORM_ACCESS_DENIED = new ErrorCode(1_009_010_029, "无权通过当前流程上下文访问表单数据源");
+    ErrorCode BPM_DATA_SOURCE_PARAM_INVALID = new ErrorCode(1_009_010_030, "数据源请求参数不合法或超出大小限制");
 
     // ========== 用户组模块 1-009-011-000 ==========
     ErrorCode USER_GROUP_NOT_EXISTS = new ErrorCode(1_009_011_000, "用户分组不存在");

@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmFormDataSourceDO;
 import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmFormDataSourceLogDO;
 import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmFormDataSourceVersionDO;
+import cn.iocoder.yudao.module.bpm.enums.definition.BpmFormDataSourceVersionStatusEnum;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -114,6 +115,40 @@ public class BpmFormDataSourceMapperTest extends BaseDbUnitTest {
         versionMapper.insert(publishedVersion(200L, 2));
 
         assertEquals(2, versionMapper.selectPublished(200L).getVersion());
+    }
+
+    @Test
+    void updateDraftClearsNullableConfigurationFields() {
+        BpmFormDataSourceVersionDO draft = publishedVersion(300L, 1)
+                .setStatus(BpmFormDataSourceVersionStatusEnum.DRAFT.getStatus());
+        versionMapper.insert(draft);
+
+        int updated = versionMapper.updateDraft(new BpmFormDataSourceVersionDO()
+                .setId(draft.getId()).setDataSourceId(300L)
+                .setSourceConfig("{\"sql\":\"SELECT id FROM employee WHERE tenant_id = :tenantId\"}")
+                .setParameterSchema("[]").setResultSchema("[]").setPageable(false)
+                .setLabelField(null).setValueField(null).setMaxRows(null)
+                .setTimeoutSeconds(null).setCacheSeconds(null));
+
+        BpmFormDataSourceVersionDO saved = versionMapper.selectById(draft.getId());
+        assertEquals(1, updated);
+        assertNull(saved.getLabelField());
+        assertNull(saved.getValueField());
+        assertNull(saved.getMaxRows());
+        assertNull(saved.getTimeoutSeconds());
+        assertNull(saved.getCacheSeconds());
+    }
+
+    @Test
+    void publishDraftIsConditionalAndImmutableAfterTransition() {
+        BpmFormDataSourceVersionDO draft = publishedVersion(301L, 1)
+                .setStatus(BpmFormDataSourceVersionStatusEnum.DRAFT.getStatus());
+        versionMapper.insert(draft);
+
+        assertEquals(1, versionMapper.publishDraft(draft.getId(), 301L));
+        assertTrue(BpmFormDataSourceVersionStatusEnum.isPublished(
+                versionMapper.selectById(draft.getId()).getStatus()));
+        assertEquals(0, versionMapper.publishDraft(draft.getId(), 301L));
     }
 
     private BpmFormDataSourceDO dataSource(String code, Long tenantId) {
