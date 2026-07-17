@@ -12,7 +12,7 @@
 
 - Query only the current platform database; do not add external database connectivity.
 - Only one parameterized SELECT or WITH ... SELECT statement is executable.
-- SQL never reaches the browser; platform API data sources accept only relative allow-listed paths, and the new component does not execute browser-provided URLs or parser functions.
+- SQL never reaches runtime form users or runtime API responses; only administrators with data-source edit permission may read it in the management editor. Platform API data sources accept only relative allow-listed paths, and the new component does not execute browser-provided URLs or parser functions.
 - Data-source versions are immutable after publication.
 - Default query timeout is 3 seconds and default maximum result size is 200 rows.
 - BPMN/Flowable engine code is not modified.
