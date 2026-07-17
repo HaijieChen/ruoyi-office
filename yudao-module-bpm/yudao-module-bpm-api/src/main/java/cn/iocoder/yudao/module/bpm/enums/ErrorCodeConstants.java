@@ -81,6 +81,8 @@ public interface ErrorCodeConstants {
     ErrorCode BPM_DATA_SOURCE_IN_USE = new ErrorCode(1_009_010_018, "数据源正在使用中，不允许删除");
     ErrorCode BPM_DATA_SOURCE_DEPENDENCY_CYCLE = new ErrorCode(1_009_010_019, "数据源存在循环依赖");
     ErrorCode BPM_DATA_SOURCE_RESULT_MAPPING_MISMATCH = new ErrorCode(1_009_010_020, "数据源查询结果与字段映射不匹配");
+    ErrorCode BPM_DATA_SOURCE_CONFIG_INVALID = new ErrorCode(1_009_010_021, "数据源配置不合法");
+    ErrorCode BPM_DATA_SOURCE_EXECUTION_FAILED = new ErrorCode(1_009_010_022, "数据源执行失败");
 
     // ========== 用户组模块 1-009-011-000 ==========
     ErrorCode USER_GROUP_NOT_EXISTS = new ErrorCode(1_009_011_000, "用户分组不存在");

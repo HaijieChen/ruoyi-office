@@ -37,6 +37,22 @@ server:
       charset: UTF-8 # 必须设置 UTF-8，避免 WebFlux 流式返回（AI 场景）会乱码问题
       force: true
 
+# 动态表单数据源配置。所有凭据只允许通过环境变量注入，避免进入源码或 profile 专属配置。
+bpm:
+  form-data-source:
+    max-rows: ${BPM_FORM_MAX_ROWS:200}
+    timeout-seconds: ${BPM_FORM_TIMEOUT_SECONDS:3}
+    jdbc:
+      url: ${BPM_FORM_DS_URL:}
+      username: ${BPM_FORM_DS_USERNAME:}
+      password: ${BPM_FORM_DS_PASSWORD:}
+      maximum-pool-size: ${BPM_FORM_DS_MAXIMUM_POOL_SIZE:2}
+      connection-timeout-ms: ${BPM_FORM_DS_CONNECTION_TIMEOUT_MS:3000}
+    api:
+      base-url: ${BPM_FORM_API_BASE_URL:http://127.0.0.1:48080}
+      allowed-paths: ${BPM_FORM_API_ALLOWED_PATHS:}
+      connect-timeout-seconds: ${BPM_FORM_API_CONNECT_TIMEOUT_SECONDS:3}
+
 --- #################### Spring Cloud 禁用配置 ####################
 
 spring:
