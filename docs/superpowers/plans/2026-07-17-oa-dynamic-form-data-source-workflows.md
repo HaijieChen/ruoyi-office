@@ -20,7 +20,7 @@
 - Existing running process instances and historical form values remain readable.
 - Preserve unrelated local changes in both repositories.
 - Backend repository: /Users/chenhaijie/workspace/3dm/royi-oa.
-- Frontend repository: /private/tmp/ruoyi-office-vben-custom.
+- Frontend workspace: /Users/chenhaijie/workspace/3dm/royi-oa/ruoyi-office-vben (same Git branch as backend).
 
 ## File Structure
 
@@ -302,13 +302,13 @@ Validate duplicate fields, published source, required bindings, result mappings,
 ### Task 6: Build the data-source management UI
 
 **Files:**
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/api/bpm/form-data-source/index.ts
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/views/bpm/form-data-source/data.ts
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/views/bpm/form-data-source/index.vue
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/views/bpm/form-data-source/modules/editor.vue
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/views/bpm/form-data-source/modules/trial-run.vue
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/views/bpm/form-data-source/modules/version-list.vue
-- Test: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/views/bpm/form-data-source/data.test.ts
+- Create: ruoyi-office-vben/apps/web-antd/src/api/bpm/form-data-source/index.ts
+- Create: ruoyi-office-vben/apps/web-antd/src/views/bpm/form-data-source/data.ts
+- Create: ruoyi-office-vben/apps/web-antd/src/views/bpm/form-data-source/index.vue
+- Create: ruoyi-office-vben/apps/web-antd/src/views/bpm/form-data-source/modules/editor.vue
+- Create: ruoyi-office-vben/apps/web-antd/src/views/bpm/form-data-source/modules/trial-run.vue
+- Create: ruoyi-office-vben/apps/web-antd/src/views/bpm/form-data-source/modules/version-list.vue
+- Test: ruoyi-office-vben/apps/web-antd/src/views/bpm/form-data-source/data.test.ts
 
 **Interfaces:**
 - Consumes Task 4 APIs.
@@ -353,10 +353,10 @@ Add 表单数据源 below 流程设置 with query/create/update/publish permissi
 ### Task 7: Add safe expressions and linkage actions
 
 **Files:**
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/data-source/expression.ts
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/data-source/linkage.ts
-- Test: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/data-source/expression.test.ts
-- Test: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/data-source/linkage.test.ts
+- Create: ruoyi-office-vben/apps/web-antd/src/components/form-create/data-source/expression.ts
+- Create: ruoyi-office-vben/apps/web-antd/src/components/form-create/data-source/linkage.ts
+- Test: ruoyi-office-vben/apps/web-antd/src/components/form-create/data-source/expression.test.ts
+- Test: ruoyi-office-vben/apps/web-antd/src/components/form-create/data-source/linkage.test.ts
 
 **Interfaces:**
 - Produces resolveBinding, buildDependencyOrder, applyDependencyChange.
@@ -386,12 +386,12 @@ Assert companyId orders before sealIds before keeperName. Assert clear-and-reloa
 ### Task 8: Add the generic selector and designer rule
 
 **Files:**
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/components/remote-data-source-select.vue
-- Create: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/rules/use-remote-data-source-rule.ts
-- Modify: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/helpers.ts
-- Modify: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/typing.ts
-- Modify: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/plugins/form-create/index.ts
-- Test: /private/tmp/ruoyi-office-vben-custom/apps/web-antd/src/components/form-create/components/remote-data-source-select.test.ts
+- Create: ruoyi-office-vben/apps/web-antd/src/components/form-create/components/remote-data-source-select.vue
+- Create: ruoyi-office-vben/apps/web-antd/src/components/form-create/rules/use-remote-data-source-rule.ts
+- Modify: ruoyi-office-vben/apps/web-antd/src/components/form-create/helpers.ts
+- Modify: ruoyi-office-vben/apps/web-antd/src/components/form-create/typing.ts
+- Modify: ruoyi-office-vben/apps/web-antd/src/plugins/form-create/index.ts
+- Test: ruoyi-office-vben/apps/web-antd/src/components/form-create/components/remote-data-source-select.test.ts
 
 **Interfaces:**
 - Props: dataSourceCode, parameterBindings, labelField, valueField, multiple, pageable, dependencies, onDependencyChange, outputMappings, formCreateInject.
