@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS "bpm_form_data_source" (
     "update_time" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deleted" bit NOT NULL DEFAULT FALSE,
     "tenant_id" bigint NOT NULL DEFAULT 0,
-    PRIMARY KEY ("id")
+    PRIMARY KEY ("id"),
+    CONSTRAINT "uk_bpm_form_ds_code_tenant_deleted" UNIQUE ("code", "tenant_id", "deleted")
 ) COMMENT 'BPM 表单数据源定义';
 
 CREATE TABLE IF NOT EXISTS "bpm_form_data_source_version" (
@@ -78,7 +79,8 @@ CREATE TABLE IF NOT EXISTS "bpm_form_data_source_version" (
     "update_time" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deleted" bit NOT NULL DEFAULT FALSE,
     "tenant_id" bigint NOT NULL DEFAULT 0,
-    PRIMARY KEY ("id")
+    PRIMARY KEY ("id"),
+    CONSTRAINT "uk_bpm_form_ds_version_deleted" UNIQUE ("data_source_id", "version", "deleted")
 ) COMMENT 'BPM 表单数据源版本';
 
 CREATE TABLE IF NOT EXISTS "bpm_form_data_source_log" (
@@ -101,3 +103,6 @@ CREATE TABLE IF NOT EXISTS "bpm_form_data_source_log" (
     "tenant_id" bigint NOT NULL DEFAULT 0,
     PRIMARY KEY ("id")
 ) COMMENT 'BPM 表单数据源调用日志';
+
+CREATE INDEX IF NOT EXISTS "idx_bpm_form_ds_log_create_time"
+    ON "bpm_form_data_source_log" ("data_source_id", "create_time");

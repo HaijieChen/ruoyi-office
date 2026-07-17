@@ -26,6 +26,9 @@ public interface BpmFormDataSourceVersionMapper extends BaseMapperX<BpmFormDataS
 
     /**
      * 获取下一个版本号
+     *
+     * <p>注意：该计算不是原子操作。调用方必须在生命周期事务中串行化同一数据源的版本创建，
+     * 并对唯一约束冲突进行明确处理，不得将本方法视为并发安全的发号器。
      */
     default Integer selectNextVersion(Long dataSourceId) {
         BpmFormDataSourceVersionDO maxVersion = selectOne(new LambdaQueryWrapper<BpmFormDataSourceVersionDO>()
