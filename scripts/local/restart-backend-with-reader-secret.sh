@@ -24,7 +24,8 @@ openssl rand -hex 32 >"${temporary_secret}"
 docker start "${mysql_container}" "${redis_container}" >/dev/null
 
 new_password=$(tr -d '\n' <"${temporary_secret}")
-printf "ALTER USER 'ruoyi_form_reader'@'%%' IDENTIFIED BY '%s'; FLUSH PRIVILEGES;\n" "${new_password}" \
+printf "CREATE USER IF NOT EXISTS 'ruoyi_form_reader'@'%%' IDENTIFIED BY '%s'; ALTER USER 'ruoyi_form_reader'@'%%' IDENTIFIED BY '%s'; REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'ruoyi_form_reader'@'%%'; GRANT SELECT ON \`ruoyi-office\`.* TO 'ruoyi_form_reader'@'%%'; FLUSH PRIVILEGES;\n" \
+  "${new_password}" "${new_password}" \
   | docker exec -i "${mysql_container}" sh -lc 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"' >/dev/null
 unset new_password
 
