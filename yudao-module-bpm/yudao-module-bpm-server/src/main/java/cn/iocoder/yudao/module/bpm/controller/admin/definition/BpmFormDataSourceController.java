@@ -55,6 +55,14 @@ public class BpmFormDataSourceController {
         return success(dataSourceService.createDataSource(reqVO));
     }
 
+    @PostMapping("/create-with-draft")
+    @Operation(summary = "原子创建表单数据源定义和首个版本草稿")
+    @PreAuthorize("@ss.hasPermission('bpm:form-data-source:create')")
+    public CommonResult<Long> createDataSourceWithDraft(
+            @Valid @RequestBody BpmFormDataSourceCreateWithDraftReqVO reqVO) {
+        return success(dataSourceService.createDataSourceWithDraft(reqVO.getDefinition(), reqVO.getVersion()));
+    }
+
     @PutMapping("/update")
     @Operation(summary = "更新表单数据源定义")
     @PreAuthorize("@ss.hasPermission('bpm:form-data-source:update')")

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -65,6 +66,41 @@ class BpmFormDataSourceServiceTest {
         verify(dataSourceMapper).insert(org.mockito.ArgumentMatchers.<BpmFormDataSourceDO>argThat(
                 source -> CommonStatusEnum.isEnable(source.getStatus())
                 && source.getPublishedVersion() == null));
+        verifyNoInteractions(versionMapper);
+    }
+
+    @Test
+    void createDataSourceWithDraft_createsDefinitionAndInitialDraftAsOneOperation() {
+        doAnswer(invocation -> {
+            invocation.<BpmFormDataSourceDO>getArgument(0).setId(10L);
+            return 1;
+        }).when(dataSourceMapper).insert(any(BpmFormDataSourceDO.class));
+        when(dataSourceMapper.selectByIdForUpdate(10L)).thenReturn(source(10L, null));
+        when(versionMapper.selectLatestDraft(10L)).thenReturn(null);
+        when(versionMapper.selectNextVersion(10L)).thenReturn(1);
+        doAnswer(invocation -> {
+            invocation.<BpmFormDataSourceVersionDO>getArgument(0).setId(20L);
+            return 1;
+        }).when(versionMapper).insert(any(BpmFormDataSourceVersionDO.class));
+
+        Long sourceId = service.createDataSourceWithDraft(sourceReq("oa_available_seals"),
+                sqlVersionReq("SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId"));
+
+        assertEquals(10L, sourceId);
+        InOrder inOrder = inOrder(dataSourceMapper, versionMapper);
+        inOrder.verify(dataSourceMapper).insert(any(BpmFormDataSourceDO.class));
+        inOrder.verify(versionMapper).insert(org.mockito.ArgumentMatchers.<BpmFormDataSourceVersionDO>argThat(
+                version -> version.getDataSourceId() == 10L && version.getVersion() == 1
+                        && BpmFormDataSourceVersionStatusEnum.isDraft(version.getStatus())));
+    }
+
+    @Test
+    void createDataSourceWithDraft_validatesDraftBeforeCreatingDefinition() {
+        ServiceException error = assertThrows(ServiceException.class, () -> service.createDataSourceWithDraft(
+                sourceReq("oa_available_seals"), sqlVersionReq("DELETE FROM oa_seal")));
+
+        assertEquals(BPM_DATA_SOURCE_SQL_READ_ONLY.getCode(), error.getCode());
+        verify(dataSourceMapper, never()).insert(any(BpmFormDataSourceDO.class));
         verifyNoInteractions(versionMapper);
     }
 

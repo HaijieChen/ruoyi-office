@@ -17,6 +17,9 @@ public interface BpmFormDataSourceService {
 
     Long createDataSource(BpmFormDataSourceSaveReqVO reqVO);
 
+    Long createDataSourceWithDraft(BpmFormDataSourceSaveReqVO definition,
+                                   BpmFormDataSourceVersionSaveReqVO version);
+
     void updateDataSource(BpmFormDataSourceSaveReqVO reqVO);
 
     BpmFormDataSourceDO getDataSource(Long id);

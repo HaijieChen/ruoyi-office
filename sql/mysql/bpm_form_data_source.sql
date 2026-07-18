@@ -69,3 +69,75 @@ CREATE TABLE `bpm_form_data_source_log` (
     PRIMARY KEY (`id`),
     KEY `idx_ds_create_time` (`data_source_id`, `create_time`)
 ) ENGINE=InnoDB COMMENT='BPM 表单数据源调用日志';
+
+-- ----------------------------
+-- BPM 表单数据源菜单（可重复执行）
+-- ----------------------------
+-- 优先匹配生产环境的“流程设置”，兼容上游初始化脚本中的旧名称“流程管理”。
+-- parent_id 和子菜单 id 均通过稳定业务字段查询，不依赖固定数字编号。
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '表单数据源', '', 2, 7, parent_menu.id, 'form-data-source', 'fa:database',
+       'bpm/form-data-source/index', 'BpmFormDataSource', 0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
+FROM (
+    SELECT `id`
+    FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `type` = 1
+      AND `name` IN ('流程设置', '流程管理')
+    ORDER BY CASE WHEN `name` = '流程设置' THEN 0 ELSE 1 END
+    LIMIT 1
+) parent_menu
+WHERE NOT EXISTS (
+    SELECT 1 FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'bpm/form-data-source/index'
+);
+
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '表单数据源查询', 'bpm:form-data-source:query', 3, 1, page_menu.id, '', '', '', NULL,
+       0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
+FROM (SELECT `id` FROM `system_menu`
+      WHERE `deleted` = b'0' AND `component` = 'bpm/form-data-source/index' LIMIT 1) page_menu
+WHERE NOT EXISTS (
+    SELECT 1 FROM `system_menu`
+    WHERE `deleted` = b'0' AND `permission` = 'bpm:form-data-source:query'
+);
+
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '表单数据源创建', 'bpm:form-data-source:create', 3, 2, page_menu.id, '', '', '', NULL,
+       0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
+FROM (SELECT `id` FROM `system_menu`
+      WHERE `deleted` = b'0' AND `component` = 'bpm/form-data-source/index' LIMIT 1) page_menu
+WHERE NOT EXISTS (
+    SELECT 1 FROM `system_menu`
+    WHERE `deleted` = b'0' AND `permission` = 'bpm:form-data-source:create'
+);
+
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '表单数据源更新', 'bpm:form-data-source:update', 3, 3, page_menu.id, '', '', '', NULL,
+       0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
+FROM (SELECT `id` FROM `system_menu`
+      WHERE `deleted` = b'0' AND `component` = 'bpm/form-data-source/index' LIMIT 1) page_menu
+WHERE NOT EXISTS (
+    SELECT 1 FROM `system_menu`
+    WHERE `deleted` = b'0' AND `permission` = 'bpm:form-data-source:update'
+);
+
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '表单数据源发布', 'bpm:form-data-source:publish', 3, 4, page_menu.id, '', '', '', NULL,
+       0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
+FROM (SELECT `id` FROM `system_menu`
+      WHERE `deleted` = b'0' AND `component` = 'bpm/form-data-source/index' LIMIT 1) page_menu
+WHERE NOT EXISTS (
+    SELECT 1 FROM `system_menu`
+    WHERE `deleted` = b'0' AND `permission` = 'bpm:form-data-source:publish'
+);

@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.bpm.controller.admin.definition;
 
+import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.datasource.BpmFormDataSourceCreateWithDraftReqVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.datasource.BpmFormDataSourceVersionSummaryRespVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +21,15 @@ class BpmFormDataSourceControllerSecurityTest {
 
         assertEquals("@ss.hasPermission('bpm:form-data-source:publish')",
                 publish.getAnnotation(PreAuthorize.class).value());
+    }
+
+    @Test
+    void atomicCreateWithDraftRequiresCreatePermission() throws NoSuchMethodException {
+        Method create = BpmFormDataSourceController.class.getMethod(
+                "createDataSourceWithDraft", BpmFormDataSourceCreateWithDraftReqVO.class);
+
+        assertEquals("@ss.hasPermission('bpm:form-data-source:create')",
+                create.getAnnotation(PreAuthorize.class).value());
     }
 
     @Test

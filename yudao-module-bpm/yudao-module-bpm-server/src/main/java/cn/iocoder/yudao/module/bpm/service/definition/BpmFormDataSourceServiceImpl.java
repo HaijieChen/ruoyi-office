@@ -88,6 +88,19 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public Long createDataSourceWithDraft(BpmFormDataSourceSaveReqVO definition,
+                                          BpmFormDataSourceVersionSaveReqVO version) {
+        // Validate both halves before the first insert. The surrounding transaction also guarantees that a later
+        // duplicate-key race or draft persistence failure rolls the definition back instead of leaving an orphan.
+        validateDefinition(definition);
+        validateVersion(definition.getType(), version);
+        Long sourceId = createDataSource(definition);
+        saveDraft(sourceId, version);
+        return sourceId;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateDataSource(BpmFormDataSourceSaveReqVO reqVO) {
         if (reqVO == null || reqVO.getId() == null) {
             throw exception(BPM_DATA_SOURCE_NOT_EXISTS);
