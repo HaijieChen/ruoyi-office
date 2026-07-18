@@ -86,7 +86,6 @@ export function collectDesignerFormFields(rules: unknown[]): DesignerField[] {
         field &&
         title &&
         SAFE_FIELD.test(field) &&
-        type !== 'RemoteDataSourceSelect' &&
         !CONTAINER_TYPES.has(type) &&
         !seen.has(field)
       ) {
@@ -174,7 +173,12 @@ export function validateRemoteProps(
     metadata.parameterFields.map((field) => field.name),
   );
   const resultNames = new Set(metadata.resultFields.map((field) => field.name));
-  const targetNames = new Set(fields.map((field) => field.field));
+  const formFieldNames = new Set(fields.map((field) => field.field));
+  const targetNames = new Set(
+    fields
+      .filter((field) => field.type !== 'RemoteDataSourceSelect')
+      .map((field) => field.field),
+  );
 
   if (props.dataSourceCode && props.dataSourceCode !== metadata.code) {
     issues.push(issue('DATA_SOURCE_MISMATCH', '当前配置与所选数据源不一致'));
@@ -239,7 +243,7 @@ export function validateRemoteProps(
     }
   }
   for (const dependency of props.dependencies ?? []) {
-    if (!targetNames.has(dependency)) {
+    if (!formFieldNames.has(dependency)) {
       issues.push(issue('DEPENDENCY_FIELD_INVALID', `依赖字段 ${dependency} 不在当前表单中`, dependency));
     }
   }

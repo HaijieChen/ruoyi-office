@@ -61,6 +61,9 @@ const activeProps = computed<RemoteProps>(() => activeRule.value?.props ?? {});
 const formFields = computed(() =>
   collectDesignerFormFields(props.getFormRules?.() ?? []),
 );
+const referenceFields = computed(() =>
+  formFields.value.filter((field) => field.field !== activeRule.value?.field),
+);
 const sourceOptions = computed<SelectOption[]>(() => {
   const options = sources.value.map((source) => ({
     label: `${source.name}（${source.code} · V${source.publishedVersion}）`,
@@ -78,14 +81,22 @@ const resultOptions = computed(() =>
 const parameterOptions = computed(() =>
   metadata.value ? buildSchemaOptions(metadata.value.parameterFields) : [],
 );
-const targetOptions = computed<SelectOption[]>(() =>
-  formFields.value.map((field) => ({
+const referenceOptions = computed<SelectOption[]>(() =>
+  referenceFields.value.map((field) => ({
     label: `${field.title}（${field.field}）`,
     value: field.field,
   })),
 );
+const targetOptions = computed<SelectOption[]>(() =>
+  referenceOptions.value.filter((option) =>
+    referenceFields.value.some(
+      (field) =>
+        field.field === option.value && field.type !== 'RemoteDataSourceSelect',
+    ),
+  ),
+);
 const bindingGroups = computed(() =>
-  buildBindingExpressionGroups(formFields.value),
+  buildBindingExpressionGroups(referenceFields.value),
 );
 const bindingOptions = computed(() =>
   bindingGroups.value.flatMap((group) => group.options),
@@ -112,7 +123,7 @@ const outputRows = computed(() =>
 );
 const issues = computed(() =>
   metadata.value
-    ? validateRemoteProps(metadata.value, formFields.value, activeProps.value)
+    ? validateRemoteProps(metadata.value, referenceFields.value, activeProps.value)
     : [],
 );
 const unavailable = computed(() => Boolean(error.value || !metadata.value));
@@ -371,7 +382,7 @@ onMounted(async () => {
         data-testid="source-select"
         data-next-value="crm_suppliers"
         class="min-w-0 flex-1"
-        :model-value="activeProps.dataSourceCode || modelValue"
+        :value="activeProps.dataSourceCode || modelValue"
         :options="sourceOptions"
         placeholder="请选择已发布数据源"
         @change="handleSourceChange"
@@ -425,7 +436,7 @@ onMounted(async () => {
           <ASelect
             data-schema-select
             :disabled="unavailable || !resultOptions.length"
-            :model-value="activeProps.labelField"
+            :value="activeProps.labelField"
             :options="optionWithHistoricalValue(resultOptions, activeProps.labelField)"
             @change="(value: string) => updateProps({ labelField: value })"
           />
@@ -435,7 +446,7 @@ onMounted(async () => {
           <ASelect
             data-schema-select
             :disabled="unavailable || !resultOptions.length"
-            :model-value="activeProps.valueField"
+            :value="activeProps.valueField"
             :options="optionWithHistoricalValue(resultOptions, activeProps.valueField)"
             @change="(value: string) => updateProps({ valueField: value })"
           />
@@ -459,14 +470,14 @@ onMounted(async () => {
           <ASelect
             data-schema-select
             class="flex-1"
-            :model-value="row.parameter"
+            :value="row.parameter"
             :options="parameterRowOptions(row.parameter)"
             @change="(value: string) => setParameterBinding(row.parameter, value)"
           />
           <ASelect
             data-schema-select
             class="flex-1"
-            :model-value="row.binding"
+            :value="row.binding"
             :options="optionWithHistoricalValue(bindingOptions, row.binding)"
             @change="(value: string) => setBindingExpression(row.parameter, value)"
           />
@@ -491,14 +502,14 @@ onMounted(async () => {
           <ASelect
             data-schema-select
             class="flex-1"
-            :model-value="row.result"
+            :value="row.result"
             :options="outputRowOptions(row.result)"
             @change="(value: string) => setOutputResult(row.result, value)"
           />
           <ASelect
             data-schema-select
             class="flex-1"
-            :model-value="row.target"
+            :value="row.target"
             :options="optionWithHistoricalValue(targetOptions, row.target)"
             @change="(value: string) => setOutputTarget(row.result, value)"
           />
@@ -515,7 +526,7 @@ onMounted(async () => {
           <ASelect
             data-schema-select
             allow-clear
-            :model-value="activeProps.searchParamName"
+            :value="activeProps.searchParamName"
             :options="parameterPurposeOptions(activeProps.searchParamName)"
             @change="(value?: string) => updateProps({ searchParamName: value })"
           />
@@ -524,9 +535,10 @@ onMounted(async () => {
           <span>依赖字段</span>
           <ASelect
             data-schema-select
+            data-testid="dependency-select"
             mode="multiple"
-            :model-value="activeProps.dependencies || []"
-            :options="targetOptions"
+            :value="activeProps.dependencies || []"
+            :options="referenceOptions"
             @change="(value: string[]) => updateProps({ dependencies: value })"
           />
         </label>
@@ -543,7 +555,7 @@ onMounted(async () => {
             <span>页码参数</span>
             <ASelect
               data-schema-select
-              :model-value="activeProps.pageNoParamName"
+              :value="activeProps.pageNoParamName"
               :options="parameterPurposeOptions(activeProps.pageNoParamName)"
               @change="(value?: string) => updateProps({ pageNoParamName: value })"
             />
@@ -552,7 +564,7 @@ onMounted(async () => {
             <span>每页条数参数</span>
             <ASelect
               data-schema-select
-              :model-value="activeProps.pageSizeParamName"
+              :value="activeProps.pageSizeParamName"
               :options="parameterPurposeOptions(activeProps.pageSizeParamName)"
               @change="(value?: string) => updateProps({ pageSizeParamName: value })"
             />
@@ -572,7 +584,7 @@ onMounted(async () => {
           <ASelect
             data-schema-select
             allow-clear
-            :model-value="activeProps.snapshotField"
+            :value="activeProps.snapshotField"
             :options="optionWithHistoricalValue(targetOptions, activeProps.snapshotField)"
             @change="(value?: string) => updateProps({ snapshotField: value })"
           />
@@ -581,7 +593,7 @@ onMounted(async () => {
           <span>依赖变更策略</span>
           <ASelect
             data-schema-select
-            :model-value="activeProps.onDependencyChange || 'clear-and-reload'"
+            :value="activeProps.onDependencyChange || 'clear-and-reload'"
             :options="[
               { label: '清空并重新加载', value: 'clear-and-reload' },
               { label: '保留有效值并重新加载', value: 'keep-and-revalidate' },

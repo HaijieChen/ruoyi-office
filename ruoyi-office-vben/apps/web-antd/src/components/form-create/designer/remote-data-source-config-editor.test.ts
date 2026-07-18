@@ -29,7 +29,7 @@ vi.mock('#/api/bpm/form-data-source', () => ({
 const SelectStub = defineComponent({
   name: 'ASelect',
   inheritAttrs: false,
-  props: ['disabled', 'modelValue', 'options'],
+  props: ['disabled', 'options', 'value'],
   emits: ['change', 'update:modelValue'],
   setup(props, { attrs, emit }) {
     return () =>
@@ -37,6 +37,7 @@ const SelectStub = defineComponent({
         'button',
         {
           ...attrs,
+          'data-current-value': JSON.stringify(props.value),
           disabled: props.disabled,
           onClick: () => {
             const value = (attrs['data-next-value'] as string) || '';
@@ -178,6 +179,33 @@ beforeEach(() => {
 });
 
 describe('RemoteDataSourceConfigEditor', () => {
+  it('binds saved values through the Ant Design Vue value prop', async () => {
+    const { wrapper } = mountEditor();
+    await flushPromises();
+
+    expect(
+      wrapper.get('[data-testid="source-select"]').attributes('data-current-value'),
+    ).toBe('"crm_customers"');
+  });
+
+  it('offers other remote selectors as dependency fields', async () => {
+    const { wrapper } = mountEditor({
+      formRules: [
+        {
+          field: 'companyId',
+          title: '主体公司',
+          type: 'RemoteDataSourceSelect',
+        },
+        { field: 'customerName', title: '客商名称', type: 'input' },
+      ],
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="dependency-select"]').text()).toContain(
+      '"value":"companyId"',
+    );
+  });
+
   it('uses strict selects and labels missing historical values explicitly', async () => {
     const { wrapper } = mountEditor({
       activeProps: { labelField: 'deletedField' },

@@ -43,7 +43,7 @@ describe('remote data source designer model', () => {
     ]);
   });
 
-  it('walks every designer rule container and excludes remote selectors', () => {
+  it('walks every designer rule container and keeps remote selectors as dependencies', () => {
     const rules = [
       {
         children: [{ field: 'phone', title: '联系电话', type: 'input' }],
@@ -76,7 +76,7 @@ describe('remote data source designer model', () => {
       collectDesignerFormFields(rules)
         .map((item) => item.field)
         .toSorted(),
-    ).toEqual(['customerName', 'email', 'phone', 'taxNo']);
+    ).toEqual(['customerId', 'customerName', 'email', 'phone', 'taxNo']);
   });
 
   it('creates only safe FORM, USER and PROCESS binding expressions', () => {
@@ -135,6 +135,38 @@ describe('remote data source designer model', () => {
         'BINDING_EXPRESSION_INVALID',
         'RESULT_FIELD_INVALID',
         'TARGET_FIELD_INVALID',
+      ]),
+    );
+  });
+
+  it('allows remote selectors as dependencies but not as output targets', () => {
+    const fields = collectDesignerFormFields([
+      {
+        field: 'companyId',
+        title: '主体公司',
+        type: 'RemoteDataSourceSelect',
+      },
+      { field: 'companyName', title: '主体公司名称', type: 'input' },
+    ]);
+
+    const issues = validateRemoteProps(metadata, fields, {
+      dataSourceCode: 'crm_customers',
+      dependencies: ['companyId'],
+      labelField: 'name',
+      outputMappings: { name: 'companyId' },
+      parameterBindings: { company: 'FORM.companyId' },
+      valueField: 'id',
+    });
+
+    expect(issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'BINDING_EXPRESSION_INVALID' }),
+        expect.objectContaining({ code: 'DEPENDENCY_FIELD_INVALID' }),
+      ]),
+    );
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'TARGET_FIELD_INVALID' }),
       ]),
     );
   });
