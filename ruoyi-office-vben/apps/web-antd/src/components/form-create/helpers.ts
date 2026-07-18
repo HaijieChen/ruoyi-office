@@ -144,8 +144,31 @@ export function parseFormFields(
     // }
   }
   if (children && Array.isArray(children)) {
-    children.forEach((rule) => {
-      parseFormFields(rule, fields);
+    children.forEach((childRule) => {
+      parseFormFields(childRule, fields);
+    });
+  }
+  if (Array.isArray(rule.props?.rule)) {
+    rule.props.rule.forEach((childRule: Record<string, any>) => {
+      parseFormFields(childRule, fields, tempTitle || parentTitle);
+    });
+  }
+  if (Array.isArray(rule.props?.columns)) {
+    rule.props.columns.forEach((column: Record<string, any>) => {
+      if (Array.isArray(column?.rule)) {
+        column.rule.forEach((childRule: Record<string, any>) => {
+          parseFormFields(childRule, fields, tempTitle || parentTitle);
+        });
+      }
+    });
+  }
+  if (Array.isArray(rule.control)) {
+    rule.control.forEach((control: Record<string, any>) => {
+      if (Array.isArray(control?.rule)) {
+        control.rule.forEach((childRule: Record<string, any>) => {
+          parseFormFields(childRule, fields, parentTitle);
+        });
+      }
     });
   }
 }

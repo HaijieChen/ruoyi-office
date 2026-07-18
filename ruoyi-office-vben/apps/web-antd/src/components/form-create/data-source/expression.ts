@@ -20,28 +20,31 @@ function invalidBinding(binding: string): Error {
   return new Error(`Invalid binding expression: ${binding}`);
 }
 
+export function isBindingExpressionAllowed(binding: string): boolean {
+  if (!PATH_PATTERN.test(binding)) return false;
+  const segments = binding.split('.');
+  if (segments.some((segment) => FORBIDDEN_SEGMENTS.has(segment))) return false;
+
+  const [root, ...path] = segments;
+  if (root === 'USER') {
+    return path.length === 1 && USER_FIELDS.has(path[0] as string);
+  }
+  if (root === 'PROCESS') {
+    return path.length === 1 && PROCESS_FIELDS.has(path[0] as string);
+  }
+  return root === 'FORM' && path.length > 0;
+}
+
 export function resolveBinding(
   binding: string,
   context: BindingContext,
 ): unknown {
-  if (!PATH_PATTERN.test(binding)) {
+  if (!isBindingExpressionAllowed(binding)) {
     throw invalidBinding(binding);
   }
 
   const segments = binding.split('.');
-  if (segments.some((segment) => FORBIDDEN_SEGMENTS.has(segment))) {
-    throw invalidBinding(binding);
-  }
-
   const [root, ...path] = segments;
-  if (
-    (root === 'USER' &&
-      (path.length !== 1 || !USER_FIELDS.has(path[0] as string))) ||
-    (root === 'PROCESS' &&
-      (path.length !== 1 || !PROCESS_FIELDS.has(path[0] as string)))
-  ) {
-    throw invalidBinding(binding);
-  }
 
   let value: unknown = context[root as keyof BindingContext];
   for (const segment of path) {

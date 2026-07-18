@@ -52,6 +52,19 @@ export namespace BpmFormDataSourceApi {
     type: string;
   }
 
+  export interface PublishedMetadata {
+    code: string;
+    id: number;
+    labelField?: string;
+    name: string;
+    pageable: boolean;
+    parameterFields: SchemaField[];
+    publishedVersion: number;
+    resultFields: SchemaField[];
+    type: number;
+    valueField?: string;
+  }
+
   export interface VersionSaveReq {
     cacheSeconds?: number;
     labelField?: string;
@@ -132,6 +145,14 @@ export function updateDataSource(data: BpmFormDataSourceApi.DefinitionSaveReq) {
 export function getDataSourceSimpleList() {
   return requestClient.get<BpmFormDataSourceApi.Definition[]>(
     '/bpm/form-data-source/simple-list',
+  );
+}
+
+/** Safe published field metadata for the form designer; executable configuration is never returned. */
+export function getPublishedDataSourceMetadata(code: string) {
+  return requestClient.get<BpmFormDataSourceApi.PublishedMetadata>(
+    '/bpm/form-data-source/published-metadata',
+    { params: { code } },
   );
 }
 

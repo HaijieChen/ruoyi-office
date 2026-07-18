@@ -1,6 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
-import { hydrateRemoteDataSourceRules } from './helpers';
+import { hydrateRemoteDataSourceRules, parseFormFields } from './helpers';
+
+describe('parseFormFields', () => {
+  it('walks children, group rules, table columns and control rules', () => {
+    const fields: Array<Record<string, any>> = [];
+    parseFormFields(
+      {
+        children: [{ field: 'child', title: '子字段', type: 'input' }],
+        control: [
+          { rule: [{ field: 'controlled', title: '控制字段', type: 'input' }] },
+        ],
+        props: {
+          columns: [
+            { rule: [{ field: 'column', title: '列字段', type: 'input' }] },
+          ],
+          rule: [{ field: 'grouped', title: '分组字段', type: 'input' }],
+        },
+        type: 'group',
+      },
+      fields,
+    );
+
+    expect(fields.map((item) => item.field)).toEqual([
+      'child',
+      'grouped',
+      'column',
+      'controlled',
+    ]);
+  });
+});
 
 describe('hydrateRemoteDataSourceRules', () => {
   it('hydrates every rule container traversed by the backend parser', () => {
