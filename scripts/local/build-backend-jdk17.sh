@@ -15,7 +15,7 @@ docker run --rm \
   -v "${maven_cache}:/root/.m2" \
   -w /workspace \
   "${maven_image}" \
-  mvn -pl yudao-server -am clean package -DskipTests
+  mvn -Pboot -pl yudao-server -am clean package -DskipTests
 
 test -s "${jar_path}"
 jar tf "${jar_path}" | grep -q 'BOOT-INF/lib/yudao-module-crm-server-.*\.jar'

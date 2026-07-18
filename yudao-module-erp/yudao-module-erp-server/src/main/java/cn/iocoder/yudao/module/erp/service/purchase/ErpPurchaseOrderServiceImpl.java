@@ -43,7 +43,7 @@ import static cn.iocoder.yudao.module.erp.enums.ErrorCodeConstants.*;
 public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
 
     @Resource
-    private ErpPurchaseOrderMapper purchaseOrderMapper;
+    private ErpPurchaseOrderMapper erpPurchaseOrderMapper;
     @Resource
     private ErpPurchaseOrderItemMapper purchaseOrderItemMapper;
 
@@ -70,7 +70,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         }
         // 1.4 生成订单号，并校验唯一性
         String no = noRedisDAO.generate(ErpNoRedisDAO.PURCHASE_ORDER_NO_PREFIX);
-        if (purchaseOrderMapper.selectByNo(no) != null) {
+        if (erpPurchaseOrderMapper.selectByNo(no) != null) {
             throw exception(PURCHASE_ORDER_NO_EXISTS);
         }
 
@@ -78,7 +78,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         ErpPurchaseOrderDO purchaseOrder = BeanUtils.toBean(createReqVO, ErpPurchaseOrderDO.class, in -> in
                 .setNo(no).setStatus(ErpAuditStatus.PROCESS.getStatus()));
         calculateTotalPrice(purchaseOrder, purchaseOrderItems);
-        purchaseOrderMapper.insert(purchaseOrder);
+        erpPurchaseOrderMapper.insert(purchaseOrder);
         // 2.2 插入订单项
         purchaseOrderItems.forEach(o -> o.setOrderId(purchaseOrder.getId()));
         purchaseOrderItemMapper.insertBatch(purchaseOrderItems);
@@ -105,7 +105,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         // 2.1 更新订单
         ErpPurchaseOrderDO updateObj = BeanUtils.toBean(updateReqVO, ErpPurchaseOrderDO.class);
         calculateTotalPrice(updateObj, purchaseOrderItems);
-        purchaseOrderMapper.updateById(updateObj);
+        erpPurchaseOrderMapper.updateById(updateObj);
         // 2.2 更新订单项
         updatePurchaseOrderItemList(updateReqVO.getId(), purchaseOrderItems);
     }
@@ -143,7 +143,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         }
 
         // 2. 更新状态
-        int updateCount = purchaseOrderMapper.updateByIdAndStatus(id, purchaseOrder.getStatus(),
+        int updateCount = erpPurchaseOrderMapper.updateByIdAndStatus(id, purchaseOrder.getStatus(),
                 new ErpPurchaseOrderDO().setStatus(status));
         if (updateCount == 0) {
             throw exception(approve ? PURCHASE_ORDER_APPROVE_FAIL : PURCHASE_ORDER_PROCESS_FAIL);
@@ -204,7 +204,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         });
         // 2. 更新采购订单
         BigDecimal totalInCount = getSumValue(inCountMap.values(), value -> value, BigDecimal::add, BigDecimal.ZERO);
-        purchaseOrderMapper.updateById(new ErpPurchaseOrderDO().setId(id).setInCount(totalInCount));
+        erpPurchaseOrderMapper.updateById(new ErpPurchaseOrderDO().setId(id).setInCount(totalInCount));
     }
 
     @Override
@@ -224,14 +224,14 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         });
         // 2. 更新采购订单
         BigDecimal totalReturnCount = getSumValue(returnCountMap.values(), value -> value, BigDecimal::add, BigDecimal.ZERO);
-        purchaseOrderMapper.updateById(new ErpPurchaseOrderDO().setId(orderId).setReturnCount(totalReturnCount));
+        erpPurchaseOrderMapper.updateById(new ErpPurchaseOrderDO().setId(orderId).setReturnCount(totalReturnCount));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePurchaseOrder(List<Long> ids) {
         // 1. 校验不处于已审批
-        List<ErpPurchaseOrderDO> purchaseOrders = purchaseOrderMapper.selectByIds(ids);
+        List<ErpPurchaseOrderDO> purchaseOrders = erpPurchaseOrderMapper.selectByIds(ids);
         if (CollUtil.isEmpty(purchaseOrders)) {
             return;
         }
@@ -244,14 +244,14 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
         // 2. 遍历删除，并记录操作日志
         purchaseOrders.forEach(purchaseOrder -> {
             // 2.1 删除订单
-            purchaseOrderMapper.deleteById(purchaseOrder.getId());
+            erpPurchaseOrderMapper.deleteById(purchaseOrder.getId());
             // 2.2 删除订单项
             purchaseOrderItemMapper.deleteByOrderId(purchaseOrder.getId());
         });
     }
 
     private ErpPurchaseOrderDO validatePurchaseOrderExists(Long id) {
-        ErpPurchaseOrderDO purchaseOrder = purchaseOrderMapper.selectById(id);
+        ErpPurchaseOrderDO purchaseOrder = erpPurchaseOrderMapper.selectById(id);
         if (purchaseOrder == null) {
             throw exception(PURCHASE_ORDER_NOT_EXISTS);
         }
@@ -260,7 +260,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
 
     @Override
     public ErpPurchaseOrderDO getPurchaseOrder(Long id) {
-        return purchaseOrderMapper.selectById(id);
+        return erpPurchaseOrderMapper.selectById(id);
     }
 
     @Override
@@ -274,7 +274,7 @@ public class ErpPurchaseOrderServiceImpl implements ErpPurchaseOrderService {
 
     @Override
     public PageResult<ErpPurchaseOrderDO> getPurchaseOrderPage(ErpPurchaseOrderPageReqVO pageReqVO) {
-        return purchaseOrderMapper.selectPage(pageReqVO);
+        return erpPurchaseOrderMapper.selectPage(pageReqVO);
     }
 
     // ==================== 订单项 ====================
