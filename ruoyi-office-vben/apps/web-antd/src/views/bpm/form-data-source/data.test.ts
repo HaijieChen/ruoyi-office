@@ -9,11 +9,59 @@ import {
 } from './data';
 
 describe('form data source editor data', () => {
+  it('normalizes and persists trimmed schema labels', () => {
+    const payload = buildVersionPayload({
+      config: {
+        sql: 'SELECT id FROM demo WHERE tenant_id = :tenantId',
+      },
+      pageable: false,
+      parameters: [
+        {
+          label: ' 当前租户 ',
+          name: 'tenantId',
+          required: true,
+          type: 'long',
+        },
+      ],
+      resultFields: [{ label: ' 编号 ', name: 'id', type: 'long' }],
+      sourceType: 1,
+    });
+
+    expect(JSON.parse(payload.parameterSchema ?? '[]')[0].label).toBe(
+      '当前租户',
+    );
+    expect(JSON.parse(payload.resultSchema ?? '[]')[0].label).toBe('编号');
+  });
+
+  it.each(['', '   ', '中'.repeat(65)])(
+    'rejects invalid schema label %j',
+    (label) => {
+      expect(() =>
+        buildVersionPayload({
+          config: {
+            sql: 'SELECT id FROM demo WHERE tenant_id = :tenantId',
+          },
+          pageable: false,
+          parameters: [{ label, name: 'tenantId', type: 'LONG' }],
+          resultFields: [{ label: '编号', name: 'id', type: 'LONG' }],
+          sourceType: 1,
+        }),
+      ).toThrow(/中文名称/);
+    },
+  );
+
   it('normalizes version limits and serializes schemas', () => {
     const payload = buildVersionPayload({
       maxRows: 9999,
-      parameters: [{ name: 'companyId', required: true, type: 'LONG' }],
-      resultFields: [{ name: 'id', type: 'LONG' }],
+      parameters: [
+        {
+          label: '主体公司',
+          name: 'companyId',
+          required: true,
+          type: 'LONG',
+        },
+      ],
+      resultFields: [{ label: '编号', name: 'id', type: 'LONG' }],
       timeoutSeconds: 99,
     });
 
@@ -22,10 +70,15 @@ describe('form data source editor data', () => {
       timeoutSeconds: 3,
     });
     expect(JSON.parse(payload.parameterSchema ?? '[]')).toEqual([
-      { name: 'companyId', required: true, type: 'LONG' },
+      {
+        label: '主体公司',
+        name: 'companyId',
+        required: true,
+        type: 'LONG',
+      },
     ]);
     expect(JSON.parse(payload.resultSchema ?? '[]')).toEqual([
-      { name: 'id', type: 'LONG' },
+      { label: '编号', name: 'id', type: 'LONG' },
     ]);
   });
 
@@ -65,7 +118,9 @@ describe('form data source editor data', () => {
 
   it('uses the same safe schema field contract as persistence and linkage', () => {
     expect(() =>
-      validateSchemaFieldNames([{ name: 'a'.repeat(63), type: 'STRING' }]),
+      validateSchemaFieldNames([
+        { label: '字段', name: 'a'.repeat(63), type: 'STRING' },
+      ]),
     ).not.toThrow();
     for (const name of [
       'a'.repeat(64),
@@ -75,7 +130,7 @@ describe('form data source editor data', () => {
       'prototype',
     ]) {
       expect(() =>
-        validateSchemaFieldNames([{ name, type: 'STRING' }]),
+        validateSchemaFieldNames([{ label: '字段', name, type: 'STRING' }]),
       ).toThrow();
     }
   });

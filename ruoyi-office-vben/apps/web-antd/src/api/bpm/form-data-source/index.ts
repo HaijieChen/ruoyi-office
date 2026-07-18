@@ -45,6 +45,7 @@ export namespace BpmFormDataSourceApi {
   }
 
   export interface SchemaField {
+    label: string;
     mask?: string;
     name: string;
     required?: boolean;

@@ -42,6 +42,7 @@ import {
   SCHEMA_TYPE_OPTIONS,
   SOURCE_TYPE_OPTIONS,
   validateSchemaFieldNames,
+  validateSchemaLabels,
 } from '../data';
 
 const emit = defineEmits(['success']);
@@ -98,11 +99,16 @@ function changeSourceType(value: unknown) {
 }
 
 function addParameter() {
-  version.parameters.push({ name: '', required: false, type: 'STRING' });
+  version.parameters.push({
+    label: '',
+    name: '',
+    required: false,
+    type: 'STRING',
+  });
 }
 
 function addResultField() {
-  version.resultFields.push({ name: '', type: 'STRING' });
+  version.resultFields.push({ label: '', name: '', type: 'STRING' });
 }
 
 function validateSchemaRows() {
@@ -111,6 +117,7 @@ function validateSchemaRows() {
     ['结果', version.resultFields],
   ] as const) {
     validateSchemaFieldNames(fields, label);
+    validateSchemaLabels(fields, label);
   }
   if (definition.type === 1) {
     if (!String(version.config.sql ?? '').trim())
@@ -295,8 +302,12 @@ const [Modal, modalApi] = useVbenModal({
         <div
           v-for="(field, index) in version.parameters"
           :key="index"
-          class="mb-2 grid grid-cols-[1fr_180px_120px_60px] gap-2"
+          class="mb-2 grid grid-cols-[1fr_1fr_150px_100px_60px] gap-2"
         >
+          <Input
+            v-model:value="field.label"
+            :placeholder="field.name || '中文名称'"
+          />
           <Input v-model:value="field.name" placeholder="参数名" />
           <Select v-model:value="field.type" :options="SCHEMA_TYPE_OPTIONS" />
           <Checkbox v-model:checked="field.required">必填</Checkbox>
@@ -324,8 +335,12 @@ const [Modal, modalApi] = useVbenModal({
         <div
           v-for="(field, index) in version.resultFields"
           :key="index"
-          class="mb-2 grid grid-cols-[1fr_180px_180px_60px] gap-2"
+          class="mb-2 grid grid-cols-[1fr_1fr_140px_150px_60px] gap-2"
         >
+          <Input
+            v-model:value="field.label"
+            :placeholder="field.name || '中文名称'"
+          />
           <Input v-model:value="field.name" placeholder="字段名" />
           <Select v-model:value="field.type" :options="SCHEMA_TYPE_OPTIONS" />
           <Select
@@ -356,7 +371,7 @@ const [Modal, modalApi] = useVbenModal({
             allow-clear
             :options="
               version.resultFields.map((field) => ({
-                label: field.name,
+                label: `${field.label || field.name}（${field.name}）`,
                 value: field.name,
               }))
             "
@@ -368,7 +383,7 @@ const [Modal, modalApi] = useVbenModal({
             allow-clear
             :options="
               version.resultFields.map((field) => ({
-                label: field.name,
+                label: `${field.label || field.name}（${field.name}）`,
                 value: field.name,
               }))
             "

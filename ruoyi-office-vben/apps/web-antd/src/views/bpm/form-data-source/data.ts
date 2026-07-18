@@ -78,12 +78,27 @@ function clampInteger(
 }
 
 function normalizeSchemaFields(fields: BpmFormDataSourceApi.SchemaField[]) {
-  return fields.map(({ mask, name, required, type }) => ({
+  return fields.map(({ label, mask, name, required, type }) => ({
     ...(mask ? { mask } : {}),
+    label: label.trim(),
     name: name.trim(),
     ...(required === undefined ? {} : { required }),
     type: type.toUpperCase(),
   }));
+}
+
+export function validateSchemaLabels(
+  fields: BpmFormDataSourceApi.SchemaField[],
+  section = 'Schema',
+) {
+  if (
+    fields.some((field) => {
+      const label = field.label?.trim();
+      return !label || label.length > 64;
+    })
+  ) {
+    throw new Error(`${section}字段中文名称必填，且长度不能超过 64 个字符`);
+  }
 }
 
 export function validateSchemaFieldNames(
@@ -136,6 +151,8 @@ export function buildVersionPayload(
 ): BpmFormDataSourceApi.VersionSaveReq {
   validateSchemaFieldNames(values.parameters ?? [], '参数');
   validateSchemaFieldNames(values.resultFields ?? [], '结果');
+  validateSchemaLabels(values.parameters ?? [], '参数');
+  validateSchemaLabels(values.resultFields ?? [], '结果');
   const parameters = normalizeSchemaFields(values.parameters ?? []);
   const resultFields = normalizeSchemaFields(values.resultFields ?? []);
   const cacheSeconds = Number.isFinite(values.cacheSeconds)
@@ -220,11 +237,17 @@ export function sanitizeTrialRunError(error: unknown) {
   return firstLine.slice(0, 160);
 }
 
-export function parseSchemaFields(value?: string) {
+export function parseSchemaFields(
+  value?: string,
+): BpmFormDataSourceApi.SchemaField[] {
   if (!value) return [];
   try {
     const fields = JSON.parse(value);
-    return Array.isArray(fields) ? fields : [];
+    if (!Array.isArray(fields)) return [];
+    return fields.map((field) => ({
+      ...field,
+      label: typeof field?.label === 'string' ? field.label : '',
+    }));
   } catch {
     return [];
   }
