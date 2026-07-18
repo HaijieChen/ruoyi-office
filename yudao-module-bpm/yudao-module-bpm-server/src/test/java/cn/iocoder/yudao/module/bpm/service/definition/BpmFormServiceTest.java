@@ -57,6 +57,22 @@ public class BpmFormServiceTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testCreateForm_largeFields() {
+        BpmFormSaveReqVO reqVO = randomPojo(BpmFormSaveReqVO.class, o -> {
+            o.setConf("{}");
+            o.setFields(List.of("""
+                    {"type":"input","field":"notes","title":"备注",
+                     "props":{"placeholder":"%s"}}
+                    """.formatted("x".repeat(6000))));
+        });
+
+        Long formId = formService.createForm(reqVO);
+
+        BpmFormDO form = formMapper.selectById(formId);
+        assertEquals(reqVO.getFields(), form.getFields());
+    }
+
+    @Test
     public void testCreateForm_missingDataSource() {
         BpmFormSaveReqVO reqVO = randomPojo(BpmFormSaveReqVO.class, o -> {
             o.setConf("{}");

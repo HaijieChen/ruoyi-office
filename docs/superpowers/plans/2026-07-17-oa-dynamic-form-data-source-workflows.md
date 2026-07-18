@@ -4,7 +4,7 @@
 
 **Goal:** Add secure configurable SQL data sources and reusable component linkage to the existing dynamic-form designer, then configure the OA forms and 15 workflow models described by the 318 workbook without modifying the BPMN engine.
 
-**Architecture:** The backend stores versioned data-source definitions, validates read-only parameterized SQL, and executes published versions through a dedicated read-only connection. The frontend adds a generic remote data-source component and a deterministic linkage resolver to form-create. OA forms reference published data-source codes; existing simple/BPMN designers configure process behavior and leave approvers unset for the administrator.
+**Architecture:** The backend stores versioned data-source definitions, validates read-only parameterized SQL, and executes published versions through a dedicated read-only connection. The frontend adds a generic remote data-source component and a deterministic linkage resolver to form-create. OA forms reference published data-source codes; existing simple/BPMN designers configure process behavior. Published v1 models use `admin` (user ID 1) only as an explicit placeholder approver that administrators must replace before production promotion.
 
 **Tech Stack:** Java 17, Spring Boot, MyBatis-Plus, Spring JDBC NamedParameterJdbcTemplate, JSqlParser, H2/MySQL, Vue 3, TypeScript, form-create, Vben Admin, Vitest, Flowable BPMN.
 
@@ -16,7 +16,7 @@
 - Data-source versions are immutable after publication.
 - Default query timeout is 3 seconds and default maximum result size is 200 rows.
 - BPMN/Flowable engine code is not modified.
-- Approval users are not hard-coded; approval nodes remain unconfigured for the administrator.
+- Business approvers are not hard-coded in application code. Runtime v1 models temporarily use `admin` (user ID 1) as a clearly documented placeholder so deployment and integration validation can complete; administrators must replace every placeholder before production promotion.
 - Existing running process instances and historical form values remain readable.
 - Preserve unrelated local changes in both repositories.
 - Backend repository: /Users/chenhaijie/workspace/3dm/royi-oa.
@@ -47,7 +47,7 @@ Frontend:
 Configuration:
 
 - OA forms configured from docs/OA流程优化-318（合同用印流程变动）.xlsx.
-- Eight draft simple-process models and seven draft BPMN models.
+- Eight published simple-process models and seven published BPMN models.
 - docs/OA流程优化-318-配置验收记录.md: IDs, keys, screenshots, tests, rollback.
 
 ---
@@ -501,14 +501,14 @@ Verify linkages, requiredness, history replay, upstream changes. Record form ID 
 
 ---
 
-### Task 11: Draw eight draft simple-process models
+### Task 11: Draw and publish eight simple-process models
 
 **Files:**
 - Update: docs/OA流程优化-318-配置验收记录.md
 - Runtime: existing simple designer.
 
 **Interfaces:**
-- Produces eight drafts with approvers unset.
+- Produces eight v1 models whose human nodes use the documented `admin` placeholder approver.
 
 - [ ] **Step 1: Draw exact sequences**
 
@@ -537,19 +537,19 @@ Verify linkages, requiredness, history replay, upstream changes. Record form ID 
       发起人 → 运营专员审批 → 财务审批 → 渠道总监审批 → 大额退款条件分支 → 副总审批/汇聚 → 执行办理 → 结束
 
 - [ ] **Step 2: Configure field permissions per applicant/finance/execution node**
-- [ ] **Step 3: Leave approvers unset; verify deployment is blocked by existing candidate validation**
+- [ ] **Step 3: Set `admin` (user ID 1) as placeholder on every human node; deploy and verify v1**
 - [ ] **Step 4: Record model IDs, keys, form IDs, screenshots**
 
 ---
 
-### Task 12: Draw seven draft BPMN models
+### Task 12: Draw and publish seven BPMN models
 
 **Files:**
 - Update: docs/OA流程优化-318-配置验收记录.md
 - Runtime: existing BPMN designer.
 
 **Interfaces:**
-- Produces seven valid drafts with approvers unset.
+- Produces seven valid v1 definitions; human nodes use the documented `admin` placeholder and the hidden orchestration parent has no human node.
 
 - [ ] **Step 1: oa_employee_resignation**
 
@@ -579,7 +579,7 @@ Import/start → generate receipt records → match business documents → multi
 
 Start → business-contract child → rebate child → recharge child → receipt-claim child → event gateway; normal end or refund/transfer child then end.
 
-- [ ] **Step 8: Validate/save all drafts, verify bindings/keys, leave approvers unset, record screenshots**
+- [ ] **Step 8: Validate/save all models, verify bindings/keys/placeholders, deploy v1 and record definition versions**
 
 ---
 
@@ -589,10 +589,10 @@ Start → business-contract child → rebate child → recharge child → receip
 - Update: docs/OA流程优化-318-配置验收记录.md
 
 **Interfaces:**
-- Consumes administrator-set approvers.
+- Consumes administrator replacement of the documented placeholder approvers.
 - Produces verified local deployment ready for production promotion.
 
-- [ ] **Step 1: Provide all approval-node names grouped by model; administrator sets candidates**
+- [ ] **Step 1: Provide all approval-node names grouped by model; administrator replaces every `admin` placeholder with the production candidate rule**
 - [ ] **Step 2: Deploy only models passing existing candidate validation; record definition IDs/versions**
 - [ ] **Step 3: Run fresh automated verification**
 
@@ -621,5 +621,5 @@ Frontend:
 - [ ] Published versions and historical values remain immutable/readable.
 - [ ] Both repositories have explicit tests and build commands.
 - [ ] All 8 simple and 7 BPMN models have exact node sequences.
-- [ ] Approvers remain administrator-configured.
+- [ ] Production approvers remain administrator-configured; `admin` is only a documented v1 placeholder.
 - [ ] Unrelated working-tree changes are preserved.
