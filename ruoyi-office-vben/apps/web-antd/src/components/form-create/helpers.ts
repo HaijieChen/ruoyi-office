@@ -2,7 +2,10 @@ import type { Rule } from '@form-create/ant-design-vue';
 
 import type { Ref } from 'vue';
 
-import type { Menu } from '#/components/form-create/typing';
+import type {
+  Menu,
+  RemoteDataSourceRuntimeContext,
+} from '#/components/form-create/typing';
 
 import { isRef, nextTick, onMounted } from 'vue';
 
@@ -15,6 +18,7 @@ import {
   useDictSelectRule,
   useEditorRule,
   useIframeRule,
+  useRemoteDataSourceRule,
   useSelectRule,
   useUploadFileRule,
   useUploadImageRule,
@@ -235,6 +239,7 @@ export async function useFormCreateDesigner(designer: Ref) {
     props: [...apiSelectRule],
     event: ['click', 'change', 'visibleChange', 'clear', 'blur', 'focus'],
   });
+  const remoteDataSourceRule = useRemoteDataSourceRule();
 
   /** 构建系统字段菜单 */
   function buildSystemMenu() {
@@ -247,6 +252,7 @@ export async function useFormCreateDesigner(designer: Ref) {
       deptSelectRule,
       dictSelectRule,
       apiSelectRule0,
+      remoteDataSourceRule,
     ];
     const menu: Menu = {
       name: 'system',
@@ -270,4 +276,55 @@ export async function useFormCreateDesigner(designer: Ref) {
     buildFormComponents();
     buildSystemMenu();
   });
+}
+
+/**
+ * Inject runtime context into all RemoteDataSourceSelect rules.
+ * Call this after setConfAndFields2 at each BPM form call site.
+ *
+ * Rules are walked recursively (children, control sub-rules).
+ * Only rules with type === 'RemoteDataSourceSelect' are modified.
+ * Designer preview passes no context, so the component renders
+ * persisted snapshot labels without issuing a backend request.
+ */
+export function hydrateRemoteDataSourceRules(
+  rules: any[],
+  context: RemoteDataSourceRuntimeContext | undefined,
+): void {
+  if (!rules || !Array.isArray(rules)) return;
+  for (const rule of rules) {
+    if (!rule || typeof rule !== 'object') continue;
+    if (rule.type === 'RemoteDataSourceSelect') {
+      if (!rule.props) rule.props = {};
+      if (context) {
+        rule.props.runtimeContext = context;
+      } else {
+        delete rule.props.runtimeContext;
+      }
+    }
+    // Recurse into children
+    if (Array.isArray(rule.children)) {
+      hydrateRemoteDataSourceRules(rule.children, context);
+    }
+    // group/subForm stores nested rules under props.rule.
+    if (Array.isArray(rule.props?.rule)) {
+      hydrateRemoteDataSourceRules(rule.props.rule, context);
+    }
+    // tableForm stores each column's rules under props.columns[].rule.
+    if (Array.isArray(rule.props?.columns)) {
+      for (const column of rule.props.columns) {
+        if (Array.isArray(column?.rule)) {
+          hydrateRemoteDataSourceRules(column.rule, context);
+        }
+      }
+    }
+    // Recurse into control sub-rules
+    if (Array.isArray(rule.control)) {
+      for (const ctrl of rule.control) {
+        if (Array.isArray(ctrl?.rule)) {
+          hydrateRemoteDataSourceRules(ctrl.rule, context);
+        }
+      }
+    }
+  }
 }

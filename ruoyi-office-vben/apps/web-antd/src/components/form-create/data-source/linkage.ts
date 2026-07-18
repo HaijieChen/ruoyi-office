@@ -27,10 +27,12 @@ const FORBIDDEN_PATH_SEGMENTS = new Set([
   'constructor',
   'prototype',
 ]);
+// Keep this byte-for-byte aligned with the backend ASCII field-name contract.
 const RECORD_PATH_PATTERN =
+  // eslint-disable-next-line regexp/prefer-w, regexp/use-ignore-case
   /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
-function readOwnPath(
+export function readOwnPath(
   record: Readonly<Record<string, unknown>>,
   path: string,
 ): unknown {
@@ -82,7 +84,7 @@ export function buildDependencyOrder(nodes: readonly LinkageNode[]): string[] {
   );
 
   for (const node of nodes) {
-    for (const dependency of new Set(node.dependencies ?? [])) {
+    for (const dependency of new Set(node.dependencies)) {
       consumers.get(dependency)?.add(node.field);
       indegree.set(node.field, (indegree.get(node.field) ?? 0) + 1);
     }
@@ -140,11 +142,12 @@ export function applyDependencyChange({
     };
   }
 
-  const currentValues = multiple
-    ? Array.isArray(currentValue)
-      ? [...currentValue]
-      : []
-    : [currentValue];
+  let currentValues: unknown[];
+  if (multiple) {
+    currentValues = Array.isArray(currentValue) ? [...currentValue] : [];
+  } else {
+    currentValues = [currentValue];
+  }
   const selectedRows: Record<string, unknown>[] = [];
   const retainedValues: unknown[] = [];
 
@@ -160,7 +163,7 @@ export function applyDependencyChange({
 
   const mappedValues = { ...clearedMappings };
   for (const [sourcePath, targetField] of Object.entries(outputMappings)) {
-    if (multiple) {
+    if (multiple && selectedRows.length > 0) {
       mappedValues[targetField] = selectedRows.map((row) =>
         readOwnPath(row, sourcePath),
       );

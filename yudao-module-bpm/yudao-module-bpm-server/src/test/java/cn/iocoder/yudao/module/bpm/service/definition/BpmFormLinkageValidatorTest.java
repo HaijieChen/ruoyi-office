@@ -264,6 +264,88 @@ class BpmFormLinkageValidatorTest {
     }
 
     @Test
+    void validate_requiresSearchParameterToBeSafePublishedAndNotBoundTwice() {
+        publishedVersion.setParameterSchema("""
+                [{"name":"tenantId","type":"LONG","required":true},
+                 {"name":"keyword","type":"STRING","required":true}]
+                """);
+
+        assertDoesNotThrow(() -> validator.validate(List.of(
+                remote("oa_available_seals", "sealIds", "\"searchParamName\":\"keyword\""))));
+
+        for (String invalidName : List.of("missing", "tenantId", "__proto__")) {
+            assertCode(BPM_DATA_SOURCE_CONFIG_INVALID, () -> validator.validate(List.of(
+                    remote("oa_available_seals", "sealIds",
+                            "\"searchParamName\":\"" + invalidName + "\""))));
+        }
+
+        assertCode(BPM_DATA_SOURCE_CONFIG_INVALID, () -> validator.validate(List.of(
+                remote("oa_available_seals", "sealIds",
+                        "\"searchParamName\":\"keyword\"," +
+                                "\"parameterBindings\":{\"keyword\":\"USER.companyId\"}"))));
+    }
+
+    @Test
+    void validate_requiresCompletePublishedPaginationControls() {
+        publishedVersion.setPageable(true).setParameterSchema("""
+                [{"name":"tenantId","type":"LONG","required":true},
+                 {"name":"pageNo","type":"INTEGER","required":true},
+                 {"name":"pageSize","type":"INTEGER","required":true}]
+                """);
+
+        assertDoesNotThrow(() -> validator.validate(List.of(
+                remote("oa_available_seals", "sealIds",
+                        "\"pageable\":true,\"pageNoParamName\":\"pageNo\"," +
+                                "\"pageSizeParamName\":\"pageSize\",\"pageSize\":20"))));
+
+        for (String invalidControls : List.of(
+                "\"pageable\":true",
+                "\"pageable\":true,\"pageNoParamName\":\"pageNo\"",
+                "\"pageable\":true,\"pageNoParamName\":\"missing\",\"pageSizeParamName\":\"pageSize\"",
+                "\"pageable\":true,\"pageNoParamName\":\"tenantId\",\"pageSizeParamName\":\"pageSize\"",
+                "\"pageable\":true,\"pageNoParamName\":\"pageNo\",\"pageSizeParamName\":\"pageNo\"",
+                "\"pageable\":true,\"pageNoParamName\":\"pageNo\",\"pageSizeParamName\":\"pageSize\",\"pageSize\":201")) {
+            assertCode(BPM_DATA_SOURCE_CONFIG_INVALID, () -> validator.validate(List.of(
+                    remote("oa_available_seals", "sealIds", invalidControls))));
+        }
+    }
+
+    @Test
+    void validate_rejectsPaginationControlsWhenComponentPaginationIsDisabled() {
+        publishedVersion.setParameterSchema("""
+                [{"name":"tenantId","type":"LONG","required":true},
+                 {"name":"pageNo","type":"INTEGER"},
+                 {"name":"pageSize","type":"INTEGER"}]
+                """);
+
+        assertCode(BPM_DATA_SOURCE_CONFIG_INVALID, () -> validator.validate(List.of(
+                remote("oa_available_seals", "sealIds",
+                        "\"pageable\":false,\"pageNoParamName\":\"pageNo\"," +
+                                "\"pageSizeParamName\":\"pageSize\""))));
+    }
+
+    @Test
+    void validate_requiresSnapshotTargetToBeDistinctExistingOrdinaryField() {
+        publishedVersion.setParameterSchema(
+                "[{\"name\":\"tenantId\",\"type\":\"LONG\",\"required\":true}]");
+
+        assertDoesNotThrow(() -> validator.validate(List.of(
+                field("sealSnapshot"),
+                remote("oa_available_seals", "sealIds", "\"snapshotField\":\"sealSnapshot\""))));
+
+        for (String invalidTarget : List.of("missingSnapshot", "sealIds")) {
+            assertCode(BPM_DATA_SOURCE_CONFIG_INVALID, () -> validator.validate(List.of(
+                    field("sealSnapshot"),
+                    remote("oa_available_seals", "sealIds",
+                            "\"snapshotField\":\"" + invalidTarget + "\""))));
+        }
+
+        assertCode(BPM_DATA_SOURCE_CONFIG_INVALID, () -> validator.validate(List.of(
+                remote("oa_available_seals", "sealSnapshot", "{}"),
+                remote("oa_available_seals", "sealIds", "\"snapshotField\":\"sealSnapshot\""))));
+    }
+
+    @Test
     void validate_rejectsDuplicateOutputTargetsWithinAndAcrossSelectors() {
         assertCode(BPM_DATA_SOURCE_RESULT_MAPPING_MISMATCH, () -> validator.validate(List.of(
                 field("keyword"), field("keeperName"),

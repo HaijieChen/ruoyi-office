@@ -22,7 +22,11 @@ import {
   createProcessInstance,
   getApprovalDetail as getApprovalDetailApi,
 } from '#/api/bpm/processInstance';
-import { decodeFields, setConfAndFields2 } from '#/components/form-create';
+import {
+  decodeFields,
+  hydrateRemoteDataSourceRules,
+  setConfAndFields2,
+} from '#/components/form-create';
 import { router } from '#/router';
 import ProcessInstanceBpmnViewer from '#/views/bpm/processInstance/detail/modules/bpm-viewer.vue';
 import ProcessInstanceSimpleViewer from '#/views/bpm/processInstance/detail/modules/simple-bpm-viewer.vue';
@@ -70,7 +74,6 @@ const tempStartUserSelectAssignees = ref<Record<string, string[]>>({});
 const bpmnXML = ref<string | undefined>(undefined);
 const simpleJson = ref<string | undefined>(undefined);
 
-const timelineRef = ref<any>();
 const activeTab = ref('form');
 const activityNodes = ref<BpmProcessInstanceApi.ApprovalNodeInfo[]>([]);
 const processInstanceStartLoading = ref(false);
@@ -139,6 +142,18 @@ async function initProcessInfo(row: any, formVariables?: any) {
     }
 
     setConfAndFields2(detailForm, row.formConf, row.formFields, formVariables);
+
+    // Hydrate RemoteDataSourceSelect rules with runtime context
+    hydrateRemoteDataSourceRules(
+      detailForm.value.rule,
+      Number.isInteger(row.formId) && row.formId > 0 && row.id
+        ? {
+            formId: row.formId,
+            processDefinitionId: row.id,
+            processDefinitionKey: row.key,
+          }
+        : undefined,
+    );
 
     // 在配置中禁用 form-create 自带的提交和重置按钮
     detailForm.value.option = {
@@ -303,7 +318,6 @@ defineExpose({ initProcessInfo });
           </Col>
           <Col :xs="24" :sm="24" :md="6" :lg="6" :xl="6">
             <ProcessInstanceTimeline
-              ref="timelineRef"
               :activity-nodes="activityNodes"
               :show-status-icon="false"
               @select-user-confirm="selectUserConfirm"

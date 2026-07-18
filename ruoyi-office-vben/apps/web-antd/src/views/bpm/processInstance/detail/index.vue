@@ -10,11 +10,15 @@ import { Page } from '@vben/common-ui';
 import {
   BpmModelFormType,
   BpmModelType,
-  BpmProcessInstanceStatus,
-  DICT_TYPE,
   BpmNodeIdEnum,
-  BpmTaskStatusEnum,
+  BpmProcessInstanceStatus,
 } from '@vben/constants';
+import {
+  SvgBpmApproveIcon,
+  SvgBpmCancelIcon,
+  SvgBpmRejectIcon,
+  SvgBpmRunningIcon,
+} from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 
 import { Card, Col, message, Row, TabPane, Tabs } from 'ant-design-vue';
@@ -24,14 +28,11 @@ import {
   getProcessInstanceBpmnModelView,
 } from '#/api/bpm/processInstance';
 import { getSimpleUserList } from '#/api/system/user';
-import { setConfAndFields2 } from '#/components/form-create';
-import { registerComponent } from '#/utils';
 import {
-  SvgBpmApproveIcon,
-  SvgBpmCancelIcon,
-  SvgBpmRejectIcon,
-  SvgBpmRunningIcon,
-} from '@vben/icons';
+  hydrateRemoteDataSourceRules,
+  setConfAndFields2,
+} from '#/components/form-create';
+import { registerComponent } from '#/utils';
 
 import ProcessInstanceBpmnViewer from './modules/bpm-viewer.vue';
 import ProcessInstanceOperationButton from './modules/operation-button.vue';
@@ -194,6 +195,23 @@ async function getApprovalDetail() {
           processInstance.value.formVariables,
         );
       }
+      // Hydrate RemoteDataSourceSelect with runtime context
+      // For active tasks, provide taskId so execute is authorized;
+      // for read-only history without a task, pass no context so
+      // the component falls back to persisted snapshot labels.
+      hydrateRemoteDataSourceRules(
+        detailForm.value.rule,
+        props.taskId &&
+          Number.isInteger(processDefinition.value?.formId) &&
+          processDefinition.value.formId > 0
+          ? {
+              formId: processDefinition.value.formId,
+              taskId: props.taskId,
+              processDefinitionKey: processDefinition.value?.key,
+              processInstanceId: props.id,
+            }
+          : undefined,
+      );
       nextTick().then(() => {
         fApi.value?.btn.show(false);
         fApi.value?.resetBtn.show(false);

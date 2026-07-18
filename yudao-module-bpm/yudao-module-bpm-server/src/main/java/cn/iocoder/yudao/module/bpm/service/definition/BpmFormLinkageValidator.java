@@ -53,6 +53,7 @@ public class BpmFormLinkageValidator {
             "__proto__", "constructor", "prototype");
     private static final Set<String> USER_BINDING_FIELDS = Set.of("id", "deptId", "companyId");
     private static final Set<String> PROCESS_BINDING_FIELDS = Set.of("definitionKey", "instanceId");
+    private static final int MAX_PAGE_SIZE = 200;
     private static final Pattern BINDING_PATH = Pattern.compile(
             "^(FORM|PROCESS|USER)(?:\\.[A-Za-z_][A-Za-z0-9_]*)+$");
 
@@ -88,7 +89,10 @@ public class BpmFormLinkageValidator {
         for (LinkageNode node : context.linkageNodes) {
             PublishedSource published = publishedSources.computeIfAbsent(node.dataSourceCode,
                     this::requirePublishedSource);
-            validateBindings(node, parseSchema(published.version.getParameterSchema()), context.fields.keySet());
+            Map<String, SchemaField> parameterSchema = parseSchema(published.version.getParameterSchema());
+            Set<String> controlParameters = validateControls(node, published.version, parameterSchema,
+                    context.fields.keySet(), context.remoteFields);
+            validateBindings(node, parameterSchema, context.fields.keySet(), controlParameters);
             validateResults(node, published.version, parseSchema(published.version.getResultSchema()),
                     context.fields.keySet());
             validateDependencies(node, context.fields.keySet());
@@ -120,6 +124,7 @@ public class BpmFormLinkageValidator {
         }
 
         if (BpmFormDataSourceReferenceValidator.REMOTE_COMPONENT_TYPE.equals(text(node.get("type")))) {
+            context.remoteFields.add(field);
             context.linkageNodes.add(parseLinkageNode(node, field));
         }
     }
@@ -143,8 +148,14 @@ public class BpmFormLinkageValidator {
             throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
         }
         Boolean pageable = optionalBoolean(props, "pageable");
+        String searchParamName = optionalText(props, "searchParamName");
+        String pageNoParamName = optionalText(props, "pageNoParamName");
+        String pageSizeParamName = optionalText(props, "pageSizeParamName");
+        Integer pageSize = optionalInteger(props, "pageSize");
+        String snapshotField = optionalText(props, "snapshotField");
         return new LinkageNode(field, sourceCode, parameterBindings, dependencies, outputMappings,
-                labelField, valueField, pageable);
+                labelField, valueField, pageable, searchParamName, pageNoParamName,
+                pageSizeParamName, pageSize, snapshotField);
     }
 
     private PublishedSource requirePublishedSource(String code) {
@@ -161,7 +172,7 @@ public class BpmFormLinkageValidator {
     }
 
     private static void validateBindings(LinkageNode node, Map<String, SchemaField> parameterSchema,
-                                         Set<String> formFields) {
+                                         Set<String> formFields, Set<String> controlParameters) {
         for (String parameter : node.parameterBindings.keySet()) {
             if (RESERVED_PARAMETERS.contains(parameter)) {
                 throw exception(BPM_DATA_SOURCE_PARAM_RESERVED, parameter);
@@ -172,7 +183,8 @@ public class BpmFormLinkageValidator {
         }
         for (SchemaField parameter : parameterSchema.values()) {
             if (Boolean.TRUE.equals(parameter.getRequired()) && !RESERVED_PARAMETERS.contains(parameter.getName())
-                    && !node.parameterBindings.containsKey(parameter.getName())) {
+                    && !node.parameterBindings.containsKey(parameter.getName())
+                    && !controlParameters.contains(parameter.getName())) {
                 throw exception(BPM_DATA_SOURCE_PARAM_MISSING, parameter.getName());
             }
         }
@@ -191,6 +203,51 @@ public class BpmFormLinkageValidator {
                     throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
                 }
             }
+        }
+    }
+
+    private static Set<String> validateControls(LinkageNode node, BpmFormDataSourceVersionDO version,
+                                                Map<String, SchemaField> parameterSchema, Set<String> formFields,
+                                                Set<String> remoteFields) {
+        LinkedHashSet<String> controls = new LinkedHashSet<>();
+        addControlParameter(node.searchParamName, parameterSchema, controls);
+
+        boolean componentPageable = Boolean.TRUE.equals(node.pageable);
+        boolean publishedPageable = Boolean.TRUE.equals(version.getPageable());
+        if (componentPageable != publishedPageable) {
+            throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+        }
+        if (componentPageable) {
+            if (!StringUtils.hasText(node.pageNoParamName) || !StringUtils.hasText(node.pageSizeParamName)) {
+                throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+            }
+            addControlParameter(node.pageNoParamName, parameterSchema, controls);
+            addControlParameter(node.pageSizeParamName, parameterSchema, controls);
+        } else if (StringUtils.hasText(node.pageNoParamName) || StringUtils.hasText(node.pageSizeParamName)) {
+            throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+        }
+        if (node.pageSize != null && (node.pageSize < 1 || node.pageSize > MAX_PAGE_SIZE)) {
+            throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+        }
+        if (controls.stream().anyMatch(node.parameterBindings::containsKey)) {
+            throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+        }
+
+        if (node.snapshotField != null && (!formFields.contains(node.snapshotField)
+                || node.field.equals(node.snapshotField) || remoteFields.contains(node.snapshotField))) {
+            throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+        }
+        return controls;
+    }
+
+    private static void addControlParameter(String parameter, Map<String, SchemaField> parameterSchema,
+                                            Set<String> controls) {
+        if (parameter == null) {
+            return;
+        }
+        if (!BpmFormDataSourceSchemaRules.isSafeFieldName(parameter) || RESERVED_PARAMETERS.contains(parameter)
+                || !parameterSchema.containsKey(parameter) || !controls.add(parameter)) {
+            throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
         }
     }
 
@@ -370,6 +427,17 @@ public class BpmFormLinkageValidator {
         return value.booleanValue();
     }
 
+    private static Integer optionalInteger(JsonNode props, String name) {
+        JsonNode value = props.get(name);
+        if (value == null) {
+            return null;
+        }
+        if (!value.isIntegralNumber() || !value.canConvertToInt()) {
+            throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
+        }
+        return value.intValue();
+    }
+
     private static String firstText(JsonNode first, JsonNode second, String fallback) {
         String firstValue = text(first);
         if (StringUtils.hasText(firstValue)) {
@@ -385,7 +453,9 @@ public class BpmFormLinkageValidator {
 
     private record LinkageNode(String field, String dataSourceCode, Map<String, String> parameterBindings,
                                List<String> dependencies, Map<String, String> outputMappings,
-                               String labelField, String valueField, Boolean pageable) {
+                               String labelField, String valueField, Boolean pageable, String searchParamName,
+                               String pageNoParamName, String pageSizeParamName, Integer pageSize,
+                               String snapshotField) {
     }
 
     private record PublishedSource(BpmFormDataSourceVersionDO version) {
@@ -398,6 +468,7 @@ public class BpmFormLinkageValidator {
     private static final class ParseContext {
         private final Map<String, String> fields = new LinkedHashMap<>();
         private final List<LinkageNode> linkageNodes = new ArrayList<>();
+        private final Set<String> remoteFields = new HashSet<>();
     }
 
     @Data

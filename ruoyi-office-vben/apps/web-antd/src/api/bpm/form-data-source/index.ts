@@ -86,6 +86,14 @@ export namespace BpmFormDataSourceApi {
     total: number;
     version: number;
   }
+
+  export type ExecuteReq = {
+    formId: number;
+    params: Record<string, unknown>;
+  } & (
+    | { processDefinitionId: string; taskId?: never }
+    | { processDefinitionId?: never; taskId: string }
+  );
 }
 
 export function getDataSourcePage(params: BpmFormDataSourceApi.PageReq) {
@@ -172,4 +180,15 @@ export function disableDataSource(id: number) {
   return requestClient.put<boolean>('/bpm/form-data-source/disable', null, {
     params: { id },
   });
+}
+
+/** Executes only the published version through the BPM runtime access guard. */
+export function executePublishedDataSource(
+  code: string,
+  data: BpmFormDataSourceApi.ExecuteReq,
+) {
+  return requestClient.post<BpmFormDataSourceApi.ExecuteResult>(
+    `/bpm/form-data-source/execute/${encodeURIComponent(code)}`,
+    data,
+  );
 }
