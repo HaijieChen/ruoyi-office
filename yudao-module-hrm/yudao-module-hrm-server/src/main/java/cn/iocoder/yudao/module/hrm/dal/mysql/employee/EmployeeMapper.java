@@ -38,10 +38,17 @@ public interface EmployeeMapper extends BaseMapperX<EmployeeDO> {
      * 4. 如果同时指定了包含和排除，包含优先级更高
      */
     default PageResult<EmployeeDO> selectPageExcludeFormal(EmployeeSelectPageReqVO reqVO) {
+        return selectPage(reqVO, buildSelectableQuery(reqVO));
+    }
+
+    static LambdaQueryWrapperX<EmployeeDO> buildSelectableQuery(EmployeeSelectPageReqVO reqVO) {
         LambdaQueryWrapperX<EmployeeDO> wrapper = new LambdaQueryWrapperX<EmployeeDO>()
                 .likeIfPresent(EmployeeDO::getEmployeeNo, reqVO.getEmployeeNo())
                 .likeIfPresent(EmployeeDO::getName, reqVO.getName())
-                .eqIfPresent(EmployeeDO::getDeptId, reqVO.getDeptId())
+                .eqIfPresent(EmployeeDO::getDeptId,
+                        reqVO.getSelectedDeptId() != null ? reqVO.getSelectedDeptId() : reqVO.getDeptId())
+                .eqIfPresent(EmployeeDO::getCompanyId,
+                        reqVO.getSelectedCompanyId() != null ? reqVO.getSelectedCompanyId() : reqVO.getCompanyId())
                 .eqIfPresent(EmployeeDO::getJobPost, reqVO.getJobPost())
                 .eqIfPresent(EmployeeDO::getJobPosition, reqVO.getJobPosition())
                 .eqIfPresent(EmployeeDO::getEmployeeStatus, reqVO.getEmployeeStatus())
@@ -76,7 +83,7 @@ public interface EmployeeMapper extends BaseMapperX<EmployeeDO> {
             }
         }
         
-        return selectPage(reqVO, wrapper);
+        return wrapper;
     }
 
     /**
@@ -114,4 +121,3 @@ public interface EmployeeMapper extends BaseMapperX<EmployeeDO> {
     }
 
 }
-

@@ -81,6 +81,14 @@ public class DeptController {
         return success(BeanUtils.toBean(list, DeptRespVO.class));
     }
 
+    @GetMapping("/company-simple-list")
+    @Operation(summary = "获取启用公司精简列表", description = "仅返回当前租户已启用的公司，供下拉选项使用")
+    public CommonResult<List<DeptSimpleRespVO>> getSimpleCompanyList() {
+        List<DeptDO> list = deptService.getCompanyList(
+                new DeptListReqVO().setStatus(CommonStatusEnum.ENABLE.getStatus()));
+        return success(BeanUtils.toBean(list, DeptSimpleRespVO.class));
+    }
+
     @GetMapping(value = {"/list-all-simple", "/simple-list"})
     @Operation(summary = "获取部门精简信息列表", description = "只包含被开启的部门，主要用于前端的下拉选项")
     public CommonResult<List<DeptSimpleRespVO>> getSimpleDeptList() {

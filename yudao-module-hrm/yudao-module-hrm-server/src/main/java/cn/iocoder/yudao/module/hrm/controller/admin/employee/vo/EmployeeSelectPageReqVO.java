@@ -34,6 +34,15 @@ public class EmployeeSelectPageReqVO extends PageParam {
     @Schema(description = "所属部门", example = "1")
     private Long deptId;
 
+    @Schema(description = "业务表单选中的所属部门，存在时优先于登录上下文部门", example = "1")
+    private Long selectedDeptId;
+
+    @Schema(description = "所属公司", example = "1")
+    private Long companyId;
+
+    @Schema(description = "业务表单选中的所属公司，存在时优先于登录上下文公司", example = "1")
+    private Long selectedCompanyId;
+
     @Schema(description = "职位", example = "产品经理")
     private String jobPost;
 
@@ -58,4 +67,3 @@ public class EmployeeSelectPageReqVO extends PageParam {
     private LocalDateTime[] createTime;
 
 }
-

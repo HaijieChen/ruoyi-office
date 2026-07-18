@@ -1,7 +1,7 @@
 -- ----------------------------
 -- BPM 表单数据源定义表
 -- ----------------------------
-CREATE TABLE `bpm_form_data_source` (
+CREATE TABLE IF NOT EXISTS `bpm_form_data_source` (
     `id`                bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
     `name`              varchar(63) NOT NULL COMMENT '数据源名称',
     `code`              varchar(127) NOT NULL COMMENT '数据源标识',
@@ -21,7 +21,7 @@ CREATE TABLE `bpm_form_data_source` (
 -- ----------------------------
 -- BPM 表单数据源版本表
 -- ----------------------------
-CREATE TABLE `bpm_form_data_source_version` (
+CREATE TABLE IF NOT EXISTS `bpm_form_data_source_version` (
     `id`                bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
     `data_source_id`    bigint NOT NULL COMMENT '数据源编号',
     `version`           int NOT NULL COMMENT '版本号',
@@ -48,7 +48,7 @@ CREATE TABLE `bpm_form_data_source_version` (
 -- ----------------------------
 -- BPM 表单数据源调用日志表
 -- ----------------------------
-CREATE TABLE `bpm_form_data_source_log` (
+CREATE TABLE IF NOT EXISTS `bpm_form_data_source_log` (
     `id`                  bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
     `data_source_id`      bigint NOT NULL COMMENT '数据源编号',
     `version`             int NOT NULL COMMENT '数据源版本号',
@@ -141,3 +141,24 @@ WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
     WHERE `deleted` = b'0' AND `permission` = 'bpm:form-data-source:publish'
 );
+
+-- 将新页面及按钮权限授予当前租户的超级管理员角色。
+-- 使用角色 code、组件和权限标识定位，避免依赖环境相关的自增编号。
+INSERT INTO `system_role_menu`
+    (`role_id`, `menu_id`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
+SELECT role_record.id, menu_record.id, '', NOW(), '', NOW(), b'0', role_record.tenant_id
+FROM `system_role` role_record
+JOIN `system_menu` menu_record
+  ON menu_record.`deleted` = b'0'
+ AND (menu_record.`component` = 'bpm/form-data-source/index'
+      OR menu_record.`permission` LIKE 'bpm:form-data-source:%')
+WHERE role_record.`deleted` = b'0'
+  AND role_record.`status` = 0
+  AND role_record.`code` = 'super_admin'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM `system_role_menu` role_menu
+      WHERE role_menu.`deleted` = b'0'
+        AND role_menu.`role_id` = role_record.id
+        AND role_menu.`menu_id` = menu_record.id
+  );
