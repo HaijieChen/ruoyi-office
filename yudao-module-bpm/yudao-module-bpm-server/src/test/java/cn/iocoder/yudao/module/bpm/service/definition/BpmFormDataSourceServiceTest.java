@@ -220,6 +220,49 @@ class BpmFormDataSourceServiceTest {
     }
 
     @Test
+    void saveDraft_rejectsMissingSchemaLabel() {
+        when(dataSourceMapper.selectByIdForUpdate(10L)).thenReturn(source(10L, 1));
+        BpmFormDataSourceVersionSaveReqVO req = sqlVersionReq(
+                "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
+                .setResultSchema("[{\"name\":\"id\",\"type\":\"LONG\"}]")
+                .setLabelField("id").setValueField("id");
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.saveDraft(10L, req));
+
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), error.getCode());
+        verifyNoInteractions(versionMapper);
+    }
+
+    @Test
+    void saveDraft_rejectsBlankSchemaLabel() {
+        when(dataSourceMapper.selectByIdForUpdate(10L)).thenReturn(source(10L, 1));
+        BpmFormDataSourceVersionSaveReqVO req = sqlVersionReq(
+                "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
+                .setResultSchema("[{\"name\":\"id\",\"label\":\"   \",\"type\":\"LONG\"}]")
+                .setLabelField("id").setValueField("id");
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.saveDraft(10L, req));
+
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), error.getCode());
+        verifyNoInteractions(versionMapper);
+    }
+
+    @Test
+    void saveDraft_rejectsOverlongSchemaLabel() {
+        when(dataSourceMapper.selectByIdForUpdate(10L)).thenReturn(source(10L, 1));
+        BpmFormDataSourceVersionSaveReqVO req = sqlVersionReq(
+                "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
+                .setResultSchema("[{\"name\":\"id\",\"label\":\"" + "中".repeat(65)
+                        + "\",\"type\":\"LONG\"}]")
+                .setLabelField("id").setValueField("id");
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.saveDraft(10L, req));
+
+        assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), error.getCode());
+        verifyNoInteractions(versionMapper);
+    }
+
+    @Test
     void saveDraft_rejectsMixedTypedOrUnknownConfiguration() {
         when(dataSourceMapper.selectByIdForUpdate(10L)).thenReturn(source(10L, null));
         BpmFormDataSourceVersionSaveReqVO req = sqlVersionReq(
@@ -251,8 +294,8 @@ class BpmFormDataSourceServiceTest {
         BpmFormDataSourceVersionSaveReqVO unsafeParameter = sqlVersionReq(
                 "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
                 .setParameterSchema("""
-                        [{"name":"tenantId","type":"LONG","required":true},
-                         {"name":"customer-id","type":"LONG","required":false}]
+                        [{"name":"tenantId","label":"当前租户","type":"LONG","required":true},
+                         {"name":"customer-id","label":"客户编号","type":"LONG","required":false}]
                         """);
         ServiceException parameterError = assertThrows(ServiceException.class,
                 () -> service.saveDraft(10L, unsafeParameter));
@@ -260,7 +303,7 @@ class BpmFormDataSourceServiceTest {
 
         BpmFormDataSourceVersionSaveReqVO unsafeResult = sqlVersionReq(
                 "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
-                .setResultSchema("[{\"name\":\"keeper.name\",\"type\":\"STRING\"}]")
+                .setResultSchema("[{\"name\":\"keeper.name\",\"label\":\"保管人\",\"type\":\"STRING\"}]")
                 .setLabelField("keeper.name").setValueField("keeper.name");
         ServiceException resultError = assertThrows(ServiceException.class,
                 () -> service.saveDraft(10L, unsafeResult));
@@ -268,7 +311,7 @@ class BpmFormDataSourceServiceTest {
 
         BpmFormDataSourceVersionSaveReqVO prototypeResult = sqlVersionReq(
                 "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
-                .setResultSchema("[{\"name\":\"constructor\",\"type\":\"STRING\"}]")
+                .setResultSchema("[{\"name\":\"constructor\",\"label\":\"构造器\",\"type\":\"STRING\"}]")
                 .setLabelField("constructor").setValueField("constructor");
         ServiceException prototypeError = assertThrows(ServiceException.class,
                 () -> service.saveDraft(10L, prototypeResult));
@@ -277,7 +320,8 @@ class BpmFormDataSourceServiceTest {
         String overlongName = "a".repeat(64);
         BpmFormDataSourceVersionSaveReqVO overlongResult = sqlVersionReq(
                 "SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId")
-                .setResultSchema("[{\"name\":\"" + overlongName + "\",\"type\":\"STRING\"}]")
+                .setResultSchema("[{\"name\":\"" + overlongName
+                        + "\",\"label\":\"超长字段\",\"type\":\"STRING\"}]")
                 .setLabelField(overlongName).setValueField(overlongName);
         ServiceException overlongError = assertThrows(ServiceException.class,
                 () -> service.saveDraft(10L, overlongResult));
@@ -305,17 +349,17 @@ class BpmFormDataSourceServiceTest {
                 baseVersionReq("{\"dictType\":\"sys_yes_no\"}", "[]"));
         Long apiVersion = service.saveDraft(11L,
                 baseVersionReq("{\"path\":\"/admin-api/system/dept/simple-list\",\"method\":\"GET\"}",
-                        "[{\"name\":\"id\",\"type\":\"LONG\"}]"));
+                        "[{\"name\":\"id\",\"label\":\"编号\",\"type\":\"LONG\"}]"));
 
         assertEquals(110L, dictionaryVersion);
         assertEquals(111L, apiVersion);
         ServiceException unsafePath = assertThrows(ServiceException.class, () -> service.saveDraft(11L,
                 baseVersionReq("{\"path\":\"http://evil.example/data\",\"method\":\"GET\"}",
-                        "[{\"name\":\"id\",\"type\":\"LONG\"}]")));
+                        "[{\"name\":\"id\",\"label\":\"编号\",\"type\":\"LONG\"}]")));
         assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), unsafePath.getCode());
         ServiceException writeMethod = assertThrows(ServiceException.class, () -> service.saveDraft(11L,
                 baseVersionReq("{\"path\":\"/admin-api/system/dept/simple-list\",\"method\":\"POST\"}",
-                        "[{\"name\":\"id\",\"type\":\"LONG\"}]")));
+                        "[{\"name\":\"id\",\"label\":\"编号\",\"type\":\"LONG\"}]")));
         assertEquals(BPM_DATA_SOURCE_CONFIG_INVALID.getCode(), writeMethod.getCode());
     }
 
@@ -413,8 +457,10 @@ class BpmFormDataSourceServiceTest {
     private static BpmFormDataSourceVersionDO version(Long id, int version, int status) {
         return new BpmFormDataSourceVersionDO().setId(id).setDataSourceId(10L).setVersion(version).setStatus(status)
                 .setSourceConfig("{\"sql\":\"SELECT id, name FROM oa_seal WHERE tenant_id = :tenantId\"}")
-                .setParameterSchema("[{\"name\":\"tenantId\",\"type\":\"LONG\",\"required\":true}]")
-                .setResultSchema("[{\"name\":\"id\",\"type\":\"LONG\"},{\"name\":\"name\",\"type\":\"STRING\"}]")
+                .setParameterSchema("[{\"name\":\"tenantId\",\"label\":\"当前租户\","
+                        + "\"type\":\"LONG\",\"required\":true}]")
+                .setResultSchema("[{\"name\":\"id\",\"label\":\"编号\",\"type\":\"LONG\"},"
+                        + "{\"name\":\"name\",\"label\":\"名称\",\"type\":\"STRING\"}]")
                 .setLabelField("name").setValueField("id").setPageable(false)
                 .setMaxRows(100).setTimeoutSeconds(3).setCacheSeconds(30);
     }
@@ -422,8 +468,10 @@ class BpmFormDataSourceServiceTest {
     private static BpmFormDataSourceVersionSaveReqVO sqlVersionReq(String sql) {
         return new BpmFormDataSourceVersionSaveReqVO()
                 .setSourceConfig("{\"sql\":\"" + sql.replace("\"", "\\\"") + "\"}")
-                .setParameterSchema("[{\"name\":\"tenantId\",\"type\":\"LONG\",\"required\":true}]")
-                .setResultSchema("[{\"name\":\"id\",\"type\":\"LONG\"},{\"name\":\"name\",\"type\":\"STRING\"}]")
+                .setParameterSchema("[{\"name\":\"tenantId\",\"label\":\"当前租户\","
+                        + "\"type\":\"LONG\",\"required\":true}]")
+                .setResultSchema("[{\"name\":\"id\",\"label\":\"编号\",\"type\":\"LONG\"},"
+                        + "{\"name\":\"name\",\"label\":\"名称\",\"type\":\"STRING\"}]")
                 .setLabelField("name").setValueField("id").setPageable(false)
                 .setMaxRows(100).setTimeoutSeconds(3).setCacheSeconds(30);
     }

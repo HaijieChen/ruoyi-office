@@ -277,8 +277,8 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
                 || reqVO.getCacheSeconds() != null && reqVO.getCacheSeconds() < 0) {
             throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
         }
-        List<SchemaField> parameterFields = parseSchema(reqVO.getParameterSchema());
-        List<SchemaField> resultFields = parseSchema(reqVO.getResultSchema());
+        List<SchemaField> parameterFields = parseSchema(reqVO.getParameterSchema(), true);
+        List<SchemaField> resultFields = parseSchema(reqVO.getResultSchema(), true);
         validateFieldReference(reqVO.getLabelField(), resultFields);
         validateFieldReference(reqVO.getValueField(), resultFields);
 
@@ -331,7 +331,7 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
         }
     }
 
-    private static List<SchemaField> parseSchema(String json) {
+    private static List<SchemaField> parseSchema(String json, boolean requireLabel) {
         if (!StringUtils.hasText(json)) {
             return List.of();
         }
@@ -339,13 +339,16 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
             List<SchemaField> fields = JsonUtils.parseArray(json, SchemaField.class);
             Set<String> names = new HashSet<>();
             for (SchemaField field : fields) {
+                String label = StringUtils.hasText(field.getLabel()) ? field.getLabel().trim() : null;
                 String type = StringUtils.hasText(field.getType()) ? field.getType().toUpperCase(Locale.ROOT) : null;
                 String mask = StringUtils.hasText(field.getMask()) ? field.getMask() : field.getMaskStrategy();
                 if (!BpmFormDataSourceSchemaRules.isSafeFieldName(field.getName()) || !names.add(field.getName())
                         || type == null || !SCHEMA_TYPES.contains(type)
+                        || (requireLabel && label == null) || (label != null && label.length() > 64)
                         || StringUtils.hasText(mask) && !MASK_STRATEGIES.contains(mask.toUpperCase(Locale.ROOT))) {
                     throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
                 }
+                field.setLabel(label);
             }
             return fields;
         } catch (ServiceException ex) {
@@ -386,6 +389,7 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
     @Data
     public static class SchemaField {
         private String name;
+        private String label;
         private String type;
         private Boolean required;
         private String mask;
