@@ -99,6 +99,17 @@ public class BpmFormDataSourceController {
         return success(convertList(list, source -> BeanUtils.toBean(source, BpmFormDataSourceSimpleRespVO.class)));
     }
 
+    @GetMapping("/published-metadata")
+    @Operation(summary = "获得已发布数据源的安全字段元数据",
+            description = "用于表单设计器生成字段下拉，不返回 SQL、接口路径、原始配置或原始 Schema")
+    @PreAuthorize("@ss.hasPermission('bpm:form-data-source:query')")
+    public CommonResult<BpmFormDataSourcePublishedMetadataRespVO> getPublishedMetadata(
+            @RequestParam("code") @NotBlank(message = "数据源标识不能为空")
+            @Size(max = 127, message = "数据源标识长度不能超过 127 个字符")
+            @Pattern(regexp = "^[a-z][a-z0-9_]*$", message = "数据源标识格式不正确") String code) {
+        return success(BpmFormDataSourcePublishedMetadataRespVO.from(dataSourceService.getPublishedMetadata(code)));
+    }
+
     @GetMapping("/version/list")
     @Operation(summary = "获得表单数据源版本历史")
     @Parameter(name = "sourceId", description = "数据源编号", required = true, example = "1024")

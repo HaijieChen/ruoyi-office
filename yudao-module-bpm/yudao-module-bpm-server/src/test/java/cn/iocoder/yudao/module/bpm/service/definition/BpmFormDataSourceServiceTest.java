@@ -143,6 +143,65 @@ class BpmFormDataSourceServiceTest {
     }
 
     @Test
+    void getPublishedMetadata_readsExactPublishedVersionAndReturnsSafeFields() {
+        BpmFormDataSourceDO source = source(10L, 2);
+        BpmFormDataSourceVersionDO published = version(22L, 2,
+                BpmFormDataSourceVersionStatusEnum.PUBLISHED.getStatus())
+                .setResultSchema("[{\"name\":\"id\",\"type\":\"LONG\"},"
+                        + "{\"name\":\"name\",\"label\":\"印章名称\",\"type\":\"STRING\"}]")
+                .setPageable(true);
+        when(dataSourceMapper.selectByCode("oa_available_seals")).thenReturn(source);
+        when(versionMapper.selectPublishedBySourceIdAndVersion(10L, 2)).thenReturn(published);
+
+        BpmFormDataSourcePublishedMetadata metadata = service.getPublishedMetadata("oa_available_seals");
+
+        assertEquals(10L, metadata.id());
+        assertEquals("可用印章", metadata.name());
+        assertEquals(2, metadata.publishedVersion());
+        assertTrue(metadata.pageable());
+        assertEquals("name", metadata.labelField());
+        assertEquals("id", metadata.valueField());
+        assertEquals(List.of("tenantId"), metadata.parameterFields().stream()
+                .map(BpmFormDataSourcePublishedMetadata.Field::name).toList());
+        assertEquals("当前租户", metadata.parameterFields().get(0).label());
+        assertEquals(List.of("id", "name"), metadata.resultFields().stream()
+                .map(BpmFormDataSourcePublishedMetadata.Field::name).toList());
+        assertEquals("id", metadata.resultFields().get(0).label());
+        assertEquals("印章名称", metadata.resultFields().get(1).label());
+        verify(versionMapper).selectPublishedBySourceIdAndVersion(10L, 2);
+        verify(versionMapper, never()).selectPublished(10L);
+    }
+
+    @Test
+    void getPublishedMetadata_rejectsDisabledOrUnpublishedDefinition() {
+        BpmFormDataSourceDO disabled = source(10L, 2).setStatus(CommonStatusEnum.DISABLE.getStatus());
+        when(dataSourceMapper.selectByCode("oa_available_seals")).thenReturn(disabled);
+
+        ServiceException disabledError = assertThrows(ServiceException.class,
+                () -> service.getPublishedMetadata("oa_available_seals"));
+        assertEquals(BPM_DATA_SOURCE_NOT_EXISTS.getCode(), disabledError.getCode());
+        verifyNoInteractions(versionMapper);
+
+        reset(dataSourceMapper, versionMapper);
+        when(dataSourceMapper.selectByCode("oa_available_seals")).thenReturn(source(10L, null));
+        ServiceException unpublishedError = assertThrows(ServiceException.class,
+                () -> service.getPublishedMetadata("oa_available_seals"));
+        assertEquals(BPM_DATA_SOURCE_NOT_EXISTS.getCode(), unpublishedError.getCode());
+        verifyNoInteractions(versionMapper);
+    }
+
+    @Test
+    void getPublishedMetadata_rejectsBrokenPublishedPointer() {
+        when(dataSourceMapper.selectByCode("oa_available_seals")).thenReturn(source(10L, 2));
+        when(versionMapper.selectPublishedBySourceIdAndVersion(10L, 2)).thenReturn(null);
+
+        ServiceException error = assertThrows(ServiceException.class,
+                () -> service.getPublishedMetadata("oa_available_seals"));
+
+        assertEquals(BPM_DATA_SOURCE_VERSION_NOT_EXISTS.getCode(), error.getCode());
+    }
+
+    @Test
     void updateDataSource_onlyNameIsMutable() {
         BpmFormDataSourceDO current = source(10L, null);
         when(dataSourceMapper.selectByIdForUpdate(10L)).thenReturn(current);

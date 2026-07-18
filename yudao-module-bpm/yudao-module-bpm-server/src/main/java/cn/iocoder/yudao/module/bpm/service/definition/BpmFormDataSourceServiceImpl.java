@@ -141,6 +141,25 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
     }
 
     @Override
+    public BpmFormDataSourcePublishedMetadata getPublishedMetadata(String code) {
+        BpmFormDataSourceDO source = StringUtils.hasText(code) ? dataSourceMapper.selectByCode(code) : null;
+        if (source == null || !CommonStatusEnum.isEnable(source.getStatus())
+                || source.getPublishedVersion() == null) {
+            throw exception(BPM_DATA_SOURCE_NOT_EXISTS);
+        }
+        BpmFormDataSourceVersionDO version = versionMapper.selectPublishedBySourceIdAndVersion(
+                source.getId(), source.getPublishedVersion());
+        if (version == null) {
+            throw exception(BPM_DATA_SOURCE_VERSION_NOT_EXISTS);
+        }
+        return new BpmFormDataSourcePublishedMetadata(source.getId(), source.getName(), source.getCode(),
+                source.getType(), source.getPublishedVersion(),
+                toMetadataFields(parseSchema(version.getParameterSchema(), false)),
+                toMetadataFields(parseSchema(version.getResultSchema(), false)),
+                version.getLabelField(), version.getValueField(), version.getPageable());
+    }
+
+    @Override
     public List<BpmFormDataSourceVersionDO> getVersionList(Long sourceId) {
         requireSource(sourceId);
         return versionMapper.selectListBySourceId(sourceId);
@@ -363,6 +382,16 @@ public class BpmFormDataSourceServiceImpl implements BpmFormDataSourceService {
                 && resultFields.stream().noneMatch(field -> fieldName.equals(field.getName()))) {
             throw exception(BPM_DATA_SOURCE_CONFIG_INVALID);
         }
+    }
+
+    private static List<BpmFormDataSourcePublishedMetadata.Field> toMetadataFields(List<SchemaField> fields) {
+        return fields.stream().map(field -> {
+            String mask = StringUtils.hasText(field.getMask()) ? field.getMask() : field.getMaskStrategy();
+            return new BpmFormDataSourcePublishedMetadata.Field(field.getName(),
+                    StringUtils.hasText(field.getLabel()) ? field.getLabel() : field.getName(),
+                    field.getType().toUpperCase(Locale.ROOT), Boolean.TRUE.equals(field.getRequired()),
+                    StringUtils.hasText(mask) ? mask.toUpperCase(Locale.ROOT) : null);
+        }).toList();
     }
 
     private static boolean positiveWithin(Integer value, int globalLimit) {

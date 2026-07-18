@@ -28,6 +28,8 @@ public interface BpmFormDataSourceService {
 
     List<BpmFormDataSourceDO> getSimpleDataSourceList();
 
+    BpmFormDataSourcePublishedMetadata getPublishedMetadata(String code);
+
     List<BpmFormDataSourceVersionDO> getVersionList(Long sourceId);
 
     BpmFormDataSourceVersionDO getVersion(Long sourceId, Long versionId);

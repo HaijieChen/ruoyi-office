@@ -29,6 +29,15 @@ public interface BpmFormDataSourceVersionMapper extends BaseMapperX<BpmFormDataS
                 .last("LIMIT 1"));
     }
 
+    /** Reads the immutable published row referenced by the definition pointer. */
+    default BpmFormDataSourceVersionDO selectPublishedBySourceIdAndVersion(Long dataSourceId, Integer version) {
+        return selectOne(new LambdaQueryWrapper<BpmFormDataSourceVersionDO>()
+                .eq(BpmFormDataSourceVersionDO::getDataSourceId, dataSourceId)
+                .eq(BpmFormDataSourceVersionDO::getVersion, version)
+                .eq(BpmFormDataSourceVersionDO::getStatus,
+                        BpmFormDataSourceVersionStatusEnum.PUBLISHED.getStatus()));
+    }
+
     default BpmFormDataSourceVersionDO selectByIdAndSourceId(Long id, Long dataSourceId) {
         return selectOne(new LambdaQueryWrapper<BpmFormDataSourceVersionDO>()
                 .eq(BpmFormDataSourceVersionDO::getId, id)

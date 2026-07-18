@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -40,6 +41,23 @@ class BpmFormDataSourceControllerSecurityTest {
         assertFalse(fields.contains("sourceConfig"));
         assertFalse(fields.contains("parameterSchema"));
         assertFalse(fields.contains("resultSchema"));
+    }
+
+    @Test
+    void publishedMetadataRequiresQueryPermissionAndUsesSafeResponse() {
+        Method method = assertDoesNotThrow(() -> BpmFormDataSourceController.class
+                .getMethod("getPublishedMetadata", String.class));
+
+        assertEquals("@ss.hasPermission('bpm:form-data-source:query')",
+                method.getAnnotation(PreAuthorize.class).value());
+        Class<?> responseType = assertDoesNotThrow(() -> Class.forName(
+                "cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.datasource."
+                        + "BpmFormDataSourcePublishedMetadataRespVO"));
+        Set<String> fields = Arrays.stream(responseType.getDeclaredFields())
+                .map(java.lang.reflect.Field::getName).collect(Collectors.toSet());
+        for (String forbidden : Set.of("sourceConfig", "parameterSchema", "resultSchema", "sql", "path")) {
+            assertFalse(fields.contains(forbidden));
+        }
     }
 
 }
