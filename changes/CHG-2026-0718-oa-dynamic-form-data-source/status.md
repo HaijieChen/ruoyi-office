@@ -13,6 +13,8 @@
 | frontend-linkage | `codex/oa-platform-production` | integrated | Codex + independent review | complete | `c752a2c9e`, `9abe0a723`; 24 focused Vitest tests |
 | backend-execution | `codex/oa-platform-production` | integrated | Codex + parallel implementation/review agents | complete | `1e31b1a51`; 79 Tasks 1-3 regression tests; server package |
 | backend-lifecycle-api | `codex/oa-platform-production` | integrated | Codex + parallel implementation/review agents | complete | `e0caae32d`; 123 focused tests; server package |
+| backend-form-linkage | `codex/oa-platform-production` | integrated | Codex + independent review | complete | `0ccf5e370`; save-time schema/reference/DAG validation |
+| frontend-management | `codex/oa-platform-production` | integrated | Codex + independent review | complete | `8956f1a8f`; 10 Vitest tests; ESLint; production build |
 
 ## Integration log
 
@@ -22,19 +24,23 @@
 - 2026-07-18: integrated safe frontend binding, dependency, clear/revalidate linkage engine (`c752a2c9e`, `9abe0a723`).
 - 2026-07-18: integrated published SQL/DICT/platform-API execution with a dedicated non-primary read-only pool, tenant/user-isolated caching, result masking, bounded API responses, and audit logging (`1e31b1a51`).
 - 2026-07-18: integrated data-source definition/version lifecycle, immutable publication, trial execution, runtime process/task authorization, deployed-form reference checks, node field-permission enforcement, and hardened runtime request limits (`e0caae32d`).
+- 2026-07-18: integrated form-save linkage parsing and validation for actual form-create rule locations, canonical schema names, published references, mappings, dependencies, and cycles (`0ccf5e370`).
+- 2026-07-18: integrated typed data-source management APIs/UI, atomic definition-and-first-draft creation, trial execution, version history, independent publish permission, disable behavior, and idempotent menu SQL (`8956f1a8f`).
 
 ## Regression results
 
 - Backend baseline: existing `BpmFormServiceTest` passes when run outside the attachment-restricted sandbox (6 tests, 0 failures/errors).
 - Backend integrated Tasks 1-3: 79 focused tests pass on the integration branch (8 persistence, 38 SQL validator, 7 context resolver, 3 read-only pool configuration, 2 bounded HTTP subscriber, 21 execution/provider tests; 0 failures/errors).
 - Backend integrated Tasks 1-4: 123 focused tests pass on the integration branch, including 10 process/task/form/field access-control tests; 0 failures/errors.
-- Backend packaging: `mvn -pl yudao-server -am -DskipTests package` succeeds after Task 4 integration.
+- Backend integrated Tasks 1-6: 156 focused tests pass on the integration branch; 0 failures/errors.
+- Backend packaging: `mvn -pl yudao-server -am -DskipTests package` succeeds after Task 6 integration.
 - Frontend Task 7: 24 focused Vitest tests, strict focused TypeScript compile, and formatting checks pass.
+- Frontend Task 6: 10 focused Vitest tests and ESLint pass; the full Ant Design production build succeeds with the repository-pinned `pnpm@10.28.2` (11 Turbo tasks).
 - Frontend baseline: full workspace `vue-tsc` currently fails in unrelated IoT, mall, WMS, OA, and shared modules. New work is gated by focused Vitest plus comparison against this recorded baseline; the change must not introduce errors in owned paths.
 
 ## Remaining risks
 
-Strict migration/security gates, runtime configuration, workbook-derived data assumptions, and modeler capability validation remain open.
+Task 8 runtime authorization context and pagination/search contracts, strict migration/security gates, runtime secret delivery, workbook-derived data assumptions, and modeler capability validation remain open.
 
 ## Memory and documentation updates
 
