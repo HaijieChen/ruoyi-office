@@ -262,7 +262,7 @@ export async function useFormCreateDesigner(designer: Ref) {
     props: [...apiSelectRule],
     event: ['click', 'change', 'visibleChange', 'clear', 'blur', 'focus'],
   });
-  const remoteDataSourceRule = useRemoteDataSourceRule();
+  const remoteDataSourceRule = useRemoteDataSourceRule(designer);
 
   /** 构建系统字段菜单 */
   function buildSystemMenu() {

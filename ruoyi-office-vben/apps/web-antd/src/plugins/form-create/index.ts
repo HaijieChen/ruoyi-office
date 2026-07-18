@@ -39,6 +39,7 @@ import DeptSelect from '#/components/form-create/components/dept-select.vue';
 import DictSelect from '#/components/form-create/components/dict-select.vue';
 import IframeComponent from '#/components/form-create/components/iframe.vue';
 import RemoteDataSourceSelect from '#/components/form-create/components/remote-data-source-select.vue';
+import RemoteDataSourceConfigEditor from '#/components/form-create/designer/remote-data-source-config-editor.vue';
 import { useImagesUpload } from '#/components/form-create/components/use-images-upload';
 import { Tinymce } from '#/components/tinymce';
 import { FileUpload, ImageUpload } from '#/components/upload';
@@ -53,6 +54,11 @@ const ApiSelect = useApiSelect({
   name: 'ApiSelect',
 });
 const ImagesUpload = useImagesUpload();
+
+FcDesigner.designerForm.component(
+  'RemoteDataSourceConfigEditor',
+  RemoteDataSourceConfigEditor,
+);
 
 const components = [
   Alert,

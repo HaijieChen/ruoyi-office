@@ -3,6 +3,7 @@ import type { BpmFormDataSourceApi } from '#/api/bpm/form-data-source';
 import { isBindingExpressionAllowed } from '../data-source/expression';
 
 export interface SelectOption {
+  disabled?: boolean;
   label: string;
   value: string;
 }
