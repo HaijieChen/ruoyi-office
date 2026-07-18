@@ -33,7 +33,8 @@ public class CrmReceivableStatusListener extends BpmProcessInstanceStatusEventLi
     @Override
     @PostMapping(PREFIX + "/update-audit-status") // 目的：提供给 bpm-server rpc 调用
     public void onEvent(@RequestBody BpmProcessInstanceStatusEvent event) {
-        receivableService.updateReceivableAuditStatus(Long.parseLong(event.getBusinessKey()), event.getStatus());
+        receivableService.updateReceivableAuditStatus(Long.parseLong(event.getBusinessKey()),
+                event.getProcessInstanceInfo().getStatus());
     }
 
 }

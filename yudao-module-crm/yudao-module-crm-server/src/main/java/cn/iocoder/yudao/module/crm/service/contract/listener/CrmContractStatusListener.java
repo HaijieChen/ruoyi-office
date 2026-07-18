@@ -33,7 +33,8 @@ public class CrmContractStatusListener extends BpmProcessInstanceStatusEventList
     @Override
     @PostMapping(PREFIX + "/update-audit-status") // 目的：提供给 bpm-server rpc 调用
     protected void onEvent(@RequestBody BpmProcessInstanceStatusEvent event) {
-        contractService.updateContractAuditStatus(Long.parseLong(event.getBusinessKey()), event.getStatus());
+        contractService.updateContractAuditStatus(Long.parseLong(event.getBusinessKey()),
+                event.getProcessInstanceInfo().getStatus());
     }
 
 }
