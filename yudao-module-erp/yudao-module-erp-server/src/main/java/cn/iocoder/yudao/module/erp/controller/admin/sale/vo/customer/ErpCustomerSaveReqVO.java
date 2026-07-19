@@ -59,4 +59,7 @@ public class ErpCustomerSaveReqVO {
     @Schema(description = "开户地址", example = "兴业银行浦东支行")
     private String bankAddress;
 
+    @Schema(description = "邮寄地址", example = "上海市浦东新区张江路 1 号")
+    private String mailingAddress;
+
 }

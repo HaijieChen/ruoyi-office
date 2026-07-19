@@ -130,6 +130,14 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'mailingAddress',
+      label: '邮寄地址',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入邮寄地址',
+      },
+    },
+    {
       fieldName: 'remark',
       label: '备注',
       component: 'Textarea',

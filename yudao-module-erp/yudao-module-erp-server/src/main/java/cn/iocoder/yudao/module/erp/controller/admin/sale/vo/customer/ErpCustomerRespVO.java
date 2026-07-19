@@ -76,6 +76,10 @@ public class ErpCustomerRespVO {
     @ExcelProperty("开户地址")
     private String bankAddress;
 
+    @Schema(description = "邮寄地址", example = "上海市浦东新区张江路 1 号")
+    @ExcelProperty("邮寄地址")
+    private String mailingAddress;
+
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;

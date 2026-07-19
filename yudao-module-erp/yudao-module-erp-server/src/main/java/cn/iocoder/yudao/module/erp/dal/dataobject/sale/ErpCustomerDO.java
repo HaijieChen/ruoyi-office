@@ -86,5 +86,9 @@ public class ErpCustomerDO extends BaseDO {
      * 开户地址
      */
     private String bankAddress;
+    /**
+     * 邮寄地址
+     */
+    private String mailingAddress;
 
 }

@@ -20,6 +20,7 @@ export namespace ErpCustomerApi {
     bankName: string; // 开户行
     bankAccount: string; // 开户账号
     bankAddress: string; // 开户地址
+    mailingAddress: string; // 邮寄地址
   }
 }
 
