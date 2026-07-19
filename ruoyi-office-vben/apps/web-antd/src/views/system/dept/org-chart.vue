@@ -4,14 +4,14 @@ import type { EchartsUIType } from '@vben/plugins/echarts';
 import type { SystemDeptApi } from '#/api/system/dept';
 import type { SystemUserApi } from '#/api/system/user';
 
-import { nextTick, onMounted, ref, shallowRef } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 
 import { Page } from '@vben/common-ui';
 import { IconifyIcon } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { handleTree } from '@vben/utils';
 
-import { Button, Empty, message, Spin } from 'ant-design-vue';
+import { Button, Empty, message, Select, Spin } from 'ant-design-vue';
 
 import { getDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
@@ -28,6 +28,27 @@ const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
 const userList = shallowRef<SystemUserApi.User[]>([]);
+const companyTrees = shallowRef<DeptTree[]>([]);
+const selectedCompanyId = ref<number>();
+const companyOptions = computed(() =>
+  companyTrees.value.map((company) => ({
+    label: company.name,
+    value: company.id,
+  })),
+);
+
+/** 渲染当前选择的公司 */
+async function renderSelectedCompany() {
+  const selectedCompany = companyTrees.value.find(
+    (company) => company.id === selectedCompanyId.value,
+  );
+  if (!selectedCompany) {
+    return;
+  }
+  const graphData = transformToEchartsData(selectedCompany);
+  await nextTick();
+  await renderChart(graphData);
+}
 
 /** 加载数据 */
 async function loadData() {
@@ -42,10 +63,21 @@ async function loadData() {
     const deptList = deptRes || [];
     const deptTree = handleTree(deptList, 'id', 'parentId');
 
-    if (deptTree.length > 0 && deptTree[0]) {
-      const graphData = transformToEchartsData(deptTree[0] as DeptTree);
-      await nextTick();
-      renderChart(graphData);
+    companyTrees.value = (deptTree as DeptTree[]).filter((dept) =>
+      isCompany(dept.orgType),
+    );
+    if (companyTrees.value.length === 0) {
+      companyTrees.value = deptTree as DeptTree[];
+    }
+
+    if (companyTrees.value.length > 0) {
+      const selectedStillExists = companyTrees.value.some(
+        (company) => company.id === selectedCompanyId.value,
+      );
+      if (!selectedStillExists) {
+        selectedCompanyId.value = companyTrees.value[0]?.id;
+      }
+      void renderSelectedCompany();
     } else {
       message.warning('暂无组织架构数据');
     }
@@ -269,6 +301,16 @@ function handleRefresh() {
   loadData();
 }
 
+/** 切换查看的公司 */
+function handleCompanyChange(companyId: unknown) {
+  const nextCompanyId = Number(companyId);
+  if (!Number.isFinite(nextCompanyId)) {
+    return;
+  }
+  selectedCompanyId.value = nextCompanyId;
+  void renderSelectedCompany();
+}
+
 onMounted(() => {
   loadData();
 });
@@ -280,7 +322,19 @@ onMounted(() => {
     title="组织架构图"
   >
     <template #extra>
-      <Button type="primary" @click="handleRefresh">
+      <Select
+        v-if="companyOptions.length > 1"
+        data-testid="company-select"
+        class="company-select"
+        :options="companyOptions"
+        :value="selectedCompanyId"
+        @change="handleCompanyChange"
+      />
+      <Button
+        data-testid="org-chart-refresh"
+        type="primary"
+        @click="handleRefresh"
+      >
         <template #icon>
           <IconifyIcon icon="ant-design:reload-outlined" />
         </template>
@@ -318,5 +372,10 @@ onMounted(() => {
     width: 100%;
     height: 680px;
   }
+}
+
+.company-select {
+  width: 220px;
+  margin-right: 12px;
 }
 </style>
