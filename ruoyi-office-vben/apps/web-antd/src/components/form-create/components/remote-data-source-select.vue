@@ -79,6 +79,24 @@ const hasRuntimeContext = computed(() => {
   return isTrustedRuntimeContext(props.runtimeContext);
 });
 
+function hasDependencyValue(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') {
+    return false;
+  }
+  return !Array.isArray(value) || value.length > 0;
+}
+
+const dependenciesReady = computed(() => {
+  if (props.dependencies.length === 0) {
+    return true;
+  }
+  const api = props.formCreateInject?.api;
+  return (
+    !!api &&
+    props.dependencies.every((field) => hasDependencyValue(api.getValue(field)))
+  );
+});
+
 function getConfigurationError(): string | undefined {
   if (!/^[a-z][a-z0-9_]{0,126}$/.test(props.dataSourceCode)) {
     return '数据源标识配置不正确';
@@ -240,8 +258,18 @@ async function executeSource({
   append = false,
   revalidateValue,
 }: ExecuteOptions = {}) {
+  const requestId = ++requestSequence;
   const context = props.runtimeContext;
   if (!isTrustedRuntimeContext(context)) {
+    return;
+  }
+  if (!dependenciesReady.value) {
+    loading.value = false;
+    errorMessage.value = undefined;
+    options.value = [];
+    rawRows.value = [];
+    total.value = 0;
+    retryOptions = {};
     return;
   }
   const configurationError = getConfigurationError();
@@ -251,7 +279,6 @@ async function executeSource({
   }
 
   retryOptions = { append, revalidateValue };
-  const requestId = ++requestSequence;
   loading.value = true;
   errorMessage.value = undefined;
   try {
@@ -429,7 +456,10 @@ const displayOptions = computed(() => snapshotOptions.value ?? options.value);
     <Select
       v-else
       class="w-full"
-      :disabled="!hasRuntimeContext && displayOptions.length === 0"
+      :disabled="
+        (!hasRuntimeContext && displayOptions.length === 0) ||
+        !dependenciesReady
+      "
       :filter-option="false"
       :loading="loading"
       :mode="multiple ? 'multiple' : undefined"
@@ -439,9 +469,11 @@ const displayOptions = computed(() => snapshotOptions.value ?? options.value);
       :placeholder="
         !hasRuntimeContext
           ? '仅在流程中可用'
-          : errorMessage
-            ? '加载失败'
-            : '请选择'
+          : !dependenciesReady
+            ? '请先完成前置选择'
+            : errorMessage
+              ? '加载失败'
+              : '请选择'
       "
       :show-search="!!searchParamName"
       :value="modelValue as any"

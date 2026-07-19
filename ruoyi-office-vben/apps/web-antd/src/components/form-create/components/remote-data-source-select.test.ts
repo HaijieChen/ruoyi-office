@@ -1,4 +1,6 @@
 /* eslint-disable vue/one-component-per-file */
+import type { Ref } from 'vue';
+
 import { flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h, nextTick, ref } from 'vue';
 
@@ -58,7 +60,7 @@ function deferred<T>() {
 }
 
 function mountSelector(options: {
-  companyId?: ReturnType<typeof ref<number>>;
+  companyId?: Ref<number | undefined>;
   getValue?: (field: string) => unknown;
   modelValue?: unknown;
   props?: Record<string, unknown>;
@@ -119,6 +121,26 @@ beforeEach(() => {
 });
 
 describe('remoteDataSourceSelect component', () => {
+  it('waits for an empty dependency before executing the data source', async () => {
+    const companyId = ref<number>();
+    const { wrapper } = mountSelector({ companyId });
+    await flushPromises();
+
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain('加载数据源失败');
+
+    companyId.value = 9;
+    await nextTick();
+    await flushPromises();
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(mocks.execute).toHaveBeenCalledWith('oa_available_seals', {
+      formId: 42,
+      params: { selectedCompanyId: 9 },
+      processDefinitionId: 'definition-1',
+    });
+  });
+
   it('sends the trusted body and clears value/mappings after dependency changes', async () => {
     const companyId = ref(8);
     const { setValue, wrapper } = mountSelector({
