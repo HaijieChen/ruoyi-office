@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @Mapper
-public interface FinanceReceiptMapper extends BaseMapperX<FinanceReceiptDO> {
+public interface FinanceBankReceiptMapper extends BaseMapperX<FinanceReceiptDO> {
 
     default PageResult<FinanceReceiptDO> selectUnclaimedPage(FinanceReceiptPageReqVO reqVO) {
         return selectPage(reqVO, new MPJLambdaWrapperX<FinanceReceiptDO>()

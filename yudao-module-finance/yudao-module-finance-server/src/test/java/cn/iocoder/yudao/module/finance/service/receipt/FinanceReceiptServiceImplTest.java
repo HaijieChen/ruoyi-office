@@ -5,7 +5,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceip
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
-import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceReceiptMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceReceiptNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptClaimStatusEnum;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,13 +23,13 @@ import static org.mockito.Mockito.*;
 
 class FinanceReceiptServiceImplTest {
 
-    private FinanceReceiptMapper receiptMapper;
+    private FinanceBankReceiptMapper receiptMapper;
     private FinanceReceiptNoRedisDAO receiptNoRedisDAO;
     private FinanceReceiptServiceImpl receiptService;
 
     @BeforeEach
     void setUp() {
-        receiptMapper = mock(FinanceReceiptMapper.class);
+        receiptMapper = mock(FinanceBankReceiptMapper.class);
         receiptNoRedisDAO = mock(FinanceReceiptNoRedisDAO.class);
         receiptService = new FinanceReceiptServiceImpl(receiptMapper, receiptNoRedisDAO);
     }

@@ -7,7 +7,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceip
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
-import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceReceiptMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceReceiptNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptClaimStatusEnum;
 import org.springframework.stereotype.Service;
@@ -19,10 +19,10 @@ import java.util.*;
 @Service
 public class FinanceReceiptServiceImpl implements FinanceReceiptService {
 
-    private final FinanceReceiptMapper receiptMapper;
+    private final FinanceBankReceiptMapper receiptMapper;
     private final FinanceReceiptNoRedisDAO receiptNoRedisDAO;
 
-    public FinanceReceiptServiceImpl(FinanceReceiptMapper receiptMapper, FinanceReceiptNoRedisDAO receiptNoRedisDAO) {
+    public FinanceReceiptServiceImpl(FinanceBankReceiptMapper receiptMapper, FinanceReceiptNoRedisDAO receiptNoRedisDAO) {
         this.receiptMapper = receiptMapper;
         this.receiptNoRedisDAO = receiptNoRedisDAO;
     }
