@@ -125,6 +125,13 @@
             <version>${revision}</version>
         </dependency>
 
+        <!-- 财务管理模块 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>yudao-module-finance-server</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
         <!-- AI 大模型相关模块。默认注释，保证编译速度 -->
 <!--        <dependency>-->
 <!--            <groupId>cn.iocoder.cloud</groupId>-->
