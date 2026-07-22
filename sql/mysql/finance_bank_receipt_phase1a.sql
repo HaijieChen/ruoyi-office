@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `finance_bank_receipt` (
     `id`                 bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
     `receipt_no`         varchar(64) NOT NULL COMMENT '到款流水号',
@@ -33,19 +35,35 @@ SELECT '财务管理', '', 1, 40, 0, 'finance', 'fa:money', NULL, NULL,
        0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
-    WHERE `deleted` = b'0' AND `type` = 1 AND `path` = 'finance'
+    WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance'
 );
+
+UPDATE `system_menu`
+SET `name` = '财务管理', `sort` = 40, `parent_id` = 0, `icon` = 'fa:money', `component` = NULL, `component_name` = NULL,
+    `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1', `update_time` = NOW()
+WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance';
+
+UPDATE `system_menu`
+SET `name` = 'ERP 财务管理', `update_time` = NOW()
+WHERE `deleted` = b'0' AND `path` = 'finance' AND `parent_id` <> 0;
 
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
 SELECT '银行到款', '', 2, 1, parent_menu.id, 'receipt', 'fa:bank', 'finance/receipt/index', 'FinanceReceipt',
        0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
-FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `path` = 'finance' LIMIT 1) parent_menu
+FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1) parent_menu
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
     WHERE `deleted` = b'0' AND `component` = 'finance/receipt/index'
 );
+
+UPDATE `system_menu`
+SET `name` = '银行到款',
+    `parent_id` = (SELECT parent_menu.id FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1) parent_menu),
+    `path` = 'receipt', `icon` = 'fa:bank', `component` = 'finance/receipt/index', `component_name` = 'FinanceReceipt',
+    `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1', `update_time` = NOW()
+WHERE `deleted` = b'0' AND `component` = 'finance/receipt/index';
 
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
@@ -58,6 +76,12 @@ WHERE NOT EXISTS (
     WHERE `deleted` = b'0' AND `permission` = 'finance:receipt:query'
 );
 
+UPDATE `system_menu`
+SET `name` = '银行到款查询',
+    `parent_id` = (SELECT page_menu.id FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'finance/receipt/index' LIMIT 1) page_menu),
+    `update_time` = NOW()
+WHERE `deleted` = b'0' AND `permission` = 'finance:receipt:query';
+
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
@@ -68,3 +92,9 @@ WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
     WHERE `deleted` = b'0' AND `permission` = 'finance:receipt:import'
 );
+
+UPDATE `system_menu`
+SET `name` = '银行到款导入',
+    `parent_id` = (SELECT page_menu.id FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'finance/receipt/index' LIMIT 1) page_menu),
+    `update_time` = NOW()
+WHERE `deleted` = b'0' AND `permission` = 'finance:receipt:import';
