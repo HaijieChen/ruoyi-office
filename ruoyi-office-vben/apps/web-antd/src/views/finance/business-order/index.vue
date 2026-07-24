@@ -9,19 +9,21 @@ import {
   deleteBusinessOrder,
   getBusinessOrderPage,
 } from '#/api/finance/business-order';
-import { useAccess } from '@vben/access';
-
 import { message, Modal } from 'ant-design-vue';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import FormModal from './modules/form.vue';
+import ImportModal from './modules/import-modal.vue';
 
 defineOptions({ name: 'FinanceBusinessOrder' });
 
-const { hasAccessByCodes } = useAccess();
-
 const [BusinessOrderFormModal, formModalApi] = useVbenModal({
   connectedComponent: FormModal,
+  destroyOnClose: true,
+});
+
+const [BusinessOrderImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportModal,
   destroyOnClose: true,
 });
 
@@ -39,15 +41,14 @@ function handleEdit(row: FinanceBusinessOrderApi.BusinessOrder) {
   formModalApi.open();
 }
 
-function handleDetail(row: FinanceBusinessOrderApi.BusinessOrder) {
-  formModalApi.setData({ id: row.id });
-  formModalApi.open();
+function handleImport() {
+  importModalApi.open();
 }
 
 function handleDelete(row: FinanceBusinessOrderApi.BusinessOrder) {
   Modal.confirm({
     title: '确认删除',
-    content: `确定要删除订单「${row.orderNo}」吗？`,
+    content: `确定要删除签单「${row.orderNo}」吗？`,
     onOk: async () => {
       await deleteBusinessOrder([row.id]);
       message.success('删除成功');
@@ -67,8 +68,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          const params =
-            formValues as FinanceBusinessOrderApi.PageQuery;
+          const params = formValues as FinanceBusinessOrderApi.PageQuery;
           return getBusinessOrderPage({
             ...params,
             pageNo: page.currentPage,
@@ -79,7 +79,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
     },
     rowConfig: { keyField: 'id', isHover: true },
     toolbarConfig: { refresh: true, search: true },
-    columns: useGridColumns(),
   } as VxeTableGridOptions<FinanceBusinessOrderApi.BusinessOrder>,
 });
 </script>
@@ -87,7 +86,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <BusinessOrderFormModal @success="handleRefresh" />
-    <Grid table-title="业务订单">
+    <BusinessOrderImportModal @success="handleRefresh" />
+    <Grid table-title="签单管理">
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -98,6 +98,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['finance:business-order:create'],
               onClick: handleCreate,
             },
+            {
+              label: '导入',
+              type: 'default',
+              icon: ACTION_ICON.UPLOAD,
+              auth: ['finance:business-order:import'],
+              onClick: handleImport,
+            },
           ]"
         />
       </template>
@@ -105,16 +112,9 @@ const [Grid, gridApi] = useVbenVxeGrid({
         <TableAction
           :actions="[
             {
-              label: '详情',
-              type: 'link',
-              auth: ['finance:business-order:query'],
-              onClick: () => handleDetail(row),
-            },
-            {
               label: '编辑',
               type: 'link',
               auth: ['finance:business-order:update'],
-              ifShow: row.status !== 2,
               onClick: () => handleEdit(row),
             },
             {
@@ -122,7 +122,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               danger: true,
               auth: ['finance:business-order:delete'],
-              ifShow: row.status === 0,
               onClick: () => handleDelete(row),
             },
           ]"

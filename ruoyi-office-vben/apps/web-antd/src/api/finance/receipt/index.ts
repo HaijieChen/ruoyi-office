@@ -43,6 +43,20 @@ export namespace FinanceBankReceiptApi {
     receiptNos: string[];
     failureRows: Record<number, string>;
   }
+
+  export interface LifecycleReqVO {
+    id: number;
+    reason: string;
+  }
+
+  export interface LifecycleAuditVO {
+    id: number;
+    receiptId: number;
+    action: number;
+    operatorId: number;
+    actionTime: string;
+    reason: string;
+  }
 }
 
 /** 查询未认领回单分页 */
@@ -59,6 +73,21 @@ export function importBankReceipt(file: File) {
   return requestClient.upload<FinanceBankReceiptApi.ReceiptImportResult>(
     '/finance/receipt/import',
     { file },
+  );
+}
+
+export function closeReceipt(id: number, reason: string) {
+  return requestClient.put<boolean>('/finance/receipt/close', { id, reason });
+}
+
+export function reopenReceipt(id: number, reason: string) {
+  return requestClient.put<boolean>('/finance/receipt/reopen', { id, reason });
+}
+
+export function getLifecycleAuditList(receiptId: number) {
+  return requestClient.get<FinanceBankReceiptApi.LifecycleAuditVO[]>(
+    '/finance/receipt/lifecycle-audit-list',
+    { params: { receiptId } },
   );
 }
 

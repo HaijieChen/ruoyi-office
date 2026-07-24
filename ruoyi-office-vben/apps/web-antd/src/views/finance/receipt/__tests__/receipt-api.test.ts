@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  closeReceipt,
+  getLifecycleAuditList,
   getUnclaimedReceiptPage,
   importBankReceipt,
   mapFailureRows,
+  reopenReceipt,
 } from '#/api/finance/receipt';
 import { requestClient } from '#/api/request';
 
 vi.mock('#/api/request', () => ({
   requestClient: {
     get: vi.fn(),
+    put: vi.fn(),
     upload: vi.fn(),
   },
 }));
@@ -72,6 +76,35 @@ describe('FinanceBankReceiptApi — endpoint contracts', () => {
     expect(mockedRequestClient.upload).toHaveBeenCalledWith(
       '/finance/receipt/import',
       { file },
+    );
+  });
+});
+
+describe('FinanceBankReceiptLifecycleApi — endpoint contracts', () => {
+  it('closeReceipt sends PUT to /finance/receipt/close with id and reason', () => {
+    closeReceipt(42, '余额不足无法认领');
+
+    expect(mockedRequestClient.put).toHaveBeenCalledWith(
+      '/finance/receipt/close',
+      { id: 42, reason: '余额不足无法认领' },
+    );
+  });
+
+  it('reopenReceipt sends PUT to /finance/receipt/reopen with id and reason', () => {
+    reopenReceipt(99, '误操作需重开');
+
+    expect(mockedRequestClient.put).toHaveBeenCalledWith(
+      '/finance/receipt/reopen',
+      { id: 99, reason: '误操作需重开' },
+    );
+  });
+
+  it('getLifecycleAuditList sends GET to /finance/receipt/lifecycle-audit-list with receiptId param', () => {
+    getLifecycleAuditList(7);
+
+    expect(mockedRequestClient.get).toHaveBeenCalledWith(
+      '/finance/receipt/lifecycle-audit-list',
+      { params: { receiptId: 7 } },
     );
   });
 });
