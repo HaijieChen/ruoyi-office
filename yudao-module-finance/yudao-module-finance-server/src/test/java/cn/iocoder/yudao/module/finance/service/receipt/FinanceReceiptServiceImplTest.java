@@ -4,10 +4,13 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptLifecycleAuditDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceReceiptLifecycleAuditMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceReceiptNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptClaimStatusEnum;
+import cn.iocoder.yudao.module.finance.enums.FinanceReceiptLifecycleActionEnum;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,19 +27,21 @@ import static org.mockito.Mockito.*;
 class FinanceReceiptServiceImplTest {
 
     private FinanceBankReceiptMapper receiptMapper;
+    private FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper;
     private FinanceReceiptNoRedisDAO receiptNoRedisDAO;
     private FinanceReceiptServiceImpl receiptService;
 
     @BeforeEach
     void setUp() {
         receiptMapper = mock(FinanceBankReceiptMapper.class);
+        lifecycleAuditMapper = mock(FinanceReceiptLifecycleAuditMapper.class);
         receiptNoRedisDAO = mock(FinanceReceiptNoRedisDAO.class);
-        receiptService = new FinanceReceiptServiceImpl(receiptMapper, receiptNoRedisDAO);
+        receiptService = new FinanceReceiptServiceImpl(receiptMapper, lifecycleAuditMapper, receiptNoRedisDAO);
     }
 
     @Test
     void importReceiptListShouldInsertValidRowsAndReturnFailures() {
-        when(receiptNoRedisDAO.generate(LocalDate.of(2026, 7, 22))).thenReturn("RC-20260722-1");
+        when(receiptNoRedisDAO.generate(LocalDate.now())).thenReturn("RC-20260722-1");
         when(receiptMapper.selectByBankSerialNo("BSN-001")).thenReturn(null);
         FinanceReceiptImportExcelVO valid = row("招商银行 1234", "BSN-001", new BigDecimal("100.50"));
         FinanceReceiptImportExcelVO invalidAmount = row("招商银行 1234", "BSN-002", BigDecimal.ZERO);
@@ -86,6 +91,117 @@ class FinanceReceiptServiceImplTest {
         assertSame(expected, receiptService.getUnclaimedReceiptPage(reqVO));
     }
 
+    @Test
+    void closeReceiptShouldTransitionReceiptWithRemainingAmountAndAppendAudit() {
+        when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
+                FinanceReceiptClaimStatusEnum.PARTIALLY_CLAIMED.getStatus(), "40.00", "60.00"));
+        when(receiptMapper.closeIfStatus(1L,
+                FinanceReceiptClaimStatusEnum.PARTIALLY_CLAIMED.getStatus())).thenReturn(1);
+        when(lifecycleAuditMapper.insert(any(FinanceReceiptLifecycleAuditDO.class))).thenReturn(1);
+
+        receiptService.closeReceipt(1L, 900L, "尾款不再收取");
+
+        verify(receiptMapper).closeIfStatus(1L,
+                FinanceReceiptClaimStatusEnum.PARTIALLY_CLAIMED.getStatus());
+        verify(lifecycleAuditMapper).insert(argThat(audit -> audit.getReceiptId().equals(1L)
+                && audit.getOperatorId().equals(900L)
+                && audit.getAction().equals(FinanceReceiptLifecycleActionEnum.CLOSE.getAction())
+                && "尾款不再收取".equals(audit.getReason())
+                && audit.getActionTime() != null));
+    }
+
+    @Test
+    void closeReceiptShouldRejectBlankReasonWithoutReadingReceipt() {
+        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "  "));
+
+        verifyNoInteractions(receiptMapper, lifecycleAuditMapper);
+    }
+
+    @Test
+    void closeReceiptShouldRejectReceiptWithoutRemainingAmount() {
+        when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
+                FinanceReceiptClaimStatusEnum.FULLY_CLAIMED.getStatus(), "100.00", "0.00"));
+
+        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "已全部认领"));
+
+        verify(receiptMapper, never()).closeIfStatus(anyLong(), anyInt());
+        verifyNoInteractions(lifecycleAuditMapper);
+    }
+
+    @Test
+    void closeReceiptShouldRejectConcurrentStatusChangeWithoutAudit() {
+        when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
+                FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus(), "0.00", "100.00"));
+        when(receiptMapper.closeIfStatus(1L,
+                FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())).thenReturn(0);
+
+        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "不再认领"));
+
+        verifyNoInteractions(lifecycleAuditMapper);
+    }
+
+    @Test
+    void reopenReceiptShouldTransitionClosedReceiptAndAppendAudit() {
+        when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
+                FinanceReceiptClaimStatusEnum.CLOSED.getStatus(), "40.00", "60.00"));
+        when(receiptMapper.reopenIfClosed(1L)).thenReturn(1);
+        when(lifecycleAuditMapper.insert(any(FinanceReceiptLifecycleAuditDO.class))).thenReturn(1);
+
+        receiptService.reopenReceipt(1L, 901L, "客户恢复付款");
+
+        verify(receiptMapper).reopenIfClosed(1L);
+        verify(lifecycleAuditMapper).insert(argThat(audit -> audit.getReceiptId().equals(1L)
+                && audit.getOperatorId().equals(901L)
+                && audit.getAction().equals(FinanceReceiptLifecycleActionEnum.REOPEN.getAction())
+                && "客户恢复付款".equals(audit.getReason())
+                && audit.getActionTime() != null));
+    }
+
+    @Test
+    void reopenReceiptShouldOnlyAllowClosedReceipt() {
+        when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
+                FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus(), "0.00", "100.00"));
+
+        assertThrows(RuntimeException.class, () -> receiptService.reopenReceipt(1L, 901L, "误关闭"));
+
+        verify(receiptMapper, never()).reopenIfClosed(anyLong());
+        verifyNoInteractions(lifecycleAuditMapper);
+    }
+
+    @Test
+    void reopenReceiptShouldRejectConcurrentStatusChangeWithoutAudit() {
+        when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
+                FinanceReceiptClaimStatusEnum.CLOSED.getStatus(), "0.00", "100.00"));
+        when(receiptMapper.reopenIfClosed(1L)).thenReturn(0);
+
+        assertThrows(RuntimeException.class, () -> receiptService.reopenReceipt(1L, 901L, "误关闭"));
+
+        verifyNoInteractions(lifecycleAuditMapper);
+    }
+
+    @Test
+    void lifecycleTransitionsShouldBeTransactional() throws NoSuchMethodException {
+        assertNotNull(FinanceReceiptServiceImpl.class
+                .getMethod("closeReceipt", Long.class, Long.class, String.class)
+                .getAnnotation(org.springframework.transaction.annotation.Transactional.class));
+        assertNotNull(FinanceReceiptServiceImpl.class
+                .getMethod("reopenReceipt", Long.class, Long.class, String.class)
+                .getAnnotation(org.springframework.transaction.annotation.Transactional.class));
+    }
+
+    @Test
+    void getLifecycleAuditListShouldDelegateToImmutableAuditMapper() {
+        List<FinanceReceiptLifecycleAuditDO> expected = List.of(
+                FinanceReceiptLifecycleAuditDO.builder().id(2L).receiptId(1L)
+                        .action(FinanceReceiptLifecycleActionEnum.REOPEN.getAction()).reason("恢复认领").build(),
+                FinanceReceiptLifecycleAuditDO.builder().id(1L).receiptId(1L)
+                        .action(FinanceReceiptLifecycleActionEnum.CLOSE.getAction()).reason("停止认领").build());
+        when(lifecycleAuditMapper.selectListByReceiptId(1L)).thenReturn(expected);
+
+        assertSame(expected, receiptService.getLifecycleAuditList(1L));
+        verify(lifecycleAuditMapper).selectListByReceiptId(1L);
+    }
+
     private static FinanceReceiptImportExcelVO row(String bankAccount, String bankSerialNo, BigDecimal amount) {
         return FinanceReceiptImportExcelVO.builder()
                 .bankAccount(bankAccount)
@@ -96,6 +212,13 @@ class FinanceReceiptServiceImplTest {
                 .summary("合同款")
                 .bankSerialNo(bankSerialNo)
                 .build();
+    }
+
+    private static FinanceReceiptDO receipt(Long id, Integer claimStatus, String claimedAmount,
+                                            String unclaimedAmount) {
+        return FinanceReceiptDO.builder().id(id).claimStatus(claimStatus)
+                .claimedAmount(new BigDecimal(claimedAmount))
+                .unclaimedAmount(new BigDecimal(unclaimedAmount)).build();
     }
 
 }

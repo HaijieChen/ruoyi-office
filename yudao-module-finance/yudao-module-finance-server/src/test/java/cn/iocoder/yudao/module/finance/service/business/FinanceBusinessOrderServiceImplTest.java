@@ -1,22 +1,33 @@
 package cn.iocoder.yudao.module.finance.service.business;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
-import cn.iocoder.yudao.module.finance.enums.FinanceBusinessOrderStatusEnum;
+import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisDAO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class FinanceBusinessOrderServiceImplTest {
+
+    private static final Long IMPORTER_ID = 100L;
+    private static final String ORDER_NO = "BO-20260723-1";
 
     private FinanceBusinessOrderMapper businessOrderMapper;
     private FinanceBusinessOrderServiceImpl businessOrderService;
@@ -24,63 +35,123 @@ class FinanceBusinessOrderServiceImplTest {
     @BeforeEach
     void setUp() {
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
-        businessOrderService = new FinanceBusinessOrderServiceImpl(businessOrderMapper);
+        FinanceBusinessOrderNoRedisDAO orderNoRedisDAO = mock(FinanceBusinessOrderNoRedisDAO.class);
+        businessOrderService = new FinanceBusinessOrderServiceImpl(businessOrderMapper, orderNoRedisDAO);
+        when(orderNoRedisDAO.generate(any(LocalDate.class))).thenReturn(ORDER_NO);
     }
 
     @Test
-    void createBusinessOrderShouldInsertValidOrderWithCurrentOwner() {
-        FinanceBusinessOrderSaveReqVO reqVO = order("BO-001", new BigDecimal("100.00"), BigDecimal.ZERO);
-        when(businessOrderMapper.selectByOrderNo("BO-001")).thenReturn(null);
+    void createBusinessOrderShouldGenerateMetadataAndSettlementWhenSheetFieldsAreValid() {
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+        reqVO.setDiscountRate(null);
 
-        businessOrderService.createBusinessOrder(reqVO, 100L);
+        businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID);
 
         verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
-                "BO-001".equals(order.getOrderNo())
-                        && Long.valueOf(100L).equals(order.getOwnerId())
-                        && FinanceBusinessOrderStatusEnum.DRAFT.getStatus().equals(order.getStatus())));
+                ORDER_NO.equals(order.getOrderNo())
+                        && LocalDate.now().equals(order.getImportDate())
+                        && IMPORTER_ID.equals(order.getImporterId())
+                        && "6222000000000000".equals(order.getBankAccount())
+                        && order.getContractProcessId() == null
+                        && "产品A".equals(order.getProductName())
+                        && "张三".equals(order.getContactPerson())
+                        && "付款公司".equals(order.getPayerName())
+                        && new BigDecimal("1000.00").compareTo(order.getSignedExecutionAmount()) == 0
+                        && BigDecimal.ZERO.compareTo(order.getDiscountRate()) == 0
+                        && new BigDecimal("1000.00").compareTo(order.getSettlementAmount()) == 0
+                        && BigDecimal.ZERO.compareTo(order.getConfirmedClaimedAmount()) == 0
+                        && "备注内容".equals(order.getRemark())));
     }
 
     @Test
-    void createBusinessOrderShouldRejectDuplicateOrderNo() {
-        when(businessOrderMapper.selectByOrderNo("BO-001")).thenReturn(FinanceBusinessOrderDO.builder().id(1L).build());
+    void createBusinessOrderShouldRoundSettlementHalfUp() {
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+        reqVO.setSignedExecutionAmount(new BigDecimal("1000.005"));
+        reqVO.setDiscountRate(new BigDecimal("0.001"));
 
-        assertThrows(RuntimeException.class, () -> businessOrderService.createBusinessOrder(
-                order("BO-001", BigDecimal.ONE, BigDecimal.ZERO), 100L));
+        businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID);
+
+        verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
+                new BigDecimal("1000.01").equals(order.getSignedExecutionAmount())
+                        && new BigDecimal("0.001000").equals(order.getDiscountRate())
+                        && new BigDecimal("999.01").equals(order.getSettlementAmount())));
+    }
+
+    @Test
+    void createBusinessOrderShouldRejectNonPositiveExecutionAmount() {
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+        reqVO.setSignedExecutionAmount(BigDecimal.ZERO);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID));
+
         verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
     }
 
     @Test
-    void createBusinessOrderShouldRejectInvalidAmountAndCurrency() {
-        FinanceBusinessOrderSaveReqVO zeroAmount = order("BO-001", BigDecimal.ZERO, BigDecimal.ZERO);
-        assertThrows(RuntimeException.class, () -> businessOrderService.createBusinessOrder(zeroAmount, 100L));
+    void createBusinessOrderShouldRejectExecutionEndBeforeStart() {
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+        reqVO.setExecutionEndDate(reqVO.getExecutionStartDate().minusDays(1));
 
-        FinanceBusinessOrderSaveReqVO invalidCurrency = order("BO-002", BigDecimal.ONE, BigDecimal.ZERO);
-        invalidCurrency.setCurrency("cny");
-        assertThrows(RuntimeException.class, () -> businessOrderService.createBusinessOrder(invalidCurrency, 100L));
+        assertThrows(IllegalArgumentException.class,
+                () -> businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID));
 
         verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
     }
 
     @Test
-    void updateBusinessOrderShouldRejectClosedOrder() {
+    void createBusinessOrderShouldRejectDiscountOutsideZeroToOne() {
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+        reqVO.setDiscountRate(new BigDecimal("1.01"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID));
+
+        verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
+    }
+
+    @Test
+    void updateBusinessOrderShouldPreserveGeneratedMetadataAndRecomputeSettlement() {
         when(businessOrderMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
-                .id(1L).orderNo("BO-001").status(FinanceBusinessOrderStatusEnum.CLOSED.getStatus()).ownerId(100L).build());
-        FinanceBusinessOrderSaveReqVO reqVO = order("BO-001", BigDecimal.ONE, BigDecimal.ZERO);
+                .id(1L).orderNo(ORDER_NO).importDate(LocalDate.of(2026, 7, 1)).importerId(IMPORTER_ID)
+                .confirmedClaimedAmount(new BigDecimal("50.00")).sourceRowHash("hash").build());
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
         reqVO.setId(1L);
+        reqVO.setDiscountRate(new BigDecimal("0.25"));
 
-        assertThrows(RuntimeException.class, () -> businessOrderService.updateBusinessOrder(reqVO));
+        businessOrderService.updateBusinessOrder(reqVO);
+
+        verify(businessOrderMapper).updateById(argThat((FinanceBusinessOrderDO order) ->
+                ORDER_NO.equals(order.getOrderNo())
+                        && LocalDate.of(2026, 7, 1).equals(order.getImportDate())
+                        && IMPORTER_ID.equals(order.getImporterId())
+                        && new BigDecimal("750.00").compareTo(order.getSettlementAmount()) == 0
+                        && new BigDecimal("50.00").compareTo(order.getConfirmedClaimedAmount()) == 0
+                        && "hash".equals(order.getSourceRowHash())));
+    }
+
+    @Test
+    void updateBusinessOrderShouldRejectSettlementBelowConfirmedClaimedAmount() {
+        when(businessOrderMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
+                .id(1L).confirmedClaimedAmount(new BigDecimal("800.01")).build());
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+        reqVO.setId(1L);
+        reqVO.setDiscountRate(new BigDecimal("0.20"));
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> businessOrderService.updateBusinessOrder(reqVO));
+
+        org.junit.jupiter.api.Assertions.assertEquals(BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED.getCode(),
+                exception.getCode());
+
         verify(businessOrderMapper, never()).updateById(any(FinanceBusinessOrderDO.class));
     }
 
     @Test
-    void deleteBusinessOrderShouldDeleteDraftOnly() {
-        when(businessOrderMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
-                .id(1L).status(FinanceBusinessOrderStatusEnum.DRAFT.getStatus()).build());
-        when(businessOrderMapper.selectById(2L)).thenReturn(FinanceBusinessOrderDO.builder()
-                .id(2L).status(FinanceBusinessOrderStatusEnum.ACTIVE.getStatus()).build());
+    void deleteBusinessOrderShouldDeleteExistingOrder() {
+        when(businessOrderMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder().id(1L).build());
 
         businessOrderService.deleteBusinessOrder(List.of(1L));
-        assertThrows(RuntimeException.class, () -> businessOrderService.deleteBusinessOrder(List.of(2L)));
 
         verify(businessOrderMapper).deleteByIds(List.of(1L));
     }
@@ -88,21 +159,25 @@ class FinanceBusinessOrderServiceImplTest {
     @Test
     void getBusinessOrderPageShouldDelegateToMapper() {
         FinanceBusinessOrderPageReqVO reqVO = new FinanceBusinessOrderPageReqVO();
-        PageResult<FinanceBusinessOrderDO> expected = new PageResult<>(List.of(FinanceBusinessOrderDO.builder().id(1L).build()), 1L);
+        PageResult<FinanceBusinessOrderDO> expected = new PageResult<>(
+                List.of(FinanceBusinessOrderDO.builder().id(1L).build()), 1L);
         when(businessOrderMapper.selectPage(reqVO)).thenReturn(expected);
 
         assertSame(expected, businessOrderService.getBusinessOrderPage(reqVO));
     }
 
-    private static FinanceBusinessOrderSaveReqVO order(String orderNo, BigDecimal receivableAmount, BigDecimal payableAmount) {
+    private static FinanceBusinessOrderSaveReqVO validOrder() {
         FinanceBusinessOrderSaveReqVO reqVO = new FinanceBusinessOrderSaveReqVO();
-        reqVO.setOrderNo(orderNo);
-        reqVO.setBusinessSubject("客户 A");
-        reqVO.setBusinessType("销售");
-        reqVO.setReceivableAmount(receivableAmount);
-        reqVO.setPayableAmount(payableAmount);
-        reqVO.setCurrency("CNY");
-        reqVO.setStatus(FinanceBusinessOrderStatusEnum.DRAFT.getStatus());
+        reqVO.setBankAccount("6222000000000000");
+        reqVO.setOrderDate(LocalDate.of(2026, 7, 1));
+        reqVO.setProductName("产品A");
+        reqVO.setContactPerson("张三");
+        reqVO.setExecutionStartDate(LocalDate.of(2026, 7, 5));
+        reqVO.setExecutionEndDate(LocalDate.of(2026, 7, 31));
+        reqVO.setPayerName("付款公司");
+        reqVO.setSignedExecutionAmount(new BigDecimal("1000.00"));
+        reqVO.setDiscountRate(new BigDecimal("0.10"));
+        reqVO.setRemark("备注内容");
         return reqVO;
     }
 
