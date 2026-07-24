@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -43,6 +44,31 @@ public class FinanceReceiptController {
     public CommonResult<PageResult<FinanceReceiptRespVO>> getUnclaimedReceiptPage(@Valid FinanceReceiptPageReqVO pageReqVO) {
         PageResult<FinanceReceiptDO> pageResult = receiptService.getUnclaimedReceiptPage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, FinanceReceiptRespVO.class));
+    }
+
+    @PutMapping("/close")
+    @Operation(summary = "关闭仍有未认领金额的银行到款")
+    @PreAuthorize("@ss.hasPermission('finance:receipt:close')")
+    public CommonResult<Boolean> closeReceipt(@Valid @RequestBody FinanceReceiptLifecycleReqVO reqVO) {
+        receiptService.closeReceipt(reqVO.getId(), getLoginUserId(), reqVO.getReason());
+        return success(true);
+    }
+
+    @PutMapping("/reopen")
+    @Operation(summary = "重开已关闭的银行到款")
+    @PreAuthorize("@ss.hasPermission('finance:receipt:reopen')")
+    public CommonResult<Boolean> reopenReceipt(@Valid @RequestBody FinanceReceiptLifecycleReqVO reqVO) {
+        receiptService.reopenReceipt(reqVO.getId(), getLoginUserId(), reqVO.getReason());
+        return success(true);
+    }
+
+    @GetMapping("/lifecycle-audit-list")
+    @Operation(summary = "获得银行到款关闭和重开审计列表")
+    @PreAuthorize("@ss.hasPermission('finance:receipt:audit-query')")
+    public CommonResult<List<FinanceReceiptLifecycleAuditRespVO>> getLifecycleAuditList(
+            @RequestParam("receiptId") Long receiptId) {
+        return success(BeanUtils.toBean(receiptService.getLifecycleAuditList(receiptId),
+                FinanceReceiptLifecycleAuditRespVO.class));
     }
 
 }

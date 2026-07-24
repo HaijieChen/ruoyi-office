@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @TableName("finance_business_order")
 @KeySequence("finance_business_order_seq")
@@ -21,15 +22,21 @@ public class FinanceBusinessOrderDO extends BaseDO {
     @TableId
     private Long id;
     private String orderNo;
-    private String businessSubject;
-    private String businessType;
-    private String contractRef;
-    private String projectRef;
-    private BigDecimal receivableAmount;
-    private BigDecimal payableAmount;
-    private String currency;
-    private Long ownerId;
-    private Integer status;
+    private LocalDate importDate;
+    private Long importerId;
+    private String contractProcessId;
+    private LocalDate orderDate;
+    private String productName;
+    private String contactPerson;
+    private LocalDate executionStartDate;
+    private LocalDate executionEndDate;
+    private String payerName;
+    private BigDecimal signedExecutionAmount;
+    private BigDecimal discountRate;
+    private BigDecimal settlementAmount;
+    private String bankAccount;
     private String remark;
+    private BigDecimal confirmedClaimedAmount;
+    private String sourceRowHash;
 
 }

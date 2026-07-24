@@ -7,23 +7,35 @@ import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceip
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptLifecycleAuditDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceReceiptLifecycleAuditMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceReceiptNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptClaimStatusEnum;
+import cn.iocoder.yudao.module.finance.enums.FinanceReceiptLifecycleActionEnum;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
+
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
 
 @Service
 public class FinanceReceiptServiceImpl implements FinanceReceiptService {
 
     private final FinanceBankReceiptMapper receiptMapper;
+    private final FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper;
     private final FinanceReceiptNoRedisDAO receiptNoRedisDAO;
 
-    public FinanceReceiptServiceImpl(FinanceBankReceiptMapper receiptMapper, FinanceReceiptNoRedisDAO receiptNoRedisDAO) {
+    public FinanceReceiptServiceImpl(FinanceBankReceiptMapper receiptMapper,
+                                     FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper,
+                                     FinanceReceiptNoRedisDAO receiptNoRedisDAO) {
         this.receiptMapper = receiptMapper;
+        this.lifecycleAuditMapper = lifecycleAuditMapper;
         this.receiptNoRedisDAO = receiptNoRedisDAO;
     }
 
@@ -58,6 +70,68 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     @Override
     public PageResult<FinanceReceiptDO> getUnclaimedReceiptPage(FinanceReceiptPageReqVO pageReqVO) {
         return receiptMapper.selectUnclaimedPage(pageReqVO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void closeReceipt(Long id, Long operatorId, String reason) {
+        if (StrUtil.isBlank(reason)) {
+            throw exception(RECEIPT_CLOSE_REASON_REQUIRED);
+        }
+        FinanceReceiptDO receipt = getRequiredReceipt(id);
+        boolean claimableStatus = FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus().equals(receipt.getClaimStatus())
+                || FinanceReceiptClaimStatusEnum.PARTIALLY_CLAIMED.getStatus().equals(receipt.getClaimStatus());
+        if (!claimableStatus || receipt.getUnclaimedAmount() == null
+                || receipt.getUnclaimedAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw exception(RECEIPT_CLOSE_STATUS_INVALID);
+        }
+        if (receiptMapper.closeIfStatus(id, receipt.getClaimStatus()) != 1) {
+            throw exception(RECEIPT_CONCURRENT_MODIFICATION);
+        }
+        appendLifecycleAudit(id, operatorId, FinanceReceiptLifecycleActionEnum.CLOSE, reason);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void reopenReceipt(Long id, Long operatorId, String reason) {
+        if (StrUtil.isBlank(reason)) {
+            throw exception(RECEIPT_REOPEN_REASON_REQUIRED);
+        }
+        FinanceReceiptDO receipt = getRequiredReceipt(id);
+        if (!FinanceReceiptClaimStatusEnum.CLOSED.getStatus().equals(receipt.getClaimStatus())) {
+            throw exception(RECEIPT_REOPEN_STATUS_INVALID);
+        }
+        if (receiptMapper.reopenIfClosed(id) != 1) {
+            throw exception(RECEIPT_CONCURRENT_MODIFICATION);
+        }
+        appendLifecycleAudit(id, operatorId, FinanceReceiptLifecycleActionEnum.REOPEN, reason);
+    }
+
+    @Override
+    public List<FinanceReceiptLifecycleAuditDO> getLifecycleAuditList(Long receiptId) {
+        return lifecycleAuditMapper.selectListByReceiptId(receiptId);
+    }
+
+    private FinanceReceiptDO getRequiredReceipt(Long id) {
+        FinanceReceiptDO receipt = receiptMapper.selectById(id);
+        if (receipt == null) {
+            throw exception(RECEIPT_NOT_EXISTS);
+        }
+        return receipt;
+    }
+
+    private void appendLifecycleAudit(Long receiptId, Long operatorId,
+                                      FinanceReceiptLifecycleActionEnum action, String reason) {
+        FinanceReceiptLifecycleAuditDO audit = FinanceReceiptLifecycleAuditDO.builder()
+                .receiptId(receiptId)
+                .action(action.getAction())
+                .operatorId(operatorId)
+                .actionTime(LocalDateTime.now())
+                .reason(reason.trim())
+                .build();
+        if (lifecycleAuditMapper.insert(audit) != 1) {
+            throw exception(RECEIPT_CONCURRENT_MODIFICATION);
+        }
     }
 
     private static String validateImportReceipt(FinanceReceiptImportExcelVO importReceipt, Set<String> bankSerialNos) {
