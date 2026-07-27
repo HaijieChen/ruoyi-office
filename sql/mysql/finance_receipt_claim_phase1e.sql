@@ -61,7 +61,7 @@ WHERE `deleted` = b'0' AND `permission` = 'finance:receipt-claim:revoke';
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '到款认领复核', '', 2, 4, finance_menu.id, 'receipt-claim-review', 'fa:check-double',
+SELECT '到款认领复核', '', 2, 4, finance_menu.id, 'receipt-claim-review', 'fa:check-circle',
        'finance/receipt-claim/review', 'FinanceReceiptClaimReviewPage',
        0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
 FROM (SELECT `id` FROM `system_menu`
@@ -81,7 +81,7 @@ SET `name` = '到款认领复核',
     ),
     `path` = 'receipt-claim-review',
     `sort` = 4,
-    `icon` = 'fa:check-double',
+    `icon` = 'fa:check-circle',
     `component_name` = 'FinanceReceiptClaimReviewPage',
     `status` = 0,
     `visible` = b'1',
