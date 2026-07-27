@@ -44,7 +44,18 @@ const auditColumns = [
     customRender: ({ text }: { text: number }) =>
       text === 1 ? '关闭' : text === 2 ? '重开' : text,
   },
-  { title: '操作人ID', dataIndex: 'operatorId', key: 'operatorId' },
+  {
+    title: '操作人',
+    dataIndex: 'operatorName',
+    key: 'operatorName',
+    customRender: ({
+      text,
+      record,
+    }: {
+      text: string;
+      record: FinanceBankReceiptApi.LifecycleAuditVO;
+    }) => text || (record.operatorId != null ? `ID:${record.operatorId}` : '—'),
+  },
   { title: '原因', dataIndex: 'reason', key: 'reason' },
   { title: '时间', dataIndex: 'actionTime', key: 'actionTime' },
 ];

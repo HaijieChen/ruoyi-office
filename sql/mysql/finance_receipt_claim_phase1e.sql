@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS `finance_receipt_claim_revoke_audit` (
     `id`            bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
     `claim_id`      bigint NOT NULL COMMENT '认领单编号',
     `reviewer_id`   bigint NOT NULL COMMENT '撤销操作人编号',
+    `reviewer_name` varchar(64) DEFAULT NULL COMMENT '撤销操作人姓名',
     `revoke_time`   datetime NOT NULL COMMENT '撤销时间',
     `revoke_reason` varchar(500) NOT NULL COMMENT '撤销原因',
     `creator`       varchar(64) DEFAULT '' COMMENT '创建者',

@@ -68,6 +68,8 @@ export namespace FinanceBankReceiptApi {
     receiptId: number;
     action: number;
     operatorId: number;
+    /** 操作人姓名快照 */
+    operatorName?: string;
     actionTime: string;
     reason: string;
   }

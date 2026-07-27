@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS `finance_receipt_lifecycle_audit` (
     `receipt_id`  bigint NOT NULL COMMENT '银行到款编号',
     `action`      tinyint NOT NULL COMMENT '操作（1-关闭，2-重开）',
     `operator_id` bigint NOT NULL COMMENT '操作人编号',
+    `operator_name` varchar(64) DEFAULT NULL COMMENT '操作人姓名',
     `action_time` datetime NOT NULL COMMENT '操作时间',
     `reason`      varchar(500) NOT NULL COMMENT '操作原因',
     `creator`     varchar(64) DEFAULT '' COMMENT '创建者',

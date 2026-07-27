@@ -10,11 +10,11 @@ public interface FinanceReceiptLifecycleAuditMapper {
 
     @Options(useGeneratedKeys = true, keyProperty = "id")
     @Insert("INSERT INTO finance_receipt_lifecycle_audit " +
-            "(receipt_id, action, operator_id, action_time, reason) " +
-            "VALUES (#{receiptId}, #{action}, #{operatorId}, #{actionTime}, #{reason})")
+            "(receipt_id, action, operator_id, operator_name, action_time, reason) " +
+            "VALUES (#{receiptId}, #{action}, #{operatorId}, #{operatorName}, #{actionTime}, #{reason})")
     int insert(FinanceReceiptLifecycleAuditDO audit);
 
-    @Select("SELECT id, receipt_id, action, operator_id, action_time, reason " +
+    @Select("SELECT id, receipt_id, action, operator_id, operator_name, action_time, reason " +
             "FROM finance_receipt_lifecycle_audit " +
             "WHERE receipt_id = #{receiptId} AND deleted = b'0' " +
             "ORDER BY action_time DESC, id DESC")
@@ -23,6 +23,7 @@ public interface FinanceReceiptLifecycleAuditMapper {
             @Result(property = "receiptId", column = "receipt_id"),
             @Result(property = "action", column = "action"),
             @Result(property = "operatorId", column = "operator_id"),
+            @Result(property = "operatorName", column = "operator_name"),
             @Result(property = "actionTime", column = "action_time"),
             @Result(property = "reason", column = "reason")
     })

@@ -67,10 +67,55 @@ const auditVisible = ref(false);
 const auditLogs = ref<FinanceReceiptClaimApi.AuditLog[]>([]);
 
 const auditColumns = [
-  { title: '操作', dataIndex: 'action', key: 'action' },
-  { title: '操作人', dataIndex: 'operatorName', key: 'operatorName' },
-  { title: '原因', dataIndex: 'reason', key: 'reason' },
-  { title: '时间', dataIndex: 'createTime', key: 'createTime' },
+  {
+    title: '操作',
+    dataIndex: 'action',
+    key: 'action',
+    customRender: ({ text }: { text?: string }) => text || '撤销',
+  },
+  {
+    title: '操作人',
+    dataIndex: 'operatorName',
+    key: 'operatorName',
+    customRender: ({
+      text,
+      record,
+    }: {
+      text?: string;
+      record: FinanceReceiptClaimApi.AuditLog;
+    }) =>
+      text ||
+      record.reviewerName ||
+      (record.operatorId != null
+        ? `ID:${record.operatorId}`
+        : record.reviewerId != null
+          ? `ID:${record.reviewerId}`
+          : '—'),
+  },
+  {
+    title: '原因',
+    dataIndex: 'reason',
+    key: 'reason',
+    customRender: ({
+      text,
+      record,
+    }: {
+      text?: string;
+      record: FinanceReceiptClaimApi.AuditLog;
+    }) => text || record.revokeReason || '—',
+  },
+  {
+    title: '时间',
+    dataIndex: 'createTime',
+    key: 'createTime',
+    customRender: ({
+      text,
+      record,
+    }: {
+      text?: string;
+      record: FinanceReceiptClaimApi.AuditLog;
+    }) => text || record.revokeTime || '—',
+  },
 ];
 
 async function openAuditModal(row: FinanceReceiptClaimApi.ReceiptClaim) {

@@ -28,6 +28,7 @@ import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserNickname;
 
 @Tag(name = "管理后台 - 到款认领")
 @RestController
@@ -111,7 +112,7 @@ public class FinanceReceiptClaimController {
     @Operation(summary = "撤销已确认的到款认领单")
     @PreAuthorize("@ss.hasPermission('finance:receipt-claim:revoke')")
     public CommonResult<Boolean> revokeClaim(@Valid @RequestBody FinanceReceiptClaimRevokeReqVO reqVO) {
-        claimService.revokeClaim(reqVO.getId(), getLoginUserId(), reqVO.getReason());
+        claimService.revokeClaim(reqVO.getId(), getLoginUserId(), getLoginUserNickname(), reqVO.getReason());
         return success(true);
     }
 
@@ -130,7 +131,16 @@ public class FinanceReceiptClaimController {
     public CommonResult<List<FinanceReceiptClaimRevokeAuditRespVO>> getRevokeAuditList(
             @RequestParam("claimId") Long claimId) {
         List<FinanceReceiptClaimRevokeAuditDO> audits = claimService.getRevokeAuditList(claimId);
-        return success(BeanUtils.toBean(audits, FinanceReceiptClaimRevokeAuditRespVO.class));
+        return success(BeanUtils.toBean(audits, FinanceReceiptClaimRevokeAuditRespVO.class, this::fillRevokeAuditDisplay));
+    }
+
+    private void fillRevokeAuditDisplay(FinanceReceiptClaimRevokeAuditRespVO respVO) {
+        // 兼容前端 AuditLog：operatorId/operatorName/reason/createTime/action
+        respVO.setOperatorId(respVO.getReviewerId());
+        respVO.setOperatorName(respVO.getReviewerName());
+        respVO.setReason(respVO.getRevokeReason());
+        respVO.setCreateTime(respVO.getRevokeTime());
+        respVO.setAction("撤销");
     }
 
     @GetMapping("/source-receipt-page")

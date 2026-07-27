@@ -66,15 +66,19 @@ export namespace FinanceReceiptClaimApi {
     reason: string;
   }
 
-  /** 审计历史记录 */
+  /** 审计历史记录（后端撤销审计 + 展示兼容字段） */
   export interface AuditLog {
     id: number;
     claimId: number;
-    action: string;
-    operatorId: number;
-    operatorName: string;
+    action?: string;
+    operatorId?: number;
+    operatorName?: string;
+    reviewerId?: number;
+    reviewerName?: string;
     reason?: string;
-    createTime: string;
+    revokeReason?: string;
+    createTime?: string;
+    revokeTime?: string;
   }
 }
 

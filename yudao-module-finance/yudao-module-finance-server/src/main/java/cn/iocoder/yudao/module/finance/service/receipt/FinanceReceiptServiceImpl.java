@@ -120,7 +120,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void closeReceipt(Long id, Long operatorId, String reason) {
+    public void closeReceipt(Long id, Long operatorId, String operatorName, String reason) {
         if (StrUtil.isBlank(reason)) {
             throw exception(RECEIPT_CLOSE_REASON_REQUIRED);
         }
@@ -134,12 +134,12 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         if (receiptMapper.closeIfStatus(id, receipt.getClaimStatus()) != 1) {
             throw exception(RECEIPT_CONCURRENT_MODIFICATION);
         }
-        appendLifecycleAudit(id, operatorId, FinanceReceiptLifecycleActionEnum.CLOSE, reason);
+        appendLifecycleAudit(id, operatorId, operatorName, FinanceReceiptLifecycleActionEnum.CLOSE, reason);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void reopenReceipt(Long id, Long operatorId, String reason) {
+    public void reopenReceipt(Long id, Long operatorId, String operatorName, String reason) {
         if (StrUtil.isBlank(reason)) {
             throw exception(RECEIPT_REOPEN_REASON_REQUIRED);
         }
@@ -150,7 +150,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         if (receiptMapper.reopenIfClosed(id) != 1) {
             throw exception(RECEIPT_CONCURRENT_MODIFICATION);
         }
-        appendLifecycleAudit(id, operatorId, FinanceReceiptLifecycleActionEnum.REOPEN, reason);
+        appendLifecycleAudit(id, operatorId, operatorName, FinanceReceiptLifecycleActionEnum.REOPEN, reason);
     }
 
     @Override
@@ -213,12 +213,13 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         return value.trim();
     }
 
-    private void appendLifecycleAudit(Long receiptId, Long operatorId,
+    private void appendLifecycleAudit(Long receiptId, Long operatorId, String operatorName,
                                       FinanceReceiptLifecycleActionEnum action, String reason) {
         FinanceReceiptLifecycleAuditDO audit = FinanceReceiptLifecycleAuditDO.builder()
                 .receiptId(receiptId)
                 .action(action.getAction())
                 .operatorId(operatorId)
+                .operatorName(StrUtil.blankToDefault(StrUtil.trim(operatorName), null))
                 .actionTime(LocalDateTime.now())
                 .reason(reason.trim())
                 .build();

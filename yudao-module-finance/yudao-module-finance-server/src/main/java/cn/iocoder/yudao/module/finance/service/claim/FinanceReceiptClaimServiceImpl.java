@@ -133,7 +133,7 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void revokeClaim(Long id, Long reviewerId, String reason) {
+    public void revokeClaim(Long id, Long reviewerId, String reviewerName, String reason) {
         if (StrUtil.isBlank(reason)) {
             throw exception(RECEIPT_CLAIM_REVOKE_REASON_REQUIRED);
         }
@@ -167,6 +167,7 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
         });
         if (revokeAuditMapper.insert(FinanceReceiptClaimRevokeAuditDO.builder()
                 .claimId(id).reviewerId(reviewerId)
+                .reviewerName(StrUtil.blankToDefault(StrUtil.trim(reviewerName), null))
                 .revokeTime(LocalDateTime.now()).revokeReason(reason.trim())
                 .build()) != 1) {
             throw exception(RECEIPT_CLAIM_CONCURRENT_MODIFICATION);

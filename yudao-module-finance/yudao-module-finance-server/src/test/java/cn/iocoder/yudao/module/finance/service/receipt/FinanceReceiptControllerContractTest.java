@@ -54,7 +54,7 @@ class FinanceReceiptControllerContractTest {
 
     @Test
     void lifecycleAuditResponseShouldExposeOnlyImmutableAuditFields() throws NoSuchFieldException {
-        assertEquals(List.of("id", "receiptId", "action", "operatorId", "actionTime", "reason"),
+        assertEquals(List.of("id", "receiptId", "action", "operatorId", "operatorName", "actionTime", "reason"),
                 Stream.of(FinanceReceiptLifecycleAuditRespVO.class.getDeclaredFields())
                         .map(java.lang.reflect.Field::getName).toList());
         assertEquals(Integer.class, FinanceReceiptLifecycleAuditRespVO.class.getDeclaredField("action").getType());

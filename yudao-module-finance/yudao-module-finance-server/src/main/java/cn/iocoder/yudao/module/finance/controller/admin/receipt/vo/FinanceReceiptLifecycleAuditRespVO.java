@@ -12,7 +12,10 @@ public class FinanceReceiptLifecycleAuditRespVO {
     private Long id;
     private Long receiptId;
     private Integer action;
+    @Schema(description = "操作人编号", example = "1")
     private Long operatorId;
+    @Schema(description = "操作人姓名", example = "系统管理员")
+    private String operatorName;
     private LocalDateTime actionTime;
     private String reason;
 }

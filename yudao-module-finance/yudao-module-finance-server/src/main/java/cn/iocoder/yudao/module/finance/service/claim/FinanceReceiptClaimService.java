@@ -19,7 +19,7 @@ public interface FinanceReceiptClaimService {
 
     void rejectClaim(Long id, Long reviewerId, String reason);
 
-    void revokeClaim(Long id, Long reviewerId, String reason);
+    void revokeClaim(Long id, Long reviewerId, String reviewerName, String reason);
 
     void resubmitClaim(Long id, Long claimantId);
 

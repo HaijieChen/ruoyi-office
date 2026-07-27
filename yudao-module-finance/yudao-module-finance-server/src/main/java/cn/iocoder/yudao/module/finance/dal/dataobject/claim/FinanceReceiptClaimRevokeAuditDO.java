@@ -22,6 +22,8 @@ public class FinanceReceiptClaimRevokeAuditDO extends BaseDO {
     private Long id;
     private Long claimId;
     private Long reviewerId;
+    /** 撤销操作人姓名快照 */
+    private String reviewerName;
     private LocalDateTime revokeTime;
     private String revokeReason;
 

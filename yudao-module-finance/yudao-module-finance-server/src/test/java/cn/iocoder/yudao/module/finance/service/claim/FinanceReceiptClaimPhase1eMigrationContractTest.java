@@ -39,6 +39,8 @@ class FinanceReceiptClaimPhase1eMigrationContractTest {
                 "审计表必须包含 claim_id 列");
         assertTrue(sql.contains("`reviewer_id`"),
                 "审计表必须包含 reviewer_id 列");
+        assertTrue(sql.contains("`reviewer_name`"),
+                "审计表必须包含 reviewer_name 列");
         assertTrue(sql.contains("`revoke_time`"),
                 "审计表必须包含 revoke_time 列");
         assertTrue(sql.contains("`revoke_reason`"),

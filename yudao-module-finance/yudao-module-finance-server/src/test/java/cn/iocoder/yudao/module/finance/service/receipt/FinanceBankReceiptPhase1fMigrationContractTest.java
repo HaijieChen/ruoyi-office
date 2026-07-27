@@ -20,6 +20,7 @@ class FinanceBankReceiptPhase1fMigrationContractTest {
         assertTrue(sql.contains("`receipt_id`"));
         assertTrue(sql.contains("`action`"));
         assertTrue(sql.contains("`operator_id`"));
+        assertTrue(sql.contains("`operator_name`"));
         assertTrue(sql.contains("`action_time`"));
         assertTrue(sql.contains("`reason`"));
         assertTrue(sql.contains("`tenant_id`"));

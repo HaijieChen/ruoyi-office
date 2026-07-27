@@ -99,12 +99,13 @@ class FinanceReceiptServiceImplTest {
                 FinanceReceiptClaimStatusEnum.PARTIALLY_CLAIMED.getStatus())).thenReturn(1);
         when(lifecycleAuditMapper.insert(any(FinanceReceiptLifecycleAuditDO.class))).thenReturn(1);
 
-        receiptService.closeReceipt(1L, 900L, "尾款不再收取");
+        receiptService.closeReceipt(1L, 900L, "测试操作人", "尾款不再收取");
 
         verify(receiptMapper).closeIfStatus(1L,
                 FinanceReceiptClaimStatusEnum.PARTIALLY_CLAIMED.getStatus());
         verify(lifecycleAuditMapper).insert(argThat(audit -> audit.getReceiptId().equals(1L)
                 && audit.getOperatorId().equals(900L)
+                && "测试操作人".equals(audit.getOperatorName())
                 && audit.getAction().equals(FinanceReceiptLifecycleActionEnum.CLOSE.getAction())
                 && "尾款不再收取".equals(audit.getReason())
                 && audit.getActionTime() != null));
@@ -112,7 +113,7 @@ class FinanceReceiptServiceImplTest {
 
     @Test
     void closeReceiptShouldRejectBlankReasonWithoutReadingReceipt() {
-        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "  "));
+        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "测试操作人", "  "));
 
         verifyNoInteractions(receiptMapper, lifecycleAuditMapper);
     }
@@ -122,7 +123,7 @@ class FinanceReceiptServiceImplTest {
         when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
                 FinanceReceiptClaimStatusEnum.FULLY_CLAIMED.getStatus(), "100.00", "0.00"));
 
-        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "已全部认领"));
+        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "测试操作人", "已全部认领"));
 
         verify(receiptMapper, never()).closeIfStatus(anyLong(), anyInt());
         verifyNoInteractions(lifecycleAuditMapper);
@@ -135,7 +136,7 @@ class FinanceReceiptServiceImplTest {
         when(receiptMapper.closeIfStatus(1L,
                 FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())).thenReturn(0);
 
-        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "不再认领"));
+        assertThrows(RuntimeException.class, () -> receiptService.closeReceipt(1L, 900L, "测试操作人", "不再认领"));
 
         verifyNoInteractions(lifecycleAuditMapper);
     }
@@ -147,11 +148,12 @@ class FinanceReceiptServiceImplTest {
         when(receiptMapper.reopenIfClosed(1L)).thenReturn(1);
         when(lifecycleAuditMapper.insert(any(FinanceReceiptLifecycleAuditDO.class))).thenReturn(1);
 
-        receiptService.reopenReceipt(1L, 901L, "客户恢复付款");
+        receiptService.reopenReceipt(1L, 901L, "测试操作人", "客户恢复付款");
 
         verify(receiptMapper).reopenIfClosed(1L);
         verify(lifecycleAuditMapper).insert(argThat(audit -> audit.getReceiptId().equals(1L)
                 && audit.getOperatorId().equals(901L)
+                && "测试操作人".equals(audit.getOperatorName())
                 && audit.getAction().equals(FinanceReceiptLifecycleActionEnum.REOPEN.getAction())
                 && "客户恢复付款".equals(audit.getReason())
                 && audit.getActionTime() != null));
@@ -162,7 +164,7 @@ class FinanceReceiptServiceImplTest {
         when(receiptMapper.selectById(1L)).thenReturn(receipt(1L,
                 FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus(), "0.00", "100.00"));
 
-        assertThrows(RuntimeException.class, () -> receiptService.reopenReceipt(1L, 901L, "误关闭"));
+        assertThrows(RuntimeException.class, () -> receiptService.reopenReceipt(1L, 901L, "测试操作人", "误关闭"));
 
         verify(receiptMapper, never()).reopenIfClosed(anyLong());
         verifyNoInteractions(lifecycleAuditMapper);
@@ -174,7 +176,7 @@ class FinanceReceiptServiceImplTest {
                 FinanceReceiptClaimStatusEnum.CLOSED.getStatus(), "0.00", "100.00"));
         when(receiptMapper.reopenIfClosed(1L)).thenReturn(0);
 
-        assertThrows(RuntimeException.class, () -> receiptService.reopenReceipt(1L, 901L, "误关闭"));
+        assertThrows(RuntimeException.class, () -> receiptService.reopenReceipt(1L, 901L, "测试操作人", "误关闭"));
 
         verifyNoInteractions(lifecycleAuditMapper);
     }
@@ -182,10 +184,10 @@ class FinanceReceiptServiceImplTest {
     @Test
     void lifecycleTransitionsShouldBeTransactional() throws NoSuchMethodException {
         assertNotNull(FinanceReceiptServiceImpl.class
-                .getMethod("closeReceipt", Long.class, Long.class, String.class)
+                .getMethod("closeReceipt", Long.class, Long.class, String.class, String.class)
                 .getAnnotation(org.springframework.transaction.annotation.Transactional.class));
         assertNotNull(FinanceReceiptServiceImpl.class
-                .getMethod("reopenReceipt", Long.class, Long.class, String.class)
+                .getMethod("reopenReceipt", Long.class, Long.class, String.class, String.class)
                 .getAnnotation(org.springframework.transaction.annotation.Transactional.class));
     }
 

@@ -341,7 +341,7 @@ class FinanceReceiptClaimServiceImplTest {
          when(businessOrderMapper.decreaseConfirmedClaimedAmount(anyLong(), eq(100L), any())).thenReturn(1);
          when(revokeAuditMapper.insert(any(FinanceReceiptClaimRevokeAuditDO.class))).thenReturn(1);
 
-         claimService.revokeClaim(7L, 900L, "金额有误");
+         claimService.revokeClaim(7L, 900L, "测试操作人", "金额有误");
 
          verify(claimMapper).updateStatusIfMatch(argThat(claim -> claim.getId().equals(7L)
                  && claim.getStatus().equals(FinanceReceiptClaimReviewStatusEnum.REVOKED.getStatus())
@@ -354,12 +354,13 @@ class FinanceReceiptClaimServiceImplTest {
          verify(businessOrderMapper).decreaseConfirmedClaimedAmount(11L, 100L, new BigDecimal("60.00"));
          verify(revokeAuditMapper).insert(argThat((FinanceReceiptClaimRevokeAuditDO audit) ->
                  audit.getClaimId().equals(7L) && audit.getReviewerId().equals(900L)
+                         && "测试操作人".equals(audit.getReviewerName())
                          && "金额有误".equals(audit.getRevokeReason()) && audit.getRevokeTime() != null));
      }
 
      @Test
      void revokeClaimShouldRejectBlankReason() {
-         assertThrows(RuntimeException.class, () -> claimService.revokeClaim(7L, 900L, "  "));
+         assertThrows(RuntimeException.class, () -> claimService.revokeClaim(7L, 900L, "测试操作人", "  "));
 
          verifyNoInteractions(claimMapper, receiptMapper, businessOrderMapper);
      }
@@ -369,7 +370,7 @@ class FinanceReceiptClaimServiceImplTest {
          when(claimMapper.selectById(7L)).thenReturn(
                  claimDO(7L, 100L, FinanceReceiptClaimReviewStatusEnum.PENDING.getStatus()));
 
-         assertThrows(RuntimeException.class, () -> claimService.revokeClaim(7L, 900L, "金额有误"));
+         assertThrows(RuntimeException.class, () -> claimService.revokeClaim(7L, 900L, "测试操作人", "金额有误"));
 
          verifyNoInteractions(itemMapper, receiptMapper, businessOrderMapper);
      }
@@ -381,7 +382,7 @@ class FinanceReceiptClaimServiceImplTest {
          when(itemMapper.selectListByClaimId(7L)).thenReturn(List.of(claimItem(7L, 1L, 10L, "100.00")));
          when(claimMapper.updateStatusIfMatch(any(), eq(FinanceReceiptClaimReviewStatusEnum.CONFIRMED.getStatus()))).thenReturn(0);
 
-         assertThrows(RuntimeException.class, () -> claimService.revokeClaim(7L, 900L, "金额有误"));
+         assertThrows(RuntimeException.class, () -> claimService.revokeClaim(7L, 900L, "测试操作人", "金额有误"));
 
          verifyNoInteractions(receiptMapper, businessOrderMapper);
      }
@@ -397,7 +398,7 @@ class FinanceReceiptClaimServiceImplTest {
          when(revokeAuditMapper.insert(any(FinanceReceiptClaimRevokeAuditDO.class))).thenReturn(0);
 
          assertThrows(cn.iocoder.yudao.framework.common.exception.ServiceException.class,
-                 () -> claimService.revokeClaim(7L, 900L, "金额有误"));
+                 () -> claimService.revokeClaim(7L, 900L, "测试操作人", "金额有误"));
 
          verify(revokeAuditMapper).insert(any(FinanceReceiptClaimRevokeAuditDO.class));
      }
@@ -405,7 +406,7 @@ class FinanceReceiptClaimServiceImplTest {
      @Test
      void revokeClaimShouldBeTransactional() throws NoSuchMethodException {
          Transactional transactional = FinanceReceiptClaimServiceImpl.class
-                 .getMethod("revokeClaim", Long.class, Long.class, String.class).getAnnotation(Transactional.class);
+                 .getMethod("revokeClaim", Long.class, Long.class, String.class, String.class).getAnnotation(Transactional.class);
          assertNotNull(transactional);
      }
 

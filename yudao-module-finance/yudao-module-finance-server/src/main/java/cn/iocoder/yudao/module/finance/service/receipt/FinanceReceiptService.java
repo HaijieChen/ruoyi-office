@@ -27,9 +27,9 @@ public interface FinanceReceiptService {
 
     PageResult<FinanceReceiptDO> getUnclaimedReceiptPage(FinanceReceiptPageReqVO pageReqVO);
 
-    void closeReceipt(Long id, Long operatorId, String reason);
+    void closeReceipt(Long id, Long operatorId, String operatorName, String reason);
 
-    void reopenReceipt(Long id, Long operatorId, String reason);
+    void reopenReceipt(Long id, Long operatorId, String operatorName, String reason);
 
     List<FinanceReceiptLifecycleAuditDO> getLifecycleAuditList(Long receiptId);
 

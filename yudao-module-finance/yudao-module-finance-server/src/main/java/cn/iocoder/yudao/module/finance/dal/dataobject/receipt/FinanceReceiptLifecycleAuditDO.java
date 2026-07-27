@@ -23,6 +23,8 @@ public class FinanceReceiptLifecycleAuditDO extends BaseDO {
     private Long receiptId;
     private Integer action;
     private Long operatorId;
+    /** 操作人姓名快照（写入时固化，避免用户改名后审计不可读） */
+    private String operatorName;
     private LocalDateTime actionTime;
     private String reason;
 }
