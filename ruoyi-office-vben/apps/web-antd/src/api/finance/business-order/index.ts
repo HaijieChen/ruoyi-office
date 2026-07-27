@@ -1,0 +1,136 @@
+import type { PageParam, PageResult } from '@vben/request';
+
+import { requestClient } from '#/api/request';
+
+export namespace FinanceBusinessOrderApi {
+  /** 签单记录（对应 OA表单-722.xlsx 工作簿字段） */
+  export interface BusinessOrder {
+    /** 系统生成，只读 */
+    id: number;
+    /** 系统生成，只读 */
+    orderNo: string;
+    /** 系统生成，只读 */
+    importDate: string;
+    /** 系统生成，只读 */
+    importerId: number;
+    /** 系统生成，只读 */
+    importerName: string;
+    /** 导入/创建时指定 */
+    bankAccount: string;
+    /** 可选：流程合同ID */
+    contractProcessId?: string;
+    /** 签单日期 */
+    orderDate: string;
+    /** 产品/服务 */
+    productName: string;
+    /** 对接人 */
+    contactPerson: string;
+    /** 执行开始日期 */
+    executionStartDate: string;
+    /** 执行结束日期 */
+    executionEndDate: string;
+    /** 付款方（可选） */
+    payerName?: string;
+    /** 签约执行金额 */
+    signedExecutionAmount: number;
+    /** 折扣率（为空时视为0） */
+    discountRate?: number;
+    /** 结算金额，后端 HALF_UP 计算，只读 */
+    settlementAmount: number;
+    /** 已确认到款，只读 */
+    confirmedClaimedAmount: number;
+    /** 剩余余额，只读 */
+    remainingBalance: number;
+    /** 备注（可选） */
+    remark?: string;
+    /** 创建时间，只读 */
+    createTime: string;
+  }
+
+  /** 分页查询参数 */
+  export interface PageQuery extends PageParam {
+    orderNo?: string;
+    bankAccount?: string;
+    importDate?: string;
+    productName?: string;
+    contactPerson?: string;
+    contractProcessId?: string;
+  }
+
+  /** 创建/编辑表单数据（排除服务端只读字段） */
+  export type SaveForm = Pick<
+    BusinessOrder,
+    | 'bankAccount'
+    | 'orderDate'
+    | 'productName'
+    | 'contactPerson'
+    | 'executionStartDate'
+    | 'executionEndDate'
+    | 'signedExecutionAmount'
+  > & {
+    id?: number;
+    contractProcessId?: string;
+    payerName?: string;
+    discountRate?: number;
+    remark?: string;
+  };
+
+  /** 导入结果 */
+  export interface ImportResult {
+    /** 成功写入的订单编号列表 */
+    orderNos: string[];
+    /** 跳过的重复行号列表 */
+    skippedRows: number[];
+    /** 失败行（行号 → 原因） */
+    failureRows: Record<number, string>;
+  }
+}
+
+/** 查询签单分页 */
+export function getBusinessOrderPage(params: FinanceBusinessOrderApi.PageQuery) {
+  return requestClient.get<PageResult<FinanceBusinessOrderApi.BusinessOrder>>(
+    '/finance/business-order/page',
+    { params },
+  );
+}
+
+/** 获取签单详情 */
+export function getBusinessOrder(id: number) {
+  return requestClient.get<FinanceBusinessOrderApi.BusinessOrder>(
+    '/finance/business-order/get',
+    { params: { id } },
+  );
+}
+
+/** 创建签单 */
+export function createBusinessOrder(data: FinanceBusinessOrderApi.SaveForm) {
+  return requestClient.post<number>('/finance/business-order/create', data);
+}
+
+/** 更新签单 */
+export function updateBusinessOrder(data: FinanceBusinessOrderApi.SaveForm) {
+  return requestClient.put<void>('/finance/business-order/update', data);
+}
+
+/** 删除签单 */
+export function deleteBusinessOrder(ids: number[]) {
+  return requestClient.delete<void>('/finance/business-order/delete', {
+    params: { ids: ids.join(',') },
+  });
+}
+
+/** 导入签单 Excel（multipart：file + bankAccount） */
+export function importBusinessOrder(file: File, bankAccount: string) {
+  return requestClient.upload<FinanceBusinessOrderApi.ImportResult>(
+    '/finance/business-order/import',
+    { file, bankAccount },
+  );
+}
+
+/** 将 failureRows 记录展开为表格数据 */
+export function mapImportErrorRows(rows: Record<number, string>) {
+  return Object.entries(rows).map(([rowNum, reason]) => ({
+    rowNum: Number(rowNum),
+    reason,
+  }));
+}

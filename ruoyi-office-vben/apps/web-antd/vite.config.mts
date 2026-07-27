@@ -35,6 +35,9 @@ function excludeDirectoriesPlugin(): Plugin {
 
 // @ts-ignore - defineConfig 类型推断问题，不影响运行
 export default defineConfig(async () => {
+  const proxyTarget =
+    process.env.VITE_PROXY_TARGET ?? 'http://localhost:48080/admin-api';
+
   return {
     application: {},
     vite: {
@@ -47,7 +50,7 @@ export default defineConfig(async () => {
             changeOrigin: true,
             rewrite: (path: string) => path.replace(/^\/admin-api/, ''),
             // mock代理目标地址
-            target: 'http://localhost:48080/admin-api',
+            target: proxyTarget,
             ws: true,
           },
         },

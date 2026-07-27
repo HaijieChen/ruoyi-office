@@ -1,0 +1,9 @@
+package cn.iocoder.yudao.module.finance.dal.redis;
+
+public interface RedisKeyConstants {
+
+    String FINANCE_RECEIPT_NO = "finance_receipt_no:%s";
+
+    String FINANCE_BUSINESS_ORDER_NO = "finance_business_order_no:%s";
+
+}
