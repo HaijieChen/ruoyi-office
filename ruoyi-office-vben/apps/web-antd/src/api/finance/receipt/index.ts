@@ -76,6 +76,11 @@ export function importBankReceipt(file: File) {
   );
 }
 
+/** 下载银行到款导入模板 */
+export function importBankReceiptTemplate() {
+  return requestClient.download('/finance/receipt/get-import-template');
+}
+
 export function closeReceipt(id: number, reason: string) {
   return requestClient.put<boolean>('/finance/receipt/close', { id, reason });
 }

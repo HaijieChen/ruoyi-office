@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.finance.service.receipt.FinanceReceiptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -17,6 +18,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -30,6 +34,33 @@ public class FinanceReceiptController {
 
     @Resource
     private FinanceReceiptService receiptService;
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得银行到款导入模板")
+    @PreAuthorize("@ss.hasPermission('finance:receipt:import')")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        List<FinanceReceiptImportExcelVO> list = Arrays.asList(
+                FinanceReceiptImportExcelVO.builder()
+                        .bankAccount("工行基本户")
+                        .transactionDate(LocalDateTime.of(2026, 7, 27, 10, 15, 0))
+                        .payerName("示例付款方A")
+                        .payerAccount("6222000011112222")
+                        .transactionAmount(new BigDecimal("10000.00"))
+                        .summary("示例摘要/附言")
+                        .bankSerialNo("BANK-SERIAL-DEMO-001")
+                        .build(),
+                FinanceReceiptImportExcelVO.builder()
+                        .bankAccount("工行基本户")
+                        .transactionDate(LocalDateTime.of(2026, 7, 27, 11, 30, 0))
+                        .payerName("示例付款方B")
+                        .payerAccount("6222000033334444")
+                        .transactionAmount(new BigDecimal("2500.50"))
+                        .summary("示例摘要/附言")
+                        .bankSerialNo("BANK-SERIAL-DEMO-002")
+                        .build()
+        );
+        ExcelUtils.write(response, "银行到款导入模板.xls", "银行到款", FinanceReceiptImportExcelVO.class, list);
+    }
 
     @PostMapping("/import")
     @Operation(summary = "导入银行到款")

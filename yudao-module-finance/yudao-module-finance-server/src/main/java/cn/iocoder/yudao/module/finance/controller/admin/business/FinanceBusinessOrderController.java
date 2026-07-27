@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -26,6 +27,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -43,6 +46,39 @@ public class FinanceBusinessOrderController {
     private FinanceBusinessOrderService businessOrderService;
     @Resource
     private AdminUserApi adminUserApi;
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得商务签单导入模板")
+    @PreAuthorize("@ss.hasPermission('finance:business-order:import')")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        List<FinanceBusinessOrderImportExcelVO> list = Arrays.asList(
+                FinanceBusinessOrderImportExcelVO.builder()
+                        .contractProcessId("PROC-DEMO-001")
+                        .orderDate(LocalDate.of(2026, 7, 20))
+                        .productName("示例产品A")
+                        .contactPerson("张三")
+                        .executionStartDate(LocalDate.of(2026, 7, 20))
+                        .executionEndDate(LocalDate.of(2026, 8, 20))
+                        .payerName("示例付款方A")
+                        .signedExecutionAmount(new BigDecimal("10000.00"))
+                        .discountRate(new BigDecimal("0.10"))
+                        .summary("示例摘要/附言")
+                        .build(),
+                FinanceBusinessOrderImportExcelVO.builder()
+                        .contractProcessId("")
+                        .orderDate(LocalDate.of(2026, 7, 21))
+                        .productName("示例产品B")
+                        .contactPerson("李四")
+                        .executionStartDate(LocalDate.of(2026, 7, 21))
+                        .executionEndDate(LocalDate.of(2026, 9, 21))
+                        .payerName("")
+                        .signedExecutionAmount(new BigDecimal("5000.00"))
+                        .discountRate(BigDecimal.ZERO)
+                        .summary("折扣率可留空，按 0 处理")
+                        .build()
+        );
+        ExcelUtils.write(response, "商务签单导入模板.xls", "商务签单", FinanceBusinessOrderImportExcelVO.class, list);
+    }
 
     @PostMapping("/import")
     @Operation(summary = "导入商务签单")

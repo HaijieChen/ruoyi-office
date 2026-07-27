@@ -119,6 +119,11 @@ export function deleteBusinessOrder(ids: number[]) {
   });
 }
 
+/** 下载商务签单导入模板 */
+export function importBusinessOrderTemplate() {
+  return requestClient.download('/finance/business-order/get-import-template');
+}
+
 /** 导入签单 Excel（multipart：file + bankAccount） */
 export function importBusinessOrder(file: File, bankAccount: string) {
   return requestClient.upload<FinanceBusinessOrderApi.ImportResult>(

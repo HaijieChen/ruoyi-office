@@ -15,7 +15,8 @@ export namespace FinanceReceiptClaimApi {
     bankSerialNo: string;
     businessOrderId: number;
     businessOrderNo: string;
-    businessSubject: string;
+    businessSubject?: string;
+    productName?: string;
     claimAmount: number;
   }
 
@@ -152,5 +153,21 @@ export function getRevokeAuditList(claimId: number) {
   return requestClient.get<FinanceReceiptClaimApi.AuditLog[]>(
     '/finance/receipt-claim/revoke-audit-list',
     { params: { claimId } },
+  );
+}
+
+/** 可认领银行到款分页（创建认领时选源） */
+export function getSourceReceiptPage(params: PageParam) {
+  return requestClient.get<PageResult<Record<string, any>>>(
+    '/finance/receipt-claim/source-receipt-page',
+    { params },
+  );
+}
+
+/** 可认领商务单分页（创建认领时选源，仅本人负责） */
+export function getSourceBusinessOrderPage(params: PageParam) {
+  return requestClient.get<PageResult<Record<string, any>>>(
+    '/finance/receipt-claim/source-business-order-page',
+    { params },
   );
 }

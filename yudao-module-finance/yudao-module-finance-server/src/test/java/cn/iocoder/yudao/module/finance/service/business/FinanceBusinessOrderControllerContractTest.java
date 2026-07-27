@@ -10,7 +10,9 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOr
 import cn.iocoder.yudao.module.finance.service.business.FinanceBusinessOrderService;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import org.junit.jupiter.api.Test;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +36,16 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class FinanceBusinessOrderControllerContractTest {
+
+    @Test
+    void importTemplateEndpointShouldUseImportPermission() throws NoSuchMethodException {
+        Method method = FinanceBusinessOrderController.class.getDeclaredMethod(
+                "importTemplate", HttpServletResponse.class);
+
+        assertArrayEquals(new String[]{"/get-import-template"}, method.getAnnotation(GetMapping.class).value());
+        assertEquals("@ss.hasPermission('finance:business-order:import')",
+                method.getAnnotation(PreAuthorize.class).value());
+    }
 
     @Test
     void importEndpointShouldRequireFileBankAccountAndImportPermission() throws NoSuchMethodException {

@@ -6,10 +6,14 @@ import type { FinanceBusinessOrderApi } from '#/api/finance/business-order';
 import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Alert, Button, Input, message, Table, Upload } from 'ant-design-vue';
 
-import { importBusinessOrder } from '#/api/finance/business-order';
+import {
+  importBusinessOrder,
+  importBusinessOrderTemplate,
+} from '#/api/finance/business-order';
 
 defineOptions({ name: 'FinanceBusinessOrderImportForm' });
 
@@ -80,13 +84,30 @@ function beforeUpload(file: FileType) {
   result.value = null;
   return false;
 }
+
+async function handleDownloadTemplate() {
+  const data = await importBusinessOrderTemplate();
+  downloadFileFromBlobPart({
+    fileName: '商务签单导入模板.xls',
+    source: data,
+  });
+}
 </script>
 
 <template>
   <Modal title="导入签单 Excel" class="w-[560px]">
     <div class="mx-4 space-y-4">
+      <Alert
+        type="info"
+        show-icon
+        message="请先下载导入模板，按表头填写后上传"
+        description="银行账号在弹窗统一填写，将应用到本批全部行。折扣率可留空（按 0）。结算金额由系统自动计算，无需填写。"
+      />
+
       <div class="flex items-center gap-2">
-        <span class="shrink-0 text-sm text-gray-700">银行账号<span class="text-red-500">*</span></span>
+        <span class="shrink-0 text-sm text-gray-700">
+          银行账号<span class="text-red-500">*</span>
+        </span>
         <Input
           v-model:value="bankAccount"
           placeholder="请输入银行账号（将应用于所有导入行）"
@@ -97,7 +118,7 @@ function beforeUpload(file: FileType) {
       <Upload
         :before-upload="beforeUpload"
         :max-count="1"
-        accept=".xlsx"
+        accept=".xls,.xlsx"
         :show-upload-list="!!selectedFile"
       >
         <Button type="primary">选择 .xlsx 文件</Button>
@@ -138,5 +159,11 @@ function beforeUpload(file: FileType) {
         </template>
       </template>
     </div>
+
+    <template #prepend-footer>
+      <div class="flex flex-auto items-center">
+        <Button @click="handleDownloadTemplate">下载导入模板</Button>
+      </div>
+    </template>
   </Modal>
 </template>

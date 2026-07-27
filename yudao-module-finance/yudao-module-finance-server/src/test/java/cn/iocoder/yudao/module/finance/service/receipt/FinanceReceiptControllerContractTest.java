@@ -5,6 +5,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceip
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptLifecycleReqVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 
@@ -16,6 +17,16 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FinanceReceiptControllerContractTest {
+
+    @Test
+    void importTemplateEndpointShouldUseImportPermission() throws NoSuchMethodException {
+        Method method = FinanceReceiptController.class.getDeclaredMethod(
+                "importTemplate", HttpServletResponse.class);
+
+        assertArrayEquals(new String[]{"/get-import-template"}, method.getAnnotation(GetMapping.class).value());
+        assertEquals("@ss.hasPermission('finance:receipt:import')",
+                method.getAnnotation(PreAuthorize.class).value());
+    }
 
     @Test
     void closeAndReopenEndpointsShouldUseDedicatedFinancePermissions() throws NoSuchMethodException {

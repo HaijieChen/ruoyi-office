@@ -6,10 +6,15 @@ import type { FinanceBankReceiptApi } from '#/api/finance/receipt';
 import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { Alert, Button, message, Table, Upload } from 'ant-design-vue';
 
-import { importBankReceipt, mapFailureRows } from '#/api/finance/receipt';
+import {
+  importBankReceipt,
+  importBankReceiptTemplate,
+  mapFailureRows,
+} from '#/api/finance/receipt';
 
 defineOptions({ name: 'FinanceReceiptImportForm' });
 
@@ -35,6 +40,9 @@ const [Modal, modalApi] = useVbenModal({
         );
         await modalApi.close();
         emit('success');
+      } else if (result.value.receiptNos.length > 0) {
+        // 部分成功也刷新列表
+        emit('success');
       }
       // 有失败行时不关闭弹窗，让用户查看失败详情
     } finally {
@@ -54,6 +62,14 @@ function beforeUpload(file: FileType) {
   return false;
 }
 
+async function handleDownloadTemplate() {
+  const data = await importBankReceiptTemplate();
+  downloadFileFromBlobPart({
+    fileName: '银行到款导入模板.xls',
+    source: data,
+  });
+}
+
 const failureColumns = [
   { title: '行号', dataIndex: 'rowNum', width: 80 },
   { title: '失败原因', dataIndex: 'reason' },
@@ -61,15 +77,22 @@ const failureColumns = [
 </script>
 
 <template>
-  <Modal title="导入银行回单" class="w-2/5">
+  <Modal title="导入银行到款" class="w-2/5">
     <div class="mx-4 space-y-4">
+      <Alert
+        type="info"
+        show-icon
+        message="请先下载导入模板，按表头填写后上传 .xls/.xlsx 文件"
+        description="必填：银行账户、交易日期、付款方名称、交易金额、银行流水号。银行流水号不可重复。"
+      />
+
       <Upload
         :before-upload="beforeUpload"
         :max-count="1"
-        accept=".xlsx"
+        accept=".xls,.xlsx"
         :show-upload-list="!!selectedFile"
       >
-        <Button type="primary">选择 .xlsx 文件</Button>
+        <Button type="primary">选择 Excel 文件</Button>
       </Upload>
 
       <template v-if="result">
@@ -95,5 +118,11 @@ const failureColumns = [
         </template>
       </template>
     </div>
+
+    <template #prepend-footer>
+      <div class="flex flex-auto items-center">
+        <Button @click="handleDownloadTemplate">下载导入模板</Button>
+      </div>
+    </template>
   </Modal>
 </template>
