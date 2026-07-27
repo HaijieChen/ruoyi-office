@@ -32,6 +32,19 @@ public interface FinanceBankReceiptMapper extends BaseMapperX<FinanceReceiptDO> 
                 .orderByDesc(FinanceReceiptDO::getId));
     }
 
+    default PageResult<FinanceReceiptDO> selectReceiptPage(FinanceReceiptPageReqVO reqVO) {
+        return selectPage(reqVO, new MPJLambdaWrapperX<FinanceReceiptDO>()
+                .eqIfPresent(FinanceReceiptDO::getClaimStatus, reqVO.getClaimStatus())
+                .likeIfPresent(FinanceReceiptDO::getReceiptNo, reqVO.getReceiptNo())
+                .likeIfPresent(FinanceReceiptDO::getBankAccount, reqVO.getBankAccount())
+                .betweenIfPresent(FinanceReceiptDO::getTransactionDate, reqVO.getTransactionDate())
+                .likeIfPresent(FinanceReceiptDO::getPayerName, reqVO.getPayerName())
+                .likeIfPresent(FinanceReceiptDO::getPayerAccount, reqVO.getPayerAccount())
+                .likeIfPresent(FinanceReceiptDO::getBankSerialNo, reqVO.getBankSerialNo())
+                .betweenIfPresent(FinanceReceiptDO::getImportDate, reqVO.getImportDate())
+                .orderByDesc(FinanceReceiptDO::getId));
+    }
+
     default FinanceReceiptDO selectByReceiptNo(String receiptNo) {
         return selectOne("receipt_no", receiptNo);
     }

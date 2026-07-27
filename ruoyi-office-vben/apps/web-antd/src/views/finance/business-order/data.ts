@@ -86,9 +86,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '剩余余额',
       width: 120,
       formatter: 'formatAmount2',
-      fixed: 'right',
     },
     { field: 'remark', title: '备注', minWidth: 120 },
     { field: 'createTime', title: '创建时间', width: 160, formatter: 'formatDateTime' },
+    {
+      field: 'action',
+      title: '操作',
+      width: 140,
+      fixed: 'right',
+      slots: { default: 'action' },
+    },
   ];
 }

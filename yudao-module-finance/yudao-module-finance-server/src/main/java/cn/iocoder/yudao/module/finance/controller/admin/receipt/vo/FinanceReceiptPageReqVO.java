@@ -42,4 +42,7 @@ public class FinanceReceiptPageReqVO extends PageParam {
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY)
     private LocalDate[] importDate;
 
+    @Schema(description = "认领状态（0-待认领，1-部分认领，2-完全认领，3-已关闭）")
+    private Integer claimStatus;
+
 }

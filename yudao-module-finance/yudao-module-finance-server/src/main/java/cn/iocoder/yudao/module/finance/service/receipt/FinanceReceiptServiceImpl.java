@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptLifecycleAuditDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
@@ -37,6 +38,51 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         this.receiptMapper = receiptMapper;
         this.lifecycleAuditMapper = lifecycleAuditMapper;
         this.receiptNoRedisDAO = receiptNoRedisDAO;
+    }
+
+    @Override
+    public Long createReceipt(FinanceReceiptSaveReqVO createReqVO, Long importerId) {
+        validateWritableReceipt(createReqVO, null);
+        String receiptNo = receiptNoRedisDAO.generate(LocalDate.now());
+        FinanceReceiptDO receipt = buildReceiptFromSave(createReqVO, importerId, receiptNo);
+        receiptMapper.insert(receipt);
+        return receipt.getId();
+    }
+
+    @Override
+    public void updateReceipt(FinanceReceiptSaveReqVO updateReqVO) {
+        FinanceReceiptDO current = getRequiredReceipt(updateReqVO.getId());
+        validateUnclaimedEditable(current, false);
+        validateWritableReceipt(updateReqVO, current.getId());
+        FinanceReceiptDO update = buildReceiptFromSave(updateReqVO, current.getImporterId(), current.getReceiptNo());
+        update.setId(current.getId());
+        update.setImportDate(current.getImportDate());
+        update.setClaimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus());
+        update.setClaimedAmount(BigDecimal.ZERO);
+        update.setUnclaimedAmount(updateReqVO.getTransactionAmount());
+        receiptMapper.updateById(update);
+    }
+
+    @Override
+    public void deleteReceipt(List<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return;
+        }
+        for (Long id : ids) {
+            FinanceReceiptDO receipt = getRequiredReceipt(id);
+            validateUnclaimedEditable(receipt, true);
+            receiptMapper.deleteById(id);
+        }
+    }
+
+    @Override
+    public FinanceReceiptDO getReceipt(Long id) {
+        return getRequiredReceipt(id);
+    }
+
+    @Override
+    public PageResult<FinanceReceiptDO> getReceiptPage(FinanceReceiptPageReqVO pageReqVO) {
+        return receiptMapper.selectReceiptPage(pageReqVO);
     }
 
     @Override
@@ -118,6 +164,53 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
             throw exception(RECEIPT_NOT_EXISTS);
         }
         return receipt;
+    }
+
+    private void validateUnclaimedEditable(FinanceReceiptDO receipt, boolean forDelete) {
+        boolean unclaimed = FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus().equals(receipt.getClaimStatus());
+        boolean zeroClaimed = receipt.getClaimedAmount() == null
+                || receipt.getClaimedAmount().compareTo(BigDecimal.ZERO) == 0;
+        if (!unclaimed || !zeroClaimed) {
+            throw exception(forDelete ? RECEIPT_DELETE_STATUS_INVALID : RECEIPT_UPDATE_STATUS_INVALID);
+        }
+    }
+
+    private void validateWritableReceipt(FinanceReceiptSaveReqVO reqVO, Long excludeId) {
+        if (StrUtil.isBlank(reqVO.getBankAccount()) || reqVO.getTransactionDate() == null
+                || StrUtil.isBlank(reqVO.getPayerName()) || reqVO.getTransactionAmount() == null
+                || reqVO.getTransactionAmount().compareTo(BigDecimal.ZERO) <= 0
+                || StrUtil.isBlank(reqVO.getBankSerialNo())) {
+            throw new IllegalArgumentException("银行账户、交易日期、付款方名称、交易金额和银行流水号不能为空，且金额须大于 0");
+        }
+        FinanceReceiptDO exists = receiptMapper.selectByBankSerialNo(reqVO.getBankSerialNo().trim());
+        if (exists != null && (excludeId == null || !exists.getId().equals(excludeId))) {
+            throw exception(RECEIPT_BANK_SERIAL_NO_EXISTS);
+        }
+    }
+
+    private static FinanceReceiptDO buildReceiptFromSave(FinanceReceiptSaveReqVO reqVO, Long importerId, String receiptNo) {
+        return FinanceReceiptDO.builder()
+                .receiptNo(receiptNo)
+                .importDate(LocalDate.now())
+                .importerId(importerId)
+                .bankAccount(reqVO.getBankAccount().trim())
+                .transactionDate(reqVO.getTransactionDate())
+                .payerName(reqVO.getPayerName().trim())
+                .payerAccount(trimToNull(reqVO.getPayerAccount()))
+                .transactionAmount(reqVO.getTransactionAmount())
+                .summary(trimToNull(reqVO.getSummary()))
+                .bankSerialNo(reqVO.getBankSerialNo().trim())
+                .claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
+                .claimedAmount(BigDecimal.ZERO)
+                .unclaimedAmount(reqVO.getTransactionAmount())
+                .build();
+    }
+
+    private static String trimToNull(String value) {
+        if (StrUtil.isBlank(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private void appendLifecycleAudit(Long receiptId, Long operatorId,

@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.*;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
 import cn.iocoder.yudao.module.finance.service.receipt.FinanceReceiptService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
@@ -67,6 +68,46 @@ public class FinanceReceiptController {
     @PreAuthorize("@ss.hasPermission('finance:receipt:import')")
     public CommonResult<FinanceReceiptImportRespVO> importReceipt(@RequestParam("file") MultipartFile file) throws IOException {
         return success(receiptService.importReceiptList(ExcelUtils.read(file, FinanceReceiptImportExcelVO.class), getLoginUserId()));
+    }
+
+    @PostMapping("/create")
+    @Operation(summary = "创建银行到款")
+    @PreAuthorize("@ss.hasPermission('finance:receipt:create')")
+    public CommonResult<Long> createReceipt(@Valid @RequestBody FinanceReceiptSaveReqVO createReqVO) {
+        return success(receiptService.createReceipt(createReqVO, getLoginUserId()));
+    }
+
+    @PutMapping("/update")
+    @Operation(summary = "更新银行到款")
+    @PreAuthorize("@ss.hasPermission('finance:receipt:update')")
+    public CommonResult<Boolean> updateReceipt(@Valid @RequestBody FinanceReceiptSaveReqVO updateReqVO) {
+        receiptService.updateReceipt(updateReqVO);
+        return success(true);
+    }
+
+    @DeleteMapping("/delete")
+    @Operation(summary = "删除银行到款")
+    @Parameter(name = "ids", description = "编号数组", required = true)
+    @PreAuthorize("@ss.hasPermission('finance:receipt:delete')")
+    public CommonResult<Boolean> deleteReceipt(@RequestParam("ids") List<Long> ids) {
+        receiptService.deleteReceipt(ids);
+        return success(true);
+    }
+
+    @GetMapping("/get")
+    @Operation(summary = "获得银行到款")
+    @Parameter(name = "id", description = "编号", required = true)
+    @PreAuthorize("@ss.hasPermission('finance:receipt:query')")
+    public CommonResult<FinanceReceiptRespVO> getReceipt(@RequestParam("id") Long id) {
+        return success(BeanUtils.toBean(receiptService.getReceipt(id), FinanceReceiptRespVO.class));
+    }
+
+    @GetMapping("/page")
+    @Operation(summary = "获得银行到款分页")
+    @PreAuthorize("@ss.hasPermission('finance:receipt:query')")
+    public CommonResult<PageResult<FinanceReceiptRespVO>> getReceiptPage(@Valid FinanceReceiptPageReqVO pageReqVO) {
+        PageResult<FinanceReceiptDO> pageResult = receiptService.getReceiptPage(pageReqVO);
+        return success(BeanUtils.toBean(pageResult, FinanceReceiptRespVO.class));
     }
 
     @GetMapping("/unclaimed-page")

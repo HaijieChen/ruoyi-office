@@ -46,6 +46,10 @@ function handleImport() {
 }
 
 function handleDelete(row: FinanceBusinessOrderApi.BusinessOrder) {
+  if (Number(row.confirmedClaimedAmount) > 0) {
+    message.warning('已有确认认领金额的商务单不能删除');
+    return;
+  }
   Modal.confirm({
     title: '确认删除',
     content: `确定要删除签单「${row.orderNo}」吗？`,
@@ -122,6 +126,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'link',
               danger: true,
               auth: ['finance:business-order:delete'],
+              ifShow: Number(row.confirmedClaimedAmount) === 0,
               onClick: () => handleDelete(row),
             },
           ]"

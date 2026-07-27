@@ -22,22 +22,36 @@ export namespace FinanceBankReceiptApi {
     unclaimedAmount: number;
   }
 
-  /** 未认领回单分页查询参数 */
-  export interface UnclaimedReceiptPageQuery extends PageParam {
+  /** 分页查询参数 */
+  export interface ReceiptPageQuery extends PageParam {
     receiptNo?: string;
     bankAccount?: string;
-    /** 交易日期范围，传给后端的格式为 [startDate, endDate] */
+    /** 交易日期范围 */
     transactionDate?: [string, string];
     payerName?: string;
     payerAccount?: string;
     bankSerialNo?: string;
-    /** 导入日期范围，传给后端的格式为 [startDate, endDate] */
+    /** 导入日期范围 */
     importDate?: [string, string];
+    /** 认领状态 */
+    claimStatus?: number;
+  }
+
+  /** 新增/修改（transactionDate 传 epoch millis 或后端可解析时间） */
+  export interface SaveForm {
+    id?: number;
+    bankAccount: string;
+    transactionDate: number | string;
+    payerName: string;
+    payerAccount?: string;
+    transactionAmount: number;
+    summary?: string;
+    bankSerialNo: string;
   }
 
   /**
    * 导入结果
-   * 后端 failureRows 类型为 Map<Integer, String>，序列化后为 Record<number, string>
+   * 后端 failureRows 类型为 Map<Integer,String>，序列化后为 Record<number, string>
    */
   export interface ReceiptImportResult {
     receiptNos: string[];
@@ -59,13 +73,47 @@ export namespace FinanceBankReceiptApi {
   }
 }
 
+/** 查询银行到款分页（含全部状态） */
+export function getReceiptPage(params: FinanceBankReceiptApi.ReceiptPageQuery) {
+  return requestClient.get<PageResult<FinanceBankReceiptApi.BankReceipt>>(
+    '/finance/receipt/page',
+    { params },
+  );
+}
+
 /** 查询未认领回单分页 */
 export function getUnclaimedReceiptPage(
-  params: FinanceBankReceiptApi.UnclaimedReceiptPageQuery,
+  params: FinanceBankReceiptApi.ReceiptPageQuery,
 ) {
-  return requestClient.get<
-    PageResult<FinanceBankReceiptApi.BankReceipt>
-  >('/finance/receipt/unclaimed-page', { params });
+  return requestClient.get<PageResult<FinanceBankReceiptApi.BankReceipt>>(
+    '/finance/receipt/unclaimed-page',
+    { params },
+  );
+}
+
+/** 获得银行到款详情 */
+export function getReceipt(id: number) {
+  return requestClient.get<FinanceBankReceiptApi.BankReceipt>(
+    '/finance/receipt/get',
+    { params: { id } },
+  );
+}
+
+/** 创建银行到款 */
+export function createReceipt(data: FinanceBankReceiptApi.SaveForm) {
+  return requestClient.post<number>('/finance/receipt/create', data);
+}
+
+/** 更新银行到款 */
+export function updateReceipt(data: FinanceBankReceiptApi.SaveForm) {
+  return requestClient.put<boolean>('/finance/receipt/update', data);
+}
+
+/** 删除银行到款 */
+export function deleteReceipt(ids: number[]) {
+  return requestClient.delete<boolean>('/finance/receipt/delete', {
+    params: { ids: ids.join(',') },
+  });
 }
 
 /** 导入银行回单 XLSX */

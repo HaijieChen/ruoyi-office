@@ -4,14 +4,14 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import { getRangePickerDefaultProps } from '#/utils';
 
 /** 认领状态标签 */
-const CLAIM_STATUS_OPTIONS = [
+export const CLAIM_STATUS_OPTIONS = [
   { label: '未认领', value: 0 },
   { label: '部分认领', value: 1 },
   { label: '完全认领', value: 2 },
   { label: '已关闭', value: 3 },
 ];
 
-function claimStatusLabel(status: number): string {
+export function claimStatusLabel(status: number): string {
   return CLAIM_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? String(status);
 }
 
@@ -64,6 +64,16 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'claimStatus',
+      label: '认领状态',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: CLAIM_STATUS_OPTIONS,
+        placeholder: '全部状态',
+      },
+    },
+    {
       fieldName: 'transactionDate',
       label: '交易日期',
       component: 'RangePicker',
@@ -101,8 +111,8 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'transactionDate',
       title: '交易日期',
-      width: 120,
-      formatter: 'formatDate',
+      width: 160,
+      formatter: 'formatDateTime',
     },
     {
       field: 'payerName',
@@ -135,7 +145,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'summary',
       title: '摘要',
-      minWidth: 200,
+      minWidth: 160,
     },
     {
       field: 'bankSerialNo',
@@ -152,9 +162,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'claimStatus',
       title: '认领状态',
       width: 100,
-      fixed: 'right',
       formatter: ({ cellValue }: { cellValue: number }) =>
         claimStatusLabel(cellValue),
+    },
+    {
+      field: 'action',
+      title: '操作',
+      width: 260,
+      fixed: 'right',
+      slots: { default: 'action' },
     },
   ];
 }

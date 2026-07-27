@@ -92,6 +92,20 @@ function resetForm() {
   formRef.value?.resetFields();
 }
 
+function formatDateField(value: unknown): string | undefined {
+  if (value == null || value === '') {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    return value.length >= 10 ? value.slice(0, 10) : value;
+  }
+  if (Array.isArray(value) && value.length >= 3) {
+    const [y, m, d] = value as number[];
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  return undefined;
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     await formRef.value?.validate();
@@ -129,7 +143,15 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     try {
       const detail = await getBusinessOrder(data.id);
-      formData.value = { ...detail };
+      formData.value = {
+        ...detail,
+        // 后端可能返回 LocalDate 数组，DatePicker 需要字符串
+        orderDate: formatDateField(detail.orderDate),
+        executionStartDate: formatDateField(detail.executionStartDate),
+        executionEndDate: formatDateField(detail.executionEndDate),
+        importDate: formatDateField(detail.importDate),
+        importer: detail.importerName || String(detail.importerId ?? ''),
+      };
     } finally {
       modalApi.unlock();
     }

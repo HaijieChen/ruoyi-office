@@ -15,6 +15,10 @@ public interface ErrorCodeConstants {
     ErrorCode RECEIPT_REOPEN_STATUS_INVALID = new ErrorCode(1_040_000_006, "仅可重开已关闭的银行到款");
     ErrorCode RECEIPT_CONCURRENT_MODIFICATION = new ErrorCode(1_040_000_007,
             "银行到款状态已变化，请刷新后重试");
+    ErrorCode RECEIPT_UPDATE_STATUS_INVALID = new ErrorCode(1_040_000_008,
+            "仅未认领且无认领金额的银行到款可修改");
+    ErrorCode RECEIPT_DELETE_STATUS_INVALID = new ErrorCode(1_040_000_009,
+            "仅未认领且无认领金额的银行到款可删除");
 
     // ========== 商务单 1-040-001-000 ==========
     ErrorCode BUSINESS_ORDER_NOT_EXISTS = new ErrorCode(1_040_001_000, "商务单不存在");
@@ -25,6 +29,8 @@ public interface ErrorCodeConstants {
     ErrorCode BUSINESS_ORDER_STATUS_INVALID = new ErrorCode(1_040_001_006, "商务单状态无效");
     ErrorCode BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED = new ErrorCode(1_040_001_007,
             "应收金额不能低于已确认认领金额");
+    ErrorCode BUSINESS_ORDER_DELETE_HAS_CLAIM = new ErrorCode(1_040_001_008,
+            "已有确认认领金额的商务单不能删除");
 
     // ========== 到款认领 1-040-002-000 ==========
     ErrorCode RECEIPT_CLAIM_NOT_EXISTS = new ErrorCode(1_040_002_000, "到款认领单不存在");

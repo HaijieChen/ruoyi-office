@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_DELETE_HAS_CLAIM;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_NOT_EXISTS;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED;
 
@@ -80,7 +81,14 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
 
     @Override
     public void deleteBusinessOrder(List<Long> ids) {
-        ids.forEach(this::validateBusinessOrderExists);
+        for (Long id : ids) {
+            FinanceBusinessOrderDO order = validateBusinessOrderExists(id);
+            BigDecimal confirmed = order.getConfirmedClaimedAmount() == null
+                    ? ZERO : order.getConfirmedClaimedAmount();
+            if (confirmed.compareTo(BigDecimal.ZERO) > 0) {
+                throw exception(BUSINESS_ORDER_DELETE_HAS_CLAIM);
+            }
+        }
         businessOrderMapper.deleteByIds(ids);
     }
 
