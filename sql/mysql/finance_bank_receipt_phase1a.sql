@@ -31,17 +31,23 @@ CREATE TABLE IF NOT EXISTS `finance_bank_receipt` (
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '财务管理', '', 1, 40, 0, 'finance', 'fa:money', NULL, NULL,
+SELECT '财务管理', '', 1, 40, 0, '/finance', 'fa:money', NULL, NULL,
        0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
-    WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance'
+    WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance')
 );
 
+-- 兼容历史数据：相对 path `finance` 归一为绝对 path `/finance`（仅一级菜单）
 UPDATE `system_menu`
-SET `name` = '财务管理', `sort` = 40, `parent_id` = 0, `icon` = 'fa:money', `component` = NULL, `component_name` = NULL,
-    `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1', `update_time` = NOW()
+SET `path` = '/finance', `update_time` = NOW()
 WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance';
+
+UPDATE `system_menu`
+SET `name` = '财务管理', `sort` = 40, `parent_id` = 0, `path` = '/finance', `icon` = 'fa:money',
+    `component` = NULL, `component_name` = NULL,
+    `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1', `update_time` = NOW()
+WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance');
 
 UPDATE `system_menu`
 SET `name` = 'ERP 财务管理', `update_time` = NOW()
@@ -52,7 +58,7 @@ INSERT INTO `system_menu`
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
 SELECT '银行到款', '', 2, 1, parent_menu.id, 'receipt', 'fa:bank', 'finance/receipt/index', 'FinanceReceipt',
        0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
-FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1) parent_menu
+FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance') LIMIT 1) parent_menu
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
     WHERE `deleted` = b'0' AND `component` = 'finance/receipt/index'
@@ -60,7 +66,7 @@ WHERE NOT EXISTS (
 
 UPDATE `system_menu`
 SET `name` = '银行到款',
-    `parent_id` = (SELECT parent_menu.id FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1) parent_menu),
+    `parent_id` = (SELECT parent_menu.id FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance') LIMIT 1) parent_menu),
     `path` = 'receipt', `icon` = 'fa:bank', `component` = 'finance/receipt/index', `component_name` = 'FinanceReceipt',
     `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1', `update_time` = NOW()
 WHERE `deleted` = b'0' AND `component` = 'finance/receipt/index';

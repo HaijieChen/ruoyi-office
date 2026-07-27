@@ -64,7 +64,7 @@ SELECT '到款认领复核', '', 2, 4, finance_menu.id, 'receipt-claim-review', 
        'finance/receipt-claim/review', 'FinanceReceiptClaimReviewPage',
        0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
 FROM (SELECT `id` FROM `system_menu`
-      WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1) finance_menu
+      WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance') LIMIT 1) finance_menu
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
     WHERE `deleted` = b'0' AND `component` = 'finance/receipt-claim/review'
@@ -75,7 +75,7 @@ SET `name` = '到款认领复核',
     `parent_id` = (
         SELECT finance_menu.id FROM (
             SELECT `id` FROM `system_menu`
-            WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1
+            WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance') LIMIT 1
         ) finance_menu
     ),
     `path` = 'receipt-claim-review',

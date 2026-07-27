@@ -102,7 +102,7 @@ INSERT INTO `system_menu`
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
 SELECT '到款认领', '', 2, 3, parent_menu.id, 'receipt-claim', 'fa:handshake', 'finance/receipt-claim/index', 'FinanceReceiptClaimMyPage',
        0, b'1', b'1', b'1', '', NOW(), '', NOW(), b'0'
-FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1) parent_menu
+FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance') LIMIT 1) parent_menu
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu`
     WHERE `deleted` = b'0' AND `component` = 'finance/receipt-claim/index'
@@ -110,7 +110,7 @@ WHERE NOT EXISTS (
 
 UPDATE `system_menu`
 SET `name` = '到款认领',
-    `parent_id` = (SELECT parent_menu.id FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` = 'finance' LIMIT 1) parent_menu),
+    `parent_id` = (SELECT parent_menu.id FROM (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `type` = 1 AND `parent_id` = 0 AND `path` IN ('finance', '/finance') LIMIT 1) parent_menu),
     `path` = 'receipt-claim', `sort` = 3, `icon` = 'fa:handshake', `component` = 'finance/receipt-claim/index', `component_name` = 'FinanceReceiptClaimMyPage',
     `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1', `update_time` = NOW()
 WHERE `deleted` = b'0' AND `component` = 'finance/receipt-claim/index';
