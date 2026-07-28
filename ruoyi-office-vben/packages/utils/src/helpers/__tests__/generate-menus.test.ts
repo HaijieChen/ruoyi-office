@@ -4,7 +4,10 @@ import { createRouter, createWebHistory } from 'vue-router';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { generateMenus } from '../generate-menus';
+import {
+  convertServerMenuToRouteRecordStringComponent,
+  generateMenus,
+} from '../generate-menus';
 
 // Nested route setup to test child inclusion and hideChildrenInMenu functionality
 
@@ -229,5 +232,30 @@ describe('generateMenus', () => {
     const emptyRoutes: any[] = [];
     const menus = generateMenus(emptyRoutes, router);
     expect(menus).toEqual([]);
+  });
+});
+
+describe('convertServerMenuToRouteRecordStringComponent', () => {
+  it('preserves an absolute child path', () => {
+    const routes = convertServerMenuToRouteRecordStringComponent([
+      {
+        id: 5049,
+        name: '工作台',
+        parentId: 0,
+        path: '/dashboard',
+        children: [
+          {
+            id: 5050,
+            name: '工作台',
+            parentId: 5049,
+            path: '/workspace',
+            component: 'dashboard/workspace/index',
+            componentName: 'Workspace',
+          },
+        ],
+      },
+    ] as any);
+
+    expect(routes[0]?.children?.[0]?.path).toBe('/workspace');
   });
 });

@@ -153,7 +153,7 @@ function convertServerMenuToRouteRecordStringComponent(
     }
 
     // path
-    if (parent) {
+    if (parent && !menu.path.startsWith('/')) {
       menu.path = `${parent}/${menu.path}`;
     }
 
