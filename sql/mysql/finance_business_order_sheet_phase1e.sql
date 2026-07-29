@@ -48,24 +48,17 @@ PREPARE phase1e_statement FROM @phase1e_sql;
 EXECUTE phase1e_statement;
 DEALLOCATE PREPARE phase1e_statement;
 
-DROP PROCEDURE IF EXISTS `finance_business_order_phase1e_guard`;
-DELIMITER //
-CREATE PROCEDURE `finance_business_order_phase1e_guard`()
-BEGIN
-    DECLARE unsafe_claim_balance_count bigint DEFAULT 0;
-
-    SELECT COUNT(*) INTO unsafe_claim_balance_count
-    FROM `finance_business_order`
-    WHERE `confirmed_claimed_amount` > `settlement_amount`;
-
-    IF unsafe_claim_balance_count > 0 THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'phase 1E refused: confirmed claims exceed settlement';
-    END IF;
-END//
-DELIMITER ;
-CALL `finance_business_order_phase1e_guard`();
-DROP PROCEDURE `finance_business_order_phase1e_guard`;
+-- 应用迁移账号可能没有 CREATE/ALTER ROUTINE 权限，因此沿用动态 SQL 做数据保护。
+-- 不安全时，PREPARE 会因描述性占位表不存在而失败，从而在任何删列前中止迁移。
+SET @phase1e_sql = IF(
+    EXISTS (SELECT 1 FROM `finance_business_order`
+            WHERE `confirmed_claimed_amount` > `settlement_amount`),
+    'SELECT * FROM `phase_1e_refused_confirmed_claims_exceed_settlement`',
+    'SELECT 1'
+);
+PREPARE phase1e_statement FROM @phase1e_sql;
+EXECUTE phase1e_statement;
+DEALLOCATE PREPARE phase1e_statement;
 
 SET @phase1e_sql = IF(
     EXISTS (SELECT 1 FROM `information_schema`.`columns`

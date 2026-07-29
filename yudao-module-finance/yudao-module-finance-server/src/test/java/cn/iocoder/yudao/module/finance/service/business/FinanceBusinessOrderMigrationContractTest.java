@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FinanceBusinessOrderMigrationContractTest {
@@ -61,15 +62,27 @@ class FinanceBusinessOrderMigrationContractTest {
         }
         assertTrue(normalizedSql.contains("update `finance_business_order` set `settlement_amount` = `receivable_amount` where `settlement_amount` is null"));
         assertTrue(normalizedSql.contains("`confirmed_claimed_amount` > `settlement_amount`"));
-        assertTrue(lowerSql.contains("signal sqlstate '45000'"));
+        assertTrue(lowerSql.contains("phase_1e_refused_confirmed_claims_exceed_settlement"));
 
-        int unsafeBalanceGuard = lowerSql.indexOf("signal sqlstate '45000'");
+        int unsafeBalanceGuard = lowerSql.indexOf("phase_1e_refused_confirmed_claims_exceed_settlement");
         int firstDrop = lowerSql.indexOf("drop column");
         assertTrue(unsafeBalanceGuard >= 0 && firstDrop > unsafeBalanceGuard);
         for (String column : List.of("business_subject", "business_type", "contract_ref", "project_ref",
                 "receivable_amount", "payable_amount", "owner_id", "status")) {
             assertTrue(lowerSql.contains("drop column `" + column + "`"));
         }
+    }
+
+    @Test
+    void sheetReplacementMigrationShouldNotRequireStoredRoutinePrivileges() throws IOException {
+        Path repositoryRoot = findRepositoryRoot();
+        String lowerSql = Files.readString(repositoryRoot.resolve(
+                "sql/mysql/finance_business_order_sheet_phase1e.sql")).toLowerCase(Locale.ROOT);
+
+        assertFalse(lowerSql.contains("create procedure") || lowerSql.contains("drop procedure"),
+                "phase 1E 必须兼容无 CREATE/ALTER ROUTINE 权限的应用迁移账号");
+        assertTrue(lowerSql.contains("phase_1e_refused_confirmed_claims_exceed_settlement"),
+                "无存储过程的保护分支必须保留可识别的拒绝原因");
     }
 
     @Test
