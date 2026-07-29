@@ -106,7 +106,7 @@ git add yudao-module-finance/yudao-module-finance-server/src/test/java/cn/iocode
 git commit -m "test(finance): align revoke audit response contract"
 ```
 
-- [ ] **Step 6: Fast-forward `codeup/dev` and verify the remote ref**
+- [x] **Step 6: Fast-forward `codeup/dev` and verify the remote ref**
 
 Run:
 
