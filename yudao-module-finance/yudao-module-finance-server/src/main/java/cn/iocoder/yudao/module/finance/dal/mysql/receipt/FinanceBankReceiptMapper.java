@@ -57,15 +57,30 @@ public interface FinanceBankReceiptMapper extends BaseMapperX<FinanceReceiptDO> 
         return selectList(new MPJLambdaWrapperX<FinanceReceiptDO>().in(FinanceReceiptDO::getId, ids));
     }
 
-    @Update("UPDATE finance_bank_receipt SET claimed_amount = claimed_amount + #{amount}, " +
+    /**
+     * 认领金额增加。
+     * <p>
+     * 注意：MySQL 单表 UPDATE 的 SET 从左到右赋值，后写字段可能读到前面字段的新值。
+     * 因此 claim_status 必须先于 claimed/unclaimed 金额更新，否则
+     * {@code CASE WHEN unclaimed_amount - amount = 0} 会在 unclaimed 已减为 0 后变成
+     * {@code 0 - amount != 0}，错误落成「部分认领」。
+     */
+    @Update("UPDATE finance_bank_receipt SET " +
+            "claim_status = CASE WHEN unclaimed_amount = #{amount} THEN 2 ELSE 1 END, " +
+            "claimed_amount = claimed_amount + #{amount}, " +
             "unclaimed_amount = unclaimed_amount - #{amount}, " +
-            "claim_status = CASE WHEN unclaimed_amount - #{amount} = 0 THEN 2 ELSE 1 END, update_time = NOW() " +
+            "update_time = NOW() " +
             "WHERE id = #{id} AND claim_status IN (0, 1) AND unclaimed_amount >= #{amount} AND deleted = b'0'")
     int increaseClaimedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
 
-    @Update("UPDATE finance_bank_receipt SET claimed_amount = claimed_amount - #{amount}, " +
+    /**
+     * 认领金额回退（撤销）。claim_status 同样必须先于金额字段更新，理由同 {@link #increaseClaimedAmount}。
+     */
+    @Update("UPDATE finance_bank_receipt SET " +
+            "claim_status = CASE WHEN claimed_amount = #{amount} THEN 0 ELSE 1 END, " +
+            "claimed_amount = claimed_amount - #{amount}, " +
             "unclaimed_amount = unclaimed_amount + #{amount}, " +
-            "claim_status = CASE WHEN claimed_amount - #{amount} = 0 THEN 0 ELSE 1 END, update_time = NOW() " +
+            "update_time = NOW() " +
             "WHERE id = #{id} AND claim_status IN (1, 2) AND claimed_amount >= #{amount} AND deleted = b'0'")
     int decreaseClaimedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
 
