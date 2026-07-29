@@ -17,7 +17,7 @@ import {
 
 import {
   createClaim,
-  getSourceBusinessOrderPage,
+  getSourceInvoiceApplicationPage,
   getSourceReceiptPage,
   updateClaim,
 } from '#/api/finance/receipt-claim';
@@ -28,8 +28,9 @@ const emit = defineEmits(['success']);
 
 interface LineItem {
   receiptId?: number;
-  businessOrderId?: number;
+  invoiceApplicationId?: number;
   claimAmount?: number;
+  claimSource?: string;
 }
 
 interface FormData {
@@ -43,7 +44,7 @@ const formData = ref<FormData>({ items: [{}] });
 const receiptOptions = ref<
   Array<{ label: string; value: number; unclaimed?: number }>
 >([]);
-const orderOptions = ref<
+const invoiceOptions = ref<
   Array<{ label: string; value: number; remaining?: number }>
 >([]);
 const loadingOptions = ref(false);
@@ -65,8 +66,8 @@ const rules: Record<string, Rule[]> = {
           if (!item.receiptId) {
             return Promise.reject(`第 ${idx + 1} 行：请选择银行到款`);
           }
-          if (!item.businessOrderId) {
-            return Promise.reject(`第 ${idx + 1} 行：请选择商务单`);
+          if (!item.invoiceApplicationId) {
+            return Promise.reject(`第 ${idx + 1} 行：请选择开票申请`);
           }
           if (!item.claimAmount || item.claimAmount <= 0) {
             return Promise.reject(`第 ${idx + 1} 行：认领金额须大于 0`);
@@ -82,26 +83,33 @@ const rules: Record<string, Rule[]> = {
 async function loadSourceOptions() {
   loadingOptions.value = true;
   try {
-    const [receiptPage, orderPage] = await Promise.all([
+    const [receiptPage, invoicePage] = await Promise.all([
       getSourceReceiptPage({ pageNo: 1, pageSize: 100 }),
-      getSourceBusinessOrderPage({ pageNo: 1, pageSize: 100 }),
+      getSourceInvoiceApplicationPage({ pageNo: 1, pageSize: 100 }),
     ]);
-    receiptOptions.value = (receiptPage?.list || []).map((r: any) => ({
-      value: r.id,
-      unclaimed: Number(r.unclaimedAmount ?? 0),
-      label: `${r.receiptNo || r.id} | ${r.payerName || '-'} | 可认领 ¥${Number(r.unclaimedAmount ?? 0).toFixed(2)}`,
-    }));
-    orderOptions.value = (orderPage?.list || []).map((o: any) => ({
-      value: o.id,
-      remaining: Number(
-        o.remainingBalance ??
-          Number(o.settlementAmount ?? 0) - Number(o.confirmedClaimedAmount ?? 0),
-      ),
-      label: `${o.orderNo || o.id} | ${o.productName || '-'} | 可认领 ¥${Number(
-        o.remainingBalance ??
-          Number(o.settlementAmount ?? 0) - Number(o.confirmedClaimedAmount ?? 0),
-      ).toFixed(2)}`,
-    }));
+    receiptOptions.value = (receiptPage?.list || []).map((r: any) => {
+      const pending = Number(r.pendingClaimedAmount ?? 0);
+      const unclaimed = Number(r.unclaimedAmount ?? 0);
+      const available = Math.max(0, unclaimed - pending);
+      return {
+        value: r.id,
+        unclaimed: available,
+        label: `${r.receiptNo || r.id} | ${r.payerName || '-'} | 可认领 ¥${available.toFixed(2)}`,
+      };
+    });
+    invoiceOptions.value = (invoicePage?.list || []).map((a: any) => {
+      const remaining = Math.max(
+        0,
+        Number(a.totalAmount ?? 0) -
+          Number(a.confirmedClaimedAmount ?? 0) -
+          Number(a.pendingClaimedAmount ?? 0),
+      );
+      return {
+        value: a.id,
+        remaining,
+        label: `${a.applicationNo || a.id} | ${a.buyerName || '-'} | 可认领 ¥${remaining.toFixed(2)}`,
+      };
+    });
   } finally {
     loadingOptions.value = false;
   }
@@ -130,6 +138,18 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     const data = modalApi.getData<FormData>() || {};
+    // 历史 LEGACY 单禁止在表单编辑
+    if (
+      data.items?.some(
+        (i) =>
+          i.claimSource === 'LEGACY_BO' ||
+          (!i.invoiceApplicationId && (i as any).businessOrderId),
+      )
+    ) {
+      message.warning('历史商务单认领禁止修改');
+      modalApi.close();
+      return;
+    }
     formData.value = {
       id: data.id,
       remark: data.remark,
@@ -137,7 +157,7 @@ const [Modal, modalApi] = useVbenModal({
         data.items && data.items.length
           ? data.items.map((i) => ({
               receiptId: i.receiptId,
-              businessOrderId: i.businessOrderId,
+              invoiceApplicationId: i.invoiceApplicationId,
               claimAmount: i.claimAmount,
             }))
           : [{}],
@@ -153,7 +173,7 @@ const [Modal, modalApi] = useVbenModal({
         remark: formData.value.remark,
         items: formData.value.items.map((i) => ({
           receiptId: i.receiptId as number,
-          businessOrderId: i.businessOrderId as number,
+          invoiceApplicationId: i.invoiceApplicationId as number,
           claimAmount: i.claimAmount as number,
         })),
       };
@@ -222,15 +242,15 @@ const [Modal, modalApi] = useVbenModal({
                 />
               </div>
               <div>
-                <div class="mb-1 text-xs text-gray-500">商务单</div>
+                <div class="mb-1 text-xs text-gray-500">开票申请</div>
                 <Select
-                  v-model:value="item.businessOrderId"
+                  v-model:value="item.invoiceApplicationId"
                   show-search
                   allow-clear
                   :loading="loadingOptions"
-                  :options="orderOptions"
+                  :options="invoiceOptions"
                   option-filter-prop="label"
-                  placeholder="选择可认领商务单"
+                  placeholder="选择已审批通过的开票申请（未出票也可）"
                   class="w-full"
                 />
               </div>

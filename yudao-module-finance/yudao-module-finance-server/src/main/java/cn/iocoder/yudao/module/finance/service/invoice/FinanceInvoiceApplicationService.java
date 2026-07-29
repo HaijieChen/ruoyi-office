@@ -1,0 +1,52 @@
+package cn.iocoder.yudao.module.finance.service.invoice;
+
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationPageReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
+import jakarta.validation.Valid;
+
+import java.util.List;
+
+/**
+ * 开票申请 Service。
+ * <p>商务单 {@code invoiced_occupied_amount} 仅由 createAndStart / resubmit / onApprovalOutcome 释占写路径变更。
+ * <p>{@code issue_status} 仅由 {@link #updateIssueProgress} 写入（T4）。
+ */
+public interface FinanceInvoiceApplicationService {
+
+    /**
+     * 创建开票申请并启动审批流程（无草稿）。
+     *
+     * @return 申请主键
+     */
+    Long createAndStart(@Valid FinanceInvoiceApplicationCreateAndStartReqVO reqVO, Long applicantUserId);
+
+    /**
+     * 同步审批落账（主路径由 Flowable 同步 Delegate 调用；同 outcome 幂等）。
+     *
+     * @param appId   申请主键
+     * @param outcome APPROVED | REJECTED | CANCELLED（与 {@code FinanceInvoiceApprovalStatusEnum} 对齐）
+     */
+    void onApprovalOutcome(Long appId, String outcome);
+
+    /**
+     * 驳回后重提：释占 → 换明细 → 再占 → 新 processInstance；不删历史流程。
+     */
+    void resubmit(Long appId, @Valid FinanceInvoiceApplicationResubmitReqVO reqVO, Long userId);
+
+    /**
+     * 一行一票办票（唯一写 line/app issue 字段路径）。
+     */
+    void updateIssueProgress(@Valid FinanceInvoiceApplicationUpdateIssueProgressReqVO reqVO);
+
+    FinanceInvoiceApplicationDO getApplication(Long id);
+
+    List<FinanceInvoiceApplicationLineDO> getApplicationLines(Long applicationId);
+
+    PageResult<FinanceInvoiceApplicationDO> getApplicationPage(FinanceInvoiceApplicationPageReqVO pageReqVO);
+
+}

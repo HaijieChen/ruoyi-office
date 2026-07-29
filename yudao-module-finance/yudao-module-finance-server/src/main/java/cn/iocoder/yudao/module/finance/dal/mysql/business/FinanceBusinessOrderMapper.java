@@ -68,4 +68,22 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
     int decreaseConfirmedClaimedAmount(@Param("id") Long id, @Param("importerId") Long importerId,
                                        @Param("amount") BigDecimal amount);
 
+    /**
+     * CAS 增加开票占用：settlement_amount - invoiced_occupied_amount &gt;= amount。
+     * <p>仅 createAndStart / resubmit（T3）写路径调用；其它路径禁止写占用。
+     */
+    @Update("UPDATE finance_business_order SET invoiced_occupied_amount = invoiced_occupied_amount + #{amount}, " +
+            "update_time = NOW() WHERE id = #{id} " +
+            "AND settlement_amount - invoiced_occupied_amount >= #{amount} AND deleted = b'0'")
+    int increaseInvoicedOccupiedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
+    /**
+     * CAS 减少开票占用：invoiced_occupied_amount &gt;= amount。
+     * <p>仅 onApprovalOutcome(REJECTED|CANCELLED) / resubmit 释占路径调用。
+     */
+    @Update("UPDATE finance_business_order SET invoiced_occupied_amount = invoiced_occupied_amount - #{amount}, " +
+            "update_time = NOW() WHERE id = #{id} " +
+            "AND invoiced_occupied_amount >= #{amount} AND deleted = b'0'")
+    int decreaseInvoicedOccupiedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
 }

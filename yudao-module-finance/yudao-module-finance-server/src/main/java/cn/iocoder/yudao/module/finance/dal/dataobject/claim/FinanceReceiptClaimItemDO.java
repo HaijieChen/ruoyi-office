@@ -22,7 +22,18 @@ public class FinanceReceiptClaimItemDO extends BaseDO {
     private Long id;
     private Long claimId;
     private Long receiptId;
+    /**
+     * 开票申请编号（INVOICE 源）；与 {@link #businessOrderId} 应用层 XOR，恰有其一
+     */
+    private Long invoiceApplicationId;
+    /**
+     * 商务单编号（LEGACY_BO 源）；新链路为 null
+     */
     private Long businessOrderId;
+    /**
+     * 认领来源：INVOICE / LEGACY_BO
+     */
+    private String claimSource;
     private BigDecimal claimAmount;
 
 }

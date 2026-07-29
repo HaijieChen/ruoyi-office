@@ -47,5 +47,35 @@ public interface ErrorCodeConstants {
             "认领单已处理或余额已变化，请刷新后重试");
     ErrorCode RECEIPT_CLAIM_REVOKE_REASON_REQUIRED = new ErrorCode(1_040_002_010, "撤销原因不能为空");
     ErrorCode RECEIPT_CLAIM_RECEIPT_CLOSED = new ErrorCode(1_040_002_011, "已关闭的银行到款不能认领");
+    ErrorCode RECEIPT_CLAIM_LEGACY_WRITE_FORBIDDEN = new ErrorCode(1_040_002_012,
+            "历史商务单认领禁止一切写操作（含撤销）");
+    ErrorCode RECEIPT_CLAIM_INVOICE_INVALID = new ErrorCode(1_040_002_013,
+            "开票申请不存在、不可认领、无权限或可认领金额不足");
+    ErrorCode RECEIPT_CLAIM_SOURCE_INVALID = new ErrorCode(1_040_002_014,
+            "认领明细必须挂开票申请（新链路），且来源一致");
+    ErrorCode RECEIPT_CLAIM_ITEM_DUPLICATE_INVOICE = new ErrorCode(1_040_002_015,
+            "同一到款和开票申请不能重复分摊");
+
+    // ========== 开票申请 1-040-003-000 ==========
+    ErrorCode INVOICE_APPLICATION_NOT_EXISTS = new ErrorCode(1_040_003_000, "开票申请不存在");
+    ErrorCode INVOICE_APPLICATION_LINES_EMPTY = new ErrorCode(1_040_003_001, "开票申请明细不能为空");
+    ErrorCode INVOICE_APPLICATION_AMOUNT_INVALID = new ErrorCode(1_040_003_002, "开票金额必须大于 0");
+    ErrorCode INVOICE_APPLICATION_OCCUPY_EXCEED = new ErrorCode(1_040_003_003,
+            "商务单可开票金额不足，无法占用");
+    ErrorCode INVOICE_APPLICATION_OCCUPY_CONCURRENT = new ErrorCode(1_040_003_004,
+            "商务单开票占用已变化，请刷新后重试");
+    ErrorCode INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS = new ErrorCode(1_040_003_005,
+            "开票明细关联的商务单不存在");
+    ErrorCode INVOICE_APPLICATION_STATUS_INVALID = new ErrorCode(1_040_003_006,
+            "当前审批状态不允许执行该操作");
+    ErrorCode INVOICE_APPLICATION_APPROVAL_OUTCOME_INVALID = new ErrorCode(1_040_003_007,
+            "审批结果非法或状态迁移不被允许");
+    ErrorCode INVOICE_APPLICATION_RELEASE_OCCUPY_FAILED = new ErrorCode(1_040_003_008,
+            "释放商务单开票占用失败，请刷新后重试");
+    ErrorCode INVOICE_APPLICATION_LINE_NOT_EXISTS = new ErrorCode(1_040_003_009, "开票申请明细不存在");
+    ErrorCode INVOICE_APPLICATION_ISSUE_NOT_ALLOWED = new ErrorCode(1_040_003_010,
+            "仅审批通过且未作废的开票申请可办票");
+    ErrorCode INVOICE_APPLICATION_LINE_ALREADY_ISSUED = new ErrorCode(1_040_003_011,
+            "该明细已开票，一期一行仅允许一张物理票");
 
 }

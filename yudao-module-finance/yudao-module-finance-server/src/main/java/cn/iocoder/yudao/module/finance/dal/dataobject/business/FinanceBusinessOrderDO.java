@@ -37,6 +37,10 @@ public class FinanceBusinessOrderDO extends BaseDO {
     private String bankAccount;
     private String remark;
     private BigDecimal confirmedClaimedAmount;
+    /**
+     * 开票占用金额（提交即占，见 phase2a）
+     */
+    private BigDecimal invoicedOccupiedAmount;
     private String sourceRowHash;
 
 }

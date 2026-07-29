@@ -94,4 +94,24 @@ public interface FinanceBankReceiptMapper extends BaseMapperX<FinanceReceiptDO> 
             "WHERE id = #{id} AND claim_status = 3 AND unclaimed_amount > 0 AND deleted = b'0'")
     int reopenIfClosed(@Param("id") Long id);
 
+    /**
+     * 待确认占用增加：pending + amount &lt;= unclaimed（unclaimed=交易额-已确认认领）。
+     */
+    @Update("UPDATE finance_bank_receipt SET " +
+            "pending_claimed_amount = IFNULL(pending_claimed_amount, 0) + #{amount}, " +
+            "update_time = NOW() " +
+            "WHERE id = #{id} AND claim_status IN (0, 1) AND deleted = b'0' " +
+            "AND IFNULL(pending_claimed_amount, 0) + #{amount} <= unclaimed_amount")
+    int increasePendingClaimedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
+    /**
+     * 待确认占用释放（驳回 / 确认前 pending→claimed）。
+     */
+    @Update("UPDATE finance_bank_receipt SET " +
+            "pending_claimed_amount = IFNULL(pending_claimed_amount, 0) - #{amount}, " +
+            "update_time = NOW() " +
+            "WHERE id = #{id} AND deleted = b'0' " +
+            "AND IFNULL(pending_claimed_amount, 0) >= #{amount}")
+    int decreasePendingClaimedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
 }

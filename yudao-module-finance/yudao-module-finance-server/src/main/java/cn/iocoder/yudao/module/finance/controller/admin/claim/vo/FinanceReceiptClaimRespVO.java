@@ -45,11 +45,17 @@ public class FinanceReceiptClaimRespVO {
         private String payerName;
         @Schema(description = "银行流水号")
         private String bankSerialNo;
-        @Schema(description = "商务单编号")
+        @Schema(description = "开票申请编号")
+        private Long invoiceApplicationId;
+        @Schema(description = "开票申请单号")
+        private String invoiceApplicationNo;
+        @Schema(description = "认领来源 INVOICE / LEGACY_BO")
+        private String claimSource;
+        @Schema(description = "商务单编号（历史 LEGACY）")
         private Long businessOrderId;
-        @Schema(description = "商务单号")
+        @Schema(description = "商务单号（历史 LEGACY）")
         private String businessOrderNo;
-        @Schema(description = "产品名称")
+        @Schema(description = "产品名称（历史 LEGACY）")
         private String productName;
         @Schema(description = "认领金额")
         private BigDecimal claimAmount;

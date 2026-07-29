@@ -1,0 +1,96 @@
+package cn.iocoder.yudao.module.finance.controller.admin.invoice.vo;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+@Schema(description = "管理后台 - 开票申请 createAndStart Request VO")
+@Data
+public class FinanceInvoiceApplicationCreateAndStartReqVO {
+
+    @Schema(description = "期望开票日")
+    private LocalDate expectedInvoiceDate;
+
+    @Schema(description = "开票公司（表头快照）")
+    private String invoiceCompany;
+
+    @Schema(description = "发票类型：普票/专票")
+    private String invoiceType;
+
+    @Schema(description = "购方名称（提交快照）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotEmpty(message = "购方名称不能为空")
+    private String buyerName;
+
+    @Schema(description = "购方税号（提交快照）")
+    private String buyerTaxNo;
+
+    @Schema(description = "购方地址电话（提交快照）")
+    private String buyerAddressPhone;
+
+    @Schema(description = "购方银行账号（提交快照）")
+    private String buyerBankAccount;
+
+    @Schema(description = "特殊开票要求")
+    private String specialInvoiceRequirement;
+
+    @Schema(description = "税收分类/开票内容（提交快照）")
+    private String taxContent;
+
+    @Schema(description = "税率（提交快照）")
+    private BigDecimal taxRate;
+
+    @Schema(description = "不含税金额")
+    private BigDecimal amountExcludingTax;
+
+    @Schema(description = "税额")
+    private BigDecimal taxAmount;
+
+    @Schema(description = "开票依据附件 URL")
+    private String evidenceFileUrl;
+
+    @Schema(description = "备注/特殊情况说明")
+    private String remark;
+
+    @Schema(description = "发起人自选审批人")
+    private Map<String, List<Long>> startUserSelectAssignees;
+
+    @Schema(description = "开票明细", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotEmpty(message = "开票明细不能为空")
+    @Valid
+    private List<Line> lines;
+
+    @Data
+    public static class Line {
+
+        @Schema(description = "商务单编号", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotNull(message = "商务单编号不能为空")
+        private Long businessOrderId;
+
+        @Schema(description = "本行开票金额", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotNull(message = "开票金额不能为空")
+        @DecimalMin(value = "0.01", message = "开票金额必须大于 0")
+        private BigDecimal amount;
+
+        @Schema(description = "开票公司（行快照）")
+        private String invoiceCompany;
+
+        @Schema(description = "发票类型（行快照）")
+        private String invoiceType;
+
+        @Schema(description = "业务账期 YYYY-MM")
+        private String billingPeriod;
+
+        @Schema(description = "行序")
+        private Integer sort;
+
+    }
+
+}

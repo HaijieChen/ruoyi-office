@@ -34,6 +34,10 @@ public class FinanceReceiptDO extends BaseDO {
     private String bankSerialNo;
     private Integer claimStatus;
     private BigDecimal claimedAmount;
+    /**
+     * 待确认认领占用金额（双边 pending，见 phase2a）
+     */
+    private BigDecimal pendingClaimedAmount;
     private BigDecimal unclaimedAmount;
 
 }

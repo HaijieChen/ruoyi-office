@@ -5,16 +5,21 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.claim.vo.*;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationPageReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptRespVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.claim.FinanceReceiptClaimDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.claim.FinanceReceiptClaimRevokeAuditDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
 import cn.iocoder.yudao.module.finance.service.business.FinanceBusinessOrderService;
 import cn.iocoder.yudao.module.finance.service.claim.FinanceReceiptClaimDetail;
 import cn.iocoder.yudao.module.finance.service.claim.FinanceReceiptClaimService;
+import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationService;
 import cn.iocoder.yudao.module.finance.service.receipt.FinanceReceiptService;
+import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,6 +47,8 @@ public class FinanceReceiptClaimController {
     private FinanceReceiptService receiptService;
     @Resource
     private FinanceBusinessOrderService businessOrderService;
+    @Resource
+    private FinanceInvoiceApplicationService invoiceApplicationService;
 
     @PostMapping("/create")
     @Operation(summary = "创建到款认领单")
@@ -153,13 +160,27 @@ public class FinanceReceiptClaimController {
     }
 
     @GetMapping("/source-business-order-page")
-    @Operation(summary = "获得本人负责的可认领商务单分页")
+    @Operation(summary = "【历史】本人可认领商务单分页（只读；新写禁止 LEGACY）")
     @PreAuthorize("@ss.hasPermission('finance:receipt-claim:query')")
     public CommonResult<PageResult<FinanceReceiptClaimBusinessOrderSourceRespVO>> getSourceBusinessOrderPage(
             @Valid FinanceBusinessOrderPageReqVO pageReqVO) {
         PageResult<FinanceBusinessOrderDO> page = businessOrderService
                 .getClaimableBusinessOrderPage(pageReqVO, getLoginUserId());
         return success(BeanUtils.toBean(page, FinanceReceiptClaimBusinessOrderSourceRespVO.class));
+    }
+
+    @GetMapping("/source-invoice-application-page")
+    @Operation(summary = "获得可认领开票申请分页（批过未出票也可选；服务端 claimAllowed）")
+    @PreAuthorize("@ss.hasPermission('finance:receipt-claim:query')")
+    public CommonResult<PageResult<FinanceInvoiceApplicationRespVO>> getSourceInvoiceApplicationPage(
+            @Valid FinanceInvoiceApplicationPageReqVO pageReqVO) {
+        // 列表层过滤 APPROVED；对象权限与金额在 create 再强校验
+        if (pageReqVO.getApprovalStatus() == null) {
+            pageReqVO.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
+        }
+        PageResult<FinanceInvoiceApplicationDO> page =
+                invoiceApplicationService.getApplicationPage(pageReqVO);
+        return success(BeanUtils.toBean(page, FinanceInvoiceApplicationRespVO.class));
     }
 
     private static FinanceReceiptClaimRespVO buildClaimDetail(FinanceReceiptClaimDetail detail) {
@@ -172,10 +193,18 @@ public class FinanceReceiptClaimController {
                 itemResponse.setPayerName(receipt.getPayerName());
                 itemResponse.setBankSerialNo(receipt.getBankSerialNo());
             }
-            FinanceBusinessOrderDO order = detail.businessOrders().get(item.getBusinessOrderId());
-            if (order != null) {
-                itemResponse.setBusinessOrderNo(order.getOrderNo());
-                itemResponse.setProductName(order.getProductName());
+            if (item.getInvoiceApplicationId() != null && detail.invoiceApplications() != null) {
+                FinanceInvoiceApplicationDO app = detail.invoiceApplications().get(item.getInvoiceApplicationId());
+                if (app != null) {
+                    itemResponse.setInvoiceApplicationNo(app.getApplicationNo());
+                }
+            }
+            if (item.getBusinessOrderId() != null) {
+                FinanceBusinessOrderDO order = detail.businessOrders().get(item.getBusinessOrderId());
+                if (order != null) {
+                    itemResponse.setBusinessOrderNo(order.getOrderNo());
+                    itemResponse.setProductName(order.getProductName());
+                }
             }
             return itemResponse;
         }).toList();

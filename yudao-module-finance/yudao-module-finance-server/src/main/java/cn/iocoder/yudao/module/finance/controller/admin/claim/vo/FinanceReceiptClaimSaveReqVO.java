@@ -10,7 +10,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.util.List;
 
-@Schema(description = "管理后台 - 到款认领新增/修改 Request VO")
+@Schema(description = "管理后台 - 到款认领新增/修改 Request VO（新链路挂开票申请）")
 @Data
 public class FinanceReceiptClaimSaveReqVO {
 
@@ -32,9 +32,9 @@ public class FinanceReceiptClaimSaveReqVO {
         @NotNull(message = "银行到款编号不能为空")
         private Long receiptId;
 
-        @Schema(description = "商务单编号", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotNull(message = "商务单编号不能为空")
-        private Long businessOrderId;
+        @Schema(description = "开票申请编号（新链路必填）", requiredMode = Schema.RequiredMode.REQUIRED)
+        @NotNull(message = "开票申请编号不能为空")
+        private Long invoiceApplicationId;
 
         @Schema(description = "认领金额", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "认领金额不能为空")

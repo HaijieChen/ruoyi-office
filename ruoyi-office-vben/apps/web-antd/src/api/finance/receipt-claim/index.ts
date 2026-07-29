@@ -13,8 +13,13 @@ export namespace FinanceReceiptClaimApi {
     receiptNo: string;
     payerName: string;
     bankSerialNo: string;
-    businessOrderId: number;
-    businessOrderNo: string;
+    /** 新链路：开票申请 */
+    invoiceApplicationId?: number;
+    invoiceApplicationNo?: string;
+    claimSource?: 'INVOICE' | 'LEGACY_BO';
+    /** 历史 LEGACY */
+    businessOrderId?: number;
+    businessOrderNo?: string;
     businessSubject?: string;
     productName?: string;
     claimAmount: number;
@@ -42,14 +47,14 @@ export namespace FinanceReceiptClaimApi {
     createTime?: [string, string];
   }
 
-  /** 保存请求（新建/修改共用） */
+  /** 保存请求（新建/修改共用；新链路挂开票申请） */
   export interface SaveRequest {
     /** 修改时必填 */
     id?: number;
     remark?: string;
     items: Array<{
       receiptId: number;
-      businessOrderId: number;
+      invoiceApplicationId: number;
       claimAmount: number;
     }>;
   }
@@ -168,10 +173,18 @@ export function getSourceReceiptPage(params: PageParam) {
   );
 }
 
-/** 可认领商务单分页（创建认领时选源，仅本人负责） */
+/** 可认领商务单分页（历史只读；新写禁止 LEGACY） */
 export function getSourceBusinessOrderPage(params: PageParam) {
   return requestClient.get<PageResult<Record<string, any>>>(
     '/finance/receipt-claim/source-business-order-page',
+    { params },
+  );
+}
+
+/** 可认领开票申请分页（批过未出票可选） */
+export function getSourceInvoiceApplicationPage(params: PageParam) {
+  return requestClient.get<PageResult<Record<string, any>>>(
+    '/finance/receipt-claim/source-invoice-application-page',
     { params },
   );
 }
