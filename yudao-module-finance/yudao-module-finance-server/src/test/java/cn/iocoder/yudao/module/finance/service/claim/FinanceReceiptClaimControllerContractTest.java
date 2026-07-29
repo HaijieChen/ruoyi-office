@@ -35,8 +35,11 @@ class FinanceReceiptClaimControllerContractTest {
     }
 
     @Test
-    void revokeAuditRespVOShouldExposeOnlyImmutableAuditFields() {
-        assertEquals(List.of("id", "claimId", "reviewerId", "revokeTime", "revokeReason"),
+    void revokeAuditRespVOShouldExposePersistedAndDisplayFields() {
+        assertEquals(List.of(
+                        "id", "claimId", "reviewerId", "reviewerName",
+                        "operatorId", "operatorName", "revokeTime", "revokeReason",
+                        "reason", "createTime", "action"),
                 Stream.of(FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredFields())
                         .map(java.lang.reflect.Field::getName).toList());
     }
@@ -46,8 +49,14 @@ class FinanceReceiptClaimControllerContractTest {
         assertEquals(Long.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("id").getType());
         assertEquals(Long.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("claimId").getType());
         assertEquals(Long.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("reviewerId").getType());
+        assertEquals(String.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("reviewerName").getType());
+        assertEquals(Long.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("operatorId").getType());
+        assertEquals(String.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("operatorName").getType());
         assertEquals(LocalDateTime.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("revokeTime").getType());
         assertEquals(String.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("revokeReason").getType());
+        assertEquals(String.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("reason").getType());
+        assertEquals(LocalDateTime.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("createTime").getType());
+        assertEquals(String.class, FinanceReceiptClaimRevokeAuditRespVO.class.getDeclaredField("action").getType());
     }
 
 }
