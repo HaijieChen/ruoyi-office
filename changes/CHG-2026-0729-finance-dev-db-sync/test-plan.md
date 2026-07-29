@@ -41,8 +41,8 @@
 | 兼容真实 system_menu 结构 | 单元/契约 + 只读探针 | 禁止 `m/p.tenant_id` | RED 1 fail → GREEN pass |
 | 兼容受限迁移账号 | 单元/契约 + 真实库 | phase1e 不依赖存储过程权限 | RED 1 fail → GREEN 4/4 pass |
 | 财务模块回归 | 模块测试 | Maven finance server tests | 105 pass；1 个基线遗留失败 |
-| 数据库可恢复 | 真实库 | 备份表行数与源表一致 | pending |
-| 迁移幂等 | 真实库 | 全量 SQL 连续执行两次并比较指纹 | pending |
-| 角色隔离 | 真实库/API | 角色菜单与权限白名单/黑名单查询 | pending |
+| 数据库可恢复 | 真实库 | 备份表行数与源表一致 | pass：938/6/873 |
+| 迁移幂等 | 真实库 | 全量 SQL 连续执行两次并比较指纹 | pass：最终指纹无漂移 |
+| 角色隔离 | 真实库/API | 角色菜单与权限白名单/黑名单查询 | pass：漏权/额外/禁权均 0 |
 
 基线遗留失败：`FinanceReceiptClaimControllerContractTest.revokeAuditRespVOShouldExposeOnlyImmutableAuditFields` 仍期望 5 个字段，当前基线 VO 已有 11 个字段。已在未修改的 `main@9139607e` 独立复现，不属于本变更范围。
