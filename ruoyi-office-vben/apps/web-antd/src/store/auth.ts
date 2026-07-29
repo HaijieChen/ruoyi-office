@@ -20,6 +20,7 @@ import {
   smsLogin,
   socialLogin,
 } from '#/api';
+import { FIXED_LOGIN_TENANT_ID } from '#/constants/tenant';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -118,6 +119,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
     resetAllStores();
     accessStore.setLoginExpired(false);
+    // OA 固定登录租户，退出后仍保持 tenant-id=1，避免回登录页请求丢租户
+    accessStore.setTenantId(FIXED_LOGIN_TENANT_ID);
 
     // 回登录页带上当前路由地址
     await router.replace({

@@ -2,96 +2,34 @@
 import type { VbenFormSchema } from '@vben/common-ui';
 import type { Recordable } from '@vben/types';
 
-import type { AuthApi } from '#/api';
-
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { AuthenticationForgetPassword, z } from '@vben/common-ui';
-import { isTenantEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { useAccessStore } from '@vben/stores';
 
 import { message } from 'ant-design-vue';
 
 import { sendSmsCode, smsResetPassword } from '#/api';
-import { getTenantByWebsite, getTenantSimpleList } from '#/api/core/auth';
+import { bindFixedLoginTenant } from '#/constants/tenant';
 
 defineOptions({ name: 'ForgetPassword' });
 
 const accessStore = useAccessStore();
 const router = useRouter();
-const tenantEnable = isTenantEnable();
 
 const loading = ref(false);
 const CODE_LENGTH = 4;
 const forgetPasswordRef = ref();
 
-/** 获取租户列表，并默认选中 */
-const tenantList = ref<AuthApi.TenantResult[]>([]); // 租户列表
-async function fetchTenantList() {
-  if (!tenantEnable) {
-    return;
-  }
-  try {
-    // 获取租户列表、域名对应租户
-    const websiteTenantPromise = getTenantByWebsite(window.location.hostname);
-    tenantList.value = await getTenantSimpleList();
-
-    // 选中租户：域名 > store 中的租户 > 首个租户
-    let tenantId: null | number = null;
-    const websiteTenant = await websiteTenantPromise;
-    if (websiteTenant?.id) {
-      tenantId = websiteTenant.id;
-    }
-    // 如果没有从域名获取到租户，尝试从 store 中获取
-    if (!tenantId && accessStore.tenantId) {
-      tenantId = accessStore.tenantId;
-    }
-    // 如果还是没有租户，使用列表中的第一个
-    if (!tenantId && tenantList.value?.[0]?.id) {
-      tenantId = tenantList.value[0].id;
-    }
-
-    // 设置选中的租户编号
-    accessStore.setTenantId(tenantId);
-    forgetPasswordRef.value
-      .getFormApi()
-      .setFieldValue('tenantId', tenantId?.toString());
-  } catch (error) {
-    console.error('获取租户列表失败:', error);
-  }
-}
-
-/** 组件挂载时获取租户信息 */
+/** 组件挂载时固定登录租户 */
 onMounted(() => {
-  fetchTenantList();
+  bindFixedLoginTenant(accessStore);
 });
 
 const formSchema = computed((): VbenFormSchema[] => {
   return [
-    {
-      component: 'VbenSelect',
-      componentProps: {
-        options: tenantList.value.map((item) => ({
-          label: item.name,
-          value: item.id.toString(),
-        })),
-        placeholder: $t('authentication.tenantTip'),
-      },
-      fieldName: 'tenantId',
-      label: $t('authentication.tenant'),
-      rules: z.string().min(1, { message: $t('authentication.tenantTip') }),
-      dependencies: {
-        triggerFields: ['tenantId'],
-        if: tenantEnable,
-        trigger(values) {
-          if (values.tenantId) {
-            accessStore.setTenantId(Number(values.tenantId));
-          }
-        },
-      },
-    },
     {
       component: 'VbenInput',
       componentProps: {
@@ -121,6 +59,7 @@ const formSchema = computed((): VbenFormSchema[] => {
         handleSendCode: async () => {
           loading.value = true;
           try {
+            bindFixedLoginTenant(accessStore);
             const formApi = forgetPasswordRef.value?.getFormApi();
             if (!formApi) {
               throw new Error('表单未准备好');
@@ -193,6 +132,7 @@ const formSchema = computed((): VbenFormSchema[] => {
 async function handleSubmit(values: Recordable<any>) {
   loading.value = true;
   try {
+    bindFixedLoginTenant(accessStore);
     const { mobile, code, password } = values;
     await smsResetPassword({ mobile, code, password });
     message.success($t('authentication.resetPasswordSuccess'));

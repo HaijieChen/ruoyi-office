@@ -1,23 +1,17 @@
 <script lang="ts" setup>
 import type { VbenFormSchema } from '@vben/common-ui';
 
-import type { AuthApi } from '#/api/core/auth';
-
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { AuthenticationLogin, Verification, z } from '@vben/common-ui';
-import { isCaptchaEnable, isTenantEnable } from '@vben/hooks';
+import { isCaptchaEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { useAccessStore } from '@vben/stores';
 import { getUrlValue } from '@vben/utils';
 
-import {
-  checkCaptcha,
-  getCaptcha,
-  getTenantByWebsite,
-  getTenantSimpleList,
-} from '#/api/core/auth';
+import { checkCaptcha, getCaptcha } from '#/api/core/auth';
+import { bindFixedLoginTenant } from '#/constants/tenant';
 import { useAuthStore } from '#/store';
 
 defineOptions({ name: 'SocialLogin' });
@@ -26,48 +20,12 @@ const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const { query } = useRoute();
 const router = useRouter();
-const tenantEnable = isTenantEnable();
 const captchaEnable = isCaptchaEnable();
 
 const loginRef = ref();
 const verifyRef = ref();
 
 const captchaType = 'blockPuzzle'; // 验证码类型：'blockPuzzle' | 'clickWord'
-
-/** 获取租户列表，并默认选中 */
-const tenantList = ref<AuthApi.TenantResult[]>([]); // 租户列表
-async function fetchTenantList() {
-  if (!tenantEnable) {
-    return;
-  }
-
-  try {
-    // 获取租户列表、域名对应租户
-    const websiteTenantPromise = getTenantByWebsite(window.location.hostname);
-    tenantList.value = await getTenantSimpleList();
-
-    // 选中租户：域名 > store 中的租户 > 首个租户
-    let tenantId: null | number = null;
-    const websiteTenant = await websiteTenantPromise;
-    if (websiteTenant?.id) {
-      tenantId = websiteTenant.id;
-    }
-    // 如果没有从域名获取到租户，尝试从 store 中获取
-    if (!tenantId && accessStore.tenantId) {
-      tenantId = accessStore.tenantId;
-    }
-    // 如果还是没有租户，使用列表中的第一个
-    if (!tenantId && tenantList.value?.[0]?.id) {
-      tenantId = tenantList.value[0].id;
-    }
-
-    // 设置选中的租户编号
-    accessStore.setTenantId(tenantId);
-    loginRef.value.getFormApi().setFieldValue('tenantId', tenantId);
-  } catch (error) {
-    console.error('获取租户列表失败:', error);
-  }
-}
 
 /** 尝试登录：当账号已经绑定，socialLogin 会直接获得 token */
 const socialType = Number(getUrlValue('type'));
@@ -86,6 +44,7 @@ async function tryLogin() {
   }
 
   // 尝试登录
+  bindFixedLoginTenant(accessStore);
   await authStore.authLogin('social', {
     type: socialType,
     code: socialCode,
@@ -95,6 +54,7 @@ async function tryLogin() {
 
 /** 处理登录 */
 async function handleLogin(values: any) {
+  bindFixedLoginTenant(accessStore);
   // 如果开启验证码，则先验证验证码
   if (captchaEnable) {
     verifyRef.value.show();
@@ -113,6 +73,7 @@ async function handleLogin(values: any) {
 /** 验证码通过，执行登录 */
 async function handleVerifySuccess({ captchaVerification }: any) {
   try {
+    bindFixedLoginTenant(accessStore);
     await authStore.authLogin('username', {
       ...(await loginRef.value.getFormApi().getValues()),
       captchaVerification,
@@ -125,37 +86,14 @@ async function handleVerifySuccess({ captchaVerification }: any) {
   }
 }
 
-/** 组件挂载时获取租户信息 */
+/** 组件挂载时固定登录租户 */
 onMounted(async () => {
-  await fetchTenantList();
-
+  bindFixedLoginTenant(accessStore);
   await tryLogin();
 });
 
 const formSchema = computed((): VbenFormSchema[] => {
   return [
-    {
-      component: 'VbenSelect',
-      componentProps: {
-        options: tenantList.value.map((item) => ({
-          label: item.name,
-          value: item.id.toString(),
-        })),
-        placeholder: $t('authentication.tenantTip'),
-      },
-      fieldName: 'tenantId',
-      label: $t('authentication.tenant'),
-      rules: z.string().min(1, { message: $t('authentication.tenantTip') }),
-      dependencies: {
-        triggerFields: ['tenantId'],
-        if: tenantEnable,
-        trigger(values) {
-          if (values.tenantId) {
-            accessStore.setTenantId(Number(values.tenantId));
-          }
-        },
-      },
-    },
     {
       component: 'VbenInput',
       componentProps: {

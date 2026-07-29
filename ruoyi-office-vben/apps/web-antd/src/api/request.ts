@@ -16,6 +16,7 @@ import { createApiEncrypt } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
 
+import { resolveRequestTenantId } from '#/constants/tenant';
 import { useAuthStore } from '#/store';
 
 import { refreshTokenApi } from './core';
@@ -78,9 +79,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
 
       config.headers.Authorization = formatToken(accessStore.accessToken);
       config.headers['Accept-Language'] = preferences.app.locale;
-      // 添加租户编号
+      // 添加租户编号（OA 固定租户 1，store 为空时回落）
       config.headers['tenant-id'] = tenantEnable
-        ? accessStore.tenantId
+        ? resolveRequestTenantId(accessStore.tenantId)
         : undefined;
       // 只有登录时，才设置 visit-tenant-id 访问租户
       config.headers['visit-tenant-id'] = tenantEnable
@@ -175,9 +176,9 @@ export const baseRequestClient = new RequestClient({ baseURL: apiURL });
 baseRequestClient.addRequestInterceptor({
   fulfilled: (config) => {
     const accessStore = useAccessStore();
-    // 添加租户编号
+    // 添加租户编号（OA 固定租户 1，store 为空时回落）
     config.headers['tenant-id'] = tenantEnable
-      ? accessStore.tenantId
+      ? resolveRequestTenantId(accessStore.tenantId)
       : undefined;
     // 只有登录时，才设置 visit-tenant-id 访问租户
     config.headers['visit-tenant-id'] = tenantEnable
