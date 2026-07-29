@@ -37,7 +37,8 @@
 
 | Requirement or risk | Test level | Command or case | Result |
 |---|---|---|---|
-| 无硬编码菜单 ID | 单元/契约 | `FinanceRoleMigrationContractTest` | RED 2 fail → GREEN 2 pass |
+| 无硬编码菜单 ID | 单元/契约 | `FinanceRoleMigrationContractTest` | RED 2 fail → GREEN pass |
+| 兼容真实 system_menu 结构 | 单元/契约 + 只读探针 | 禁止 `m/p.tenant_id` | RED 1 fail → GREEN pass |
 | 财务模块回归 | 模块测试 | Maven finance server tests | 105 pass；1 个基线遗留失败 |
 | 数据库可恢复 | 真实库 | 备份表行数与源表一致 | pending |
 | 迁移幂等 | 真实库 | 全量 SQL 连续执行两次并比较指纹 | pending |

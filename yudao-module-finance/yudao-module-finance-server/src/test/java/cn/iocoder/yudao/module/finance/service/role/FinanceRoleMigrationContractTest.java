@@ -49,6 +49,14 @@ class FinanceRoleMigrationContractTest {
                 "财务管理员必须通过 finance:* 权限前缀获得全部财务按钮权限");
     }
 
+    @Test
+    void migrationShouldRespectSystemMenuSchemaWithoutTenantId() throws IOException {
+        String sql = readMigration();
+
+        assertFalse(sql.contains("m.`tenant_id`") || sql.contains("p.`tenant_id`"),
+                "system_menu 没有 tenant_id 列，菜单查询不能添加租户字段条件");
+    }
+
     private static String readMigration() throws IOException {
         Path migration = findRepositoryRoot().resolve(MIGRATION_FILE);
         assertTrue(Files.exists(migration), "财务角色迁移文件必须存在");

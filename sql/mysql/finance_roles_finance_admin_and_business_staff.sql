@@ -51,14 +51,14 @@ SELECT r.`id`, m.`id`, 'admin', NOW(), 'admin', NOW(), b'0', 1
 FROM `system_role` r
 CROSS JOIN `system_menu` m
 WHERE r.`deleted` = b'0' AND r.`code` = 'finance_admin' AND r.`tenant_id` = 1
-  AND m.`deleted` = b'0' AND m.`tenant_id` = 1
+  AND m.`deleted` = b'0'
   AND (
         (m.`parent_id` = 0 AND m.`path` = '/finance')
      OR m.`component` LIKE 'finance/%'
      OR m.`permission` LIKE 'finance:%'
      OR m.`parent_id` IN (
             SELECT p.`id` FROM `system_menu` p
-            WHERE p.`deleted` = b'0' AND p.`tenant_id` = 1
+            WHERE p.`deleted` = b'0'
               AND (
                     (p.`parent_id` = 0 AND p.`path` = '/finance')
                  OR p.`component` LIKE 'finance/%'
@@ -76,7 +76,7 @@ SELECT r.`id`, m.`id`, 'admin', NOW(), 'admin', NOW(), b'0', 1
 FROM `system_role` r
 CROSS JOIN `system_menu` m
 WHERE r.`deleted` = b'0' AND r.`code` = 'business_staff' AND r.`tenant_id` = 1
-  AND m.`deleted` = b'0' AND m.`tenant_id` = 1
+  AND m.`deleted` = b'0'
   AND (
         -- 目录/页面
         (m.`parent_id` = 0 AND m.`path` = '/finance')

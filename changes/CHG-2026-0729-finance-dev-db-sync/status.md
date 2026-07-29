@@ -15,10 +15,11 @@
 - 2026-07-29：确认外网数据库与内网运行库 UUID/菜单指纹一致，目标 schema 为 `ruoyi_office`。
 - 2026-07-29：用户明确确认方案 1；排除测试用户 SQL 和现有用户角色分配。
 - 2026-07-29：新增角色迁移契约测试，RED 阶段 2/2 按预期失败，动态匹配修复后 GREEN 阶段 2/2 通过。
+- 2026-07-29：真实库只读探针发现 `system_menu` 无 `tenant_id`；新增契约测试先失败，再移除无效菜单租户条件。
 
 ## Regression results
 
-- `FinanceRoleMigrationContractTest`：2/2 通过。
+- `FinanceRoleMigrationContractTest`：3/3 通过。
 - 财务模块：105 个测试通过；1 个基线遗留的 VO 字段契约测试失败，已在未修改的 `main@9139607e` 复现。
 - `git diff --check`：通过。
 
