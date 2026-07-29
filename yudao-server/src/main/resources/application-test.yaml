@@ -47,20 +47,20 @@ spring:
       primary: master
       datasource:
         master:
-          # 开发联调：公网映射测试中间件（库 ruoyi_office）
-          url: jdbc:mysql://115.227.43.101:336/ruoyi_office?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+          # 测试环境：VPC 内网中间件（库 ruoyi_office）
+          url: jdbc:mysql://10.20.32.5:3306/ruoyi_office?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
           username: app
           password: "0Yw#7rhqRISf"
         slave: # 模拟从库，可根据自己需要修改
           lazy: true # 开启懒加载，保证启动速度
-          url: jdbc:mysql://115.227.43.101:336/ruoyi_office?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+          url: jdbc:mysql://10.20.32.5:3306/ruoyi_office?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
           username: app
           password: "0Yw#7rhqRISf"
 
   # Redis 配置。Redisson 默认的配置足够使用，一般不需要进行调优
   data:
     redis:
-      host: 115.227.40.63 # 公网映射测试 Redis
+      host: 10.20.32.2 # VPC 内网 Redis
       port: 6379 # 端口
       database: 5 # 数据库索引
       password: "Ca[)>3-1B|Yyu=AD"
