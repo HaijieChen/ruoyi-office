@@ -40,6 +40,16 @@ export function isTenantEnable(): boolean {
 }
 
 export function isCaptchaEnable(): boolean {
+  // 生产可在 window._VBEN_ADMIN_PRO_APP_CONF_.VITE_APP_CAPTCHA_ENABLE 覆盖构建期开关
+  try {
+    const runtime = (window as any)?._VBEN_ADMIN_PRO_APP_CONF_
+      ?.VITE_APP_CAPTCHA_ENABLE;
+    if (runtime !== undefined && runtime !== null && runtime !== '') {
+      return runtime === true || runtime === 'true';
+    }
+  } catch {
+    // ignore SSR / non-browser
+  }
   return import.meta.env.VITE_APP_CAPTCHA_ENABLE === 'true';
 }
 

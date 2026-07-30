@@ -301,6 +301,9 @@ yudao:
   info:
     version: 1.0.0
     base-package: cn.iocoder.yudao
+  captcha:
+    # 登录滑块/图形验证码；可用环境变量 YUDAO_CAPTCHA_ENABLE 覆盖。联调默认关，正式环境按需开。
+    enable: ${YUDAO_CAPTCHA_ENABLE:false}
   web:
     admin-ui:
       url: http://dashboard.yudao.iocoder.cn # Admin 管理后台 UI 的地址
