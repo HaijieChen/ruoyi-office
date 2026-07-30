@@ -32,9 +32,11 @@ public class FinanceInvoiceApplicationRespVO {
     private Long applicantUserId;
     @Schema(description = "期望开票日")
     private LocalDate expectedInvoiceDate;
-    @Schema(description = "开票公司")
+    @Schema(description = "开票公司名称快照")
     private String invoiceCompany;
-    @Schema(description = "发票类型")
+    @Schema(description = "开票公司组织部门编号")
+    private Long invoiceCompanyDeptId;
+    @Schema(description = "发票类型（字典 finance_invoice_type）")
     private String invoiceType;
     @Schema(description = "购方名称")
     private String buyerName;

@@ -27,9 +27,16 @@ export async function getDeptList() {
   return requestClient.get('/system/dept/list');
 }
 
-/** 查询公司列表 */
+/** 查询公司列表（需 system:dept:query） */
 export async function getCompanyList() {
   return requestClient.get('/system/dept/company-list');
+}
+
+/** 启用公司精简列表（下拉，无额外权限） */
+export async function getSimpleCompanyList() {
+  return requestClient.get<SystemDeptApi.Dept[]>(
+    '/system/dept/company-simple-list',
+  );
 }
 
 /** 查询部门详情 */

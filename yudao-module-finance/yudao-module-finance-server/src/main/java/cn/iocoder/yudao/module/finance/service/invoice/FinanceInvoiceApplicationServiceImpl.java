@@ -122,6 +122,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .applicantUserId(applicantUserId)
                 .expectedInvoiceDate(reqVO.getExpectedInvoiceDate())
                 .invoiceCompany(reqVO.getInvoiceCompany())
+                .invoiceCompanyDeptId(reqVO.getInvoiceCompanyDeptId())
                 .invoiceType(reqVO.getInvoiceType())
                 .buyerName(reqVO.getBuyerName())
                 .buyerTaxNo(reqVO.getBuyerTaxNo())
@@ -308,6 +309,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         headerUpdate.setTotalAmount(totalAmount);
         headerUpdate.setExpectedInvoiceDate(reqVO.getExpectedInvoiceDate());
         headerUpdate.setInvoiceCompany(reqVO.getInvoiceCompany());
+        headerUpdate.setInvoiceCompanyDeptId(reqVO.getInvoiceCompanyDeptId());
         headerUpdate.setInvoiceType(reqVO.getInvoiceType());
         headerUpdate.setBuyerName(reqVO.getBuyerName());
         headerUpdate.setBuyerTaxNo(reqVO.getBuyerTaxNo());
@@ -499,6 +501,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         variables.put("issueStatus", application.getIssueStatus());
         variables.put("expectedInvoiceDate", application.getExpectedInvoiceDate());
         variables.put("invoiceCompany", application.getInvoiceCompany());
+        variables.put("invoiceCompanyDeptId", application.getInvoiceCompanyDeptId());
         variables.put("invoiceType", application.getInvoiceType());
         variables.put("taxContent", application.getTaxContent());
         variables.put("taxRate", application.getTaxRate());

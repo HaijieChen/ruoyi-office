@@ -4,6 +4,8 @@ import type { Rule } from 'ant-design-vue/es/form';
 import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 
 import {
   Button,
@@ -25,6 +27,7 @@ import {
   getInvoiceApplication,
   resubmitInvoiceApplication,
 } from '#/api/finance/invoice-application';
+import { getSimpleCompanyList } from '#/api/system/dept';
 
 defineOptions({ name: 'FinanceInvoiceApplicationForm' });
 
@@ -41,10 +44,18 @@ interface FormData {
   mode?: 'create' | 'resubmit';
   buyerName?: string;
   buyerTaxNo?: string;
+  /** 组织公司 deptId */
+  invoiceCompanyDeptId?: number;
+  /** 公司名称快照 */
   invoiceCompany?: string;
   invoiceType?: string;
   remark?: string;
   lines: LineItem[];
+}
+
+interface CompanyOption {
+  label: string;
+  value: number;
 }
 
 interface BoOption {
@@ -59,13 +70,19 @@ interface BoOption {
 const formRef = ref();
 const formData = ref<FormData>({ lines: [{}] });
 const boOptions = ref<BoOption[]>([]);
+const companyOptions = ref<CompanyOption[]>([]);
 const loadingBo = ref(false);
+const loadingCompany = ref(false);
 /** orderNo 远程搜索防抖 */
 let boSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
 const isResubmit = computed(() => formData.value.mode === 'resubmit');
 const getTitle = computed(() =>
   isResubmit.value ? '驳回后重提开票申请' : '提交开票申请（无草稿）',
+);
+
+const invoiceTypeOptions = computed(() =>
+  getDictOptions(DICT_TYPE.FINANCE_INVOICE_TYPE),
 );
 
 function openableOf(bo: {
@@ -83,6 +100,12 @@ function openableOf(bo: {
 
 const rules: Record<string, Rule[]> = {
   buyerName: [{ required: true, message: '购方名称不能为空' }],
+  invoiceCompanyDeptId: [
+    { required: true, message: '请选择开票公司', trigger: 'change' },
+  ],
+  invoiceType: [
+    { required: true, message: '请选择发票类型', trigger: 'change' },
+  ],
   lines: [
     {
       validator: async () => {
@@ -249,11 +272,36 @@ function removeLine(index: number) {
   formData.value.lines.splice(index, 1);
 }
 
+async function loadCompanyOptions() {
+  loadingCompany.value = true;
+  try {
+    const list = (await getSimpleCompanyList()) || [];
+    companyOptions.value = list
+      .filter((c) => c.id != null)
+      .map((c) => ({
+        value: c.id as number,
+        label: c.name,
+      }));
+  } finally {
+    loadingCompany.value = false;
+  }
+}
+
+/** 选中公司：同步名称快照 */
+function onCompanyChange(deptId?: number) {
+  if (deptId == null) {
+    formData.value.invoiceCompany = undefined;
+    return;
+  }
+  const opt = companyOptions.value.find((o) => o.value === deptId);
+  formData.value.invoiceCompany = opt?.label;
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) return;
     const data = modalApi.getData<FormData>() || {};
-    await loadBusinessOrderOptions();
+    await Promise.all([loadBusinessOrderOptions(), loadCompanyOptions()]);
     if (data.id && data.mode === 'resubmit') {
       const detail = await getInvoiceApplication(data.id);
       formData.value = {
@@ -261,6 +309,7 @@ const [Modal, modalApi] = useVbenModal({
         mode: 'resubmit',
         buyerName: detail.buyerName,
         buyerTaxNo: detail.buyerTaxNo,
+        invoiceCompanyDeptId: detail.invoiceCompanyDeptId,
         invoiceCompany: detail.invoiceCompany,
         invoiceType: detail.invoiceType,
         remark: detail.remark as any,
@@ -270,6 +319,29 @@ const [Modal, modalApi] = useVbenModal({
           billingPeriod: l.billingPeriod,
         })),
       };
+      // 历史单仅有公司名、无 deptId：补一条 option 便于展示
+      if (
+        formData.value.invoiceCompanyDeptId == null &&
+        formData.value.invoiceCompany
+      ) {
+        // 无法回绑组织，清空要求重选
+        formData.value.invoiceCompanyDeptId = undefined;
+      } else if (
+        formData.value.invoiceCompanyDeptId != null &&
+        !companyOptions.value.some(
+          (o) => o.value === formData.value.invoiceCompanyDeptId,
+        )
+      ) {
+        companyOptions.value = [
+          {
+            value: formData.value.invoiceCompanyDeptId,
+            label:
+              formData.value.invoiceCompany ||
+              `公司 #${formData.value.invoiceCompanyDeptId}`,
+          },
+          ...companyOptions.value,
+        ];
+      }
       if (!formData.value.lines.length) {
         formData.value.lines = [{}];
       }
@@ -280,11 +352,18 @@ const [Modal, modalApi] = useVbenModal({
   },
   async onConfirm() {
     await formRef.value?.validate();
+    if (!formData.value.invoiceCompanyDeptId) {
+      message.warning('请选择开票公司');
+      return;
+    }
+    // 再刷一次快照，防止 options 未同步
+    onCompanyChange(formData.value.invoiceCompanyDeptId);
     modalApi.lock();
     try {
       const payload = {
         buyerName: formData.value.buyerName as string,
         buyerTaxNo: formData.value.buyerTaxNo,
+        invoiceCompanyDeptId: formData.value.invoiceCompanyDeptId,
         invoiceCompany: formData.value.invoiceCompany,
         invoiceType: formData.value.invoiceType,
         remark: formData.value.remark,
@@ -292,6 +371,8 @@ const [Modal, modalApi] = useVbenModal({
           businessOrderId: l.businessOrderId as number,
           amount: l.amount as number,
           billingPeriod: l.billingPeriod,
+          invoiceCompany: formData.value.invoiceCompany,
+          invoiceType: formData.value.invoiceType,
         })),
       };
       if (isResubmit.value && formData.value.id) {
@@ -310,6 +391,7 @@ const [Modal, modalApi] = useVbenModal({
   onClosed() {
     formData.value = { lines: [{}] };
     boOptions.value = [];
+    companyOptions.value = [];
     if (boSearchTimer) clearTimeout(boSearchTimer);
   },
 });
@@ -334,11 +416,32 @@ const [Modal, modalApi] = useVbenModal({
       <Form.Item label="购方税号" name="buyerTaxNo">
         <Input v-model:value="formData.buyerTaxNo" />
       </Form.Item>
-      <Form.Item label="开票公司" name="invoiceCompany">
-        <Input v-model:value="formData.invoiceCompany" />
+      <Form.Item label="开票公司" name="invoiceCompanyDeptId" required>
+        <Select
+          v-model:value="formData.invoiceCompanyDeptId"
+          class="w-full"
+          show-search
+          allow-clear
+          :loading="loadingCompany"
+          :options="companyOptions"
+          option-filter-prop="label"
+          placeholder="请选择组织架构中的公司"
+          @change="(v: any) => onCompanyChange(v)"
+          @dropdown-visible-change="
+            (open: boolean) => {
+              if (open && !companyOptions.length) loadCompanyOptions();
+            }
+          "
+        />
       </Form.Item>
-      <Form.Item label="发票类型" name="invoiceType">
-        <Input v-model:value="formData.invoiceType" placeholder="普票/专票" />
+      <Form.Item label="发票类型" name="invoiceType" required>
+        <Select
+          v-model:value="formData.invoiceType"
+          class="w-full"
+          allow-clear
+          :options="invoiceTypeOptions"
+          placeholder="请选择发票类型"
+        />
       </Form.Item>
       <Form.Item label="备注" name="remark">
         <Textarea v-model:value="formData.remark" :rows="2" />

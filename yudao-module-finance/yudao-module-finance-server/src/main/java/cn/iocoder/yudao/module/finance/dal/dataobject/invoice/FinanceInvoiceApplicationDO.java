@@ -42,6 +42,10 @@ public class FinanceInvoiceApplicationDO extends BaseDO {
     private Long applicantUserId;
     private LocalDate expectedInvoiceDate;
     private String invoiceCompany;
+    /**
+     * 开票公司对应组织部门编号（orgType=公司）；名称快照见 {@link #invoiceCompany}
+     */
+    private Long invoiceCompanyDeptId;
     private String invoiceType;
     private String buyerName;
     private String buyerTaxNo;

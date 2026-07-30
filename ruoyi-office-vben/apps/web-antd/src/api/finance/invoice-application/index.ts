@@ -36,6 +36,8 @@ export namespace FinanceInvoiceApplicationApi {
     buyerName?: string;
     buyerTaxNo?: string;
     invoiceCompany?: string;
+    /** 开票公司组织部门 id */
+    invoiceCompanyDeptId?: number;
     invoiceType?: string;
     voided?: boolean;
     createTime?: string;
@@ -45,6 +47,7 @@ export namespace FinanceInvoiceApplicationApi {
   export interface CreateAndStartRequest {
     expectedInvoiceDate?: string;
     invoiceCompany?: string;
+    invoiceCompanyDeptId?: number;
     invoiceType?: string;
     buyerName: string;
     buyerTaxNo?: string;

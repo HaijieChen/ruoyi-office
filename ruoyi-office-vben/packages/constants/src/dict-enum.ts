@@ -178,6 +178,11 @@ const IOT_DICT = {
   IOT_MODBUS_FRAME_FORMAT: 'iot_modbus_frame_format', // IoT Modbus 帧格式
 } as const;
 
+/** ========== FINANCE - 财务模块 ========== */
+const FINANCE_DICT = {
+  FINANCE_INVOICE_TYPE: 'finance_invoice_type', // 发票类型：专票/普票
+} as const;
+
 /** ========== OA - 办公模块 ========== */
 const OA_DICT = {
   OA_CAR_CLS: 'oa_car_cls', // 车辆分类
@@ -230,6 +235,7 @@ const DICT_TYPE = {
   ...COMMON_DICT,
   ...OA_DICT,
   ...HRM_DICT,
+  ...FINANCE_DICT,
 } as const;
 
 export { DICT_TYPE };

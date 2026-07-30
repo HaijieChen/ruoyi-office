@@ -19,10 +19,13 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Schema(description = "期望开票日")
     private LocalDate expectedInvoiceDate;
 
-    @Schema(description = "开票公司（表头快照）")
+    @Schema(description = "开票公司组织部门编号（orgType=公司）")
+    private Long invoiceCompanyDeptId;
+
+    @Schema(description = "开票公司名称快照（与 deptId 同时提交）")
     private String invoiceCompany;
 
-    @Schema(description = "发票类型：普票/专票")
+    @Schema(description = "发票类型：字典 finance_invoice_type 的 value（专票/普票）")
     private String invoiceType;
 
     @Schema(description = "购方名称（提交快照）", requiredMode = Schema.RequiredMode.REQUIRED)
