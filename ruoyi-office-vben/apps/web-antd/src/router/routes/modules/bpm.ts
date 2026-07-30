@@ -1,10 +1,27 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+/**
+ * BPM 静态辅路由。
+ *
+ * 产品事实（勿再误判为「错误路径」）：
+ * - 「可申请流程」目录页 = views/bpm/processInstance/create/index.vue
+ *   拉取已启用流程定义（suspensionState=1），按分类展示，支持搜索后发起。
+ * - 系统内置两种模型：BpmModelType.BPMN(10) 与 BpmModelType.SIMPLE(20)；
+ *   选中流程后 form.vue 按 modelType 分别渲染 BPMN / Simple 流程图。
+ *
+ * 路由双入口（同组件）：
+ * 1) 静态：/bpm/start-process（本文件，兼容书签与「工作流程」redirect）
+ * 2) 后端菜单：/bpm/task/create（system_menu 2720「发起流程」，component 同上）
+ *
+ * accessMode=backend 时静态路由与菜单路由会合并；start-process 必须挂真实 component，
+ * 不能只做 redirect，否则访问 /bpm → /bpm/start-process 会 404，目录页消失。
+ */
 const routes: RouteRecordRaw[] = [
   {
     path: '/bpm',
     name: 'bpm',
-    redirect: '/bpm/start-process', // 重定向到发起流程页面
+    // 工作流程入口 → 可申请流程目录
+    redirect: '/bpm/start-process',
     meta: {
       title: '工作流',
       hideInMenu: true,
@@ -13,6 +30,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'start-process',
         component: () => import('#/views/bpm/processInstance/create/index.vue'),
+        // 与后端菜单 component_name 可能重名；path 仍独立可用。
+        // 若需避免 name 覆盖，可改为 BpmStartProcess，但 path 入口保持不变。
         name: 'BpmProcessInstanceCreate',
         meta: {
           title: '发起流程',
