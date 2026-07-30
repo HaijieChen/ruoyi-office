@@ -1,30 +1,37 @@
 package cn.iocoder.yudao.module.finance.framework.bpm;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.delegate.DelegateExecution;
+import org.flowable.engine.delegate.ExecutionListener;
 import org.flowable.engine.delegate.JavaDelegate;
 import org.springframework.stereotype.Component;
 
 /**
- * 开票申请审批结果 — Flowable <b>同步</b> JavaDelegate（主路径，D-T3）。
+ * 开票申请审批结果 — Flowable <b>同步</b> 落账（主路径，D-T3）。
  *
- * <p>BPM 模型挂载方式（delegateExpression）：
+ * <p>BPM 模型挂载（delegateExpression）：
  * <pre>
  * ${financeInvoiceApprovalOutcomeDelegate}
  * </pre>
- * 建议挂在流程 end 事件或审批通过/驳回出口的 ExecutionListener / ServiceTask。
+ * 建议挂在<strong>结束事件</strong>的 ExecutionListener（event=end），或审批通过/驳回出口的 ServiceTask。
+ *
+ * <p>与 yudao {@code BpmProcessInstanceServiceImpl#processProcessInstanceCompleted} 对齐：
+ * 流程正常结束且 {@code PROCESS_STATUS} 仍为「审批中」(1) 时，视为<strong>审批通过</strong>。
+ * 因为引擎在 complete 任务时会先触发 end 监听器，此时状态尚未被改成 APPROVE(2)。
+ *
+ * <p>驳回/取消会在结束前先写入 REJECT(3)/CANCEL(4)，本类原样映射。
  *
  * <p><b>失败必须抛出</b>，使引擎事务回滚；禁止吞异常。
- * 异步 {@code BpmNotificationManager} 仅作辅路径，不可替代本 Delegate。
  */
 @Component("financeInvoiceApprovalOutcomeDelegate")
 @Slf4j
-public class FinanceInvoiceApprovalOutcomeDelegate implements JavaDelegate {
+public class FinanceInvoiceApprovalOutcomeDelegate implements JavaDelegate, ExecutionListener {
 
     /**
      * 与 BPM 引擎变量一致（见 BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_STATUS）
@@ -36,6 +43,16 @@ public class FinanceInvoiceApprovalOutcomeDelegate implements JavaDelegate {
 
     @Override
     public void execute(DelegateExecution execution) {
+        applyOutcome(execution);
+    }
+
+    @Override
+    public void notify(DelegateExecution execution) {
+        // ExecutionListener（end 事件）入口
+        applyOutcome(execution);
+    }
+
+    private void applyOutcome(DelegateExecution execution) {
         String businessKey = execution.getProcessInstanceBusinessKey();
         if (StrUtil.isBlank(businessKey)) {
             throw new IllegalStateException(
@@ -58,26 +75,33 @@ public class FinanceInvoiceApprovalOutcomeDelegate implements JavaDelegate {
                             + statusVar + " to invoice approval outcome");
         }
 
-        log.info("[execute][appId({}) processInstanceId({}) PROCESS_STATUS={} -> {}]",
+        log.info("[applyOutcome][appId({}) processInstanceId({}) PROCESS_STATUS={} -> {}]",
                 appId, execution.getProcessInstanceId(), processStatus, outcome);
         // 不 catch：ServiceException / 任意失败向上抛，阻断引擎事务
         invoiceApplicationService.onApprovalOutcome(appId, outcome);
     }
 
     /**
-     * BpmTaskStatusEnum → FinanceInvoiceApprovalStatusEnum 字符串。
+     * 流程实例状态 → 开票审批结果。
+     * <p>兼容 {@link BpmProcessInstanceStatusEnum} 与 {@link BpmTaskStatusEnum} 中相同取值。
      */
     public static String mapProcessStatusToOutcome(Integer processStatus) {
-        if (processStatus == null) {
-            return null;
-        }
-        if (BpmTaskStatusEnum.APPROVE.getStatus().equals(processStatus)) {
+        // 未写入或仍为「审批中」：流程已到达结束节点 ⇒ 视为通过
+        // （对齐 processProcessInstanceCompleted 的 RUNNING→APPROVE 语义）
+        if (processStatus == null
+                || BpmProcessInstanceStatusEnum.RUNNING.getStatus().equals(processStatus)) {
             return FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus();
         }
-        if (BpmTaskStatusEnum.REJECT.getStatus().equals(processStatus)) {
+        if (BpmProcessInstanceStatusEnum.APPROVE.getStatus().equals(processStatus)
+                || BpmTaskStatusEnum.APPROVE.getStatus().equals(processStatus)) {
+            return FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus();
+        }
+        if (BpmProcessInstanceStatusEnum.REJECT.getStatus().equals(processStatus)
+                || BpmTaskStatusEnum.REJECT.getStatus().equals(processStatus)) {
             return FinanceInvoiceApprovalStatusEnum.REJECTED.getStatus();
         }
-        if (BpmTaskStatusEnum.CANCEL.getStatus().equals(processStatus)
+        if (BpmProcessInstanceStatusEnum.CANCEL.getStatus().equals(processStatus)
+                || BpmTaskStatusEnum.CANCEL.getStatus().equals(processStatus)
                 || BpmTaskStatusEnum.WITHDRAW.getStatus().equals(processStatus)) {
             return FinanceInvoiceApprovalStatusEnum.CANCELLED.getStatus();
         }
