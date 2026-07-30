@@ -49,6 +49,10 @@ public class FinanceBusinessOrderRespVO {
     private BigDecimal confirmedClaimedAmount;
     @Schema(description = "剩余可认领余额 = 结算金额 - 已确认认领金额")
     private BigDecimal remainingBalance;
+    @Schema(description = "开票占用金额（提交即占）")
+    private BigDecimal invoicedOccupiedAmount;
+    @Schema(description = "可开余额 = 结算金额 - 开票占用金额")
+    private BigDecimal invoiceOpenableAmount;
     @Schema(description = "来源行哈希")
     private String sourceRowHash;
     @Schema(description = "创建时间")

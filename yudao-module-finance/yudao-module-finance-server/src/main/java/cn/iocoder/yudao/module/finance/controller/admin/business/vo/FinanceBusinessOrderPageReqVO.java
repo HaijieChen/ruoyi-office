@@ -35,5 +35,7 @@ public class FinanceBusinessOrderPageReqVO extends PageParam {
     @Schema(description = "下单日期范围")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY)
     private LocalDate[] orderDate;
+    @Schema(description = "仅可开余额 > 0 的商务单（settlement - invoiced_occupied > 0）")
+    private Boolean onlyOpenable;
 
 }

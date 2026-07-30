@@ -50,7 +50,8 @@ interface FormData {
 interface BoOption {
   label: string;
   value: number;
-  remainingBalance?: number;
+  /** 可开余额 = settlement - invoiced_occupied */
+  invoiceOpenableAmount?: number;
   settlementAmount?: number;
   orderNo?: string;
 }
@@ -67,6 +68,19 @@ const getTitle = computed(() =>
   isResubmit.value ? '驳回后重提开票申请' : '提交开票申请（无草稿）',
 );
 
+function openableOf(bo: {
+  invoiceOpenableAmount?: number;
+  settlementAmount?: number;
+  remainingBalance?: number;
+  invoicedOccupiedAmount?: number;
+}): number {
+  if (bo.invoiceOpenableAmount != null && !Number.isNaN(Number(bo.invoiceOpenableAmount))) {
+    return Number(bo.invoiceOpenableAmount);
+  }
+  // 兼容旧后端：无 invoiceOpenableAmount 时回退结算（不误用认领 remainingBalance）
+  return Number(bo.settlementAmount ?? 0);
+}
+
 const rules: Record<string, Rule[]> = {
   buyerName: [{ required: true, message: '购方名称不能为空' }],
   lines: [
@@ -74,12 +88,39 @@ const rules: Record<string, Rule[]> = {
       validator: async () => {
         const lines = formData.value.lines || [];
         if (!lines.length) return Promise.reject('请至少添加一行明细');
+        // 同商务单多行合计不得超可开
+        const sumByBo = new Map<number, number>();
         for (const [idx, line] of lines.entries()) {
           if (!line.businessOrderId) {
             return Promise.reject(`第 ${idx + 1} 行：请选择商务单`);
           }
           if (!line.amount || line.amount <= 0) {
             return Promise.reject(`第 ${idx + 1} 行：金额须大于 0`);
+          }
+          const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
+          const openable = opt ? Number(opt.invoiceOpenableAmount ?? 0) : undefined;
+          if (openable != null && openable <= 0) {
+            return Promise.reject(
+              `第 ${idx + 1} 行：该商务单无可开余额，请更换`,
+            );
+          }
+          if (openable != null && line.amount > openable + 1e-9) {
+            return Promise.reject(
+              `第 ${idx + 1} 行：开票金额不可超过可开余额 ¥${openable.toFixed(2)}`,
+            );
+          }
+          const prev = sumByBo.get(line.businessOrderId) || 0;
+          sumByBo.set(line.businessOrderId, prev + Number(line.amount));
+        }
+        for (const [boId, total] of sumByBo.entries()) {
+          const opt = boOptions.value.find((o) => o.value === boId);
+          if (!opt) continue;
+          const openable = Number(opt.invoiceOpenableAmount ?? 0);
+          if (total > openable + 1e-9) {
+            const label = opt.orderNo || `#${boId}`;
+            return Promise.reject(
+              `商务单 ${label}：多行合计 ¥${total.toFixed(2)} 超过可开余额 ¥${openable.toFixed(2)}`,
+            );
           }
         }
         return Promise.resolve();
@@ -93,11 +134,22 @@ function formatBoLabel(bo: {
   orderNo?: string;
   productName?: string;
   payerName?: string;
-  remainingBalance?: number;
+  invoiceOpenableAmount?: number;
   settlementAmount?: number;
 }) {
-  const remain = Number(bo.remainingBalance ?? bo.settlementAmount ?? 0);
-  return `${bo.orderNo || bo.id} | ${bo.productName || '-'} | ${bo.payerName || '-'} | 余额 ¥${remain.toFixed(2)}`;
+  const openable = openableOf(bo);
+  return `${bo.orderNo || bo.id} | ${bo.productName || '-'} | ${bo.payerName || '-'} | 可开 ¥${openable.toFixed(2)}`;
+}
+
+function mapBoOption(bo: any): BoOption {
+  const invoiceOpenableAmount = openableOf(bo);
+  return {
+    value: bo.id as number,
+    orderNo: bo.orderNo as string,
+    invoiceOpenableAmount,
+    settlementAmount: Number(bo.settlementAmount ?? 0),
+    label: formatBoLabel(bo),
+  };
 }
 
 function upsertBoOption(opt: BoOption) {
@@ -113,14 +165,9 @@ async function loadBusinessOrderOptions(keyword?: string) {
       pageNo: 1,
       pageSize: 50,
       orderNo: keyword?.trim() || undefined,
+      onlyOpenable: true,
     });
-    const mapped = (page?.list || []).map((bo: any) => ({
-      value: bo.id as number,
-      orderNo: bo.orderNo as string,
-      remainingBalance: Number(bo.remainingBalance ?? 0),
-      settlementAmount: Number(bo.settlementAmount ?? 0),
-      label: formatBoLabel(bo),
-    }));
+    const mapped = (page?.list || []).map((bo: any) => mapBoOption(bo));
     // 保留已选但不在当前页的选项，避免重提/筛选后丢 label
     const selectedIds = new Set(
       (formData.value.lines || [])
@@ -143,7 +190,7 @@ function onBoSearch(keyword: string) {
   }, 300);
 }
 
-/** 选中商务单：回填建议金额（余额优先，否则结算金额） */
+/** 选中商务单：回填建议金额 = 可开余额 */
 async function onBoChange(index: number, boId?: number) {
   if (!boId) return;
   const line = formData.value.lines[index];
@@ -152,30 +199,21 @@ async function onBoChange(index: number, boId?: number) {
   if (!opt) {
     try {
       const bo = await getBusinessOrder(boId);
-      opt = {
-        value: bo.id,
-        orderNo: bo.orderNo,
-        remainingBalance: Number(bo.remainingBalance ?? 0),
-        settlementAmount: Number(bo.settlementAmount ?? 0),
-        label: formatBoLabel(bo),
-      };
+      opt = mapBoOption(bo);
       upsertBoOption(opt);
     } catch {
       return;
     }
   }
   if (line.amount == null || line.amount <= 0) {
-    const suggest =
-      Number(opt.remainingBalance) > 0
-        ? Number(opt.remainingBalance)
-        : Number(opt.settlementAmount) || undefined;
-    if (suggest && suggest > 0) {
+    const suggest = Number(opt.invoiceOpenableAmount) || 0;
+    if (suggest > 0) {
       line.amount = Number(suggest.toFixed(2));
     }
   }
 }
 
-/** 重提时：补全当前行已选商务单的下拉项 */
+/** 重提时：补全当前行已选商务单的下拉项（即使可开=0 也保留，便于用户改金额或换单） */
 async function ensureSelectedBoOptions(lines: LineItem[]) {
   const ids = [
     ...new Set(
@@ -187,17 +225,12 @@ async function ensureSelectedBoOptions(lines: LineItem[]) {
       if (boOptions.value.some((o) => o.value === id)) return;
       try {
         const bo = await getBusinessOrder(id);
-        upsertBoOption({
-          value: bo.id,
-          orderNo: bo.orderNo,
-          remainingBalance: Number(bo.remainingBalance ?? 0),
-          settlementAmount: Number(bo.settlementAmount ?? 0),
-          label: formatBoLabel(bo),
-        });
+        upsertBoOption(mapBoOption(bo));
       } catch {
         upsertBoOption({
           value: id,
           label: `商务单 #${id}`,
+          invoiceOpenableAmount: 0,
         });
       }
     }),
@@ -285,7 +318,8 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal :title="getTitle" class="w-[800px]">
     <div class="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-800">
-      仅支持「提交即启流」。无草稿**按钮。审批在 BPM 完成；办票在审批通过后单独办理。
+      仅支持「提交即启流」。无草稿按钮。审批在 BPM 完成；办票在审批通过后单独办理。下拉仅展示可开余额
+      &gt; 0 的商务单；金额不得超过可开余额。
     </div>
     <Form
       ref="formRef"
@@ -333,7 +367,7 @@ const [Modal, modalApi] = useVbenModal({
                   :loading="loadingBo"
                   :options="boOptions"
                   option-filter-prop="label"
-                  placeholder="搜索单号并选择"
+                  placeholder="搜索单号（仅可开&gt;0）"
                   :filter-option="false"
                   @search="onBoSearch"
                   @change="(v: any) => onBoChange(index, v)"
@@ -349,7 +383,7 @@ const [Modal, modalApi] = useVbenModal({
                 <InputNumber
                   v-model:value="line.amount"
                   class="w-full"
-                  placeholder="金额"
+                  placeholder="不超过可开"
                   :min="0.01"
                   :precision="2"
                 />

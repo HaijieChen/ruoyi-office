@@ -39,8 +39,12 @@ export namespace FinanceBusinessOrderApi {
     settlementAmount: number;
     /** 已确认到款，只读 */
     confirmedClaimedAmount: number;
-    /** 剩余余额，只读 */
+    /** 剩余可认领余额 = 结算 - 已确认认领，只读 */
     remainingBalance: number;
+    /** 开票占用金额，只读 */
+    invoicedOccupiedAmount?: number;
+    /** 可开余额 = 结算 - 开票占用，只读 */
+    invoiceOpenableAmount?: number;
     /** 备注（可选） */
     remark?: string;
     /** 创建时间，只读 */
@@ -55,6 +59,8 @@ export namespace FinanceBusinessOrderApi {
     productName?: string;
     contactPerson?: string;
     contractProcessId?: string;
+    /** 仅可开余额 > 0（开票下拉用） */
+    onlyOpenable?: boolean;
   }
 
   /** 创建/编辑表单数据（排除服务端只读字段） */

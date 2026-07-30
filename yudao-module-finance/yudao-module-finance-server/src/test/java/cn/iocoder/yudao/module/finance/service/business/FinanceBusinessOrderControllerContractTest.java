@@ -100,7 +100,7 @@ class FinanceBusinessOrderControllerContractTest {
     @Test
     void pageRequestShouldFilterBySheetAndGeneratedFields() {
         assertEquals(Set.of("orderNo", "bankAccount", "contractProcessId", "productName", "payerName",
-                        "importerId", "importDate", "orderDate"),
+                        "importerId", "importDate", "orderDate", "onlyOpenable"),
                 declaredFields(FinanceBusinessOrderPageReqVO.class));
     }
 
@@ -137,6 +137,8 @@ class FinanceBusinessOrderControllerContractTest {
     @Test
     void responseVOShouldExposeRemainingBalanceField() {
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("remainingBalance"));
+        assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("invoiceOpenableAmount"));
+        assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("invoicedOccupiedAmount"));
     }
 
     @Test
@@ -146,11 +148,13 @@ class FinanceBusinessOrderControllerContractTest {
         FinanceBusinessOrderController controller = controller(service, adminUserApi);
         when(service.getBusinessOrder(1L)).thenReturn(FinanceBusinessOrderDO.builder()
                 .id(1L).settlementAmount(new BigDecimal("1000.00"))
-                .confirmedClaimedAmount(new BigDecimal("300.00")).build());
+                .confirmedClaimedAmount(new BigDecimal("300.00"))
+                .invoicedOccupiedAmount(new BigDecimal("200.00")).build());
 
         FinanceBusinessOrderRespVO response = controller.getBusinessOrder(1L).getData();
 
         assertEquals(new BigDecimal("700.00"), response.getRemainingBalance());
+        assertEquals(new BigDecimal("800.00"), response.getInvoiceOpenableAmount());
     }
 
     @Test
@@ -162,11 +166,13 @@ class FinanceBusinessOrderControllerContractTest {
         when(service.getBusinessOrderPage(request)).thenReturn(
                 new PageResult<>(List.of(FinanceBusinessOrderDO.builder()
                         .id(1L).settlementAmount(new BigDecimal("1000.00"))
-                        .confirmedClaimedAmount(new BigDecimal("300.00")).build()), 1L));
+                        .confirmedClaimedAmount(new BigDecimal("300.00"))
+                        .invoicedOccupiedAmount(new BigDecimal("200.00")).build()), 1L));
 
         PageResult<FinanceBusinessOrderRespVO> response = controller.getBusinessOrderPage(request).getData();
 
         assertEquals(new BigDecimal("700.00"), response.getList().get(0).getRemainingBalance());
+        assertEquals(new BigDecimal("800.00"), response.getList().get(0).getInvoiceOpenableAmount());
     }
 
     private static FinanceBusinessOrderController controller(FinanceBusinessOrderService service,

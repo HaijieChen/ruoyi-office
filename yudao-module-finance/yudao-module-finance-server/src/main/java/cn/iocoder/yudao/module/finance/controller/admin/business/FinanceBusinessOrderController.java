@@ -164,6 +164,12 @@ public class FinanceBusinessOrderController {
         if (settlement != null && claimed != null) {
             respVO.setRemainingBalance(settlement.subtract(claimed));
         }
+        // 可开余额 = 结算 - 开票占用（与 CAS increaseInvoicedOccupiedAmount 口径一致）
+        if (settlement != null) {
+            BigDecimal occupied = respVO.getInvoicedOccupiedAmount() != null
+                    ? respVO.getInvoicedOccupiedAmount() : BigDecimal.ZERO;
+            respVO.setInvoiceOpenableAmount(settlement.subtract(occupied));
+        }
     }
 
 }

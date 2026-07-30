@@ -17,7 +17,7 @@ import java.util.List;
 public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessOrderDO> {
 
     default PageResult<FinanceBusinessOrderDO> selectPage(FinanceBusinessOrderPageReqVO reqVO) {
-        return selectPage(reqVO, new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
+        MPJLambdaWrapperX<FinanceBusinessOrderDO> wrapper = new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
                 .likeIfPresent(FinanceBusinessOrderDO::getOrderNo, reqVO.getOrderNo())
                 .likeIfPresent(FinanceBusinessOrderDO::getBankAccount, reqVO.getBankAccount())
                 .likeIfPresent(FinanceBusinessOrderDO::getContractProcessId, reqVO.getContractProcessId())
@@ -25,8 +25,12 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
                 .likeIfPresent(FinanceBusinessOrderDO::getPayerName, reqVO.getPayerName())
                 .eqIfPresent(FinanceBusinessOrderDO::getImporterId, reqVO.getImporterId())
                 .betweenIfPresent(FinanceBusinessOrderDO::getImportDate, reqVO.getImportDate())
-                .betweenIfPresent(FinanceBusinessOrderDO::getOrderDate, reqVO.getOrderDate())
-                .orderByDesc(FinanceBusinessOrderDO::getId));
+                .betweenIfPresent(FinanceBusinessOrderDO::getOrderDate, reqVO.getOrderDate());
+        // 可开余额 > 0：settlement_amount - IFNULL(invoiced_occupied_amount,0) > 0
+        if (Boolean.TRUE.equals(reqVO.getOnlyOpenable())) {
+            wrapper.apply("settlement_amount > IFNULL(invoiced_occupied_amount, 0)");
+        }
+        return selectPage(reqVO, wrapper.orderByDesc(FinanceBusinessOrderDO::getId));
     }
 
     default PageResult<FinanceBusinessOrderDO> selectClaimablePage(FinanceBusinessOrderPageReqVO reqVO,
