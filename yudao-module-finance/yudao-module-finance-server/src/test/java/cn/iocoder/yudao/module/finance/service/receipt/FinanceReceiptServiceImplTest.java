@@ -83,6 +83,43 @@ class FinanceReceiptServiceImplTest {
     }
 
     @Test
+    void importReceiptListShouldAcceptDateOnlyTextAndDateTimeText() {
+        when(receiptNoRedisDAO.generate(LocalDate.now())).thenReturn("RC-DATE-1", "RC-DATE-2");
+        when(receiptMapper.selectByBankSerialNo(any())).thenReturn(null);
+        FinanceReceiptImportExcelVO dateOnly = row("招商银行 1234", "BSN-DATE-1", BigDecimal.ONE);
+        dateOnly.setTransactionDate("2026-05-25");
+        FinanceReceiptImportExcelVO dateTime = row("招商银行 1234", "BSN-DATE-2", BigDecimal.TEN);
+        dateTime.setTransactionDate("2026-05-25 10:15:30");
+
+        FinanceReceiptImportRespVO respVO = receiptService.importReceiptList(List.of(dateOnly, dateTime), 100L);
+
+        assertEquals(List.of("RC-DATE-1", "RC-DATE-2"), respVO.getReceiptNos());
+        assertTrue(respVO.getFailureRows().isEmpty());
+        verify(receiptMapper).insert(argThat((FinanceReceiptDO r) ->
+                LocalDateTime.of(2026, 5, 25, 0, 0, 0).equals(r.getTransactionDate())
+                        && "BSN-DATE-1".equals(r.getBankSerialNo())));
+        verify(receiptMapper).insert(argThat((FinanceReceiptDO r) ->
+                LocalDateTime.of(2026, 5, 25, 10, 15, 30).equals(r.getTransactionDate())
+                        && "BSN-DATE-2".equals(r.getBankSerialNo())));
+    }
+
+    @Test
+    void importReceiptListShouldReturnRowFailureForInvalidDateInsteadOfThrowing() {
+        FinanceReceiptImportExcelVO invalidDate = row("招商银行 1234", "BSN-BAD-DATE", BigDecimal.ONE);
+        invalidDate.setTransactionDate("not-a-date");
+        FinanceReceiptImportExcelVO blankDate = row("招商银行 1234", "BSN-BLANK-DATE", BigDecimal.ONE);
+        blankDate.setTransactionDate("  ");
+
+        FinanceReceiptImportRespVO respVO = receiptService.importReceiptList(
+                List.of(invalidDate, blankDate), 100L);
+
+        assertTrue(respVO.getReceiptNos().isEmpty());
+        assertEquals("交易日期格式错误", respVO.getFailureRows().get(2));
+        assertEquals("交易日期不能为空", respVO.getFailureRows().get(3));
+        verify(receiptMapper, never()).insert(any(FinanceReceiptDO.class));
+    }
+
+    @Test
     void getUnclaimedReceiptPageShouldDelegateToMapper() {
         FinanceReceiptPageReqVO reqVO = new FinanceReceiptPageReqVO();
         PageResult<FinanceReceiptDO> expected = new PageResult<>(List.of(FinanceReceiptDO.builder().id(1L).build()), 1L);
@@ -207,7 +244,7 @@ class FinanceReceiptServiceImplTest {
     private static FinanceReceiptImportExcelVO row(String bankAccount, String bankSerialNo, BigDecimal amount) {
         return FinanceReceiptImportExcelVO.builder()
                 .bankAccount(bankAccount)
-                .transactionDate(LocalDateTime.of(2026, 7, 22, 10, 30))
+                .transactionDate("2026-07-22 10:30:00")
                 .payerName("客户 A")
                 .payerAccount("6222000000000000000")
                 .transactionAmount(amount)

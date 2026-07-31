@@ -101,13 +101,15 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 respVO.getFailureRows().put(rowNumber, failureReason);
                 continue;
             }
+            // validate 已保证日期可解析
+            LocalDateTime transactionDate = FinanceReceiptImportDateParser.tryParse(importReceipt.getTransactionDate());
             if (receiptMapper.selectByBankSerialNo(importReceipt.getBankSerialNo()) != null) {
                 respVO.getFailureRows().put(rowNumber, "银行流水号已存在");
                 continue;
             }
             bankSerialNos.add(importReceipt.getBankSerialNo());
             String receiptNo = receiptNoRedisDAO.generate(LocalDate.now());
-            receiptMapper.insert(buildReceipt(importReceipt, importerId, receiptNo));
+            receiptMapper.insert(buildReceipt(importReceipt, importerId, receiptNo, transactionDate));
             respVO.getReceiptNos().add(receiptNo);
         }
         return respVO;
@@ -232,8 +234,11 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         if (StrUtil.isBlank(importReceipt.getBankAccount())) {
             return "银行账户不能为空";
         }
-        if (importReceipt.getTransactionDate() == null) {
+        if (FinanceReceiptImportDateParser.isBlank(importReceipt.getTransactionDate())) {
             return "交易日期不能为空";
+        }
+        if (FinanceReceiptImportDateParser.tryParse(importReceipt.getTransactionDate()) == null) {
+            return "交易日期格式错误";
         }
         if (StrUtil.isBlank(importReceipt.getPayerName())) {
             return "付款方名称不能为空";
@@ -250,13 +255,14 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         return null;
     }
 
-    private static FinanceReceiptDO buildReceipt(FinanceReceiptImportExcelVO importReceipt, Long importerId, String receiptNo) {
+    private static FinanceReceiptDO buildReceipt(FinanceReceiptImportExcelVO importReceipt, Long importerId,
+                                                 String receiptNo, LocalDateTime transactionDate) {
         return FinanceReceiptDO.builder()
                 .receiptNo(receiptNo)
                 .importDate(LocalDate.now())
                 .importerId(importerId)
                 .bankAccount(importReceipt.getBankAccount())
-                .transactionDate(importReceipt.getTransactionDate())
+                .transactionDate(transactionDate)
                 .payerName(importReceipt.getPayerName())
                 .payerAccount(importReceipt.getPayerAccount())
                 .transactionAmount(importReceipt.getTransactionAmount())

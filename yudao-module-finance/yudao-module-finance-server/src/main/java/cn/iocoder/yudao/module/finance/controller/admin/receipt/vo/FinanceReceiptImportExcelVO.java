@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -18,8 +17,15 @@ public class FinanceReceiptImportExcelVO {
     @ExcelProperty("银行账户")
     private String bankAccount;
 
-    @ExcelProperty("交易日期")
-    private LocalDateTime transactionDate;
+    /**
+     * 交易日期原始值（字符串）。
+     * <p>
+     * Excel 数值日期与文本日期均经 {@link FinanceReceiptImportDateStringConverter}
+     * 转为字符串，再由 {@code FinanceReceiptImportDateParser} 按档 1 规则解析，
+     * 避免 FastExcel 对 {@code yyyy-MM-dd} 文本直接转 LocalDateTime 抛 500。
+     */
+    @ExcelProperty(value = "交易日期", converter = FinanceReceiptImportDateStringConverter.class)
+    private String transactionDate;
 
     @ExcelProperty("付款方名称")
     private String payerName;

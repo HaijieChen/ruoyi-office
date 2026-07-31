@@ -20,7 +20,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -44,7 +43,7 @@ public class FinanceReceiptController {
         List<FinanceReceiptImportExcelVO> list = Arrays.asList(
                 FinanceReceiptImportExcelVO.builder()
                         .bankAccount("工行基本户")
-                        .transactionDate(LocalDateTime.of(2026, 7, 27, 10, 15, 0))
+                        .transactionDate("2026-07-27 10:15:00")
                         .payerName("示例付款方A")
                         .payerAccount("6222000011112222")
                         .transactionAmount(new BigDecimal("10000.00"))
@@ -53,7 +52,7 @@ public class FinanceReceiptController {
                         .build(),
                 FinanceReceiptImportExcelVO.builder()
                         .bankAccount("工行基本户")
-                        .transactionDate(LocalDateTime.of(2026, 7, 27, 11, 30, 0))
+                        .transactionDate("2026-07-27 11:30:00")
                         .payerName("示例付款方B")
                         .payerAccount("6222000033334444")
                         .transactionAmount(new BigDecimal("2500.50"))
