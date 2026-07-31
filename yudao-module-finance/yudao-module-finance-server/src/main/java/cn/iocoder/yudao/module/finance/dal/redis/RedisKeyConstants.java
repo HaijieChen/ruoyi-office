@@ -8,4 +8,6 @@ public interface RedisKeyConstants {
 
     String FINANCE_INVOICE_APPLICATION_NO = "finance_invoice_application_no:%s";
 
+    String FINANCE_CUSTOMER_COMPANY_NO = "finance_customer_company_no:%s";
+
 }

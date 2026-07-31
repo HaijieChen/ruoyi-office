@@ -5,7 +5,9 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
@@ -14,6 +16,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicati
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
+import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -22,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_OCCUPY_CONCURRENT;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_OCCUPY_EXCEED;
 import static cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationServiceImpl.PROCESS_KEY;
@@ -39,6 +43,7 @@ class FinanceInvoiceApplicationServiceImplTest {
     private FinanceBusinessOrderMapper businessOrderMapper;
     private FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private BpmProcessInstanceApi processInstanceApi;
+    private FinanceCustomerCompanyService customerCompanyService;
     private FinanceInvoiceApplicationServiceImpl service;
 
     @BeforeEach
@@ -48,10 +53,22 @@ class FinanceInvoiceApplicationServiceImplTest {
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
         applicationNoRedisDAO = mock(FinanceInvoiceApplicationNoRedisDAO.class);
         processInstanceApi = mock(BpmProcessInstanceApi.class);
+        customerCompanyService = mock(FinanceCustomerCompanyService.class);
         service = new FinanceInvoiceApplicationServiceImpl(applicationMapper, lineMapper, businessOrderMapper,
-                applicationNoRedisDAO, processInstanceApi);
+                applicationNoRedisDAO, processInstanceApi, customerCompanyService);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("INV-20260729-1");
+        when(customerCompanyService.getEnabledCustomerCompany(anyLong())).thenReturn(
+                FinanceCustomerCompanyDO.builder()
+                        .id(50L)
+                        .name("购方A")
+                        .taxNo("91110000MA0000000X")
+                        .address("北京市朝阳区")
+                        .phone("010-12345678")
+                        .bankName("开户行")
+                        .bankAccount("622200001111")
+                        .status(FinanceCustomerCompanyDO.STATUS_ENABLE)
+                        .build());
         doAnswer(invocation -> {
             FinanceInvoiceApplicationDO app = invocation.getArgument(0);
             app.setId(100L);
@@ -108,6 +125,10 @@ class FinanceInvoiceApplicationServiceImplTest {
         assertEquals(Boolean.FALSE, inserted.getVoided());
         assertEquals(200L, inserted.getApplicantUserId());
         assertEquals("购方A", inserted.getBuyerName());
+        assertEquals("91110000MA0000000X", inserted.getBuyerTaxNo());
+        assertEquals(50L, inserted.getCustomerCompanyId());
+        assertEquals("北京市朝阳区 010-12345678", inserted.getBuyerAddressPhone());
+        assertEquals("开户行 622200001111", inserted.getBuyerBankAccount());
 
         verify(lineMapper, times(3)).insert(any(FinanceInvoiceApplicationLineDO.class));
         // 同 BO 明细汇总后一次占用
@@ -150,10 +171,113 @@ class FinanceInvoiceApplicationServiceImplTest {
         verify(applicationMapper, never()).updateById(any(FinanceInvoiceApplicationDO.class));
     }
 
+    @Test
+    void createAndStartShouldRejectDisabledCustomerCompany() {
+        when(customerCompanyService.getEnabledCustomerCompany(99L)).thenThrow(
+                new ServiceException(INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED));
+        when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
+                order(10L, "100.00", "0.00")));
+
+        FinanceInvoiceApplicationCreateAndStartReqVO reqVO = req(line(10L, "10.00"));
+        reqVO.setCustomerCompanyId(99L);
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(reqVO, 200L));
+        assertEquals(INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED.getCode(), ex.getCode());
+        verify(applicationMapper, never()).insert(any(FinanceInvoiceApplicationDO.class));
+        verifyNoInteractions(processInstanceApi);
+    }
+
+    @Test
+    void resubmitShouldRefreshBuyerSnapshotFromCurrentCompanyIncludingEmptySegments() {
+        FinanceInvoiceApplicationDO rejected = pendingApp(100L);
+        rejected.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.REJECTED.getStatus());
+        rejected.setBuyerName("旧购方");
+        rejected.setBuyerTaxNo("OLDTAX");
+        rejected.setBuyerAddressPhone("旧地址 旧电话");
+        rejected.setBuyerBankAccount("旧行 旧账号");
+        rejected.setCustomerCompanyId(50L);
+
+        when(applicationMapper.selectById(100L)).thenReturn(rejected);
+        // 驳回后占用已空
+        when(lineMapper.selectListByApplicationId(100L)).thenReturn(List.of(
+                FinanceInvoiceApplicationLineDO.builder()
+                        .id(1L).applicationId(100L).businessOrderId(10L)
+                        .amount(new BigDecimal("30.00")).build()));
+        when(businessOrderMapper.selectById(10L)).thenReturn(order(10L, "200.00", "0.00"));
+        when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(order(10L, "200.00", "0.00")));
+        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("30.00")))).thenReturn(1);
+        when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("proc-resubmit"));
+
+        // 档案已改税号，且清空银行/地址 → 合成 null
+        when(customerCompanyService.getEnabledCustomerCompany(50L)).thenReturn(
+                FinanceCustomerCompanyDO.builder()
+                        .id(50L)
+                        .name("新购方")
+                        .taxNo("NEWTAX001")
+                        .address(null)
+                        .phone(null)
+                        .bankName(null)
+                        .bankAccount(null)
+                        .status(FinanceCustomerCompanyDO.STATUS_ENABLE)
+                        .build());
+
+        FinanceInvoiceApplicationResubmitReqVO resubmitReq = new FinanceInvoiceApplicationResubmitReqVO();
+        resubmitReq.setId(100L);
+        resubmitReq.setCustomerCompanyId(50L);
+        resubmitReq.setBuyerName("客户端伪造");
+        resubmitReq.setBuyerTaxNo("FAKE");
+        resubmitReq.setInvoiceCompany("开票公司");
+        resubmitReq.setInvoiceType("普票");
+        resubmitReq.setLines(List.of(line(10L, "30.00")));
+
+        service.resubmit(100L, resubmitReq, 200L);
+
+        ArgumentCaptor<FinanceInvoiceApplicationDO> updateCaptor =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
+        verify(applicationMapper, atLeastOnce()).updateById(updateCaptor.capture());
+        FinanceInvoiceApplicationDO headerUpdate = updateCaptor.getAllValues().stream()
+                .filter(u -> "新购方".equals(u.getBuyerName()) || "NEWTAX001".equals(u.getBuyerTaxNo()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("expected buyer snapshot header update"));
+        assertEquals("新购方", headerUpdate.getBuyerName());
+        assertEquals("NEWTAX001", headerUpdate.getBuyerTaxNo());
+        assertNull(headerUpdate.getBuyerAddressPhone());
+        assertNull(headerUpdate.getBuyerBankAccount());
+        assertEquals(50L, headerUpdate.getCustomerCompanyId());
+        assertEquals(FinanceInvoiceApprovalStatusEnum.PENDING.getStatus(), headerUpdate.getApprovalStatus());
+    }
+
+    @Test
+    void resubmitShouldRejectDisabledCustomerCompany() {
+        FinanceInvoiceApplicationDO rejected = pendingApp(100L);
+        rejected.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.REJECTED.getStatus());
+        when(applicationMapper.selectById(100L)).thenReturn(rejected);
+        when(lineMapper.selectListByApplicationId(100L)).thenReturn(List.of());
+        when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(order(10L, "100.00", "0.00")));
+        when(businessOrderMapper.selectById(10L)).thenReturn(order(10L, "100.00", "0.00"));
+        when(customerCompanyService.getEnabledCustomerCompany(88L)).thenThrow(
+                new ServiceException(INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED));
+
+        FinanceInvoiceApplicationResubmitReqVO resubmitReq = new FinanceInvoiceApplicationResubmitReqVO();
+        resubmitReq.setId(100L);
+        resubmitReq.setCustomerCompanyId(88L);
+        resubmitReq.setLines(List.of(line(10L, "10.00")));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.resubmit(100L, resubmitReq, 200L));
+        assertEquals(INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED.getCode(), ex.getCode());
+        verify(processInstanceApi, never()).createProcessInstance(anyLong(), any());
+    }
+
     private static FinanceInvoiceApplicationCreateAndStartReqVO req(
             FinanceInvoiceApplicationCreateAndStartReqVO.Line... lines) {
         FinanceInvoiceApplicationCreateAndStartReqVO reqVO = new FinanceInvoiceApplicationCreateAndStartReqVO();
-        reqVO.setBuyerName("购方A");
+        reqVO.setCustomerCompanyId(50L);
+        // 客户端伪造税项：服务端应以档案覆盖
+        reqVO.setBuyerName("伪造购方");
+        reqVO.setBuyerTaxNo("FAKE");
         reqVO.setInvoiceCompany("开票公司");
         reqVO.setInvoiceType("专票");
         reqVO.setLines(List.of(lines));

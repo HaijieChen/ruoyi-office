@@ -38,14 +38,16 @@ public class FinanceInvoiceApplicationRespVO {
     private Long invoiceCompanyDeptId;
     @Schema(description = "发票类型（字典 finance_invoice_type）")
     private String invoiceType;
-    @Schema(description = "购方名称")
+    @Schema(description = "购方名称（快照）")
     private String buyerName;
-    @Schema(description = "购方税号")
+    @Schema(description = "购方税号（快照）")
     private String buyerTaxNo;
-    @Schema(description = "购方地址电话")
+    @Schema(description = "购方地址电话（快照）")
     private String buyerAddressPhone;
-    @Schema(description = "购方银行账号")
+    @Schema(description = "购方银行账号（快照）")
     private String buyerBankAccount;
+    @Schema(description = "弱关联客户公司编号")
+    private Long customerCompanyId;
     @Schema(description = "特殊开票要求")
     private String specialInvoiceRequirement;
     @Schema(description = "税收分类/开票内容")

@@ -28,17 +28,20 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Schema(description = "发票类型：字典 finance_invoice_type 的 value（专票/普票）")
     private String invoiceType;
 
-    @Schema(description = "购方名称（提交快照）", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotEmpty(message = "购方名称不能为空")
+    @Schema(description = "客户公司编号（必须选启用档案；服务端写购方快照）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "必须选择客户公司")
+    private Long customerCompanyId;
+
+    @Schema(description = "购方名称（可选展示；服务端以档案覆盖）")
     private String buyerName;
 
-    @Schema(description = "购方税号（提交快照）")
+    @Schema(description = "购方税号（可选展示；服务端以档案覆盖）")
     private String buyerTaxNo;
 
-    @Schema(description = "购方地址电话（提交快照）")
+    @Schema(description = "购方地址电话（可选展示；服务端以档案覆盖）")
     private String buyerAddressPhone;
 
-    @Schema(description = "购方银行账号（提交快照）")
+    @Schema(description = "购方银行账号（可选展示；服务端以档案覆盖）")
     private String buyerBankAccount;
 
     @Schema(description = "特殊开票要求")

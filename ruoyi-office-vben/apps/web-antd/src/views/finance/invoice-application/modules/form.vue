@@ -23,6 +23,10 @@ import {
   getBusinessOrderPage,
 } from '#/api/finance/business-order';
 import {
+  getCustomerCompanySimpleList,
+} from '#/api/finance/customer-company';
+import type { FinanceCustomerCompanyApi } from '#/api/finance/customer-company';
+import {
   createAndStartInvoiceApplication,
   getInvoiceApplication,
   resubmitInvoiceApplication,
@@ -42,13 +46,18 @@ interface LineItem {
 interface FormData {
   id?: number;
   mode?: 'create' | 'resubmit';
+  customerCompanyId?: number;
   buyerName?: string;
   buyerTaxNo?: string;
+  buyerAddressPhone?: string;
+  buyerBankAccount?: string;
   /** 组织公司 deptId */
   invoiceCompanyDeptId?: number;
   /** 公司名称快照 */
   invoiceCompany?: string;
   invoiceType?: string;
+  /** 特别开票要求（单据级，不进客户档案） */
+  specialInvoiceRequirement?: string;
   remark?: string;
   lines: LineItem[];
 }
@@ -56,6 +65,14 @@ interface FormData {
 interface CompanyOption {
   label: string;
   value: number;
+}
+
+interface CustomerCompanyOption {
+  label: string;
+  value: number;
+  taxNo?: string;
+  addressPhone?: string;
+  bankAccount?: string;
 }
 
 interface BoOption {
@@ -71,8 +88,12 @@ const formRef = ref();
 const formData = ref<FormData>({ lines: [{}] });
 const boOptions = ref<BoOption[]>([]);
 const companyOptions = ref<CompanyOption[]>([]);
+const customerCompanyOptions = ref<CustomerCompanyOption[]>([]);
 const loadingBo = ref(false);
 const loadingCompany = ref(false);
+const loadingCustomerCompany = ref(false);
+/** resubmit 时原客户公司已停用：保留上次快照只读展示，须重选启用档 */
+const priorBuyerSnapshotHint = ref<string | undefined>();
 /** orderNo 远程搜索防抖 */
 let boSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -99,7 +120,9 @@ function openableOf(bo: {
 }
 
 const rules: Record<string, Rule[]> = {
-  buyerName: [{ required: true, message: '购方名称不能为空' }],
+  customerCompanyId: [
+    { required: true, message: '请选择客户公司', trigger: 'change' },
+  ],
   invoiceCompanyDeptId: [
     { required: true, message: '请选择开票公司', trigger: 'change' },
   ],
@@ -287,7 +310,7 @@ async function loadCompanyOptions() {
   }
 }
 
-/** 选中公司：同步名称快照 */
+/** 选中开票主体公司：同步名称快照 */
 function onCompanyChange(deptId?: number) {
   if (deptId == null) {
     formData.value.invoiceCompany = undefined;
@@ -297,21 +320,76 @@ function onCompanyChange(deptId?: number) {
   formData.value.invoiceCompany = opt?.label;
 }
 
+function joinNonEmpty(...parts: Array<string | undefined | null>): string {
+  return parts
+    .map((p) => (p == null ? '' : String(p).trim()))
+    .filter(Boolean)
+    .join(' ');
+}
+
+function mapCustomerCompanyOption(
+  c: FinanceCustomerCompanyApi.CustomerCompany,
+): CustomerCompanyOption {
+  return {
+    value: c.id,
+    label: c.name,
+    taxNo: c.taxNo,
+    addressPhone: joinNonEmpty(c.address, c.phone),
+    bankAccount: joinNonEmpty(c.bankName, c.bankAccount),
+  };
+}
+
+async function loadCustomerCompanyOptions() {
+  loadingCustomerCompany.value = true;
+  try {
+    const list = await getCustomerCompanySimpleList();
+    customerCompanyOptions.value = (list || []).map(mapCustomerCompanyOption);
+  } finally {
+    loadingCustomerCompany.value = false;
+  }
+}
+
+/** 选中购方客户公司：只读税项 */
+function onCustomerCompanyChange(id?: number) {
+  if (id == null) {
+    formData.value.buyerName = undefined;
+    formData.value.buyerTaxNo = undefined;
+    formData.value.buyerAddressPhone = undefined;
+    formData.value.buyerBankAccount = undefined;
+    return;
+  }
+  const opt = customerCompanyOptions.value.find((o) => o.value === id);
+  if (!opt) return;
+  priorBuyerSnapshotHint.value = undefined;
+  formData.value.buyerName = opt.label;
+  formData.value.buyerTaxNo = opt.taxNo;
+  formData.value.buyerAddressPhone = opt.addressPhone;
+  formData.value.buyerBankAccount = opt.bankAccount;
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) return;
     const data = modalApi.getData<FormData>() || {};
-    await Promise.all([loadBusinessOrderOptions(), loadCompanyOptions()]);
+    await Promise.all([
+      loadBusinessOrderOptions(),
+      loadCompanyOptions(),
+      loadCustomerCompanyOptions(),
+    ]);
     if (data.id && data.mode === 'resubmit') {
       const detail = await getInvoiceApplication(data.id);
       formData.value = {
         id: detail.id,
         mode: 'resubmit',
+        customerCompanyId: detail.customerCompanyId,
         buyerName: detail.buyerName,
         buyerTaxNo: detail.buyerTaxNo,
+        buyerAddressPhone: detail.buyerAddressPhone,
+        buyerBankAccount: detail.buyerBankAccount,
         invoiceCompanyDeptId: detail.invoiceCompanyDeptId,
         invoiceCompany: detail.invoiceCompany,
         invoiceType: detail.invoiceType,
+        specialInvoiceRequirement: detail.specialInvoiceRequirement,
         remark: detail.remark as any,
         lines: (detail.lines || []).map((l) => ({
           businessOrderId: l.businessOrderId,
@@ -319,6 +397,27 @@ const [Modal, modalApi] = useVbenModal({
           billingPeriod: l.billingPeriod,
         })),
       };
+      priorBuyerSnapshotHint.value = undefined;
+      // M1：原客户已停用（不在 simple-list）→ 清空 id，强制重选；税项快照仅作提示，不注入可选 option
+      if (formData.value.customerCompanyId != null) {
+        const stillEnabled = customerCompanyOptions.value.some(
+          (o) => o.value === formData.value.customerCompanyId,
+        );
+        if (!stillEnabled) {
+          const snapName =
+            formData.value.buyerName || `#${formData.value.customerCompanyId}`;
+          priorBuyerSnapshotHint.value = `原客户公司「${snapName}」已停用或不存在，请重新选择启用中的客户公司`;
+          formData.value.customerCompanyId = undefined;
+          // 清空只读税项，避免误以为可沿用停用档提交
+          formData.value.buyerName = undefined;
+          formData.value.buyerTaxNo = undefined;
+          formData.value.buyerAddressPhone = undefined;
+          formData.value.buyerBankAccount = undefined;
+          message.warning(priorBuyerSnapshotHint.value);
+        } else {
+          onCustomerCompanyChange(formData.value.customerCompanyId);
+        }
+      }
       // 历史单仅有公司名、无 deptId：补一条 option 便于展示
       if (
         formData.value.invoiceCompanyDeptId == null &&
@@ -347,25 +446,47 @@ const [Modal, modalApi] = useVbenModal({
       }
       await ensureSelectedBoOptions(formData.value.lines);
     } else {
+      priorBuyerSnapshotHint.value = undefined;
       formData.value = { mode: 'create', lines: [{}] };
     }
   },
   async onConfirm() {
     await formRef.value?.validate();
+    if (!formData.value.customerCompanyId) {
+      message.warning(
+        priorBuyerSnapshotHint.value || '请选择启用中的客户公司',
+      );
+      return;
+    }
+    // 仅允许 simple-list（启用）中的 id，防止陈旧状态提交
+    if (
+      !customerCompanyOptions.value.some(
+        (o) => o.value === formData.value.customerCompanyId,
+      )
+    ) {
+      message.warning('所选客户公司不可用，请从启用列表中重新选择');
+      formData.value.customerCompanyId = undefined;
+      return;
+    }
     if (!formData.value.invoiceCompanyDeptId) {
       message.warning('请选择开票公司');
       return;
     }
     // 再刷一次快照，防止 options 未同步
     onCompanyChange(formData.value.invoiceCompanyDeptId);
+    onCustomerCompanyChange(formData.value.customerCompanyId);
     modalApi.lock();
     try {
       const payload = {
-        buyerName: formData.value.buyerName as string,
+        customerCompanyId: formData.value.customerCompanyId as number,
+        buyerName: formData.value.buyerName,
         buyerTaxNo: formData.value.buyerTaxNo,
+        buyerAddressPhone: formData.value.buyerAddressPhone,
+        buyerBankAccount: formData.value.buyerBankAccount,
         invoiceCompanyDeptId: formData.value.invoiceCompanyDeptId,
         invoiceCompany: formData.value.invoiceCompany,
         invoiceType: formData.value.invoiceType,
+        specialInvoiceRequirement: formData.value.specialInvoiceRequirement,
         remark: formData.value.remark,
         lines: formData.value.lines.map((l) => ({
           businessOrderId: l.businessOrderId as number,
@@ -392,6 +513,8 @@ const [Modal, modalApi] = useVbenModal({
     formData.value = { lines: [{}] };
     boOptions.value = [];
     companyOptions.value = [];
+    customerCompanyOptions.value = [];
+    priorBuyerSnapshotHint.value = undefined;
     if (boSearchTimer) clearTimeout(boSearchTimer);
   },
 });
@@ -400,8 +523,14 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal :title="getTitle" class="w-[800px]">
     <div class="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-800">
-      仅支持「提交即启流」。无草稿按钮。审批在 BPM 完成；办票在审批通过后单独办理。下拉仅展示可开余额
-      &gt; 0 的商务单；金额不得超过可开余额。
+      仅支持「提交即启流」。无草稿。购方须从客户公司档案选择，税项只读（服务端以档案快照为准）。商务单仅可开余额
+      &gt; 0。
+    </div>
+    <div
+      v-if="priorBuyerSnapshotHint"
+      class="mb-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+      {{ priorBuyerSnapshotHint }}
     </div>
     <Form
       ref="formRef"
@@ -410,11 +539,43 @@ const [Modal, modalApi] = useVbenModal({
       :label-col="{ span: 5 }"
       :wrapper-col="{ span: 18 }"
     >
-      <Form.Item label="购方名称" name="buyerName" required>
-        <Input v-model:value="formData.buyerName" placeholder="提交快照" />
+      <Form.Item label="客户公司" name="customerCompanyId" required>
+        <Select
+          v-model:value="formData.customerCompanyId"
+          class="w-full"
+          show-search
+          allow-clear
+          :loading="loadingCustomerCompany"
+          :options="customerCompanyOptions"
+          option-filter-prop="label"
+          placeholder="从启用中的客户公司选择"
+          @change="(v: any) => onCustomerCompanyChange(v)"
+          @dropdown-visible-change="
+            (open: boolean) => {
+              if (open) loadCustomerCompanyOptions();
+            }
+          "
+        />
       </Form.Item>
-      <Form.Item label="购方税号" name="buyerTaxNo">
-        <Input v-model:value="formData.buyerTaxNo" />
+      <Form.Item label="购方名称">
+        <Input :value="formData.buyerName" disabled placeholder="选档后自动带出" />
+      </Form.Item>
+      <Form.Item label="购方税号">
+        <Input :value="formData.buyerTaxNo" disabled />
+      </Form.Item>
+      <Form.Item label="地址、电话">
+        <Input :value="formData.buyerAddressPhone" disabled />
+      </Form.Item>
+      <Form.Item label="开户行及账号">
+        <Input :value="formData.buyerBankAccount" disabled />
+      </Form.Item>
+      <Form.Item label="特别开票要求" name="specialInvoiceRequirement">
+        <Textarea
+          v-model:value="formData.specialInvoiceRequirement"
+          :rows="2"
+          placeholder="客户当次要求（可选，不进客户档案）"
+          allow-clear
+        />
       </Form.Item>
       <Form.Item label="开票公司" name="invoiceCompanyDeptId" required>
         <Select

@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoic
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
@@ -18,6 +19,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicati
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
+import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -62,17 +64,20 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     private final FinanceBusinessOrderMapper businessOrderMapper;
     private final FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private final BpmProcessInstanceApi processInstanceApi;
+    private final FinanceCustomerCompanyService customerCompanyService;
 
     public FinanceInvoiceApplicationServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
                                                 FinanceInvoiceApplicationLineMapper lineMapper,
                                                 FinanceBusinessOrderMapper businessOrderMapper,
                                                 FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO,
-                                                BpmProcessInstanceApi processInstanceApi) {
+                                                BpmProcessInstanceApi processInstanceApi,
+                                                FinanceCustomerCompanyService customerCompanyService) {
         this.applicationMapper = applicationMapper;
         this.lineMapper = lineMapper;
         this.businessOrderMapper = businessOrderMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
+        this.customerCompanyService = customerCompanyService;
     }
 
     @Override
@@ -110,6 +115,9 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             }
         }
 
+        // 1b. 客户公司：服务端权威快照
+        BuyerSnapshot buyerSnapshot = resolveBuyerSnapshot(reqVO.getCustomerCompanyId());
+
         // 2. 写主表
         String applicationNo = applicationNoRedisDAO.generate(LocalDate.now());
         FinanceInvoiceApplicationDO application = FinanceInvoiceApplicationDO.builder()
@@ -124,10 +132,11 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .invoiceCompany(reqVO.getInvoiceCompany())
                 .invoiceCompanyDeptId(reqVO.getInvoiceCompanyDeptId())
                 .invoiceType(reqVO.getInvoiceType())
-                .buyerName(reqVO.getBuyerName())
-                .buyerTaxNo(reqVO.getBuyerTaxNo())
-                .buyerAddressPhone(reqVO.getBuyerAddressPhone())
-                .buyerBankAccount(reqVO.getBuyerBankAccount())
+                .buyerName(buyerSnapshot.buyerName())
+                .buyerTaxNo(buyerSnapshot.buyerTaxNo())
+                .buyerAddressPhone(buyerSnapshot.buyerAddressPhone())
+                .buyerBankAccount(buyerSnapshot.buyerBankAccount())
+                .customerCompanyId(buyerSnapshot.customerCompanyId())
                 .specialInvoiceRequirement(reqVO.getSpecialInvoiceRequirement())
                 .taxContent(reqVO.getTaxContent())
                 .taxRate(reqVO.getTaxRate())
@@ -301,7 +310,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             sort++;
         }
 
-        // 4. 更新表头快照 + 回到 PENDING
+        // 4. 更新表头快照 + 回到 PENDING（购方以当前启用档案为准）
+        BuyerSnapshot buyerSnapshot = resolveBuyerSnapshot(reqVO.getCustomerCompanyId());
         FinanceInvoiceApplicationDO headerUpdate = new FinanceInvoiceApplicationDO();
         headerUpdate.setId(appId);
         headerUpdate.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.PENDING.getStatus());
@@ -311,10 +321,11 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         headerUpdate.setInvoiceCompany(reqVO.getInvoiceCompany());
         headerUpdate.setInvoiceCompanyDeptId(reqVO.getInvoiceCompanyDeptId());
         headerUpdate.setInvoiceType(reqVO.getInvoiceType());
-        headerUpdate.setBuyerName(reqVO.getBuyerName());
-        headerUpdate.setBuyerTaxNo(reqVO.getBuyerTaxNo());
-        headerUpdate.setBuyerAddressPhone(reqVO.getBuyerAddressPhone());
-        headerUpdate.setBuyerBankAccount(reqVO.getBuyerBankAccount());
+        headerUpdate.setBuyerName(buyerSnapshot.buyerName());
+        headerUpdate.setBuyerTaxNo(buyerSnapshot.buyerTaxNo());
+        headerUpdate.setBuyerAddressPhone(buyerSnapshot.buyerAddressPhone());
+        headerUpdate.setBuyerBankAccount(buyerSnapshot.buyerBankAccount());
+        headerUpdate.setCustomerCompanyId(buyerSnapshot.customerCompanyId());
         headerUpdate.setSpecialInvoiceRequirement(reqVO.getSpecialInvoiceRequirement());
         headerUpdate.setTaxContent(reqVO.getTaxContent());
         headerUpdate.setTaxRate(reqVO.getTaxRate());
@@ -455,6 +466,20 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 throw exception(INVOICE_APPLICATION_RELEASE_OCCUPY_FAILED);
             }
         }
+    }
+
+    private BuyerSnapshot resolveBuyerSnapshot(Long customerCompanyId) {
+        FinanceCustomerCompanyDO company = customerCompanyService.getEnabledCustomerCompany(customerCompanyId);
+        return new BuyerSnapshot(
+                company.getId(),
+                company.getName(),
+                company.getTaxNo(),
+                FinanceCustomerCompanyService.composeBuyerAddressPhone(company),
+                FinanceCustomerCompanyService.composeBuyerBankAccount(company));
+    }
+
+    private record BuyerSnapshot(Long customerCompanyId, String buyerName, String buyerTaxNo,
+                                 String buyerAddressPhone, String buyerBankAccount) {
     }
 
     private Map<Long, BigDecimal> aggregateOccupyByLines(Long appId) {

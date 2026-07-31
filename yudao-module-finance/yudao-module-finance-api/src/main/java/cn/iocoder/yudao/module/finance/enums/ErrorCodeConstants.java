@@ -77,5 +77,16 @@ public interface ErrorCodeConstants {
             "仅审批通过且未作废的开票申请可办票");
     ErrorCode INVOICE_APPLICATION_LINE_ALREADY_ISSUED = new ErrorCode(1_040_003_011,
             "该明细已开票，一期一行仅允许一张物理票");
+    ErrorCode INVOICE_APPLICATION_CUSTOMER_COMPANY_REQUIRED = new ErrorCode(1_040_003_012,
+            "必须选择启用中的客户公司");
+    ErrorCode INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED = new ErrorCode(1_040_003_013,
+            "客户公司已停用，请重新选择");
+
+    // ========== 客户公司 1-040-004-000 ==========
+    ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");
+    ErrorCode CUSTOMER_COMPANY_TAX_NO_EXISTS = new ErrorCode(1_040_004_001, "纳税人识别号已存在");
+    ErrorCode CUSTOMER_COMPANY_NAME_REQUIRED = new ErrorCode(1_040_004_002, "客户公司名称不能为空");
+    ErrorCode CUSTOMER_COMPANY_TAX_NO_REQUIRED = new ErrorCode(1_040_004_003, "纳税人识别号不能为空");
+    ErrorCode CUSTOMER_COMPANY_STATUS_INVALID = new ErrorCode(1_040_004_004, "客户公司状态无效");
 
 }

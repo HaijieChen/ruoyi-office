@@ -35,6 +35,12 @@ export namespace FinanceInvoiceApplicationApi {
     applicantUserId: number;
     buyerName?: string;
     buyerTaxNo?: string;
+    buyerAddressPhone?: string;
+    buyerBankAccount?: string;
+    /** 弱关联客户公司 */
+    customerCompanyId?: number;
+    specialInvoiceRequirement?: string;
+    remark?: string;
     invoiceCompany?: string;
     /** 开票公司组织部门 id */
     invoiceCompanyDeptId?: number;
@@ -49,10 +55,13 @@ export namespace FinanceInvoiceApplicationApi {
     invoiceCompany?: string;
     invoiceCompanyDeptId?: number;
     invoiceType?: string;
-    buyerName: string;
+    /** 必选启用客户公司；服务端写 buyer 快照 */
+    customerCompanyId: number;
+    buyerName?: string;
     buyerTaxNo?: string;
     buyerAddressPhone?: string;
     buyerBankAccount?: string;
+    /** 特别开票要求（单据级） */
     specialInvoiceRequirement?: string;
     taxContent?: string;
     taxRate?: number;
