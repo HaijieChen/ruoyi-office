@@ -119,6 +119,43 @@ function openableOf(bo: {
   return Number(bo.settlementAmount ?? 0);
 }
 
+/**
+ * 明细行金额上限（绑定 InputNumber max / 校验）。
+ * 关键：可开未知时返回 undefined，**绝不返回 0**——
+ * max=0 且 min=0.01 会形成非法区间，Chrome a11y 显示 valuemax=0，步进/提交易异常。
+ */
+function lineAmountMax(line?: LineItem): number | undefined {
+  if (!line?.businessOrderId) {
+    return undefined;
+  }
+  const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
+  if (!opt) {
+    return undefined;
+  }
+  // 仅当选项明确带了可开数字时才限制；缺失则不设 max（避免假 0）
+  if (opt.invoiceOpenableAmount == null || Number.isNaN(Number(opt.invoiceOpenableAmount))) {
+    return undefined;
+  }
+  const openable = Number(opt.invoiceOpenableAmount);
+  if (!Number.isFinite(openable) || openable <= 0) {
+    return undefined;
+  }
+  return Number(openable.toFixed(2));
+}
+
+/** 行可开余额：有有效数字返回 number；选项缺失或未知返回 undefined（勿用 ?? 0 抹平） */
+function lineOpenableAmount(line?: LineItem): number | undefined {
+  if (!line?.businessOrderId) {
+    return undefined;
+  }
+  const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
+  if (!opt || opt.invoiceOpenableAmount == null) {
+    return undefined;
+  }
+  const n = Number(opt.invoiceOpenableAmount);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 const rules: Record<string, Rule[]> = {
   customerCompanyId: [
     { required: true, message: '请选择客户公司', trigger: 'change' },
@@ -143,8 +180,8 @@ const rules: Record<string, Rule[]> = {
           if (!line.amount || line.amount <= 0) {
             return Promise.reject(`第 ${idx + 1} 行：金额须大于 0`);
           }
-          const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
-          const openable = opt ? Number(opt.invoiceOpenableAmount ?? 0) : undefined;
+          const openable = lineOpenableAmount(line);
+          // 明确可开为 0 才拦；未知（undefined）不在此当成 0 误杀（重提兜底项无 openable 时）
           if (openable != null && openable <= 0) {
             return Promise.reject(
               `第 ${idx + 1} 行：该商务单无可开余额，请更换`,
@@ -160,8 +197,9 @@ const rules: Record<string, Rule[]> = {
         }
         for (const [boId, total] of sumByBo.entries()) {
           const opt = boOptions.value.find((o) => o.value === boId);
-          if (!opt) continue;
-          const openable = Number(opt.invoiceOpenableAmount ?? 0);
+          if (!opt || opt.invoiceOpenableAmount == null) continue;
+          const openable = Number(opt.invoiceOpenableAmount);
+          if (!Number.isFinite(openable)) continue;
           if (total > openable + 1e-9) {
             const label = opt.orderNo || `#${boId}`;
             return Promise.reject(
@@ -273,10 +311,11 @@ async function ensureSelectedBoOptions(lines: LineItem[]) {
         const bo = await getBusinessOrder(id);
         upsertBoOption(mapBoOption(bo));
       } catch {
+        // 不要写 openable=0：会被校验当成「无可开余额」，且 InputNumber max=0 与 min=0.01 冲突
         upsertBoOption({
           value: id,
           label: `商务单 #${id}`,
-          invoiceOpenableAmount: 0,
+          invoiceOpenableAmount: undefined,
         });
       }
     }),
@@ -649,6 +688,7 @@ const [Modal, modalApi] = useVbenModal({
                   class="w-full"
                   placeholder="不超过可开"
                   :min="0.01"
+                  :max="lineAmountMax(line)"
                   :precision="2"
                 />
               </div>
