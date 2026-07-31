@@ -20,6 +20,29 @@ export function registerComponent(componentPath: string) {
   }
 }
 
+/**
+ * 解析「路由 path + 可选 query」字符串，供 BPM 自定义 create 路径使用。
+ * 例：/finance/invoice-application?openCreate=1
+ */
+export function parsePathWithQuery(raw: string): {
+  path: string;
+  query: Record<string, string>;
+} {
+  if (!raw) {
+    return { path: '/', query: {} };
+  }
+  const qIndex = raw.indexOf('?');
+  if (qIndex < 0) {
+    return { path: raw, query: {} };
+  }
+  const path = raw.slice(0, qIndex) || '/';
+  const query: Record<string, string> = {};
+  new URLSearchParams(raw.slice(qIndex + 1)).forEach((value, key) => {
+    query[key] = value;
+  });
+  return { path, query };
+}
+
 export const getRawRoute = (
   route: RouteLocationNormalized,
 ): RouteLocationNormalized => {

@@ -35,6 +35,7 @@ import {
   updateModelState,
 } from '#/api/bpm/model';
 import { $t } from '#/locales';
+import { parsePathWithQuery } from '#/utils';
 
 import CategoryRenameForm from '../../category/modules/rename-form.vue';
 import FormCreateDetail from '../../form/modules/detail.vue';
@@ -244,10 +245,9 @@ async function handleFormDetail(row: any) {
       id: row.formId,
     };
     formCreateDetailModalApi.setData(data).open();
-  } else {
-    await router.push({
-      path: row.formCustomCreatePath,
-    });
+  } else if (row.formCustomCreatePath) {
+    const { path, query } = parsePathWithQuery(row.formCustomCreatePath);
+    await router.push({ path, query });
   }
 }
 

@@ -2,6 +2,9 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { FinanceInvoiceApplicationApi } from '#/api/finance/invoice-application';
 
+import { nextTick, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -15,6 +18,9 @@ import FormModal from './modules/form.vue';
 import IssueModal from './modules/issue-form.vue';
 
 defineOptions({ name: 'FinanceInvoiceApplication' });
+
+const route = useRoute();
+const router = useRouter();
 
 const [CreateModal, createModalApi] = useVbenModal({
   connectedComponent: FormModal,
@@ -34,6 +40,38 @@ function handleCreate() {
   createModalApi.setData({});
   createModalApi.open();
 }
+
+/**
+ * 发起流程 catalog：formCustomCreatePath =
+ * /finance/invoice-application?openCreate=1
+ * 进入列表后自动打开创建弹窗，并去掉 query 避免刷新重复弹。
+ */
+function shouldOpenCreateFromQuery() {
+  const raw = route.query.openCreate;
+  if (raw == null) return false;
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return v === '1' || v === 'true' || v === 'create';
+}
+
+async function consumeOpenCreateQuery() {
+  if (!shouldOpenCreateFromQuery()) return;
+  await nextTick();
+  handleCreate();
+  const nextQuery = { ...route.query };
+  delete nextQuery.openCreate;
+  await router.replace({ path: route.path, query: nextQuery });
+}
+
+onMounted(() => {
+  void consumeOpenCreateQuery();
+});
+
+watch(
+  () => route.query.openCreate,
+  () => {
+    void consumeOpenCreateQuery();
+  },
+);
 
 function handleResubmit(row: FinanceInvoiceApplicationApi.Application) {
   if (row.approvalStatus !== 'REJECTED') {

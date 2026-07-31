@@ -12,6 +12,7 @@ import { Button, Tooltip } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getProcessDefinitionPage } from '#/api/bpm/definition';
+import { parsePathWithQuery } from '#/utils';
 
 import FormCreateDetail from '../../form/modules/detail.vue';
 import { useGridColumns } from './data';
@@ -40,10 +41,9 @@ async function handleFormDetail(
       id: row.formId,
     };
     formCreateDetailModalApi.setData(data).open();
-  } else {
-    await router.push({
-      path: row.formCustomCreatePath,
-    });
+  } else if (row.formCustomCreatePath) {
+    const { path, query } = parsePathWithQuery(row.formCustomCreatePath);
+    await router.push({ path, query });
   }
 }
 

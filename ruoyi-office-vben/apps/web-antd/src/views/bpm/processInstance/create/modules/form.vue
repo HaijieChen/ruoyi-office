@@ -28,6 +28,7 @@ import {
   setConfAndFields2,
 } from '#/components/form-create';
 import { router } from '#/router';
+import { parsePathWithQuery } from '#/utils';
 import ProcessInstanceBpmnViewer from '#/views/bpm/processInstance/detail/modules/bpm-viewer.vue';
 import ProcessInstanceSimpleViewer from '#/views/bpm/processInstance/detail/modules/simple-bpm-viewer.vue';
 import ProcessInstanceTimeline from '#/views/bpm/processInstance/detail/modules/time-line.vue';
@@ -180,9 +181,11 @@ async function initProcessInfo(row: any, formVariables?: any) {
     // 情况二：业务表单
   } else if (row.formCustomCreatePath) {
     // 这里暂时无需加载流程图，因为跳出到另外个 Tab；
-    await router.push({
-      path: row.formCustomCreatePath,
-    });
+    // 支持 path?query（如开票 ?openCreate=1 自动弹创建窗）
+    const { path, query } = parsePathWithQuery(
+      row.formCustomCreatePath as string,
+    );
+    await router.push({ path, query });
   }
 }
 

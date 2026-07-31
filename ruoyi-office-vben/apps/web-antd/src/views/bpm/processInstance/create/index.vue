@@ -24,6 +24,7 @@ import { getCategorySimpleList } from '#/api/bpm/category';
 import { getProcessDefinitionList } from '#/api/bpm/definition';
 import { getProcessInstance } from '#/api/bpm/processInstance';
 import { router } from '#/router';
+import { parsePathWithQuery } from '#/utils';
 
 import ProcessDefinitionDetail from './modules/form.vue';
 
@@ -142,9 +143,9 @@ async function handleSelect(
 ) {
   if (row.formType === BpmModelFormType.CUSTOM) {
     if (row.formCustomCreatePath) {
-      await router.push({
-        path: row.formCustomCreatePath,
-      });
+      // 支持 path?query（如开票 /finance/invoice-application?openCreate=1）
+      const { path, query } = parsePathWithQuery(row.formCustomCreatePath);
+      await router.push({ path, query });
     } else {
       message.error('流程定义中未配置业务表单路径');
     }
