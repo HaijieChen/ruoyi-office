@@ -86,6 +86,24 @@ WHERE r.`deleted` = b'0' AND r.`code` = 'finance_admin' AND r.`tenant_id` = 1
             'finance:receipt-claim:reject',
             'finance:receipt-claim:revoke'
         )
+        -- 工作流程 / 审批中心（待办办理、已办、我的流程、抄送、发起）
+     OR (m.`parent_id` = 0 AND m.`path` = '/bpm')
+     OR m.`id` IN (
+            1200,  -- 审批中心
+            1201,  -- 我的流程
+            1207,  -- 待办任务
+            1208,  -- 已办任务
+            2713,  -- 抄送我的
+            2720   -- 发起流程
+        )
+     OR m.`permission` IN (
+            'bpm:process-instance:query',
+            'bpm:process-instance:create',
+            'bpm:process-instance:cancel',
+            'bpm:process-instance-cc:query',
+            'bpm:task:query',
+            'bpm:task:update'
+        )
   );
 
 -- ========== 3. 商务人员：到款只读 + 商务单维护 + 认领提交侧 ==========
@@ -127,5 +145,23 @@ WHERE r.`deleted` = b'0' AND r.`code` = 'business_staff' AND r.`tenant_id` = 1
             'finance:receipt-claim:create',
             'finance:receipt-claim:update',
             'finance:receipt-claim:resubmit'
+        )
+        -- 工作流程 / 审批中心（与 FA 同一套业务办理能力，不含流程管理配置）
+     OR (m.`parent_id` = 0 AND m.`path` = '/bpm')
+     OR m.`id` IN (
+            1200,  -- 审批中心
+            1201,  -- 我的流程
+            1207,  -- 待办任务
+            1208,  -- 已办任务
+            2713,  -- 抄送我的
+            2720   -- 发起流程
+        )
+     OR m.`permission` IN (
+            'bpm:process-instance:query',
+            'bpm:process-instance:create',
+            'bpm:process-instance:cancel',
+            'bpm:process-instance-cc:query',
+            'bpm:task:query',
+            'bpm:task:update'
         )
   );
