@@ -536,7 +536,11 @@ const [Modal, modalApi] = useVbenModal({
         })),
       };
       if (isResubmit.value && formData.value.id) {
-        await resubmitInvoiceApplication(formData.value.id, payload);
+        // ResubmitReqVO 要求 body 带 id（query 仅路由用）；缺 id 会 400「开票申请编号不能为空」
+        await resubmitInvoiceApplication(formData.value.id, {
+          ...payload,
+          id: formData.value.id,
+        });
         message.success('已重提并启动新审批');
       } else {
         await createAndStartInvoiceApplication(payload);
