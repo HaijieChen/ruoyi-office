@@ -123,10 +123,13 @@ export namespace BpmProcessInstanceApi {
 }
 
 /** 查询我的流程实例分页 */
-export async function getProcessInstanceMyPage(params: PageParam) {
+export async function getProcessInstanceMyPage(
+  params: PageParam,
+  options?: { hideErrorMessage?: boolean },
+) {
   return requestClient.get<PageResult<BpmProcessInstanceApi.ProcessInstance>>(
     '/bpm/process-instance/my-page',
-    { params },
+    { params, hideErrorMessage: options?.hideErrorMessage },
   );
 }
 
@@ -177,10 +180,13 @@ export async function getProcessInstance(id: number) {
 }
 
 /** 查询复制流程实例分页 */
-export async function getProcessInstanceCopyPage(params: PageParam) {
+export async function getProcessInstanceCopyPage(
+  params: PageParam,
+  options?: { hideErrorMessage?: boolean },
+) {
   return requestClient.get<PageResult<BpmProcessInstanceApi.ProcessInstance>>(
     '/bpm/process-instance/copy/page',
-    { params },
+    { params, hideErrorMessage: options?.hideErrorMessage },
   );
 }
 

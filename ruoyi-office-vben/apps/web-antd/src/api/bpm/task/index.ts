@@ -46,16 +46,24 @@ export namespace BpmTaskApi {
 }
 
 /** 查询待办任务分页 */
-export async function getTaskTodoPage(params: PageParam) {
+export async function getTaskTodoPage(
+  params: PageParam,
+  options?: { hideErrorMessage?: boolean },
+) {
   return requestClient.get<PageResult<BpmTaskApi.Task>>('/bpm/task/todo-page', {
     params,
+    hideErrorMessage: options?.hideErrorMessage,
   });
 }
 
 /** 查询已办任务分页 */
-export async function getTaskDonePage(params: PageParam) {
+export async function getTaskDonePage(
+  params: PageParam,
+  options?: { hideErrorMessage?: boolean },
+) {
   return requestClient.get<PageResult<BpmTaskApi.Task>>('/bpm/task/done-page', {
     params,
+    hideErrorMessage: options?.hideErrorMessage,
   });
 }
 

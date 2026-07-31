@@ -20,10 +20,13 @@ export namespace SystemNoticeApi {
 }
 
 /** 查询公告列表 */
-export function getNoticePage(params: PageParam) {
+export function getNoticePage(
+  params: PageParam,
+  options?: { hideErrorMessage?: boolean },
+) {
   return requestClient.get<PageResult<SystemNoticeApi.Notice>>(
     '/system/notice/page',
-    { params },
+    { params, hideErrorMessage: options?.hideErrorMessage },
   );
 }
 

@@ -308,6 +308,9 @@ const columns = computed(() => {
   return [...baseColumns, ...specialColumns, actionColumn];
 });
 
+// 工作台内嵌：无权限时静默空态，避免全局 toast「没有该操作权限」
+const silent = { hideErrorMessage: true as const };
+
 // 加载数据
 async function loadData(tab: TabKey) {
   loading.value = true;
@@ -316,28 +319,31 @@ async function loadData(tab: TabKey) {
     const pageSize = props.maxRecordNum || 10;
     switch (tab) {
       case 'copy': {
-        response = await getProcessInstanceCopyPage({
-          pageNo: 1,
-          pageSize,
-        });
+        response = await getProcessInstanceCopyPage(
+          { pageNo: 1, pageSize },
+          silent,
+        );
         taskList.value = response.list || [];
         statistics.value.copy = response.total || 0;
         break;
       }
       case 'done': {
-        response = await getTaskDonePage({ pageNo: 1, pageSize });
+        response = await getTaskDonePage({ pageNo: 1, pageSize }, silent);
         taskList.value = response.list || [];
         statistics.value.done = response.total || 0;
         break;
       }
       case 'myBill': {
-        response = await getProcessInstanceMyPage({ pageNo: 1, pageSize });
+        response = await getProcessInstanceMyPage(
+          { pageNo: 1, pageSize },
+          silent,
+        );
         taskList.value = response.list || [];
         statistics.value.myBill = response.total || 0;
         break;
       }
       case 'todo': {
-        response = await getTaskTodoPage({ pageNo: 1, pageSize });
+        response = await getTaskTodoPage({ pageNo: 1, pageSize }, silent);
         taskList.value = response.list || [];
         statistics.value.todo = response.total || 0;
         break;
@@ -347,6 +353,7 @@ async function loadData(tab: TabKey) {
     await nextTick();
   } catch (error) {
     console.error('加载任务数据失败:', error);
+    taskList.value = [];
     taskList.value = [];
   } finally {
     loading.value = false;
@@ -467,48 +474,45 @@ function handleViewMore() {
   }
 }
 
-// 初始化
+// 初始化：仅拉当前 tab；角标统计用 allSettled + 静默请求，避免无权限连环 toast
 onMounted(async () => {
   const currentTab = activeTab.value;
-
-  // 先加载当前tab的数据（使用loadData函数保证逻辑一致）
   await loadData(currentTab);
 
-  // 并行加载其他tab的统计数据
-  const otherTabs: TabKey[] = ['myBill', 'todo', 'done', 'copy'].filter(
+  const otherTabs: TabKey[] = (['myBill', 'todo', 'done', 'copy'] as TabKey[]).filter(
     (tab) => tab !== currentTab,
-  ) as TabKey[];
+  );
 
-  try {
-    const promises = otherTabs.map((tab) => {
+  const results = await Promise.allSettled(
+    otherTabs.map((tab) => {
       switch (tab) {
         case 'copy': {
-          return getProcessInstanceCopyPage({ pageNo: 1, pageSize: 1 });
+          return getProcessInstanceCopyPage({ pageNo: 1, pageSize: 1 }, silent);
         }
         case 'done': {
-          return getTaskDonePage({ pageNo: 1, pageSize: 1 });
+          return getTaskDonePage({ pageNo: 1, pageSize: 1 }, silent);
         }
         case 'myBill': {
-          return getProcessInstanceMyPage({ pageNo: 1, pageSize: 1 });
+          return getProcessInstanceMyPage({ pageNo: 1, pageSize: 1 }, silent);
         }
         case 'todo': {
-          return getTaskTodoPage({ pageNo: 1, pageSize: 1 });
+          return getTaskTodoPage({ pageNo: 1, pageSize: 1 }, silent);
         }
         default: {
           return Promise.resolve({ total: 0 });
         }
       }
-    });
+    }),
+  );
 
-    const results = await Promise.all(promises);
-
-    // 更新其他tab的统计数据
-    otherTabs.forEach((tab, index) => {
-      statistics.value[tab] = results[index]?.total || 0;
-    });
-  } catch (error) {
-    console.error('加载其他tab统计数据失败:', error);
-  }
+  otherTabs.forEach((tab, index) => {
+    const r = results[index];
+    if (r?.status === 'fulfilled') {
+      statistics.value[tab] = (r.value as { total?: number })?.total || 0;
+    } else {
+      statistics.value[tab] = 0;
+    }
+  });
 });
 </script>
 

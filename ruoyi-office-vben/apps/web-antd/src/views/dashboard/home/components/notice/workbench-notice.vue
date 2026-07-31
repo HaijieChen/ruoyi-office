@@ -53,15 +53,19 @@ function getNoticeTypeText(type: number) {
 async function loadNoticeList() {
   loading.value = true;
   try {
-    const response = await getNoticePage({
-      pageNo: 1,
-      pageSize: props.maxRecordNum,
-    });
+    const response = await getNoticePage(
+      {
+        pageNo: 1,
+        pageSize: props.maxRecordNum,
+      },
+      { hideErrorMessage: true },
+    );
     noticeList.value = response.list || [];
     total.value = response.total || 0;
   } catch (error) {
     console.error('加载通知公告失败:', error);
     noticeList.value = [];
+    total.value = 0;
   } finally {
     loading.value = false;
   }
