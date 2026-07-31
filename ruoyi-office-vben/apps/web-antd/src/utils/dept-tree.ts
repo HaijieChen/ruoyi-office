@@ -1,8 +1,9 @@
 import { handleTree } from '@vben/utils';
-import { getDeptList } from '#/api/system/dept';
+import { getSimpleDeptList } from '#/api/system/dept';
 
 /**
  * 获取指定公司下的所有部门（树形结构）
+ * 使用 /system/dept/simple-list（无 system:dept:query），供 FA/BS 等业务角色筛选。
  * @param companyId 公司ID
  * @returns 部门树形数据
  */
@@ -11,8 +12,8 @@ export async function getCompanyDeptTree(companyId: number) {
     return [];
   }
 
-  // 获取所有部门数据
-  const allDepts = await getDeptList();
+  // 启用部门精简列表（无需 system:dept:query）
+  const allDepts = await getSimpleDeptList();
   
   // 递归函数：获取指定节点下的所有子节点（包括自身）
   function getNodeWithChildren(depts: any[], nodeId: number): any[] {
@@ -72,8 +73,8 @@ export async function getCompanyDeptTreeWithoutRoot(companyId: number) {
     return [];
   }
 
-  // 获取所有部门数据
-  const allDepts = await getDeptList();
+  // 启用部门精简列表（无需 system:dept:query）
+  const allDepts = await getSimpleDeptList();
   
   // 递归函数：获取指定节点下的所有子节点（不包括自身）
   function getChildrenNodes(depts: any[], parentId: number): any[] {

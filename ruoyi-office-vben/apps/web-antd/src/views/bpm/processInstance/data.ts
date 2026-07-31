@@ -7,7 +7,7 @@ import { handleTree } from '@vben/utils';
 
 import { getCategorySimpleList } from '#/api/bpm/category';
 import { getSimpleProcessDefinitionList } from '#/api/bpm/definition';
-import { getCompanyList } from '#/api/system/dept';
+import { getSimpleCompanyList } from '#/api/system/dept';
 import { getRangePickerDefaultProps } from '#/utils';
 import { getCurrentUserCompanyDeptTree } from '#/utils/dept-tree';
 
@@ -102,7 +102,8 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         allowClear: true,
         api: async () => {
-          const data = await getCompanyList();
+          // simple-list：FA/BS 无 system:dept:query 时不 403
+          const data = await getSimpleCompanyList();
           return handleTree(data);
         },
         labelField: 'name',

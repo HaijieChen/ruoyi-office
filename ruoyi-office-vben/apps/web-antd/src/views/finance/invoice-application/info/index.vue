@@ -1,0 +1,206 @@
+<script lang="ts" setup>
+/**
+ * 开票申请 · BPM 自定义表单「查看」组件。
+ * 由 processInstance/detail 经 formCustomViewPath 动态加载，
+ * props.id = processInstance.businessKey（开票申请主键）。
+ * 只读展示；通过/驳回走详情页操作条，不在此页办票。
+ */
+import type { FinanceInvoiceApplicationApi } from '#/api/finance/invoice-application';
+
+import { onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+
+import { Descriptions, DescriptionsItem, Spin, Table, Tag, message } from 'ant-design-vue';
+
+import { getInvoiceApplication } from '#/api/finance/invoice-application';
+
+defineOptions({ name: 'FinanceInvoiceApplicationInfo' });
+
+const props = defineProps<{
+  activityNodes?: any[];
+  id?: number | string;
+  isApproval?: boolean;
+  nodeKey?: string;
+  nodeKeyName?: string;
+  processDefinition?: any;
+  processInstance?: any;
+}>();
+
+const route = useRoute();
+const loading = ref(false);
+const detail = ref<FinanceInvoiceApplicationApi.Application | null>(null);
+
+function resolveId(): number | undefined {
+  if (props.id != null && props.id !== '') {
+    const n = typeof props.id === 'string' ? Number(props.id) : props.id;
+    return Number.isFinite(n) ? n : undefined;
+  }
+  const q = route.query.id;
+  if (q != null && q !== '') {
+    const n = Number(q);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+const approvalLabel: Record<string, string> = {
+  PENDING: '审批中',
+  APPROVED: '已通过',
+  REJECTED: '已驳回',
+  CANCELLED: '已取消',
+};
+
+const issueLabel: Record<number, string> = {
+  0: '未开票',
+  1: '部分开票',
+  2: '全部开票',
+};
+
+const lineColumns = [
+  {
+    title: '商务单 ID',
+    dataIndex: 'businessOrderId',
+    key: 'businessOrderId',
+    width: 110,
+  },
+  {
+    title: '开票金额',
+    dataIndex: 'amount',
+    key: 'amount',
+    width: 120,
+    customRender: ({ text }: { text: number }) =>
+      text != null ? `¥${Number(text).toFixed(2)}` : '-',
+  },
+  {
+    title: '账期',
+    dataIndex: 'billingPeriod',
+    key: 'billingPeriod',
+    width: 120,
+  },
+  {
+    title: '开票公司',
+    dataIndex: 'invoiceCompany',
+    key: 'invoiceCompany',
+    ellipsis: true,
+  },
+  {
+    title: '发票类型',
+    dataIndex: 'invoiceType',
+    key: 'invoiceType',
+    width: 100,
+  },
+  {
+    title: '发票号',
+    dataIndex: 'invoiceNo',
+    key: 'invoiceNo',
+    width: 140,
+  },
+];
+
+async function loadData() {
+  const id = resolveId();
+  if (id == null) {
+    detail.value = null;
+    return;
+  }
+  loading.value = true;
+  try {
+    detail.value = await getInvoiceApplication(id);
+  } catch (error) {
+    detail.value = null;
+    const msg =
+      error instanceof Error ? error.message : '加载开票申请详情失败';
+    message.error(msg);
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadData();
+});
+
+watch(
+  () => props.id,
+  () => {
+    void loadData();
+  },
+);
+</script>
+
+<template>
+  <div class="invoice-application-info p-4">
+    <Spin :spinning="loading">
+      <template v-if="detail">
+        <div class="mb-4 flex items-center gap-2">
+          <span class="text-base font-medium">开票申请</span>
+          <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
+          <Tag>
+            {{ approvalLabel[detail.approvalStatus] || detail.approvalStatus }}
+          </Tag>
+          <Tag v-if="detail.voided" color="red">已作废</Tag>
+          <Tag v-else-if="detail.approvalStatus === 'APPROVED'">
+            {{ issueLabel[detail.issueStatus ?? 0] || '' }}
+          </Tag>
+        </div>
+
+        <Descriptions bordered :column="2" size="small" class="mb-4">
+          <DescriptionsItem label="申请单号">
+            {{ detail.applicationNo || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="价税合计">
+            {{
+              detail.totalAmount != null
+                ? `¥${Number(detail.totalAmount).toFixed(2)}`
+                : '-'
+            }}
+          </DescriptionsItem>
+          <DescriptionsItem label="购方名称">
+            {{ detail.buyerName || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="购方税号">
+            {{ detail.buyerTaxNo || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="地址电话" :span="2">
+            {{ detail.buyerAddressPhone || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="开户行账号" :span="2">
+            {{ detail.buyerBankAccount || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="开票公司">
+            {{ detail.invoiceCompany || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="发票类型">
+            {{ detail.invoiceType || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="特别开票要求" :span="2">
+            {{ detail.specialInvoiceRequirement || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="备注" :span="2">
+            {{ detail.remark || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="创建时间">
+            {{ detail.createTime || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="流程实例">
+            {{ detail.processInstanceId || '-' }}
+          </DescriptionsItem>
+        </Descriptions>
+
+        <div class="mb-2 text-sm font-medium">申请明细</div>
+        <Table
+          size="small"
+          :columns="lineColumns"
+          :data-source="detail.lines || []"
+          :pagination="false"
+          row-key="id"
+          bordered
+        />
+      </template>
+      <div v-else-if="!loading" class="text-gray-500">
+        未找到开票申请（id={{ resolveId() ?? '空' }}）。请确认流程
+        businessKey 与 formCustomViewPath 配置。
+      </div>
+    </Spin>
+  </div>
+</template>
