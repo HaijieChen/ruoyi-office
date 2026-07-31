@@ -2,7 +2,8 @@
 -- 职责分离（SoD）矩阵（2026-07-29 与 GPT 评审对齐）：
 --   finance_admin：银行到款全量；商务单只读；认领仅复核（confirm/reject/revoke/review）
 --   business_staff：银行到款只读；商务单维护；认领提交侧（create/update/resubmit/query）
--- 双方均含工作台 /dashboard + /workspace，避免 defaultHomePath=/workspace 登录 404。
+-- 双方均含工作台 /dashboard + /workspace + /home，避免 defaultHomePath=/home 登录 404。
+-- 可配首页 component=dashboard/home/index；旧 workspace 保留兼容（redirect→/home）。
 -- 注意：不要用「全部 finance:%」回灌 FA，会破坏 SoD。
 
 -- ========== 1. 创建/更新角色 ==========
@@ -56,8 +57,9 @@ CROSS JOIN `system_menu` m
 WHERE r.`deleted` = b'0' AND r.`code` = 'finance_admin' AND r.`tenant_id` = 1
   AND m.`deleted` = b'0'
   AND (
-        -- 工作台
+        -- 工作台（目录 + 可配首页 + 旧 workspace 兼容）
         (m.`parent_id` = 0 AND m.`path` = '/dashboard')
+     OR m.`component` = 'dashboard/home/index'
      OR m.`component` = 'dashboard/workspace/index'
         -- 财务管理目录
      OR (m.`parent_id` = 0 AND m.`path` = '/finance')
@@ -98,8 +100,9 @@ CROSS JOIN `system_menu` m
 WHERE r.`deleted` = b'0' AND r.`code` = 'business_staff' AND r.`tenant_id` = 1
   AND m.`deleted` = b'0'
   AND (
-        -- 工作台
+        -- 工作台（目录 + 可配首页 + 旧 workspace 兼容）
         (m.`parent_id` = 0 AND m.`path` = '/dashboard')
+     OR m.`component` = 'dashboard/home/index'
      OR m.`component` = 'dashboard/workspace/index'
         -- 目录/页面
      OR (m.`parent_id` = 0 AND m.`path` = '/finance')

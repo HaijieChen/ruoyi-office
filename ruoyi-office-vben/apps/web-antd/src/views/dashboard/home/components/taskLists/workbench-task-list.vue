@@ -23,7 +23,8 @@ const props = withDefaults(defineProps<Props>(), {
 type TabKey = 'copy' | 'done' | 'myBill' | 'todo';
 
 // 当前激活的Tab
-const activeTab = ref<TabKey>('myBill');
+// 产品：默认可配首页焦点在「待办」（tech-plan T3 / core-flows §4.2）
+const activeTab = ref<TabKey>('todo');
 
 // 加载状态
 const loading = ref(false);
