@@ -205,9 +205,9 @@ async function initData() {
   extraSettingRef.value?.initData();
 }
 
-/** 根据类型切换流程数据 */
+/** 根据类型切换流程数据（勿用 async getter，否则依赖追踪不稳定） */
 watch(
-  async () => formData.value.type,
+  () => [formData.value?.type, formData.value?.bpmnXml, formData.value?.simpleModel],
   () => {
     if (formData.value.type === BpmModelType.BPMN) {
       processData.value = formData.value.bpmnXml;
