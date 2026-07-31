@@ -1,9 +1,7 @@
 package cn.iocoder.yudao.module.finance.dal.dataobject.customer;
 
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
-import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.KeySequence;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
@@ -11,7 +9,8 @@ import lombok.*;
 /**
  * 财务客户公司（购方档案）
  *
- * <p>可选税项字段使用 ALWAYS：允许 FA 清空银行/地址等（review H1）。
+ * <p>可清空字段不要用 FieldStrategy.ALWAYS + 局部 updateById（如 updateStatus 只改 status
+ * 会把银行/地址刷空）。全量更新见 Service 中 LambdaUpdateWrapper 显式 set。
  */
 @TableName("finance_customer_company")
 @KeySequence("finance_customer_company_seq")
@@ -35,18 +34,11 @@ public class FinanceCustomerCompanyDO extends BaseDO {
     private String code;
     private String name;
     private String taxNo;
-    /** 可清空 */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String bankName;
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String bankAccount;
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String address;
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String phone;
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String contactName;
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String email;
     /** C1 固定 CUSTOMER */
     private String partyType;

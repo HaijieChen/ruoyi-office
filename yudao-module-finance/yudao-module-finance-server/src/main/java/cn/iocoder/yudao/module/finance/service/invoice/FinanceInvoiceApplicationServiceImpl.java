@@ -20,6 +20,7 @@ import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoR
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -310,31 +311,30 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             sort++;
         }
 
-        // 4. 更新表头快照 + 回到 PENDING（购方以当前启用档案为准）
+        // 4. 更新表头快照 + 回到 PENDING（购方以当前启用档案为准；可空列显式 set）
         BuyerSnapshot buyerSnapshot = resolveBuyerSnapshot(reqVO.getCustomerCompanyId());
-        FinanceInvoiceApplicationDO headerUpdate = new FinanceInvoiceApplicationDO();
-        headerUpdate.setId(appId);
-        headerUpdate.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.PENDING.getStatus());
-        headerUpdate.setIssueStatus(FinanceInvoiceIssueStatusEnum.NONE.getStatus());
-        headerUpdate.setTotalAmount(totalAmount);
-        headerUpdate.setExpectedInvoiceDate(reqVO.getExpectedInvoiceDate());
-        headerUpdate.setInvoiceCompany(reqVO.getInvoiceCompany());
-        headerUpdate.setInvoiceCompanyDeptId(reqVO.getInvoiceCompanyDeptId());
-        headerUpdate.setInvoiceType(reqVO.getInvoiceType());
-        headerUpdate.setBuyerName(buyerSnapshot.buyerName());
-        headerUpdate.setBuyerTaxNo(buyerSnapshot.buyerTaxNo());
-        headerUpdate.setBuyerAddressPhone(buyerSnapshot.buyerAddressPhone());
-        headerUpdate.setBuyerBankAccount(buyerSnapshot.buyerBankAccount());
-        headerUpdate.setCustomerCompanyId(buyerSnapshot.customerCompanyId());
-        headerUpdate.setSpecialInvoiceRequirement(reqVO.getSpecialInvoiceRequirement());
-        headerUpdate.setTaxContent(reqVO.getTaxContent());
-        headerUpdate.setTaxRate(reqVO.getTaxRate());
-        headerUpdate.setAmountExcludingTax(reqVO.getAmountExcludingTax());
-        headerUpdate.setTaxAmount(reqVO.getTaxAmount());
-        headerUpdate.setEvidenceFileUrl(reqVO.getEvidenceFileUrl());
-        headerUpdate.setRemark(reqVO.getRemark());
-        headerUpdate.setVoided(Boolean.FALSE);
-        applicationMapper.updateById(headerUpdate);
+        applicationMapper.update(null, new UpdateWrapper<FinanceInvoiceApplicationDO>()
+                .eq("id", appId)
+                .set("approval_status", FinanceInvoiceApprovalStatusEnum.PENDING.getStatus())
+                .set("issue_status", FinanceInvoiceIssueStatusEnum.NONE.getStatus())
+                .set("total_amount", totalAmount)
+                .set("expected_invoice_date", reqVO.getExpectedInvoiceDate())
+                .set("invoice_company", reqVO.getInvoiceCompany())
+                .set("invoice_company_dept_id", reqVO.getInvoiceCompanyDeptId())
+                .set("invoice_type", reqVO.getInvoiceType())
+                .set("buyer_name", buyerSnapshot.buyerName())
+                .set("buyer_tax_no", buyerSnapshot.buyerTaxNo())
+                .set("buyer_address_phone", buyerSnapshot.buyerAddressPhone())
+                .set("buyer_bank_account", buyerSnapshot.buyerBankAccount())
+                .set("customer_company_id", buyerSnapshot.customerCompanyId())
+                .set("special_invoice_requirement", reqVO.getSpecialInvoiceRequirement())
+                .set("tax_content", reqVO.getTaxContent())
+                .set("tax_rate", reqVO.getTaxRate())
+                .set("amount_excluding_tax", reqVO.getAmountExcludingTax())
+                .set("tax_amount", reqVO.getTaxAmount())
+                .set("evidence_file_url", reqVO.getEvidenceFileUrl())
+                .set("remark", reqVO.getRemark())
+                .set("voided", Boolean.FALSE));
 
         // 5. 再占
         increaseOccupy(newOccupyByBo);

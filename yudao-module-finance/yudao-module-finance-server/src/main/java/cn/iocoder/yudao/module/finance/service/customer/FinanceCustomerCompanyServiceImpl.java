@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCusto
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.customer.FinanceCustomerCompanyMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceCustomerCompanyNoRedisDAO;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -68,13 +69,20 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
         Integer status = updateReqVO.getStatus() != null ? updateReqVO.getStatus() : existing.getStatus();
         validateStatus(status);
 
-        FinanceCustomerCompanyDO update = buildFromSave(updateReqVO, name, taxNo);
-        update.setId(existing.getId());
-        update.setCode(existing.getCode());
-        update.setPartyType(FinanceCustomerCompanyDO.PARTY_TYPE_CUSTOMER);
-        update.setStatus(status);
+        // 显式 set 可空列，支持清空银行/地址；避免 updateById 跳过 null
         try {
-            customerCompanyMapper.updateById(update);
+            customerCompanyMapper.update(null, new UpdateWrapper<FinanceCustomerCompanyDO>()
+                    .eq("id", existing.getId())
+                    .set("name", name)
+                    .set("tax_no", taxNo)
+                    .set("bank_name", trimToNull(updateReqVO.getBankName()))
+                    .set("bank_account", trimToNull(updateReqVO.getBankAccount()))
+                    .set("address", trimToNull(updateReqVO.getAddress()))
+                    .set("phone", trimToNull(updateReqVO.getPhone()))
+                    .set("contact_name", trimToNull(updateReqVO.getContactName()))
+                    .set("email", trimToNull(updateReqVO.getEmail()))
+                    .set("party_type", FinanceCustomerCompanyDO.PARTY_TYPE_CUSTOMER)
+                    .set("status", status));
         } catch (DuplicateKeyException ex) {
             throw mapDuplicateKey(ex);
         }

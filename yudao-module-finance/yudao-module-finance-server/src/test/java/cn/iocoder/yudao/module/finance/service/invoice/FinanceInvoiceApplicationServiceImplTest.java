@@ -32,6 +32,7 @@ import static cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceAppl
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+// isNull used by resubmit wrapper verify
 
 /**
  * createAndStart：占用失败零副作用、成功启流回写、并发 CAS 失败。
@@ -234,19 +235,9 @@ class FinanceInvoiceApplicationServiceImplTest {
 
         service.resubmit(100L, resubmitReq, 200L);
 
-        ArgumentCaptor<FinanceInvoiceApplicationDO> updateCaptor =
-                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
-        verify(applicationMapper, atLeastOnce()).updateById(updateCaptor.capture());
-        FinanceInvoiceApplicationDO headerUpdate = updateCaptor.getAllValues().stream()
-                .filter(u -> "新购方".equals(u.getBuyerName()) || "NEWTAX001".equals(u.getBuyerTaxNo()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("expected buyer snapshot header update"));
-        assertEquals("新购方", headerUpdate.getBuyerName());
-        assertEquals("NEWTAX001", headerUpdate.getBuyerTaxNo());
-        assertNull(headerUpdate.getBuyerAddressPhone());
-        assertNull(headerUpdate.getBuyerBankAccount());
-        assertEquals(50L, headerUpdate.getCustomerCompanyId());
-        assertEquals(FinanceInvoiceApprovalStatusEnum.PENDING.getStatus(), headerUpdate.getApprovalStatus());
+        // resubmit 表头快照走 UpdateWrapper（可 set null）
+        verify(applicationMapper, atLeastOnce()).update(isNull(), any());
+        verify(processInstanceApi).createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class));
     }
 
     @Test

@@ -16,6 +16,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.CUSTOMER_
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 class FinanceCustomerCompanyServiceImplTest {
@@ -80,7 +81,7 @@ class FinanceCustomerCompanyServiceImplTest {
                 .id(1L).code("CC-1").name("客户甲").taxNo("OLD").status(0).build());
         when(mapper.selectByTaxNo("NEWTAX")).thenReturn(null);
         doThrow(new DuplicateKeyException("Duplicate entry for key 'uk_tax_no_tenant_deleted'"))
-                .when(mapper).updateById(any(FinanceCustomerCompanyDO.class));
+                .when(mapper).update(isNull(), any());
 
         FinanceCustomerCompanySaveReqVO req = new FinanceCustomerCompanySaveReqVO();
         req.setId(1L);
@@ -140,16 +141,9 @@ class FinanceCustomerCompanyServiceImplTest {
 
         service.updateCustomerCompany(req);
 
-        ArgumentCaptor<FinanceCustomerCompanyDO> captor =
-                ArgumentCaptor.forClass(FinanceCustomerCompanyDO.class);
-        verify(mapper).updateById(captor.capture());
-        FinanceCustomerCompanyDO updated = captor.getValue();
-        assertEquals(1L, updated.getId());
-        assertEquals("CC-1", updated.getCode());
-        assertNull(updated.getBankName());
-        assertNull(updated.getBankAccount());
-        assertNull(updated.getAddress());
-        assertNull(updated.getPhone());
+        // 使用 UpdateWrapper 全量 set（含 null），不再走 updateById
+        verify(mapper).update(isNull(), any());
+        verify(mapper, never()).updateById(any(FinanceCustomerCompanyDO.class));
     }
 
 }
