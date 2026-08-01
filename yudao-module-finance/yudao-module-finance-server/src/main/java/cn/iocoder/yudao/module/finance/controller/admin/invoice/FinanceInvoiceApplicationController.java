@@ -57,8 +57,27 @@ public class FinanceInvoiceApplicationController {
         return success(true);
     }
 
+    @PutMapping("/complete-issue")
+    @Operation(summary = "整单办票（多附件 replace，issue_status=FULL）")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:issue')")
+    public CommonResult<Boolean> completeIssue(
+            @Valid @RequestBody FinanceInvoiceApplicationCompleteIssueReqVO reqVO) {
+        invoiceApplicationService.completeIssue(reqVO);
+        return success(true);
+    }
+
+    @PostMapping("/complete-issue")
+    @Operation(summary = "整单办票（POST 别名）")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:issue')")
+    public CommonResult<Boolean> completeIssuePost(
+            @Valid @RequestBody FinanceInvoiceApplicationCompleteIssueReqVO reqVO) {
+        invoiceApplicationService.completeIssue(reqVO);
+        return success(true);
+    }
+
+    @Deprecated
     @PutMapping("/update-issue-progress")
-    @Operation(summary = "办票进度（一行一票）")
+    @Operation(summary = "办票进度（一行一票，已废弃，请用 complete-issue）")
     @PreAuthorize("@ss.hasPermission('finance:invoice-application:issue')")
     public CommonResult<Boolean> updateIssueProgress(
             @Valid @RequestBody FinanceInvoiceApplicationUpdateIssueProgressReqVO reqVO) {
@@ -66,8 +85,9 @@ public class FinanceInvoiceApplicationController {
         return success(true);
     }
 
+    @Deprecated
     @PostMapping("/update-issue-progress")
-    @Operation(summary = "办票进度（POST 别名）")
+    @Operation(summary = "办票进度（POST 别名，已废弃）")
     @PreAuthorize("@ss.hasPermission('finance:invoice-application:issue')")
     public CommonResult<Boolean> updateIssueProgressPost(
             @Valid @RequestBody FinanceInvoiceApplicationUpdateIssueProgressReqVO reqVO) {
@@ -93,6 +113,9 @@ public class FinanceInvoiceApplicationController {
         FinanceInvoiceApplicationRespVO respVO = BeanUtils.toBean(application, FinanceInvoiceApplicationRespVO.class);
         List<FinanceInvoiceApplicationLineDO> lines = invoiceApplicationService.getApplicationLines(id);
         respVO.setLines(BeanUtils.toBean(lines, FinanceInvoiceApplicationRespVO.Line.class));
+        respVO.setFiles(BeanUtils.toBean(
+                invoiceApplicationService.getApplicationFiles(id),
+                FinanceInvoiceApplicationRespVO.FileItem.class));
         return success(respVO);
     }
 

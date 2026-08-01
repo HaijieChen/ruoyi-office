@@ -93,6 +93,8 @@ public interface ErrorCodeConstants {
             "必须选择启用中的客户公司");
     ErrorCode INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED = new ErrorCode(1_040_003_013,
             "客户公司已停用，请重新选择");
+    ErrorCode INVOICE_APPLICATION_COMPLETE_ISSUE_FILES_EMPTY = new ErrorCode(1_040_003_014,
+            "整单办票至少需要一个发票附件");
 
     // ========== 客户公司 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");

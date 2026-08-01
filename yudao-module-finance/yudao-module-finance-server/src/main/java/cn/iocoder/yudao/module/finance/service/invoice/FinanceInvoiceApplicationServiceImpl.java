@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
@@ -12,8 +13,10 @@ import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoic
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationFileMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoRedisDAO;
@@ -42,7 +45,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
 /**
  * 开票申请 Service 实现。
  * <p>占用写路径：createAndStart / resubmit 增占；onApprovalOutcome(REJECTED|CANCELLED) / resubmit 释占。
- * <p>issue 写路径：仅 {@link #updateIssueProgress}。
+ * <p>issue 写路径：主路径 {@link #completeIssue}；兼容 {@link #updateIssueProgress}。
  */
 @Service
 @Validated
@@ -62,6 +65,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
 
     private final FinanceInvoiceApplicationMapper applicationMapper;
     private final FinanceInvoiceApplicationLineMapper lineMapper;
+    private final FinanceInvoiceApplicationFileMapper fileMapper;
     private final FinanceBusinessOrderMapper businessOrderMapper;
     private final FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private final BpmProcessInstanceApi processInstanceApi;
@@ -69,12 +73,14 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
 
     public FinanceInvoiceApplicationServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
                                                 FinanceInvoiceApplicationLineMapper lineMapper,
+                                                FinanceInvoiceApplicationFileMapper fileMapper,
                                                 FinanceBusinessOrderMapper businessOrderMapper,
                                                 FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO,
                                                 BpmProcessInstanceApi processInstanceApi,
                                                 FinanceCustomerCompanyService customerCompanyService) {
         this.applicationMapper = applicationMapper;
         this.lineMapper = lineMapper;
+        this.fileMapper = fileMapper;
         this.businessOrderMapper = businessOrderMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
@@ -358,6 +364,63 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void completeIssue(FinanceInvoiceApplicationCompleteIssueReqVO reqVO) {
+        FinanceInvoiceApplicationDO application = getApplication(reqVO.getApplicationId());
+        if (!FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus().equals(application.getApprovalStatus())
+                || Boolean.TRUE.equals(application.getVoided())) {
+            throw exception(INVOICE_APPLICATION_ISSUE_NOT_ALLOWED);
+        }
+        List<FinanceInvoiceApplicationCompleteIssueReqVO.FileItem> files = reqVO.getFiles();
+        if (CollUtil.isEmpty(files)) {
+            throw exception(INVOICE_APPLICATION_COMPLETE_ISSUE_FILES_EMPTY);
+        }
+        for (FinanceInvoiceApplicationCompleteIssueReqVO.FileItem file : files) {
+            if (file == null || StrUtil.isBlank(file.getUrl())) {
+                throw exception(INVOICE_APPLICATION_COMPLETE_ISSUE_FILES_EMPTY);
+            }
+        }
+
+        // 默认 replace：先软删旧附件再插入
+        fileMapper.deleteByApplicationId(reqVO.getApplicationId());
+        int sort = 0;
+        for (FinanceInvoiceApplicationCompleteIssueReqVO.FileItem file : files) {
+            FinanceInvoiceApplicationFileDO row = FinanceInvoiceApplicationFileDO.builder()
+                    .applicationId(reqVO.getApplicationId())
+                    .fileUrl(file.getUrl().trim())
+                    .fileName(StrUtil.blankToDefault(file.getName(), null))
+                    .sort(sort++)
+                    .build();
+            fileMapper.insert(row);
+        }
+
+        // I2：整单 FULL=2；再次办票仍保持 FULL，不降级
+        FinanceInvoiceApplicationDO appUpdate = new FinanceInvoiceApplicationDO();
+        appUpdate.setId(reqVO.getApplicationId());
+        appUpdate.setIssueStatus(FinanceInvoiceIssueStatusEnum.FULL.getStatus());
+        // invoiceNos 仅备注：若有值则写入首行 invoice_no 兼容展示（不强制 lineId）
+        if (CollUtil.isNotEmpty(reqVO.getInvoiceNos())) {
+            String joined = reqVO.getInvoiceNos().stream()
+                    .filter(StrUtil::isNotBlank)
+                    .map(String::trim)
+                    .collect(Collectors.joining(","));
+            if (StrUtil.isNotBlank(joined)) {
+                List<FinanceInvoiceApplicationLineDO> lines =
+                        lineMapper.selectListByApplicationId(reqVO.getApplicationId());
+                if (CollUtil.isNotEmpty(lines)) {
+                    FinanceInvoiceApplicationLineDO first = lines.get(0);
+                    FinanceInvoiceApplicationLineDO lineUpdate = new FinanceInvoiceApplicationLineDO();
+                    lineUpdate.setId(first.getId());
+                    lineUpdate.setInvoiceNo(joined);
+                    lineMapper.updateById(lineUpdate);
+                }
+            }
+        }
+        applicationMapper.updateById(appUpdate);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @Deprecated
     public void updateIssueProgress(FinanceInvoiceApplicationUpdateIssueProgressReqVO reqVO) {
         FinanceInvoiceApplicationDO application = getApplication(reqVO.getApplicationId());
         if (!FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus().equals(application.getApprovalStatus())
@@ -420,6 +483,11 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     @Override
     public List<FinanceInvoiceApplicationLineDO> getApplicationLines(Long applicationId) {
         return lineMapper.selectListByApplicationId(applicationId);
+    }
+
+    @Override
+    public List<FinanceInvoiceApplicationFileDO> getApplicationFiles(Long applicationId) {
+        return fileMapper.selectListByApplicationId(applicationId);
     }
 
     @Override

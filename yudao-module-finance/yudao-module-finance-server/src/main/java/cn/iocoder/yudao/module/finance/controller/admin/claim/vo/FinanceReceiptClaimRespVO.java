@@ -49,6 +49,10 @@ public class FinanceReceiptClaimRespVO {
         private Long invoiceApplicationId;
         @Schema(description = "开票申请单号")
         private String invoiceApplicationNo;
+        @Schema(description = "购方名称（开票快照）")
+        private String buyerName;
+        @Schema(description = "客户公司编号")
+        private Long customerCompanyId;
         @Schema(description = "认领来源 INVOICE / LEGACY_BO")
         private String claimSource;
         @Schema(description = "商务单编号（历史 LEGACY）")

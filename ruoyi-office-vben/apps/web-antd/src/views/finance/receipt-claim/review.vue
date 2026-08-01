@@ -12,6 +12,7 @@ import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   confirmClaim,
   getRevokeAuditList,
+  getReviewClaim,
   getReviewPage,
   rejectClaim,
   revokeClaim,
@@ -123,6 +124,22 @@ async function openAuditModal(row: FinanceReceiptClaimApi.ReceiptClaim) {
   auditVisible.value = true;
 }
 
+/* ---------- 详情抽屉（review-get，含购方） ---------- */
+const detailVisible = ref(false);
+const detailLoading = ref(false);
+const detail = ref<FinanceReceiptClaimApi.ReceiptClaim | null>(null);
+
+async function openDetailModal(row: FinanceReceiptClaimApi.ReceiptClaim) {
+  detailVisible.value = true;
+  detailLoading.value = true;
+  detail.value = null;
+  try {
+    detail.value = await getReviewClaim(row.id);
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
 /* ---------- 表格 ---------- */
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
@@ -204,8 +221,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
               <th style="padding: 4px 8px; text-align: left">回单流水号</th>
               <th style="padding: 4px 8px; text-align: left">付款方</th>
               <th style="padding: 4px 8px; text-align: left">银行流水号</th>
-              <th style="padding: 4px 8px; text-align: left">商务单号</th>
-              <th style="padding: 4px 8px; text-align: left">业务主体</th>
+              <th style="padding: 4px 8px; text-align: left">开票申请</th>
+              <th style="padding: 4px 8px; text-align: left">购方</th>
               <th style="padding: 4px 8px; text-align: right">认领金额</th>
             </tr>
           </thead>
@@ -217,8 +234,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
               <td style="padding: 4px 8px">{{ item.receiptNo }}</td>
               <td style="padding: 4px 8px">{{ item.payerName }}</td>
               <td style="padding: 4px 8px">{{ item.bankSerialNo }}</td>
-              <td style="padding: 4px 8px">{{ item.businessOrderNo }}</td>
-              <td style="padding: 4px 8px">{{ item.businessSubject }}</td>
+              <td style="padding: 4px 8px">{{ item.invoiceApplicationNo || item.businessOrderNo }}</td>
+              <td style="padding: 4px 8px">{{ item.buyerName || item.businessSubject || '—' }}</td>
               <td style="padding: 4px 8px; text-align: right">
                 ¥{{ Number(item.claimAmount).toFixed(2) }}
               </td>
@@ -231,6 +248,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #action="{ row }">
         <TableAction
           :actions="[
+            {
+              label: '详情',
+              type: 'link',
+              auth: ['finance:receipt-claim:review'],
+              onClick: () => openDetailModal(row),
+            },
             {
               label: '确认',
               type: 'link',
@@ -308,6 +331,50 @@ const [Grid, gridApi] = useVbenVxeGrid({
         row-key="id"
         size="small"
       />
+    </Modal>
+
+    <!-- 复核详情（review-get） -->
+    <Modal
+      v-model:open="detailVisible"
+      title="认领单详情"
+      :footer="null"
+      width="800"
+      :confirm-loading="detailLoading"
+    >
+      <div v-if="detailLoading" class="py-8 text-center text-gray-400">
+        加载中…
+      </div>
+      <template v-else-if="detail">
+        <div class="mb-3 text-sm text-gray-600">
+          单号 {{ detail.id }} · 状态
+          {{ STATUS_LABEL[detail.status] ?? detail.status }} · 总额 ¥{{
+            Number(detail.totalClaimAmount).toFixed(2)
+          }}
+        </div>
+        <Table
+          size="small"
+          :pagination="false"
+          row-key="id"
+          :data-source="detail.items || []"
+          :columns="[
+            { title: '到款流水', dataIndex: 'receiptNo', key: 'receiptNo' },
+            { title: '付款方', dataIndex: 'payerName', key: 'payerName' },
+            {
+              title: '开票申请',
+              dataIndex: 'invoiceApplicationNo',
+              key: 'invoiceApplicationNo',
+            },
+            { title: '购方名称', dataIndex: 'buyerName', key: 'buyerName' },
+            {
+              title: '认领金额',
+              dataIndex: 'claimAmount',
+              key: 'claimAmount',
+              customRender: ({ text }: { text?: number }) =>
+                text != null ? `¥${Number(text).toFixed(2)}` : '—',
+            },
+          ]"
+        />
+      </template>
     </Modal>
   </Page>
 </template>

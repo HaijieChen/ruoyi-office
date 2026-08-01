@@ -29,6 +29,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -156,7 +158,16 @@ public class FinanceReceiptClaimController {
     public CommonResult<PageResult<FinanceReceiptRespVO>> getSourceReceiptPage(
             @Valid FinanceReceiptPageReqVO pageReqVO) {
         PageResult<FinanceReceiptDO> page = receiptService.getUnclaimedReceiptPage(pageReqVO);
-        return success(BeanUtils.toBean(page, FinanceReceiptRespVO.class));
+        List<FinanceReceiptRespVO> list = new ArrayList<>();
+        for (FinanceReceiptDO receipt : page.getList()) {
+            FinanceReceiptRespVO vo = BeanUtils.toBean(receipt, FinanceReceiptRespVO.class);
+            vo.setClaimableAmount(calcReceiptClaimable(receipt));
+            if (vo.getClaimableAmount().compareTo(BigDecimal.ZERO) > 0) {
+                list.add(vo);
+            }
+        }
+        // 过滤后 total 以当前页可见条数为准（源列表选型页够用；精确 total 非本票目标）
+        return success(new PageResult<>(list, (long) list.size()));
     }
 
     @GetMapping("/source-business-order-page")
@@ -180,7 +191,34 @@ public class FinanceReceiptClaimController {
         }
         PageResult<FinanceInvoiceApplicationDO> page =
                 invoiceApplicationService.getApplicationPage(pageReqVO);
-        return success(BeanUtils.toBean(page, FinanceInvoiceApplicationRespVO.class));
+        List<FinanceInvoiceApplicationRespVO> list = new ArrayList<>();
+        for (FinanceInvoiceApplicationDO app : page.getList()) {
+            FinanceInvoiceApplicationRespVO vo = BeanUtils.toBean(app, FinanceInvoiceApplicationRespVO.class);
+            vo.setClaimableAmount(calcInvoiceClaimable(app));
+            if (vo.getClaimableAmount().compareTo(BigDecimal.ZERO) > 0) {
+                list.add(vo);
+            }
+        }
+        return success(new PageResult<>(list, (long) list.size()));
+    }
+
+    private static BigDecimal calcReceiptClaimable(FinanceReceiptDO receipt) {
+        BigDecimal unclaimed = defaultZero(receipt.getUnclaimedAmount());
+        BigDecimal pending = defaultZero(receipt.getPendingClaimedAmount());
+        BigDecimal claimable = unclaimed.subtract(pending);
+        return claimable.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : claimable;
+    }
+
+    private static BigDecimal calcInvoiceClaimable(FinanceInvoiceApplicationDO app) {
+        BigDecimal total = defaultZero(app.getTotalAmount());
+        BigDecimal confirmed = defaultZero(app.getConfirmedClaimedAmount());
+        BigDecimal pending = defaultZero(app.getPendingClaimedAmount());
+        BigDecimal claimable = total.subtract(confirmed).subtract(pending);
+        return claimable.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : claimable;
+    }
+
+    private static BigDecimal defaultZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private static FinanceReceiptClaimRespVO buildClaimDetail(FinanceReceiptClaimDetail detail) {
@@ -197,6 +235,8 @@ public class FinanceReceiptClaimController {
                 FinanceInvoiceApplicationDO app = detail.invoiceApplications().get(item.getInvoiceApplicationId());
                 if (app != null) {
                     itemResponse.setInvoiceApplicationNo(app.getApplicationNo());
+                    itemResponse.setBuyerName(app.getBuyerName());
+                    itemResponse.setCustomerCompanyId(app.getCustomerCompanyId());
                 }
             }
             if (item.getBusinessOrderId() != null) {

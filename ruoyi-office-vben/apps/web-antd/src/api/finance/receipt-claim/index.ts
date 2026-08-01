@@ -16,6 +16,9 @@ export namespace FinanceReceiptClaimApi {
     /** 新链路：开票申请 */
     invoiceApplicationId?: number;
     invoiceApplicationNo?: string;
+    /** 购方名称 / 客户公司 */
+    buyerName?: string;
+    customerCompanyId?: number;
     claimSource?: 'INVOICE' | 'LEGACY_BO';
     /** 历史 LEGACY */
     businessOrderId?: number;

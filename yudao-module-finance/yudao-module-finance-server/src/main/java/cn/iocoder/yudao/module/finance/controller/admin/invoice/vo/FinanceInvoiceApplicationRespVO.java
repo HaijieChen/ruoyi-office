@@ -70,6 +70,26 @@ public class FinanceInvoiceApplicationRespVO {
     @Schema(description = "明细行")
     private List<Line> lines;
 
+    @Schema(description = "办票附件（整单多附件）")
+    private List<FileItem> files;
+
+    @Schema(description = "可认领金额（服务端计算：total − confirmed − pending）")
+    private BigDecimal claimableAmount;
+
+    @Data
+    public static class FileItem {
+        @Schema(description = "附件编号")
+        private Long id;
+        @Schema(description = "申请编号")
+        private Long applicationId;
+        @Schema(description = "附件 URL")
+        private String fileUrl;
+        @Schema(description = "文件名")
+        private String fileName;
+        @Schema(description = "排序")
+        private Integer sort;
+    }
+
     @Data
     public static class Line {
         @Schema(description = "明细编号")

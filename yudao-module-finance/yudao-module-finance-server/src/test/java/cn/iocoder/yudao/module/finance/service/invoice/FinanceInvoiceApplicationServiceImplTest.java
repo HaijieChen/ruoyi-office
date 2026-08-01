@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCo
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationFileMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoRedisDAO;
@@ -41,6 +42,7 @@ class FinanceInvoiceApplicationServiceImplTest {
 
     private FinanceInvoiceApplicationMapper applicationMapper;
     private FinanceInvoiceApplicationLineMapper lineMapper;
+    private FinanceInvoiceApplicationFileMapper fileMapper;
     private FinanceBusinessOrderMapper businessOrderMapper;
     private FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private BpmProcessInstanceApi processInstanceApi;
@@ -51,11 +53,12 @@ class FinanceInvoiceApplicationServiceImplTest {
     void setUp() {
         applicationMapper = mock(FinanceInvoiceApplicationMapper.class);
         lineMapper = mock(FinanceInvoiceApplicationLineMapper.class);
+        fileMapper = mock(FinanceInvoiceApplicationFileMapper.class);
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
         applicationNoRedisDAO = mock(FinanceInvoiceApplicationNoRedisDAO.class);
         processInstanceApi = mock(BpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
-        service = new FinanceInvoiceApplicationServiceImpl(applicationMapper, lineMapper, businessOrderMapper,
+        service = new FinanceInvoiceApplicationServiceImpl(applicationMapper, lineMapper, fileMapper, businessOrderMapper,
                 applicationNoRedisDAO, processInstanceApi, customerCompanyService);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("INV-20260729-1");
@@ -373,6 +376,54 @@ class FinanceInvoiceApplicationServiceImplTest {
                 ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
         verify(applicationMapper).updateById(appCaptor.capture());
         assertEquals(FinanceInvoiceIssueStatusEnum.PARTIAL.getStatus(), appCaptor.getValue().getIssueStatus());
+    }
+
+    @Test
+    void completeIssueShouldWriteFullAndReplaceFiles() {
+        FinanceInvoiceApplicationDO app = pendingApp(100L);
+        app.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
+        when(applicationMapper.selectById(100L)).thenReturn(app);
+        when(fileMapper.deleteByApplicationId(100L)).thenReturn(0);
+        when(lineMapper.selectListByApplicationId(100L)).thenReturn(List.of(
+                FinanceInvoiceApplicationLineDO.builder().id(1L).applicationId(100L).build()));
+
+        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO();
+        req.setApplicationId(100L);
+        req.setInvoiceNos(List.of("INV-A", "INV-B"));
+        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem f1 =
+                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem();
+        f1.setUrl("https://cdn.example/a.pdf");
+        f1.setName("a.pdf");
+        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem f2 =
+                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem();
+        f2.setUrl("https://cdn.example/b.pdf");
+        f2.setName("b.pdf");
+        req.setFiles(List.of(f1, f2));
+
+        service.completeIssue(req);
+
+        verify(fileMapper).deleteByApplicationId(100L);
+        verify(fileMapper, times(2)).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO.class));
+        ArgumentCaptor<FinanceInvoiceApplicationDO> appCaptor =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
+        verify(applicationMapper).updateById(appCaptor.capture());
+        assertEquals(FinanceInvoiceIssueStatusEnum.FULL.getStatus(), appCaptor.getValue().getIssueStatus());
+    }
+
+    @Test
+    void completeIssueShouldRejectWhenNotApproved() {
+        when(applicationMapper.selectById(100L)).thenReturn(pendingApp(100L));
+        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO();
+        req.setApplicationId(100L);
+        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem f =
+                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem();
+        f.setUrl("https://cdn.example/a.pdf");
+        req.setFiles(List.of(f));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.completeIssue(req));
+        assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_ISSUE_NOT_ALLOWED.getCode(),
+                ex.getCode());
     }
 
     private static FinanceInvoiceApplicationDO pendingApp(Long id) {

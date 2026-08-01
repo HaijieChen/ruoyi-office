@@ -1,11 +1,13 @@
 package cn.iocoder.yudao.module.finance.service.invoice;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import jakarta.validation.Valid;
 
@@ -14,7 +16,7 @@ import java.util.List;
 /**
  * 开票申请 Service。
  * <p>商务单 {@code invoiced_occupied_amount} 仅由 createAndStart / resubmit / onApprovalOutcome 释占写路径变更。
- * <p>{@code issue_status} 仅由 {@link #updateIssueProgress} 写入（T4）。
+ * <p>{@code issue_status}：主路径 {@link #completeIssue} 写 FULL；兼容路径 {@link #updateIssueProgress} 保留。
  */
 public interface FinanceInvoiceApplicationService {
 
@@ -39,13 +41,21 @@ public interface FinanceInvoiceApplicationService {
     void resubmit(Long appId, @Valid FinanceInvoiceApplicationResubmitReqVO reqVO, Long userId);
 
     /**
-     * 一行一票办票（唯一写 line/app issue 字段路径）。
+     * 整单办票（I2）：replace 附件子表，写 app.issue_status=FULL(2)。
      */
+    void completeIssue(@Valid FinanceInvoiceApplicationCompleteIssueReqVO reqVO);
+
+    /**
+     * 一行一票办票（兼容；新流程请用 {@link #completeIssue}）。
+     */
+    @Deprecated
     void updateIssueProgress(@Valid FinanceInvoiceApplicationUpdateIssueProgressReqVO reqVO);
 
     FinanceInvoiceApplicationDO getApplication(Long id);
 
     List<FinanceInvoiceApplicationLineDO> getApplicationLines(Long applicationId);
+
+    List<FinanceInvoiceApplicationFileDO> getApplicationFiles(Long applicationId);
 
     PageResult<FinanceInvoiceApplicationDO> getApplicationPage(FinanceInvoiceApplicationPageReqVO pageReqVO);
 

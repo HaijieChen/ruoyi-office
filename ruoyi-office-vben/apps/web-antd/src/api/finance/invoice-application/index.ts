@@ -32,6 +32,8 @@ export namespace FinanceInvoiceApplicationApi {
     totalAmount: number;
     confirmedClaimedAmount?: number;
     pendingClaimedAmount?: number;
+    /** 服务端可认领金额 */
+    claimableAmount?: number;
     applicantUserId: number;
     buyerName?: string;
     buyerTaxNo?: string;
@@ -48,6 +50,7 @@ export namespace FinanceInvoiceApplicationApi {
     voided?: boolean;
     createTime?: string;
     lines?: Line[];
+    files?: IssueFile[];
   }
 
   export interface CreateAndStartRequest {
@@ -91,6 +94,20 @@ export namespace FinanceInvoiceApplicationApi {
     issuedAt?: string;
   }
 
+  export interface IssueFile {
+    id?: number;
+    applicationId?: number;
+    fileUrl?: string;
+    fileName?: string;
+    sort?: number;
+  }
+
+  export interface CompleteIssueRequest {
+    applicationId: number;
+    invoiceNos?: string[];
+    files: Array<{ url: string; name?: string }>;
+  }
+
   export interface PageQuery extends PageParam {
     applicationNo?: string;
     approvalStatus?: ApprovalStatus | string;
@@ -119,11 +136,22 @@ export function resubmitInvoiceApplication(
   );
 }
 
+/** @deprecated 请用 completeInvoiceIssue */
 export function updateInvoiceIssueProgress(
   data: FinanceInvoiceApplicationApi.IssueProgressRequest,
 ) {
   return requestClient.put<boolean>(
     '/finance/invoice-application/update-issue-progress',
+    data,
+  );
+}
+
+/** 整单办票（多附件 replace） */
+export function completeInvoiceIssue(
+  data: FinanceInvoiceApplicationApi.CompleteIssueRequest,
+) {
+  return requestClient.put<boolean>(
+    '/finance/invoice-application/complete-issue',
     data,
   );
 }

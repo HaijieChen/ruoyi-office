@@ -41,11 +41,13 @@ interface FormData {
 
 const formRef = ref();
 const formData = ref<FormData>({ items: [{}] });
+/** 打开编辑时的原始明细（PENDING 编辑加回本单占用，M2） */
+const originalItems = ref<LineItem[]>([]);
 const receiptOptions = ref<
-  Array<{ label: string; value: number; unclaimed?: number }>
+  Array<{ label: string; value: number; claimable: number }>
 >([]);
 const invoiceOptions = ref<
-  Array<{ label: string; value: number; remaining?: number }>
+  Array<{ label: string; value: number; claimable: number }>
 >([]);
 const loadingOptions = ref(false);
 
@@ -53,6 +55,44 @@ const isEdit = computed(() => !!formData.value.id);
 const getTitle = computed(() =>
   isEdit.value ? '修改到款认领' : '新建到款认领',
 );
+
+/** 服务端 claimable + 编辑加回本单原占用 − 本单其他行草稿占用 */
+function displayClaimable(
+  sourceKind: 'receipt' | 'invoice',
+  sourceId: number | undefined,
+  rowIndex: number,
+): number {
+  if (sourceId == null) return 0;
+  const server =
+    sourceKind === 'receipt'
+      ? (receiptOptions.value.find((o) => o.value === sourceId)?.claimable ?? 0)
+      : (invoiceOptions.value.find((o) => o.value === sourceId)?.claimable ?? 0);
+
+  // M2：编辑时服务端 pending 已含本单 → 加回本单原占用
+  let originalOccupy = 0;
+  if (isEdit.value) {
+    for (const item of originalItems.value) {
+      const id =
+        sourceKind === 'receipt' ? item.receiptId : item.invoiceApplicationId;
+      if (id === sourceId) {
+        originalOccupy += Number(item.claimAmount ?? 0);
+      }
+    }
+  }
+
+  // 本单其他行草稿占用（不含当前行）
+  let draftOther = 0;
+  formData.value.items.forEach((item, idx) => {
+    if (idx === rowIndex) return;
+    const id =
+      sourceKind === 'receipt' ? item.receiptId : item.invoiceApplicationId;
+    if (id === sourceId) {
+      draftOther += Number(item.claimAmount ?? 0);
+    }
+  });
+
+  return Math.max(0, server + originalOccupy - draftOther);
+}
 
 const rules: Record<string, Rule[]> = {
   items: [
@@ -72,6 +112,22 @@ const rules: Record<string, Rule[]> = {
           if (!item.claimAmount || item.claimAmount <= 0) {
             return Promise.reject(`第 ${idx + 1} 行：认领金额须大于 0`);
           }
+          const maxReceipt = displayClaimable('receipt', item.receiptId, idx);
+          if (item.claimAmount > maxReceipt + 1e-9) {
+            return Promise.reject(
+              `第 ${idx + 1} 行：到款可认领不足（剩余 ¥${maxReceipt.toFixed(2)}）`,
+            );
+          }
+          const maxInvoice = displayClaimable(
+            'invoice',
+            item.invoiceApplicationId,
+            idx,
+          );
+          if (item.claimAmount > maxInvoice + 1e-9) {
+            return Promise.reject(
+              `第 ${idx + 1} 行：开票可认领不足（剩余 ¥${maxInvoice.toFixed(2)}）`,
+            );
+          }
         }
         return Promise.resolve();
       },
@@ -88,31 +144,68 @@ async function loadSourceOptions() {
       getSourceInvoiceApplicationPage({ pageNo: 1, pageSize: 100 }),
     ]);
     receiptOptions.value = (receiptPage?.list || []).map((r: any) => {
-      const pending = Number(r.pendingClaimedAmount ?? 0);
-      const unclaimed = Number(r.unclaimedAmount ?? 0);
-      const available = Math.max(0, unclaimed - pending);
+      const claimable = Number(
+        r.claimableAmount ??
+          Math.max(
+            0,
+            Number(r.unclaimedAmount ?? 0) - Number(r.pendingClaimedAmount ?? 0),
+          ),
+      );
       return {
         value: r.id,
-        unclaimed: available,
-        label: `${r.receiptNo || r.id} | ${r.payerName || '-'} | 可认领 ¥${available.toFixed(2)}`,
+        claimable,
+        label: `${r.receiptNo || r.id} | ${r.payerName || '-'} | 可认领 ¥${claimable.toFixed(2)}`,
       };
     });
     invoiceOptions.value = (invoicePage?.list || []).map((a: any) => {
-      const remaining = Math.max(
-        0,
-        Number(a.totalAmount ?? 0) -
-          Number(a.confirmedClaimedAmount ?? 0) -
-          Number(a.pendingClaimedAmount ?? 0),
+      const claimable = Number(
+        a.claimableAmount ??
+          Math.max(
+            0,
+            Number(a.totalAmount ?? 0) -
+              Number(a.confirmedClaimedAmount ?? 0) -
+              Number(a.pendingClaimedAmount ?? 0),
+          ),
       );
       return {
         value: a.id,
-        remaining,
-        label: `${a.applicationNo || a.id} | ${a.buyerName || '-'} | 可认领 ¥${remaining.toFixed(2)}`,
+        claimable,
+        label: `${a.applicationNo || a.id} | ${a.buyerName || '-'} | 可认领 ¥${claimable.toFixed(2)}`,
       };
     });
   } finally {
     loadingOptions.value = false;
   }
+}
+
+function receiptSelectOptions(rowIndex: number) {
+  return receiptOptions.value.map((o) => {
+    const remaining = displayClaimable('receipt', o.value, rowIndex);
+    return {
+      value: o.value,
+      label: o.label.replace(
+        /可认领 ¥[\d.]+/,
+        `可认领 ¥${remaining.toFixed(2)}`,
+      ),
+      disabled: remaining <= 0 && formData.value.items[rowIndex]?.receiptId !== o.value,
+    };
+  });
+}
+
+function invoiceSelectOptions(rowIndex: number) {
+  return invoiceOptions.value.map((o) => {
+    const remaining = displayClaimable('invoice', o.value, rowIndex);
+    return {
+      value: o.value,
+      label: o.label.replace(
+        /可认领 ¥[\d.]+/,
+        `可认领 ¥${remaining.toFixed(2)}`,
+      ),
+      disabled:
+        remaining <= 0 &&
+        formData.value.items[rowIndex]?.invoiceApplicationId !== o.value,
+    };
+  });
 }
 
 function addLine() {
@@ -129,6 +222,7 @@ function removeLine(index: number) {
 
 function resetForm() {
   formData.value = { items: [{}] };
+  originalItems.value = [];
   formRef.value?.resetFields();
 }
 
@@ -150,18 +244,22 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.close();
       return;
     }
+    const items =
+      data.items && data.items.length
+        ? data.items.map((i) => ({
+            receiptId: i.receiptId,
+            invoiceApplicationId: i.invoiceApplicationId,
+            claimAmount: i.claimAmount,
+          }))
+        : [{}];
     formData.value = {
       id: data.id,
       remark: data.remark,
-      items:
-        data.items && data.items.length
-          ? data.items.map((i) => ({
-              receiptId: i.receiptId,
-              invoiceApplicationId: i.invoiceApplicationId,
-              claimAmount: i.claimAmount,
-            }))
-          : [{}],
+      items,
     };
+    originalItems.value = data.id
+      ? items.map((i) => ({ ...i }))
+      : [];
     await loadSourceOptions();
   },
   async onConfirm() {
@@ -229,26 +327,46 @@ const [Modal, modalApi] = useVbenModal({
             </div>
             <div class="grid grid-cols-1 gap-2">
               <div>
-                <div class="mb-1 text-xs text-gray-500">银行到款</div>
+                <div class="mb-1 text-xs text-gray-500">
+                  银行到款
+                  <span v-if="item.receiptId" class="text-gray-400">
+                    （本行可用 ¥{{
+                      displayClaimable('receipt', item.receiptId, index).toFixed(
+                        2,
+                      )
+                    }}）
+                  </span>
+                </div>
                 <Select
                   v-model:value="item.receiptId"
                   show-search
                   allow-clear
                   :loading="loadingOptions"
-                  :options="receiptOptions"
+                  :options="receiptSelectOptions(index)"
                   option-filter-prop="label"
                   placeholder="选择可认领到款"
                   class="w-full"
                 />
               </div>
               <div>
-                <div class="mb-1 text-xs text-gray-500">开票申请</div>
+                <div class="mb-1 text-xs text-gray-500">
+                  开票申请
+                  <span v-if="item.invoiceApplicationId" class="text-gray-400">
+                    （本行可用 ¥{{
+                      displayClaimable(
+                        'invoice',
+                        item.invoiceApplicationId,
+                        index,
+                      ).toFixed(2)
+                    }}）
+                  </span>
+                </div>
                 <Select
                   v-model:value="item.invoiceApplicationId"
                   show-search
                   allow-clear
                   :loading="loadingOptions"
-                  :options="invoiceOptions"
+                  :options="invoiceSelectOptions(index)"
                   option-filter-prop="label"
                   placeholder="选择已审批通过的开票申请（未出票也可）"
                   class="w-full"

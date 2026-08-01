@@ -43,5 +43,9 @@ public class FinanceReceiptRespVO {
     private BigDecimal claimedAmount;
     @Schema(description = "未认领金额")
     private BigDecimal unclaimedAmount;
+    @Schema(description = "待确认认领占用金额")
+    private BigDecimal pendingClaimedAmount;
+    @Schema(description = "可认领金额（服务端：unclaimed − pending）")
+    private BigDecimal claimableAmount;
 
 }

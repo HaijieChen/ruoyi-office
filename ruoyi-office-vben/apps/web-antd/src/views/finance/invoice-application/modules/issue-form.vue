@@ -3,12 +3,13 @@ import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { Form, Input, Select, message } from 'ant-design-vue';
+import { Form, Input, message } from 'ant-design-vue';
 
 import {
+  completeInvoiceIssue,
   getInvoiceApplication,
-  updateInvoiceIssueProgress,
 } from '#/api/finance/invoice-application';
+import { FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'FinanceInvoiceIssueForm' });
 
@@ -17,11 +18,10 @@ const emit = defineEmits(['success']);
 const formRef = ref();
 const formData = ref({
   applicationId: undefined as number | undefined,
-  lineId: undefined as number | undefined,
-  invoiceNo: '',
-  fileUrl: '',
+  invoiceNos: '',
+  /** FileUpload 多附件 URL 列表 */
+  fileUrls: [] as string[],
 });
-const lineOptions = ref<Array<{ label: string; value: number }>>([]);
 
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
@@ -29,38 +29,55 @@ const [Modal, modalApi] = useVbenModal({
     const data = modalApi.getData<{ applicationId: number }>() || {};
     formData.value = {
       applicationId: data.applicationId,
-      lineId: undefined,
-      invoiceNo: '',
-      fileUrl: '',
+      invoiceNos: '',
+      fileUrls: [],
     };
     if (data.applicationId) {
-      const detail = await getInvoiceApplication(data.applicationId);
-      lineOptions.value = (detail.lines || [])
-        .filter((l) => !l.issueStatus || l.issueStatus === 0)
-        .map((l) => ({
-          value: l.id as number,
-          label: `行#${l.id} BO=${l.businessOrderId} 金额=${l.amount}`,
-        }));
+      try {
+        const detail = await getInvoiceApplication(data.applicationId);
+        const files = detail.files || [];
+        formData.value.fileUrls = files
+          .map((f) => f.fileUrl)
+          .filter((u): u is string => !!u);
+        // 兼容旧行上票号展示
+        const lineNos = (detail.lines || [])
+          .map((l) => l.invoiceNo)
+          .filter(Boolean);
+        if (lineNos.length) {
+          formData.value.invoiceNos = lineNos.join(',');
+        }
+      } catch {
+        // 详情失败仍可提交新附件
+      }
     }
   },
   async onConfirm() {
-    if (!formData.value.applicationId || !formData.value.lineId) {
-      message.warning('请选择明细行');
+    if (!formData.value.applicationId) {
+      message.warning('缺少开票申请编号');
       return;
     }
-    if (!formData.value.invoiceNo) {
-      message.warning('请填写票号');
+    const urls = (formData.value.fileUrls || []).filter(Boolean);
+    if (!urls.length) {
+      message.warning('请至少上传一个发票附件');
       return;
     }
     modalApi.lock();
     try {
-      await updateInvoiceIssueProgress({
+      const invoiceNos = formData.value.invoiceNos
+        ? formData.value.invoiceNos
+            .split(/[,，\s]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+      await completeInvoiceIssue({
         applicationId: formData.value.applicationId,
-        lineId: formData.value.lineId,
-        invoiceNo: formData.value.invoiceNo,
-        fileUrl: formData.value.fileUrl || undefined,
+        invoiceNos,
+        files: urls.map((url, idx) => ({
+          url,
+          name: `invoice-${idx + 1}`,
+        })),
       });
-      message.success('办票进度已更新（一行一票）');
+      message.success('整单办票完成');
       emit('success');
       modalApi.close();
     } finally {
@@ -71,21 +88,22 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal title="办票（一行一票）" class="w-[520px]">
+  <Modal title="整单办票" class="w-[560px]">
     <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-      <Form.Item label="明细行" required>
-        <Select
-          v-model:value="formData.lineId"
-          :options="lineOptions"
-          placeholder="选择未开票明细"
-          class="w-full"
+      <Form.Item label="票号备注">
+        <Input
+          v-model:value="formData.invoiceNos"
+          placeholder="可选，多个票号用逗号分隔（不绑明细行）"
         />
       </Form.Item>
-      <Form.Item label="票号" required>
-        <Input v-model:value="formData.invoiceNo" />
-      </Form.Item>
-      <Form.Item label="附件 URL">
-        <Input v-model:value="formData.fileUrl" />
+      <Form.Item label="发票附件" required>
+        <FileUpload
+          v-model:value="formData.fileUrls"
+          :max-number="20"
+          :max-size="20"
+          :multiple="true"
+          help-text="支持多附件；再次办票将覆盖整单附件列表"
+        />
       </Form.Item>
     </Form>
   </Modal>
