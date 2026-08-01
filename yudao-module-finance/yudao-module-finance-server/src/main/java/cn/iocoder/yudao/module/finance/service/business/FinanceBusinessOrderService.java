@@ -26,6 +26,6 @@ public interface FinanceBusinessOrderService {
                                                                      Long importerId);
 
     FinanceBusinessOrderImportRespVO importBusinessOrderList(List<FinanceBusinessOrderImportExcelVO> importRows,
-                                                               Long importerId, String bankAccount);
+                                                               Long importerId);
 
 }

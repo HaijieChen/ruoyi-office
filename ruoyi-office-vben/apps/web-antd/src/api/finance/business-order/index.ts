@@ -15,10 +15,14 @@ export namespace FinanceBusinessOrderApi {
     importerId: number;
     /** 系统生成，只读 */
     importerName: string;
-    /** 导入/创建时指定 */
-    bankAccount: string;
+    /** 主体公司组织部门编号 */
+    entityCompanyDeptId: number;
+    /** 主体公司名称快照 */
+    entityCompanyName?: string;
     /** 可选：流程合同ID */
     contractProcessId?: string;
+    /** 合同签约申请编号（正式关联） */
+    contractApplicationId?: number;
     /** 签单日期 */
     orderDate: string;
     /** 产品/服务 */
@@ -54,7 +58,7 @@ export namespace FinanceBusinessOrderApi {
   /** 分页查询参数 */
   export interface PageQuery extends PageParam {
     orderNo?: string;
-    bankAccount?: string;
+    entityCompanyDeptId?: number;
     importDate?: string;
     productName?: string;
     contactPerson?: string;
@@ -66,7 +70,7 @@ export namespace FinanceBusinessOrderApi {
   /** 创建/编辑表单数据（排除服务端只读字段） */
   export type SaveForm = Pick<
     BusinessOrder,
-    | 'bankAccount'
+    | 'entityCompanyDeptId'
     | 'orderDate'
     | 'productName'
     | 'contactPerson'
@@ -76,6 +80,7 @@ export namespace FinanceBusinessOrderApi {
   > & {
     id?: number;
     contractProcessId?: string;
+    contractApplicationId?: number;
     payerName?: string;
     discountRate?: number;
     remark?: string;
@@ -130,11 +135,11 @@ export function importBusinessOrderTemplate() {
   return requestClient.download('/finance/business-order/get-import-template');
 }
 
-/** 导入签单 Excel（multipart：file + bankAccount） */
-export function importBusinessOrder(file: File, bankAccount: string) {
+/** 导入签单 Excel（multipart：仅 file；主体公司在 Excel 列中） */
+export function importBusinessOrder(file: File) {
   return requestClient.upload<FinanceBusinessOrderApi.ImportResult>(
     '/finance/business-order/import',
-    { file, bankAccount },
+    { file },
   );
 }
 

@@ -53,4 +53,8 @@ public interface DeptApi {
     @Parameter(name = "id", description = "部门编号", example = "1024", required = true)
     CommonResult<List<DeptRespDTO>> getChildDeptList(@RequestParam("id") Long id);
 
+    @GetMapping(PREFIX + "/company-simple-list")
+    @Operation(summary = "获得启用公司精简列表（orgType=公司）")
+    CommonResult<List<DeptRespDTO>> getCompanySimpleList();
+
 }

@@ -48,9 +48,9 @@ class FinanceBusinessOrderControllerContractTest {
     }
 
     @Test
-    void importEndpointShouldRequireFileBankAccountAndImportPermission() throws NoSuchMethodException {
+    void importEndpointShouldRequireFileOnlyAndImportPermission() throws NoSuchMethodException {
         Method method = FinanceBusinessOrderController.class.getDeclaredMethod(
-                "importBusinessOrder", MultipartFile.class, String.class);
+                "importBusinessOrder", MultipartFile.class);
 
         PostMapping postMapping = method.getAnnotation(PostMapping.class);
         assertNotNull(postMapping);
@@ -59,36 +59,37 @@ class FinanceBusinessOrderControllerContractTest {
                 method.getAnnotation(PreAuthorize.class).value());
 
         Parameter[] parameters = method.getParameters();
+        assertEquals(1, parameters.length);
         RequestParam fileParam = parameters[0].getAnnotation(RequestParam.class);
-        RequestParam bankAccountParam = parameters[1].getAnnotation(RequestParam.class);
         assertEquals("file", fileParam.value());
         assertTrue(fileParam.required());
-        assertEquals("bankAccount", bankAccountParam.value());
-        assertTrue(bankAccountParam.required());
     }
 
     @Test
     void saveRequestShouldExposeOnlyClientWritableSheetFields() {
-        assertEquals(Set.of("id", "bankAccount", "contractProcessId", "orderDate", "productName", "contactPerson",
-                        "executionStartDate", "executionEndDate", "payerName", "signedExecutionAmount", "discountRate", "remark"),
+        assertEquals(Set.of("id", "entityCompanyDeptId", "contractProcessId", "contractApplicationId", "orderDate", "productName",
+                        "contactPerson", "executionStartDate", "executionEndDate", "payerName", "signedExecutionAmount",
+                        "discountRate", "remark"),
                 declaredFields(FinanceBusinessOrderSaveReqVO.class));
     }
 
     @Test
     void importRowShouldNotAcceptAuthoritativeSettlement() {
-        assertEquals(Set.of("contractProcessId", "orderDate", "productName", "contactPerson", "executionStartDate",
-                        "executionEndDate", "payerName", "signedExecutionAmount", "discountRate", "summary"),
+        assertEquals(Set.of("entityCompanyName", "contractProcessId", "contractApplicationNo", "orderDate", "productName", "contactPerson",
+                        "executionStartDate", "executionEndDate", "payerName", "signedExecutionAmount", "discountRate",
+                        "summary"),
                 declaredFields(FinanceBusinessOrderImportExcelVO.class));
     }
 
     @Test
     void responseAndDomainShouldExposeSheetAndGeneratedFieldsWithoutGenericFields() {
-        Set<String> requiredFields = Set.of("orderNo", "importDate", "importerId", "contractProcessId", "orderDate",
+        Set<String> requiredFields = Set.of("orderNo", "importDate", "importerId", "contractProcessId",
+                "contractApplicationId", "orderDate",
                 "productName", "contactPerson", "executionStartDate", "executionEndDate", "payerName",
-                "signedExecutionAmount", "discountRate", "settlementAmount", "bankAccount", "remark",
+                "signedExecutionAmount", "discountRate", "settlementAmount", "entityCompanyDeptId", "entityCompanyName", "remark",
                 "confirmedClaimedAmount", "sourceRowHash");
         Set<String> genericFields = Set.of("businessSubject", "businessType", "contractRef", "projectRef",
-                "receivableAmount", "payableAmount", "ownerId", "status", "currency");
+                "receivableAmount", "payableAmount", "ownerId", "status", "currency", "bankAccount");
 
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).containsAll(requiredFields));
         assertTrue(declaredFields(FinanceBusinessOrderDO.class).containsAll(requiredFields));
@@ -99,7 +100,7 @@ class FinanceBusinessOrderControllerContractTest {
 
     @Test
     void pageRequestShouldFilterBySheetAndGeneratedFields() {
-        assertEquals(Set.of("orderNo", "bankAccount", "contractProcessId", "productName", "payerName",
+        assertEquals(Set.of("orderNo", "entityCompanyDeptId", "contractProcessId", "productName", "payerName",
                         "importerId", "importDate", "orderDate", "onlyOpenable"),
                 declaredFields(FinanceBusinessOrderPageReqVO.class));
     }

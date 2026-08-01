@@ -8,7 +8,7 @@ import { ref } from 'vue';
 import { useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Alert, Button, Input, message, Table, Upload } from 'ant-design-vue';
+import { Alert, Button, message, Table, Upload } from 'ant-design-vue';
 
 import {
   importBusinessOrder,
@@ -20,7 +20,6 @@ defineOptions({ name: 'FinanceBusinessOrderImportForm' });
 const emit = defineEmits(['success']);
 
 const selectedFile = ref<File | null>(null);
-const bankAccount = ref('');
 const importing = ref(false);
 const result = ref<FinanceBusinessOrderApi.ImportResult | null>(null);
 
@@ -42,17 +41,10 @@ const [Modal, modalApi] = useVbenModal({
       message.warning('请先选择 .xlsx 文件');
       return;
     }
-    if (!bankAccount.value.trim()) {
-      message.warning('请输入银行账号');
-      return;
-    }
     importing.value = true;
     modalApi.lock();
     try {
-      result.value = await importBusinessOrder(
-        selectedFile.value,
-        bankAccount.value.trim(),
-      );
+      result.value = await importBusinessOrder(selectedFile.value);
       const hasErrors =
         Object.keys(result.value.failureRows).length > 0 ||
         result.value.skippedRows.length > 0;
@@ -74,7 +66,6 @@ const [Modal, modalApi] = useVbenModal({
   },
   onClosed() {
     selectedFile.value = null;
-    bankAccount.value = '';
     result.value = null;
   },
 });
@@ -101,19 +92,8 @@ async function handleDownloadTemplate() {
         type="info"
         show-icon
         message="请先下载导入模板，按表头填写后上传"
-        description="银行账号在弹窗统一填写，将应用到本批全部行。折扣率可留空（按 0）。结算金额由系统自动计算，无需填写。"
+        description="首列为「主体公司」（须与组织架构启用公司名称精确匹配）。折扣率可留空（按 0）。结算金额由系统自动计算，无需填写。"
       />
-
-      <div class="flex items-center gap-2">
-        <span class="shrink-0 text-sm text-gray-700">
-          银行账号<span class="text-red-500">*</span>
-        </span>
-        <Input
-          v-model:value="bankAccount"
-          placeholder="请输入银行账号（将应用于所有导入行）"
-          allow-clear
-        />
-      </div>
 
       <Upload
         :before-upload="beforeUpload"

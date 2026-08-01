@@ -15,14 +15,20 @@ public class FinanceBusinessOrderRespVO {
     private Long id;
     @Schema(description = "商务签单号")
     private String orderNo;
+    @Schema(description = "主体公司组织部门编号")
+    private Long entityCompanyDeptId;
+    @Schema(description = "主体公司名称")
+    private String entityCompanyName;
     @Schema(description = "导入日期")
     private LocalDate importDate;
     @Schema(description = "导入人编号")
     private Long importerId;
     @Schema(description = "导入人名称")
     private String importerName;
-    @Schema(description = "合同审批流程编号")
+    @Schema(description = "合同审批流程编号（legacy）")
     private String contractProcessId;
+    @Schema(description = "合同签约申请编号（正式关联）")
+    private Long contractApplicationId;
     @Schema(description = "下单日期")
     private LocalDate orderDate;
     @Schema(description = "产品名称")
@@ -41,8 +47,6 @@ public class FinanceBusinessOrderRespVO {
     private BigDecimal discountRate;
     @Schema(description = "签单结算金额")
     private BigDecimal settlementAmount;
-    @Schema(description = "银行账户")
-    private String bankAccount;
     @Schema(description = "备注")
     private String remark;
     @Schema(description = "已确认认领金额")

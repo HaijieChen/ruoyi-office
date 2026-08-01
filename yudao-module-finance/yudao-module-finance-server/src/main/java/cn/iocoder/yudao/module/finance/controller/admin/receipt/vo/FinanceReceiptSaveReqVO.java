@@ -19,6 +19,10 @@ public class FinanceReceiptSaveReqVO {
     @Schema(description = "编号，修改时必填")
     private Long id;
 
+    @Schema(description = "主体公司组织部门编号", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "主体公司不能为空")
+    private Long entityCompanyDeptId;
+
     @Schema(description = "银行账户", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "银行账户不能为空")
     private String bankAccount;

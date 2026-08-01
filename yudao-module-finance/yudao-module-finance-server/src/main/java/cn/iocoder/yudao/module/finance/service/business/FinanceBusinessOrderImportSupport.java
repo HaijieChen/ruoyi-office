@@ -31,6 +31,9 @@ final class FinanceBusinessOrderImportSupport {
         if (row == null) {
             return "导入行不能为空";
         }
+        if (StrUtil.isBlank(row.getEntityCompanyName())) {
+            return "主体公司不能为空";
+        }
         if (row.getOrderDate() == null) {
             return "下单日期不能为空";
         }
@@ -54,6 +57,9 @@ final class FinanceBusinessOrderImportSupport {
                 || amounts.discountRate().compareTo(BigDecimal.ONE) > 0) {
             return "折扣率必须在 0 到 1 之间";
         }
+        if (StrUtil.isBlank(row.getContractApplicationNo())) {
+            return "合同申请业务单号不能为空";
+        }
         return null;
     }
 
@@ -61,29 +67,38 @@ final class FinanceBusinessOrderImportSupport {
         return executionAmount.multiply(BigDecimal.ONE.subtract(discountRate)).setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * 幂等键：不含 bank_account；含主体公司 deptId（C2）。
+     */
     static String calculateSourceRowHash(FinanceBusinessOrderImportExcelVO row, NormalizedAmounts amounts,
-                                          String bankAccount) {
+                                         Long entityCompanyDeptId) {
         String canonicalRow = String.join("\u001f",
                 normalize(row.getContractProcessId()), row.getOrderDate().toString(), normalize(row.getProductName()),
                 normalize(row.getContactPerson()), row.getExecutionStartDate().toString(),
                 row.getExecutionEndDate().toString(), normalize(row.getPayerName()),
                 normalize(amounts.signedExecutionAmount()), normalize(amounts.discountRate()),
-                normalize(row.getSummary()), bankAccount);
+                normalize(row.getSummary()),
+                entityCompanyDeptId == null ? "" : entityCompanyDeptId.toString());
         return DigestUtil.sha256Hex(canonicalRow);
     }
 
     static FinanceBusinessOrderDO buildOrder(FinanceBusinessOrderImportExcelVO row, Long importerId,
-                                             String bankAccount, NormalizedAmounts amounts,
-                                             String sourceRowHash, String orderNo) {
+                                             Long entityCompanyDeptId, String entityCompanyName,
+                                             NormalizedAmounts amounts,
+                                             String sourceRowHash, String orderNo, Long contractApplicationId) {
         return FinanceBusinessOrderDO.builder()
                 .orderNo(orderNo).importDate(LocalDate.now()).importerId(importerId)
-                .contractProcessId(trimToNull(row.getContractProcessId())).remark(trimToNull(row.getSummary()))
+                .entityCompanyDeptId(entityCompanyDeptId)
+                .entityCompanyName(entityCompanyName)
+                .contractProcessId(trimToNull(row.getContractProcessId()))
+                .contractApplicationId(contractApplicationId)
+                .remark(trimToNull(row.getSummary()))
                 .confirmedClaimedAmount(ZERO)
                 .orderDate(row.getOrderDate()).productName(row.getProductName().trim())
                 .contactPerson(row.getContactPerson().trim()).executionStartDate(row.getExecutionStartDate())
                 .executionEndDate(row.getExecutionEndDate()).payerName(trimToNull(row.getPayerName()))
                 .signedExecutionAmount(amounts.signedExecutionAmount()).discountRate(amounts.discountRate())
-                .settlementAmount(amounts.settlementAmount()).bankAccount(bankAccount)
+                .settlementAmount(amounts.settlementAmount())
                 .sourceRowHash(sourceRowHash).build();
     }
 

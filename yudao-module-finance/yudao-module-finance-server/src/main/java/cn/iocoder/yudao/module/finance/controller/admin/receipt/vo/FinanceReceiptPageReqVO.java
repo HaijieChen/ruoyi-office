@@ -25,6 +25,9 @@ public class FinanceReceiptPageReqVO extends PageParam {
     @Schema(description = "银行账户")
     private String bankAccount;
 
+    @Schema(description = "主体公司组织部门编号")
+    private Long entityCompanyDeptId;
+
     @Schema(description = "交易日期")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime[] transactionDate;

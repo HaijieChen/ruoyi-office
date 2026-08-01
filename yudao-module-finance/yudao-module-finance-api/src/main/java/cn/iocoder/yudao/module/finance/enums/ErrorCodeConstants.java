@@ -19,6 +19,10 @@ public interface ErrorCodeConstants {
             "仅未认领且无认领金额的银行到款可修改");
     ErrorCode RECEIPT_DELETE_STATUS_INVALID = new ErrorCode(1_040_000_009,
             "仅未认领且无认领金额的银行到款可删除");
+    ErrorCode ENTITY_COMPANY_REQUIRED = new ErrorCode(1_040_000_010, "主体公司不能为空");
+    ErrorCode ENTITY_COMPANY_INVALID = new ErrorCode(1_040_000_011, "主体公司不存在或未启用");
+    ErrorCode ENTITY_COMPANY_NAME_DUPLICATE = new ErrorCode(1_040_000_012,
+            "主体公司名称重复，请改用唯一名称");
 
     // ========== 商务单 1-040-001-000 ==========
     ErrorCode BUSINESS_ORDER_NOT_EXISTS = new ErrorCode(1_040_001_000, "商务单不存在");
@@ -31,6 +35,14 @@ public interface ErrorCodeConstants {
             "应收金额不能低于已确认认领金额");
     ErrorCode BUSINESS_ORDER_DELETE_HAS_CLAIM = new ErrorCode(1_040_001_008,
             "已有确认认领金额的商务单不能删除");
+    ErrorCode BUSINESS_ORDER_CONTRACT_REQUIRED = new ErrorCode(1_040_001_009,
+            "商务单必须关联已通过的合同签约申请");
+    ErrorCode BUSINESS_ORDER_CONTRACT_INVALID = new ErrorCode(1_040_001_010,
+            "合同不存在、未通过或不属于当前用户，无法关联");
+    ErrorCode BUSINESS_ORDER_CONTRACT_CLEAR_FORBIDDEN = new ErrorCode(1_040_001_011,
+            "禁止清空商务单已关联合同");
+    ErrorCode BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN = new ErrorCode(1_040_001_012,
+            "存在开票占用时禁止更换合同");
 
     // ========== 到款认领 1-040-002-000 ==========
     ErrorCode RECEIPT_CLAIM_NOT_EXISTS = new ErrorCode(1_040_002_000, "到款认领单不存在");
@@ -88,5 +100,32 @@ public interface ErrorCodeConstants {
     ErrorCode CUSTOMER_COMPANY_NAME_REQUIRED = new ErrorCode(1_040_004_002, "客户公司名称不能为空");
     ErrorCode CUSTOMER_COMPANY_TAX_NO_REQUIRED = new ErrorCode(1_040_004_003, "纳税人识别号不能为空");
     ErrorCode CUSTOMER_COMPANY_STATUS_INVALID = new ErrorCode(1_040_004_004, "客户公司状态无效");
+
+    // ========== 合同签约申请 1-040-005-000 ==========
+    ErrorCode CONTRACT_APPLICATION_NOT_EXISTS = new ErrorCode(1_040_005_000, "合同签约申请不存在");
+    ErrorCode CONTRACT_APPLICATION_STATUS_INVALID = new ErrorCode(1_040_005_001,
+            "当前审批状态不允许执行该操作");
+    ErrorCode CONTRACT_APPLICATION_APPROVAL_OUTCOME_INVALID = new ErrorCode(1_040_005_002,
+            "审批结果非法或状态迁移不被允许");
+    ErrorCode CONTRACT_APPLICATION_COUNTERPARTY_REQUIRED = new ErrorCode(1_040_005_003,
+            "必须选择启用中的对方（客商）公司");
+    ErrorCode CONTRACT_APPLICATION_AMOUNT_INVALID = new ErrorCode(1_040_005_004,
+            "合同金额无效：未勾选金额不适用时金额必须大于 0");
+    ErrorCode CONTRACT_APPLICATION_FIELD_REQUIRED = new ErrorCode(1_040_005_005,
+            "合同签约申请必填字段不完整");
+    ErrorCode CONTRACT_APPLICATION_CANCEL_NOT_ALLOWED = new ErrorCode(1_040_005_006,
+            "已进入用印及之后节点，禁止申请人撤回");
+    ErrorCode CONTRACT_APPLICATION_PRE_PROCESS_REQUIRED = new ErrorCode(1_040_005_007,
+            "采购合同/租赁合同必须填写前置流程");
+    ErrorCode CONTRACT_APPLICATION_MAIL_ADDRESS_REQUIRED = new ErrorCode(1_040_005_008,
+            "需要邮寄时必须填写邮寄地址");
+    ErrorCode CONTRACT_APPLICATION_FILE_TYPE_INVALID = new ErrorCode(1_040_005_009,
+            "文件类型不在允许枚举内");
+    ErrorCode CONTRACT_APPLICATION_SEAL_FILE_REQUIRED = new ErrorCode(1_040_005_010,
+            "用印备案扫描件不能为空");
+    ErrorCode CONTRACT_APPLICATION_MAIL_TRACKING_REQUIRED = new ErrorCode(1_040_005_011,
+            "邮寄单号不能为空");
+    ErrorCode CONTRACT_APPLICATION_EXEC_NOT_ALLOWED = new ErrorCode(1_040_005_012,
+            "当前状态或节点不允许执行该用印/归档/邮寄操作");
 
 }

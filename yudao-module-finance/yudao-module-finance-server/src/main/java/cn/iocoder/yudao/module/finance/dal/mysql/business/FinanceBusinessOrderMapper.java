@@ -19,7 +19,7 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
     default PageResult<FinanceBusinessOrderDO> selectPage(FinanceBusinessOrderPageReqVO reqVO) {
         MPJLambdaWrapperX<FinanceBusinessOrderDO> wrapper = new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
                 .likeIfPresent(FinanceBusinessOrderDO::getOrderNo, reqVO.getOrderNo())
-                .likeIfPresent(FinanceBusinessOrderDO::getBankAccount, reqVO.getBankAccount())
+                .eqIfPresent(FinanceBusinessOrderDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
                 .likeIfPresent(FinanceBusinessOrderDO::getContractProcessId, reqVO.getContractProcessId())
                 .likeIfPresent(FinanceBusinessOrderDO::getProductName, reqVO.getProductName())
                 .likeIfPresent(FinanceBusinessOrderDO::getPayerName, reqVO.getPayerName())
@@ -37,7 +37,7 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
                                                                    Long importerId) {
         return selectPage(reqVO, new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
                 .likeIfPresent(FinanceBusinessOrderDO::getOrderNo, reqVO.getOrderNo())
-                .likeIfPresent(FinanceBusinessOrderDO::getBankAccount, reqVO.getBankAccount())
+                .eqIfPresent(FinanceBusinessOrderDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
                 .likeIfPresent(FinanceBusinessOrderDO::getContractProcessId, reqVO.getContractProcessId())
                 .likeIfPresent(FinanceBusinessOrderDO::getProductName, reqVO.getProductName())
                 .likeIfPresent(FinanceBusinessOrderDO::getPayerName, reqVO.getPayerName())

@@ -12,6 +12,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Select,
   Textarea,
   message,
 } from 'ant-design-vue';
@@ -22,13 +23,21 @@ import {
   getReceipt,
   updateReceipt,
 } from '#/api/finance/receipt';
+import { getSimpleCompanyList } from '#/api/system/dept';
 
 defineOptions({ name: 'FinanceReceiptForm' });
 
 const emit = defineEmits(['success']);
 
+interface CompanyOption {
+  label: string;
+  value: number;
+}
+
 interface FormData {
   id?: number;
+  entityCompanyDeptId?: number;
+  entityCompanyName?: string;
   bankAccount?: string;
   /** DatePicker 绑定字符串；提交时转 epoch millis */
   transactionDate?: string;
@@ -73,6 +82,8 @@ function toEpochMillis(value?: string): number | undefined {
 
 const formRef = ref();
 const formData = ref<FormData>({});
+const companyOptions = ref<CompanyOption[]>([]);
+const loadingCompany = ref(false);
 
 const isEdit = computed(() => !!formData.value.id);
 const getTitle = computed(() =>
@@ -80,6 +91,9 @@ const getTitle = computed(() =>
 );
 
 const rules: Record<string, Rule[]> = {
+  entityCompanyDeptId: [
+    { required: true, message: '主体公司不能为空', trigger: 'change' },
+  ],
   bankAccount: [{ required: true, message: '银行账户不能为空', trigger: 'blur' }],
   transactionDate: [
     { required: true, message: '交易日期不能为空', trigger: 'change' },
@@ -103,16 +117,35 @@ function resetForm() {
   formRef.value?.resetFields();
 }
 
+async function loadCompanyOptions() {
+  loadingCompany.value = true;
+  try {
+    const list = (await getSimpleCompanyList()) || [];
+    companyOptions.value = list
+      .filter((c) => c.id != null)
+      .map((c) => ({
+        value: c.id as number,
+        label: c.name,
+      }));
+  } finally {
+    loadingCompany.value = false;
+  }
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
+      companyOptions.value = [];
       return;
     }
+    await loadCompanyOptions();
     const data = modalApi.getData<{ id?: number }>() || {};
     if (data.id) {
       const detail = await getReceipt(data.id);
       formData.value = {
         id: detail.id,
+        entityCompanyDeptId: detail.entityCompanyDeptId,
+        entityCompanyName: detail.entityCompanyName,
         bankAccount: detail.bankAccount,
         transactionDate: toDisplayDateTime(detail.transactionDate),
         payerName: detail.payerName,
@@ -122,6 +155,20 @@ const [Modal, modalApi] = useVbenModal({
         bankSerialNo: detail.bankSerialNo,
         receiptNo: detail.receiptNo,
       };
+      if (
+        detail.entityCompanyDeptId != null &&
+        !companyOptions.value.some((o) => o.value === detail.entityCompanyDeptId)
+      ) {
+        companyOptions.value = [
+          {
+            value: detail.entityCompanyDeptId,
+            label:
+              detail.entityCompanyName ||
+              `公司 #${detail.entityCompanyDeptId}`,
+          },
+          ...companyOptions.value,
+        ];
+      }
     } else {
       formData.value = {};
     }
@@ -137,6 +184,7 @@ const [Modal, modalApi] = useVbenModal({
       }
       const payload: FinanceBankReceiptApi.SaveForm = {
         id: formData.value.id,
+        entityCompanyDeptId: formData.value.entityCompanyDeptId!,
         bankAccount: formData.value.bankAccount!,
         // 后端 LocalDateTime 使用 epoch millis 反序列化
         transactionDate: transactionDate as unknown as string,
@@ -177,6 +225,23 @@ const [Modal, modalApi] = useVbenModal({
     >
       <Form.Item v-if="formData.receiptNo" label="到款流水号">
         <Input :value="formData.receiptNo" disabled />
+      </Form.Item>
+      <Form.Item label="主体公司" name="entityCompanyDeptId">
+        <Select
+          v-model:value="formData.entityCompanyDeptId"
+          class="w-full"
+          show-search
+          allow-clear
+          :loading="loadingCompany"
+          :options="companyOptions"
+          option-filter-prop="label"
+          placeholder="请选择组织架构中的公司"
+          @dropdown-visible-change="
+            (open: boolean) => {
+              if (open && !companyOptions.length) loadCompanyOptions();
+            }
+          "
+        />
       </Form.Item>
       <Form.Item label="银行账户" name="bankAccount">
         <Input

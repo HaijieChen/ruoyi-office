@@ -8,8 +8,12 @@ import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusin
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisDAO;
+import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -19,9 +23,14 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_CONTRACT_CLEAR_FORBIDDEN;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_CONTRACT_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_CONTRACT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_DELETE_HAS_CLAIM;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_NOT_EXISTS;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED;
@@ -34,11 +43,17 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
 
     private final FinanceBusinessOrderMapper businessOrderMapper;
     private final FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO;
+    private final FinanceContractApplicationMapper contractApplicationMapper;
+    private final FinanceEntityCompanyResolver entityCompanyResolver;
 
     public FinanceBusinessOrderServiceImpl(FinanceBusinessOrderMapper businessOrderMapper,
-                                           FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO) {
+                                           FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO,
+                                           FinanceContractApplicationMapper contractApplicationMapper,
+                                           FinanceEntityCompanyResolver entityCompanyResolver) {
         this.businessOrderMapper = businessOrderMapper;
         this.businessOrderNoRedisDAO = businessOrderNoRedisDAO;
+        this.contractApplicationMapper = contractApplicationMapper;
+        this.entityCompanyResolver = entityCompanyResolver;
     }
 
     @Override
@@ -47,8 +62,13 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 FinanceBusinessOrderImportSupport.normalizeAmounts(
                         createReqVO.getSignedExecutionAmount(), createReqVO.getDiscountRate());
         validateBusinessOrderSave(createReqVO, amounts);
+        FinanceEntityCompanyResolver.ResolvedCompany company =
+                entityCompanyResolver.requireByDeptId(createReqVO.getEntityCompanyDeptId());
+        // 新数据硬强制：必须关联已通过且本人申请的合同（C4/C18）
+        Long contractAppId = requireSelectableContract(createReqVO.getContractApplicationId(), importerId);
         LocalDate importDate = LocalDate.now();
-        FinanceBusinessOrderDO businessOrder = buildBusinessOrder(createReqVO, amounts);
+        FinanceBusinessOrderDO businessOrder = buildBusinessOrder(createReqVO, amounts, company);
+        businessOrder.setContractApplicationId(contractAppId);
         businessOrder.setOrderNo(businessOrderNoRedisDAO.generate(importDate));
         businessOrder.setImportDate(importDate);
         businessOrder.setImporterId(importerId);
@@ -64,18 +84,28 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 FinanceBusinessOrderImportSupport.normalizeAmounts(
                         updateReqVO.getSignedExecutionAmount(), updateReqVO.getDiscountRate());
         validateBusinessOrderSave(updateReqVO, amounts);
+        FinanceEntityCompanyResolver.ResolvedCompany company =
+                entityCompanyResolver.requireByDeptId(updateReqVO.getEntityCompanyDeptId());
         BigDecimal confirmedClaimedAmount = currentOrder.getConfirmedClaimedAmount() == null
                 ? ZERO : currentOrder.getConfirmedClaimedAmount();
         if (amounts.settlementAmount().compareTo(confirmedClaimedAmount) < 0) {
             throw exception(BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED);
         }
-        FinanceBusinessOrderDO updateObj = buildBusinessOrder(updateReqVO, amounts);
+        Long resolvedContractId = resolveContractOnUpdate(currentOrder, updateReqVO, currentOrder.getImporterId());
+        FinanceBusinessOrderDO updateObj = buildBusinessOrder(updateReqVO, amounts, company);
         updateObj.setId(currentOrder.getId());
         updateObj.setOrderNo(currentOrder.getOrderNo());
         updateObj.setImportDate(currentOrder.getImportDate());
         updateObj.setImporterId(currentOrder.getImporterId());
         updateObj.setConfirmedClaimedAmount(confirmedClaimedAmount);
         updateObj.setSourceRowHash(currentOrder.getSourceRowHash());
+        updateObj.setContractApplicationId(resolvedContractId);
+        // 保留 legacy 脏文本列（未关联展示）；正式关联只认 contractApplicationId
+        if (resolvedContractId != null) {
+            updateObj.setContractProcessId(currentOrder.getContractProcessId());
+        } else {
+            updateObj.setContractProcessId(currentOrder.getContractProcessId());
+        }
         businessOrderMapper.updateById(updateObj);
     }
 
@@ -110,14 +140,10 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
 
     @Override
     public FinanceBusinessOrderImportRespVO importBusinessOrderList(List<FinanceBusinessOrderImportExcelVO> importRows,
-                                                                    Long importerId, String bankAccount) {
+                                                                    Long importerId) {
         if (CollUtil.isEmpty(importRows)) {
             throw new IllegalArgumentException("导入商务签单数据不能为空");
         }
-        if (StrUtil.isBlank(bankAccount)) {
-            throw new IllegalArgumentException("银行账户不能为空");
-        }
-        String normalizedBankAccount = bankAccount.trim();
         FinanceBusinessOrderImportRespVO response = FinanceBusinessOrderImportRespVO.builder()
                 .orderNos(new ArrayList<>()).failureRows(new LinkedHashMap<>()).skippedRows(new ArrayList<>()).build();
         Set<String> sourceRowHashes = new HashSet<>();
@@ -133,19 +159,98 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 response.getFailureRows().put(rowNumber, failureReason);
                 continue;
             }
+            FinanceEntityCompanyResolver.ResolvedCompany[] companyOut =
+                    new FinanceEntityCompanyResolver.ResolvedCompany[1];
+            String companyError = entityCompanyResolver.matchByNameOrError(
+                    row.getEntityCompanyName(), companyOut);
+            if (companyError != null) {
+                response.getFailureRows().put(rowNumber, companyError);
+                continue;
+            }
+            FinanceEntityCompanyResolver.ResolvedCompany company = companyOut[0];
             String sourceRowHash = FinanceBusinessOrderImportSupport.calculateSourceRowHash(
-                    row, amounts, normalizedBankAccount);
+                    row, amounts, company.deptId());
             if (!sourceRowHashes.add(sourceRowHash)
                     || businessOrderMapper.selectBySourceRowHash(sourceRowHash) != null) {
                 response.getSkippedRows().add(rowNumber);
                 continue;
             }
+            Long contractAppId;
+            try {
+                contractAppId = resolveContractByApplicationNo(row.getContractApplicationNo(), importerId);
+            } catch (Exception ex) {
+                response.getFailureRows().put(rowNumber, "合同申请业务单号无效：未找到已通过且本人申请的合同");
+                continue;
+            }
             String orderNo = businessOrderNoRedisDAO.generate(LocalDate.now());
             businessOrderMapper.insert(FinanceBusinessOrderImportSupport.buildOrder(row, importerId,
-                    normalizedBankAccount, amounts, sourceRowHash, orderNo));
+                    company.deptId(), company.name(), amounts, sourceRowHash, orderNo, contractAppId));
             response.getOrderNos().add(orderNo);
         }
         return response;
+    }
+
+    /**
+     * 新建/导入：合同必须 APPROVED 且申请人=当前用户。
+     */
+    private Long requireSelectableContract(Long contractApplicationId, Long userId) {
+        if (contractApplicationId == null) {
+            throw exception(BUSINESS_ORDER_CONTRACT_REQUIRED);
+        }
+        FinanceContractApplicationDO contract = contractApplicationMapper.selectById(contractApplicationId);
+        if (contract == null
+                || !FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(contract.getApprovalStatus())
+                || Boolean.TRUE.equals(contract.getVoided())
+                || !Objects.equals(contract.getApplicantUserId(), userId)) {
+            throw exception(BUSINESS_ORDER_CONTRACT_INVALID);
+        }
+        return contract.getId();
+    }
+
+    private Long resolveContractByApplicationNo(String applicationNo, Long userId) {
+        if (StrUtil.isBlank(applicationNo)) {
+            throw exception(BUSINESS_ORDER_CONTRACT_REQUIRED);
+        }
+        FinanceContractApplicationDO contract =
+                contractApplicationMapper.selectByApplicationNo(applicationNo.trim());
+        if (contract == null
+                || !FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(contract.getApprovalStatus())
+                || Boolean.TRUE.equals(contract.getVoided())
+                || !Objects.equals(contract.getApplicantUserId(), userId)) {
+            throw exception(BUSINESS_ORDER_CONTRACT_INVALID);
+        }
+        return contract.getId();
+    }
+
+    /**
+     * 更新：历史空可保持空；写入则校验；禁止清空已映射；有开票占用禁止换合同。
+     */
+    private Long resolveContractOnUpdate(FinanceBusinessOrderDO current,
+                                         FinanceBusinessOrderSaveReqVO reqVO,
+                                         Long userId) {
+        Long currentId = current.getContractApplicationId();
+        Long requestedId = reqVO.getContractApplicationId();
+        if (currentId == null) {
+            // 历史空：未传合同可保存其它字段；传入则校验并写入
+            if (requestedId == null) {
+                return null;
+            }
+            return requireSelectableContract(requestedId, userId);
+        }
+        // 已映射：禁止清空
+        if (requestedId == null) {
+            throw exception(BUSINESS_ORDER_CONTRACT_CLEAR_FORBIDDEN);
+        }
+        if (Objects.equals(currentId, requestedId)) {
+            return currentId;
+        }
+        // 换合同：开票占用 > 0 禁止
+        BigDecimal occupied = current.getInvoicedOccupiedAmount() == null
+                ? ZERO : current.getInvoicedOccupiedAmount();
+        if (occupied.compareTo(ZERO) > 0) {
+            throw exception(BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN);
+        }
+        return requireSelectableContract(requestedId, userId);
     }
 
     private FinanceBusinessOrderDO validateBusinessOrderExists(Long id) {
@@ -158,8 +263,8 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
 
     private static void validateBusinessOrderSave(FinanceBusinessOrderSaveReqVO reqVO,
                                                   FinanceBusinessOrderImportSupport.NormalizedAmounts amounts) {
-        if (StrUtil.isBlank(reqVO.getBankAccount())) {
-            throw new IllegalArgumentException("银行账户不能为空");
+        if (reqVO.getEntityCompanyDeptId() == null) {
+            throw new IllegalArgumentException("主体公司不能为空");
         }
         if (reqVO.getOrderDate() == null || StrUtil.isBlank(reqVO.getProductName())
                 || StrUtil.isBlank(reqVO.getContactPerson()) || reqVO.getExecutionStartDate() == null
@@ -180,10 +285,13 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
     }
 
     private static FinanceBusinessOrderDO buildBusinessOrder(FinanceBusinessOrderSaveReqVO reqVO,
-                                                               FinanceBusinessOrderImportSupport.NormalizedAmounts amounts) {
+                                                               FinanceBusinessOrderImportSupport.NormalizedAmounts amounts,
+                                                               FinanceEntityCompanyResolver.ResolvedCompany company) {
         return FinanceBusinessOrderDO.builder()
-                .bankAccount(reqVO.getBankAccount().trim())
+                .entityCompanyDeptId(company.deptId())
+                .entityCompanyName(company.name())
                 .contractProcessId(trimToNull(reqVO.getContractProcessId()))
+                .contractApplicationId(reqVO.getContractApplicationId())
                 .orderDate(reqVO.getOrderDate()).productName(reqVO.getProductName().trim())
                 .contactPerson(reqVO.getContactPerson().trim()).executionStartDate(reqVO.getExecutionStartDate())
                 .executionEndDate(reqVO.getExecutionEndDate()).payerName(trimToNull(reqVO.getPayerName()))

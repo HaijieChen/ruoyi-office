@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceReceiptLifecycle
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceReceiptNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptClaimStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptLifecycleActionEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,20 +32,25 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     private final FinanceBankReceiptMapper receiptMapper;
     private final FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper;
     private final FinanceReceiptNoRedisDAO receiptNoRedisDAO;
+    private final FinanceEntityCompanyResolver entityCompanyResolver;
 
     public FinanceReceiptServiceImpl(FinanceBankReceiptMapper receiptMapper,
                                      FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper,
-                                     FinanceReceiptNoRedisDAO receiptNoRedisDAO) {
+                                     FinanceReceiptNoRedisDAO receiptNoRedisDAO,
+                                     FinanceEntityCompanyResolver entityCompanyResolver) {
         this.receiptMapper = receiptMapper;
         this.lifecycleAuditMapper = lifecycleAuditMapper;
         this.receiptNoRedisDAO = receiptNoRedisDAO;
+        this.entityCompanyResolver = entityCompanyResolver;
     }
 
     @Override
     public Long createReceipt(FinanceReceiptSaveReqVO createReqVO, Long importerId) {
         validateWritableReceipt(createReqVO, null);
+        FinanceEntityCompanyResolver.ResolvedCompany company =
+                entityCompanyResolver.requireByDeptId(createReqVO.getEntityCompanyDeptId());
         String receiptNo = receiptNoRedisDAO.generate(LocalDate.now());
-        FinanceReceiptDO receipt = buildReceiptFromSave(createReqVO, importerId, receiptNo);
+        FinanceReceiptDO receipt = buildReceiptFromSave(createReqVO, importerId, receiptNo, company);
         receiptMapper.insert(receipt);
         return receipt.getId();
     }
@@ -54,7 +60,9 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         FinanceReceiptDO current = getRequiredReceipt(updateReqVO.getId());
         validateUnclaimedEditable(current, false);
         validateWritableReceipt(updateReqVO, current.getId());
-        FinanceReceiptDO update = buildReceiptFromSave(updateReqVO, current.getImporterId(), current.getReceiptNo());
+        FinanceEntityCompanyResolver.ResolvedCompany company =
+                entityCompanyResolver.requireByDeptId(updateReqVO.getEntityCompanyDeptId());
+        FinanceReceiptDO update = buildReceiptFromSave(updateReqVO, current.getImporterId(), current.getReceiptNo(), company);
         update.setId(current.getId());
         update.setImportDate(current.getImportDate());
         update.setClaimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus());
@@ -101,6 +109,14 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 respVO.getFailureRows().put(rowNumber, failureReason);
                 continue;
             }
+            FinanceEntityCompanyResolver.ResolvedCompany[] companyOut =
+                    new FinanceEntityCompanyResolver.ResolvedCompany[1];
+            String companyError = entityCompanyResolver.matchByNameOrError(
+                    importReceipt.getEntityCompanyName(), companyOut);
+            if (companyError != null) {
+                respVO.getFailureRows().put(rowNumber, companyError);
+                continue;
+            }
             // validate 已保证日期可解析
             LocalDateTime transactionDate = FinanceReceiptImportDateParser.tryParse(importReceipt.getTransactionDate());
             if (receiptMapper.selectByBankSerialNo(importReceipt.getBankSerialNo()) != null) {
@@ -109,7 +125,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
             }
             bankSerialNos.add(importReceipt.getBankSerialNo());
             String receiptNo = receiptNoRedisDAO.generate(LocalDate.now());
-            receiptMapper.insert(buildReceipt(importReceipt, importerId, receiptNo, transactionDate));
+            receiptMapper.insert(buildReceipt(importReceipt, importerId, receiptNo, transactionDate, companyOut[0]));
             respVO.getReceiptNos().add(receiptNo);
         }
         return respVO;
@@ -178,11 +194,12 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     }
 
     private void validateWritableReceipt(FinanceReceiptSaveReqVO reqVO, Long excludeId) {
-        if (StrUtil.isBlank(reqVO.getBankAccount()) || reqVO.getTransactionDate() == null
+        if (reqVO.getEntityCompanyDeptId() == null
+                || StrUtil.isBlank(reqVO.getBankAccount()) || reqVO.getTransactionDate() == null
                 || StrUtil.isBlank(reqVO.getPayerName()) || reqVO.getTransactionAmount() == null
                 || reqVO.getTransactionAmount().compareTo(BigDecimal.ZERO) <= 0
                 || StrUtil.isBlank(reqVO.getBankSerialNo())) {
-            throw new IllegalArgumentException("银行账户、交易日期、付款方名称、交易金额和银行流水号不能为空，且金额须大于 0");
+            throw new IllegalArgumentException("主体公司、银行账户、交易日期、付款方名称、交易金额和银行流水号不能为空，且金额须大于 0");
         }
         FinanceReceiptDO exists = receiptMapper.selectByBankSerialNo(reqVO.getBankSerialNo().trim());
         if (exists != null && (excludeId == null || !exists.getId().equals(excludeId))) {
@@ -190,12 +207,16 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         }
     }
 
-    private static FinanceReceiptDO buildReceiptFromSave(FinanceReceiptSaveReqVO reqVO, Long importerId, String receiptNo) {
+    private static FinanceReceiptDO buildReceiptFromSave(FinanceReceiptSaveReqVO reqVO, Long importerId,
+                                                         String receiptNo,
+                                                         FinanceEntityCompanyResolver.ResolvedCompany company) {
         return FinanceReceiptDO.builder()
                 .receiptNo(receiptNo)
                 .importDate(LocalDate.now())
                 .importerId(importerId)
                 .bankAccount(reqVO.getBankAccount().trim())
+                .entityCompanyDeptId(company.deptId())
+                .entityCompanyName(company.name())
                 .transactionDate(reqVO.getTransactionDate())
                 .payerName(reqVO.getPayerName().trim())
                 .payerAccount(trimToNull(reqVO.getPayerAccount()))
@@ -231,6 +252,9 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     }
 
     private static String validateImportReceipt(FinanceReceiptImportExcelVO importReceipt, Set<String> bankSerialNos) {
+        if (StrUtil.isBlank(importReceipt.getEntityCompanyName())) {
+            return "主体公司不能为空";
+        }
         if (StrUtil.isBlank(importReceipt.getBankAccount())) {
             return "银行账户不能为空";
         }
@@ -256,12 +280,15 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     }
 
     private static FinanceReceiptDO buildReceipt(FinanceReceiptImportExcelVO importReceipt, Long importerId,
-                                                 String receiptNo, LocalDateTime transactionDate) {
+                                                 String receiptNo, LocalDateTime transactionDate,
+                                                 FinanceEntityCompanyResolver.ResolvedCompany company) {
         return FinanceReceiptDO.builder()
                 .receiptNo(receiptNo)
                 .importDate(LocalDate.now())
                 .importerId(importerId)
                 .bankAccount(importReceipt.getBankAccount())
+                .entityCompanyDeptId(company.deptId())
+                .entityCompanyName(company.name())
                 .transactionDate(transactionDate)
                 .payerName(importReceipt.getPayerName())
                 .payerAccount(importReceipt.getPayerAccount())

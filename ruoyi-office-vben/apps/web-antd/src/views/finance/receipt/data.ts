@@ -1,6 +1,7 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { getSimpleCompanyList } from '#/api/system/dept';
 import { getRangePickerDefaultProps } from '#/utils';
 
 /** 认领状态标签 */
@@ -25,6 +26,19 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请输入回单编号',
         allowClear: true,
+      },
+    },
+    {
+      fieldName: 'entityCompanyDeptId',
+      label: '主体公司',
+      component: 'ApiSelect',
+      componentProps: {
+        placeholder: '请选择主体公司',
+        allowClear: true,
+        showSearch: true,
+        api: getSimpleCompanyList,
+        labelField: 'name',
+        valueField: 'id',
       },
     },
     {
@@ -102,6 +116,11 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '回单编号',
       width: 180,
       fixed: 'left',
+    },
+    {
+      field: 'entityCompanyName',
+      title: '主体公司',
+      minWidth: 140,
     },
     {
       field: 'bankAccount',

@@ -11,8 +11,10 @@ import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceReceiptLifecycle
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceReceiptNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptClaimStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptLifecycleActionEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,14 +23,19 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 class FinanceReceiptServiceImplTest {
 
+    private static final Long ENTITY_COMPANY_DEPT_ID = 10L;
+    private static final String ENTITY_COMPANY_NAME = "示例主体公司";
+
     private FinanceBankReceiptMapper receiptMapper;
     private FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper;
     private FinanceReceiptNoRedisDAO receiptNoRedisDAO;
+    private FinanceEntityCompanyResolver entityCompanyResolver;
     private FinanceReceiptServiceImpl receiptService;
 
     @BeforeEach
@@ -36,7 +43,16 @@ class FinanceReceiptServiceImplTest {
         receiptMapper = mock(FinanceBankReceiptMapper.class);
         lifecycleAuditMapper = mock(FinanceReceiptLifecycleAuditMapper.class);
         receiptNoRedisDAO = mock(FinanceReceiptNoRedisDAO.class);
-        receiptService = new FinanceReceiptServiceImpl(receiptMapper, lifecycleAuditMapper, receiptNoRedisDAO);
+        entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
+        receiptService = new FinanceReceiptServiceImpl(
+                receiptMapper, lifecycleAuditMapper, receiptNoRedisDAO, entityCompanyResolver);
+        when(entityCompanyResolver.matchByNameOrError(anyString(), ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    FinanceEntityCompanyResolver.ResolvedCompany[] out = invocation.getArgument(1);
+                    out[0] = new FinanceEntityCompanyResolver.ResolvedCompany(
+                            ENTITY_COMPANY_DEPT_ID, ENTITY_COMPANY_NAME);
+                    return null;
+                });
     }
 
     @Test
@@ -52,6 +68,8 @@ class FinanceReceiptServiceImplTest {
         assertEquals("交易金额必须大于 0", respVO.getFailureRows().get(3));
         verify(receiptMapper).insert(argThat((FinanceReceiptDO receipt) ->
                 "RC-20260722-1".equals(receipt.getReceiptNo())
+                        && ENTITY_COMPANY_DEPT_ID.equals(receipt.getEntityCompanyDeptId())
+                        && ENTITY_COMPANY_NAME.equals(receipt.getEntityCompanyName())
                         && receipt.getClaimStatus().equals(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
                         && BigDecimal.ZERO.compareTo(receipt.getClaimedAmount()) == 0
                         && new BigDecimal("100.50").compareTo(receipt.getUnclaimedAmount()) == 0));
@@ -243,6 +261,7 @@ class FinanceReceiptServiceImplTest {
 
     private static FinanceReceiptImportExcelVO row(String bankAccount, String bankSerialNo, BigDecimal amount) {
         return FinanceReceiptImportExcelVO.builder()
+                .entityCompanyName(ENTITY_COMPANY_NAME)
                 .bankAccount(bankAccount)
                 .transactionDate("2026-07-22 10:30:00")
                 .payerName("客户 A")

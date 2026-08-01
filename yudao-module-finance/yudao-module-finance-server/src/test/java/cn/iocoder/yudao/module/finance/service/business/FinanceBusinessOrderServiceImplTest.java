@@ -5,8 +5,12 @@ import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisDAO;
+import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -28,22 +33,41 @@ class FinanceBusinessOrderServiceImplTest {
 
     private static final Long IMPORTER_ID = 100L;
     private static final String ORDER_NO = "BO-20260723-1";
+    private static final Long CONTRACT_APP_ID = 50L;
+    private static final Long ENTITY_COMPANY_DEPT_ID = 10L;
+    private static final String ENTITY_COMPANY_NAME = "示例主体公司";
 
     private FinanceBusinessOrderMapper businessOrderMapper;
+    private FinanceContractApplicationMapper contractApplicationMapper;
+    private FinanceEntityCompanyResolver entityCompanyResolver;
     private FinanceBusinessOrderServiceImpl businessOrderService;
 
     @BeforeEach
     void setUp() {
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
+        contractApplicationMapper = mock(FinanceContractApplicationMapper.class);
+        entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         FinanceBusinessOrderNoRedisDAO orderNoRedisDAO = mock(FinanceBusinessOrderNoRedisDAO.class);
-        businessOrderService = new FinanceBusinessOrderServiceImpl(businessOrderMapper, orderNoRedisDAO);
+        businessOrderService = new FinanceBusinessOrderServiceImpl(
+                businessOrderMapper, orderNoRedisDAO, contractApplicationMapper, entityCompanyResolver);
         when(orderNoRedisDAO.generate(any(LocalDate.class))).thenReturn(ORDER_NO);
+        when(contractApplicationMapper.selectById(anyLong())).thenReturn(FinanceContractApplicationDO.builder()
+                .id(CONTRACT_APP_ID)
+                .applicationNo("CT-1")
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .applicantUserId(IMPORTER_ID)
+                .voided(false)
+                .build());
+        when(entityCompanyResolver.requireByDeptId(ENTITY_COMPANY_DEPT_ID))
+                .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(
+                        ENTITY_COMPANY_DEPT_ID, ENTITY_COMPANY_NAME));
     }
 
     @Test
     void createBusinessOrderShouldGenerateMetadataAndSettlementWhenSheetFieldsAreValid() {
         FinanceBusinessOrderSaveReqVO reqVO = validOrder();
         reqVO.setDiscountRate(null);
+        reqVO.setContractApplicationId(CONTRACT_APP_ID);
 
         businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID);
 
@@ -51,8 +75,9 @@ class FinanceBusinessOrderServiceImplTest {
                 ORDER_NO.equals(order.getOrderNo())
                         && LocalDate.now().equals(order.getImportDate())
                         && IMPORTER_ID.equals(order.getImporterId())
-                        && "6222000000000000".equals(order.getBankAccount())
-                        && order.getContractProcessId() == null
+                        && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
+                        && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
+                        && CONTRACT_APP_ID.equals(order.getContractApplicationId())
                         && "产品A".equals(order.getProductName())
                         && "张三".equals(order.getContactPerson())
                         && "付款公司".equals(order.getPayerName())
@@ -125,6 +150,8 @@ class FinanceBusinessOrderServiceImplTest {
                 ORDER_NO.equals(order.getOrderNo())
                         && LocalDate.of(2026, 7, 1).equals(order.getImportDate())
                         && IMPORTER_ID.equals(order.getImporterId())
+                        && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
+                        && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
                         && new BigDecimal("750.00").compareTo(order.getSettlementAmount()) == 0
                         && new BigDecimal("50.00").compareTo(order.getConfirmedClaimedAmount()) == 0
                         && "hash".equals(order.getSourceRowHash())));
@@ -133,7 +160,10 @@ class FinanceBusinessOrderServiceImplTest {
     @Test
     void updateBusinessOrderShouldRejectSettlementBelowConfirmedClaimedAmount() {
         when(businessOrderMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
-                .id(1L).confirmedClaimedAmount(new BigDecimal("800.01")).build());
+                .id(1L)
+                .importerId(IMPORTER_ID)
+                .contractApplicationId(CONTRACT_APP_ID)
+                .confirmedClaimedAmount(new BigDecimal("800.01")).build());
         FinanceBusinessOrderSaveReqVO reqVO = validOrder();
         reqVO.setId(1L);
         reqVO.setDiscountRate(new BigDecimal("0.20"));
@@ -168,7 +198,8 @@ class FinanceBusinessOrderServiceImplTest {
 
     private static FinanceBusinessOrderSaveReqVO validOrder() {
         FinanceBusinessOrderSaveReqVO reqVO = new FinanceBusinessOrderSaveReqVO();
-        reqVO.setBankAccount("6222000000000000");
+        reqVO.setEntityCompanyDeptId(ENTITY_COMPANY_DEPT_ID);
+        reqVO.setContractApplicationId(CONTRACT_APP_ID);
         reqVO.setOrderDate(LocalDate.of(2026, 7, 1));
         reqVO.setProductName("产品A");
         reqVO.setContactPerson("张三");

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  合同签约 finance_contract_sign（CS-T3）
+  - 语义：业务主管→法务→财务→总经理→用印→归档→(needMail?)邮寄→end
+  - 含 BPMNDiagram/DI，可在流程设计器查看与修改
+  - 结束事件挂载：${financeContractApprovalOutcomeDelegate}
+  - 候选组 key 可在设计器中调整（biz_lead/legal/finance/gm/seal_admin/mail）
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://www.iocoder.cn/finance">
+
+  <process id="finance_contract_sign" name="合同签约申请" isExecutable="true">
+
+    <startEvent id="startEvent" name="开始"/>
+    <userTask id="taskBizLead" name="业务主管审批" flowable:candidateGroups="contract_biz_lead">
+      <extensionElements>
+        <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+    <userTask id="taskLegal" name="法务审批" flowable:candidateGroups="contract_legal">
+      <extensionElements>
+        <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+    <userTask id="taskFinance" name="财务审批" flowable:candidateGroups="contract_finance">
+      <extensionElements>
+        <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+    <userTask id="taskGm" name="总经理审批" flowable:candidateGroups="contract_gm">
+      <extensionElements>
+        <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+    <userTask id="taskSeal" name="用印" flowable:candidateGroups="contract_seal_admin">
+      <extensionElements>
+        <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+    <userTask id="taskArchive" name="归档" flowable:candidateGroups="contract_seal_admin">
+      <extensionElements>
+        <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+    <exclusiveGateway id="gatewayMail" name="是否邮寄"/>
+    <userTask id="taskMail" name="邮寄" flowable:candidateGroups="contract_mail">
+      <extensionElements>
+        <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+    <endEvent id="endEvent" name="结束">
+      <extensionElements>
+        <flowable:executionListener event="end" delegateExpression="${financeContractApprovalOutcomeDelegate}"/>
+      </extensionElements>
+    </endEvent>
+
+    <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskBizLead"/>
+    <sequenceFlow id="flow2" sourceRef="taskBizLead" targetRef="taskLegal"/>
+    <sequenceFlow id="flow3" sourceRef="taskLegal" targetRef="taskFinance"/>
+    <sequenceFlow id="flow4" sourceRef="taskFinance" targetRef="taskGm"/>
+    <sequenceFlow id="flow5" sourceRef="taskGm" targetRef="taskSeal"/>
+    <sequenceFlow id="flow6" sourceRef="taskSeal" targetRef="taskArchive"/>
+    <sequenceFlow id="flow7" sourceRef="taskArchive" targetRef="gatewayMail"/>
+    <sequenceFlow id="flow8" sourceRef="gatewayMail" targetRef="taskMail">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${needMail == true}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow9" sourceRef="gatewayMail" targetRef="endEvent">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${needMail != true}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow10" sourceRef="taskMail" targetRef="endEvent"/>
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_finance_contract_sign">
+    <bpmndi:BPMNPlane id="BPMNPlane_finance_contract_sign" bpmnElement="finance_contract_sign">
+      <bpmndi:BPMNShape id="shape_startEvent" bpmnElement="startEvent">
+        <omgdc:Bounds x="100" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskBizLead" bpmnElement="taskBizLead">
+        <omgdc:Bounds x="180" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskLegal" bpmnElement="taskLegal">
+        <omgdc:Bounds x="320" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskFinance" bpmnElement="taskFinance">
+        <omgdc:Bounds x="460" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskGm" bpmnElement="taskGm">
+        <omgdc:Bounds x="600" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskSeal" bpmnElement="taskSeal">
+        <omgdc:Bounds x="740" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskArchive" bpmnElement="taskArchive">
+        <omgdc:Bounds x="880" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gatewayMail" bpmnElement="gatewayMail" isMarkerVisible="true">
+        <omgdc:Bounds x="1035" y="155" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskMail" bpmnElement="taskMail">
+        <omgdc:Bounds x="1140" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_endEvent" bpmnElement="endEvent">
+        <omgdc:Bounds x="1300" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="edge_flow1" bpmnElement="flow1">
+        <omgdi:waypoint x="136" y="180"/><omgdi:waypoint x="180" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow2" bpmnElement="flow2">
+        <omgdi:waypoint x="280" y="180"/><omgdi:waypoint x="320" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow3" bpmnElement="flow3">
+        <omgdi:waypoint x="420" y="180"/><omgdi:waypoint x="460" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow4" bpmnElement="flow4">
+        <omgdi:waypoint x="560" y="180"/><omgdi:waypoint x="600" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow5" bpmnElement="flow5">
+        <omgdi:waypoint x="700" y="180"/><omgdi:waypoint x="740" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow6" bpmnElement="flow6">
+        <omgdi:waypoint x="840" y="180"/><omgdi:waypoint x="880" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow7" bpmnElement="flow7">
+        <omgdi:waypoint x="980" y="180"/><omgdi:waypoint x="1035" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow8" bpmnElement="flow8">
+        <omgdi:waypoint x="1085" y="180"/><omgdi:waypoint x="1140" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow9" bpmnElement="flow9">
+        <omgdi:waypoint x="1060" y="205"/><omgdi:waypoint x="1060" y="260"/>
+        <omgdi:waypoint x="1318" y="260"/><omgdi:waypoint x="1318" y="198"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow10" bpmnElement="flow10">
+        <omgdi:waypoint x="1240" y="180"/><omgdi:waypoint x="1300" y="180"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

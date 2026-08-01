@@ -77,6 +77,11 @@ describe('Generic field absence in schema and columns', () => {
     const columns = useGridColumns() ?? [];
     expect(columns.some((c) => c.field === 'businessType')).toBe(false);
   });
+
+  it('columns must NOT contain bankAccount (S1 removed)', () => {
+    const columns = useGridColumns() ?? [];
+    expect(columns.some((c) => c.field === 'bankAccount')).toBe(false);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -93,9 +98,9 @@ describe('Workbook fields present in columns', () => {
     expect(columns.some((c) => c.field === 'importerName')).toBe(true);
   });
 
-  it('columns include bankAccount', () => {
+  it('columns include entityCompanyName', () => {
     const columns = useGridColumns() ?? [];
-    expect(columns.some((c) => c.field === 'bankAccount')).toBe(true);
+    expect(columns.some((c) => c.field === 'entityCompanyName')).toBe(true);
   });
 
   it('columns include signedExecutionAmount', () => {
@@ -108,9 +113,9 @@ describe('Workbook fields present in columns', () => {
     expect(columns.some((c) => c.field === 'settlementAmount')).toBe(true);
   });
 
-  it('filters include bankAccount', () => {
+  it('filters include entityCompanyDeptId', () => {
     expect(
-      useGridFormSchema().some((s) => s.fieldName === 'bankAccount'),
+      useGridFormSchema().some((s) => s.fieldName === 'entityCompanyDeptId'),
     ).toBe(true);
   });
 
@@ -145,7 +150,7 @@ describe('FinanceBusinessOrderApi — endpoint contracts', () => {
 
   it('createBusinessOrder POSTs backend workbook contract fields, no generic fields', () => {
     const form: FinanceBusinessOrderApi.SaveForm = {
-      bankAccount: '6225xxxx',
+      entityCompanyDeptId: 10,
       orderDate: '2024-01-10',
       productName: '设备A',
       contactPerson: '张三',
@@ -168,10 +173,21 @@ describe('FinanceBusinessOrderApi — endpoint contracts', () => {
     expect('receivableAmount' in payload).toBe(false);
     expect('payableAmount' in payload).toBe(false);
     expect('status' in payload).toBe(false);
+    expect('bankAccount' in payload).toBe(false);
   });
 
   it('updateBusinessOrder PUTs to /finance/business-order/update', () => {
-    const form: FinanceBusinessOrderApi.SaveForm = { id: 7, bankAccount: '6225xxxx', orderDate: '2024-01-10', productName: '设备A', contactPerson: '张三', executionStartDate: '2024-02-01', executionEndDate: '2024-12-31', signedExecutionAmount: 50000, discountRate: 0 };
+    const form: FinanceBusinessOrderApi.SaveForm = {
+      id: 7,
+      entityCompanyDeptId: 10,
+      orderDate: '2024-01-10',
+      productName: '设备A',
+      contactPerson: '张三',
+      executionStartDate: '2024-02-01',
+      executionEndDate: '2024-12-31',
+      signedExecutionAmount: 50000,
+      discountRate: 0,
+    };
     updateBusinessOrder(form);
     expect(mock.put).toHaveBeenCalledWith('/finance/business-order/update', form);
   });
@@ -183,13 +199,12 @@ describe('FinanceBusinessOrderApi — endpoint contracts', () => {
     });
   });
 
-  it('importBusinessOrder calls requestClient.upload with file and bankAccount', () => {
+  it('importBusinessOrder calls requestClient.upload with file only', () => {
     const file = new File([''], 'test.xlsx');
-    const bankAccount = '6225xxxx';
-    importBusinessOrder(file, bankAccount);
+    importBusinessOrder(file);
     expect(mock.upload).toHaveBeenCalledWith(
       '/finance/business-order/import',
-      { file, bankAccount },
+      { file },
     );
   });
 });
@@ -219,9 +234,11 @@ describe('Backend contract alignment', () => {
     const keys: (keyof FinanceBusinessOrderApi.BusinessOrder)[] = [
       'importerId',
       'importerName',
+      'entityCompanyDeptId',
+      'entityCompanyName',
     ];
     // 仅验证字段在类型中存在（TypeScript 编译器会在类型不对时报错）
-    expect(keys.length).toBe(2);
+    expect(keys.length).toBe(4);
     // importer（旧字段）不应存在
     expect('importer' in order).toBe(false);
   });

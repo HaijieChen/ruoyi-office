@@ -1,6 +1,8 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { getSimpleCompanyList } from '#/api/system/dept';
+
 /** 列表搜索表单（对应工作簿字段） */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
@@ -11,10 +13,17 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: { placeholder: '请输入订单编号', allowClear: true },
     },
     {
-      fieldName: 'bankAccount',
-      label: '银行账号',
-      component: 'Input',
-      componentProps: { placeholder: '请输入银行账号', allowClear: true },
+      fieldName: 'entityCompanyDeptId',
+      label: '主体公司',
+      component: 'ApiSelect',
+      componentProps: {
+        placeholder: '请选择主体公司',
+        allowClear: true,
+        showSearch: true,
+        api: getSimpleCompanyList,
+        labelField: 'name',
+        valueField: 'id',
+      },
     },
     {
       fieldName: 'importDate',
@@ -49,7 +58,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'orderNo', title: '订单编号', width: 180, fixed: 'left' },
     { field: 'importDate', title: '导入日期', width: 120, formatter: 'formatDate' },
     { field: 'importerName', title: '导入人', width: 100 },
-    { field: 'bankAccount', title: '银行账号', minWidth: 160 },
+    { field: 'entityCompanyName', title: '主体公司', minWidth: 160 },
     { field: 'contractProcessId', title: '合同流程ID', minWidth: 140 },
     { field: 'orderDate', title: '签单日期', width: 120, formatter: 'formatDate' },
     { field: 'productName', title: '产品/服务', minWidth: 150 },

@@ -1,11 +1,12 @@
 package cn.iocoder.yudao.module.system.api.dept;
 
+import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
+import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.service.dept.DeptService;
-import org.springframework.context.annotation.Bean;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -44,6 +45,13 @@ public class DeptApiImpl implements DeptApi {
     public CommonResult<List<DeptRespDTO>> getChildDeptList(Long id) {
         List<DeptDO> depts = deptService.getChildDeptList(id);
         return success(BeanUtils.toBean(depts, DeptRespDTO.class));
+    }
+
+    @Override
+    public CommonResult<List<DeptRespDTO>> getCompanySimpleList() {
+        List<DeptDO> list = deptService.getCompanyList(
+                new DeptListReqVO().setStatus(CommonStatusEnum.ENABLE.getStatus()));
+        return success(BeanUtils.toBean(list, DeptRespDTO.class));
     }
 
 }

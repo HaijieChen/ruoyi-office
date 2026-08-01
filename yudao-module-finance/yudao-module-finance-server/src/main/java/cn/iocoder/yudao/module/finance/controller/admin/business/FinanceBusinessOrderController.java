@@ -53,7 +53,9 @@ public class FinanceBusinessOrderController {
     public void importTemplate(HttpServletResponse response) throws IOException {
         List<FinanceBusinessOrderImportExcelVO> list = Arrays.asList(
                 FinanceBusinessOrderImportExcelVO.builder()
+                        .entityCompanyName("示例主体公司")
                         .contractProcessId("PROC-DEMO-001")
+                        .contractApplicationNo("HT-DEMO-001")
                         .orderDate(LocalDate.of(2026, 7, 20))
                         .productName("示例产品A")
                         .contactPerson("张三")
@@ -65,7 +67,9 @@ public class FinanceBusinessOrderController {
                         .summary("示例摘要/附言")
                         .build(),
                 FinanceBusinessOrderImportExcelVO.builder()
+                        .entityCompanyName("示例主体公司")
                         .contractProcessId("")
+                        .contractApplicationNo("HT-DEMO-002")
                         .orderDate(LocalDate.of(2026, 7, 21))
                         .productName("示例产品B")
                         .contactPerson("李四")
@@ -84,10 +88,9 @@ public class FinanceBusinessOrderController {
     @Operation(summary = "导入商务签单")
     @PreAuthorize("@ss.hasPermission('finance:business-order:import')")
     public CommonResult<FinanceBusinessOrderImportRespVO> importBusinessOrder(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("bankAccount") String bankAccount) throws IOException {
+            @RequestParam("file") MultipartFile file) throws IOException {
         return success(businessOrderService.importBusinessOrderList(
-                ExcelUtils.read(file, FinanceBusinessOrderImportExcelVO.class), getLoginUserId(), bankAccount));
+                ExcelUtils.read(file, FinanceBusinessOrderImportExcelVO.class), getLoginUserId()));
     }
 
     @PostMapping("/create")

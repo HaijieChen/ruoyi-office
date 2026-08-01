@@ -42,6 +42,7 @@ public class FinanceReceiptController {
     public void importTemplate(HttpServletResponse response) throws IOException {
         List<FinanceReceiptImportExcelVO> list = Arrays.asList(
                 FinanceReceiptImportExcelVO.builder()
+                        .entityCompanyName("示例主体公司")
                         .bankAccount("工行基本户")
                         .transactionDate("2026-07-27 10:15:00")
                         .payerName("示例付款方A")
@@ -51,6 +52,7 @@ public class FinanceReceiptController {
                         .bankSerialNo("BANK-SERIAL-DEMO-001")
                         .build(),
                 FinanceReceiptImportExcelVO.builder()
+                        .entityCompanyName("示例主体公司")
                         .bankAccount("工行基本户")
                         .transactionDate("2026-07-27 11:30:00")
                         .payerName("示例付款方B")

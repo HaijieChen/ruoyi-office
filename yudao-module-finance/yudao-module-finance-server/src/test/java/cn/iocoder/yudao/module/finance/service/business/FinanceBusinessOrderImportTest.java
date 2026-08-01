@@ -3,10 +3,15 @@ package cn.iocoder.yudao.module.finance.service.business;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderImportRespVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisDAO;
+import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -14,28 +19,52 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 /**
  * Row-based 商务签单信息 Excel import + settlement calculation.
  * One spreadsheet row -> one finance_business_order.
+ * 主体公司由 Excel「主体公司」列名称匹配组织架构公司。
  */
 class FinanceBusinessOrderImportTest {
 
     private static final Long IMPORTER_ID = 100L;
-    private static final String BANK_ACCOUNT = "6222000000000000";
+    private static final Long CONTRACT_APP_ID = 50L;
+    private static final Long ENTITY_COMPANY_DEPT_ID = 10L;
+    private static final String ENTITY_COMPANY_NAME = "示例主体公司";
 
     private FinanceBusinessOrderMapper businessOrderMapper;
     private FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO;
+    private FinanceContractApplicationMapper contractApplicationMapper;
+    private FinanceEntityCompanyResolver entityCompanyResolver;
     private FinanceBusinessOrderServiceImpl businessOrderService;
 
     @BeforeEach
     void setUp() {
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
         businessOrderNoRedisDAO = mock(FinanceBusinessOrderNoRedisDAO.class);
-        businessOrderService = new FinanceBusinessOrderServiceImpl(businessOrderMapper, businessOrderNoRedisDAO);
+        contractApplicationMapper = mock(FinanceContractApplicationMapper.class);
+        entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
+        businessOrderService = new FinanceBusinessOrderServiceImpl(
+                businessOrderMapper, businessOrderNoRedisDAO, contractApplicationMapper, entityCompanyResolver);
         when(businessOrderNoRedisDAO.generate(any(LocalDate.class))).thenReturn("BO-20260723-1");
+        when(contractApplicationMapper.selectByApplicationNo(anyString())).thenReturn(
+                FinanceContractApplicationDO.builder()
+                        .id(CONTRACT_APP_ID)
+                        .applicationNo("CT-001")
+                        .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                        .applicantUserId(IMPORTER_ID)
+                        .voided(false)
+                        .build());
+        when(entityCompanyResolver.matchByNameOrError(anyString(), ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    FinanceEntityCompanyResolver.ResolvedCompany[] out = invocation.getArgument(1);
+                    out[0] = new FinanceEntityCompanyResolver.ResolvedCompany(
+                            ENTITY_COMPANY_DEPT_ID, ENTITY_COMPANY_NAME);
+                    return null;
+                });
     }
 
     @Test
@@ -44,7 +73,7 @@ class FinanceBusinessOrderImportTest {
         when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
-                List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row), IMPORTER_ID);
 
         assertEquals(1, respVO.getOrderNos().size());
         assertTrue(respVO.getFailureRows().isEmpty());
@@ -53,10 +82,12 @@ class FinanceBusinessOrderImportTest {
         verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
                 "BO-20260723-1".equals(order.getOrderNo())
                         && "PROC-001".equals(order.getContractProcessId())
+                        && CONTRACT_APP_ID.equals(order.getContractApplicationId())
                         && LocalDate.now().equals(order.getImportDate())
                         && IMPORTER_ID.equals(order.getImporterId())
                         && order.getPayerName() == null
-                        && BANK_ACCOUNT.equals(order.getBankAccount())
+                        && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
+                        && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
                         && new BigDecimal("1000.00").compareTo(order.getSignedExecutionAmount()) == 0
                         && new BigDecimal("0.10").compareTo(order.getDiscountRate()) == 0
                         && new BigDecimal("900.00").compareTo(order.getSettlementAmount()) == 0
@@ -70,7 +101,7 @@ class FinanceBusinessOrderImportTest {
         row.setPayerName("付款公司");
         when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
 
-        businessOrderService.importBusinessOrderList(List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+        businessOrderService.importBusinessOrderList(List.of(row), IMPORTER_ID);
 
         verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
                 "付款公司".equals(order.getPayerName())));
@@ -82,7 +113,7 @@ class FinanceBusinessOrderImportTest {
         row.setDiscountRate(null);
         when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
 
-        businessOrderService.importBusinessOrderList(List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+        businessOrderService.importBusinessOrderList(List.of(row), IMPORTER_ID);
 
         verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
                 BigDecimal.ZERO.compareTo(order.getDiscountRate()) == 0
@@ -96,7 +127,7 @@ class FinanceBusinessOrderImportTest {
         row.setDiscountRate(new BigDecimal("0.001"));
         when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
 
-        businessOrderService.importBusinessOrderList(List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+        businessOrderService.importBusinessOrderList(List.of(row), IMPORTER_ID);
 
         verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
                 new BigDecimal("1000.01").equals(order.getSignedExecutionAmount())
@@ -115,7 +146,7 @@ class FinanceBusinessOrderImportTest {
         row.setSignedExecutionAmount(null);
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
-                List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row), IMPORTER_ID);
 
         assertEquals(1, respVO.getFailureRows().size());
         assertTrue(respVO.getFailureRows().containsKey(2));
@@ -124,18 +155,25 @@ class FinanceBusinessOrderImportTest {
     }
 
     @Test
-    void importBusinessOrderListShouldRequireBankAccount() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> businessOrderService.importBusinessOrderList(List.of(validRow()), IMPORTER_ID, " "));
+    void importBusinessOrderListShouldRequireEntityCompany() {
+        when(entityCompanyResolver.matchByNameOrError(any(), ArgumentMatchers.any()))
+                .thenReturn("主体公司不能为空");
 
-        assertTrue(exception.getMessage().contains("银行账户"));
+        FinanceBusinessOrderImportExcelVO row = validRow();
+        row.setEntityCompanyName(" ");
+
+        FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
+                List.of(row), IMPORTER_ID);
+
+        assertEquals(1, respVO.getFailureRows().size());
+        assertTrue(respVO.getFailureRows().get(2).contains("主体公司"));
         verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
     }
 
     @Test
     void importBusinessOrderListShouldRequireRows() {
         assertThrows(IllegalArgumentException.class,
-                () -> businessOrderService.importBusinessOrderList(List.of(), IMPORTER_ID, BANK_ACCOUNT));
+                () -> businessOrderService.importBusinessOrderList(List.of(), IMPORTER_ID));
 
         verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
     }
@@ -146,7 +184,7 @@ class FinanceBusinessOrderImportTest {
         row.setDiscountRate(new BigDecimal("1.01"));
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
-                List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row), IMPORTER_ID);
 
         assertEquals(1, respVO.getFailureRows().size());
         assertTrue(respVO.getFailureRows().get(2).contains("折扣率"));
@@ -160,7 +198,7 @@ class FinanceBusinessOrderImportTest {
         row.setExecutionEndDate(LocalDate.of(2026, 7, 10));
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
-                List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row), IMPORTER_ID);
 
         assertEquals(1, respVO.getFailureRows().size());
         verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
@@ -173,7 +211,7 @@ class FinanceBusinessOrderImportTest {
         when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
-                List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row), IMPORTER_ID);
 
         assertEquals(1, respVO.getOrderNos().size());
         assertTrue(respVO.getFailureRows().isEmpty());
@@ -187,7 +225,7 @@ class FinanceBusinessOrderImportTest {
         when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
-                List.of(row1, row2), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row1, row2), IMPORTER_ID);
 
         assertEquals(1, respVO.getOrderNos().size());
         assertEquals(List.of(3), respVO.getSkippedRows());
@@ -205,7 +243,7 @@ class FinanceBusinessOrderImportTest {
         when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
 
         FinanceBusinessOrderImportRespVO response = businessOrderService.importBusinessOrderList(
-                List.of(row1, row2), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row1, row2), IMPORTER_ID);
 
         assertEquals(1, response.getOrderNos().size());
         assertEquals(List.of(3), response.getSkippedRows());
@@ -222,7 +260,7 @@ class FinanceBusinessOrderImportTest {
                 .thenReturn(FinanceBusinessOrderDO.builder().id(1L).orderNo("BO-EXISTING").build());
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
-                List.of(row), IMPORTER_ID, BANK_ACCOUNT);
+                List.of(row), IMPORTER_ID);
 
         assertTrue(respVO.getOrderNos().isEmpty());
         assertEquals(List.of(2), respVO.getSkippedRows());
@@ -231,7 +269,9 @@ class FinanceBusinessOrderImportTest {
 
     private static FinanceBusinessOrderImportExcelVO validRow() {
         return FinanceBusinessOrderImportExcelVO.builder()
+                .entityCompanyName(ENTITY_COMPANY_NAME)
                 .contractProcessId("PROC-001")
+                .contractApplicationNo("CT-001")
                 .orderDate(LocalDate.of(2026, 7, 1))
                 .productName("产品A")
                 .contactPerson("张三")

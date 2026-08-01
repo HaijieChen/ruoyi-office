@@ -26,6 +26,10 @@ public class FinanceReceiptDO extends BaseDO {
     private LocalDate importDate;
     private Long importerId;
     private String bankAccount;
+    /** 主体公司组织部门编号 */
+    private Long entityCompanyDeptId;
+    /** 主体公司名称快照 */
+    private String entityCompanyName;
     private LocalDateTime transactionDate;
     private String payerName;
     private String payerAccount;

@@ -12,6 +12,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Select,
   message,
   Textarea,
 } from 'ant-design-vue';
@@ -21,17 +22,25 @@ import {
   getBusinessOrder,
   updateBusinessOrder,
 } from '#/api/finance/business-order';
+import { getSimpleCompanyList } from '#/api/system/dept';
 import { $t } from '#/locales';
 
 defineOptions({ name: 'FinanceBusinessOrderForm' });
 
 const emit = defineEmits(['success']);
 
+interface CompanyOption {
+  label: string;
+  value: number;
+}
+
 /** Local form state: date fields stored as YYYY-MM-DD strings via value-format on DatePicker. */
 interface FormData {
   id?: number;
-  bankAccount?: string;
+  entityCompanyDeptId?: number;
+  entityCompanyName?: string;
   contractProcessId?: string;
+  contractApplicationId?: number;
   orderDate?: string;
   productName?: string;
   contactPerson?: string;
@@ -50,9 +59,13 @@ interface FormData {
 
 const formRef = ref();
 const formData = ref<FormData>({});
+const companyOptions = ref<CompanyOption[]>([]);
+const loadingCompany = ref(false);
 
 const rules: Record<string, Rule[]> = {
-  bankAccount: [{ required: true, message: '银行账号不能为空', trigger: 'blur' }],
+  entityCompanyDeptId: [
+    { required: true, message: '主体公司不能为空', trigger: 'change' },
+  ],
   orderDate: [{ required: true, message: '签单日期不能为空', trigger: 'change' }],
   productName: [{ required: true, message: '产品/服务不能为空', trigger: 'blur' }],
   contactPerson: [{ required: true, message: '联系人不能为空', trigger: 'blur' }],
@@ -106,14 +119,30 @@ function formatDateField(value: unknown): string | undefined {
   return undefined;
 }
 
+async function loadCompanyOptions() {
+  loadingCompany.value = true;
+  try {
+    const list = (await getSimpleCompanyList()) || [];
+    companyOptions.value = list
+      .filter((c) => c.id != null)
+      .map((c) => ({
+        value: c.id as number,
+        label: c.name,
+      }));
+  } finally {
+    loadingCompany.value = false;
+  }
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     await formRef.value?.validate();
     modalApi.lock();
     const saveData: FinanceBusinessOrderApi.SaveForm = {
       id: formData.value.id,
-      bankAccount: formData.value.bankAccount!,
+      entityCompanyDeptId: formData.value.entityCompanyDeptId!,
       contractProcessId: formData.value.contractProcessId,
+      contractApplicationId: formData.value.contractApplicationId,
       orderDate: formData.value.orderDate!,
       productName: formData.value.productName!,
       contactPerson: formData.value.contactPerson!,
@@ -136,8 +165,10 @@ const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       resetForm();
+      companyOptions.value = [];
       return;
     }
+    await loadCompanyOptions();
     const data = modalApi.getData<{ id?: number }>();
     if (!data?.id) return;
     modalApi.lock();
@@ -152,6 +183,21 @@ const [Modal, modalApi] = useVbenModal({
         importDate: formatDateField(detail.importDate),
         importer: detail.importerName || String(detail.importerId ?? ''),
       };
+      // 详情中的主体公司若不在启用列表中，补一条选项以便展示
+      if (
+        detail.entityCompanyDeptId != null &&
+        !companyOptions.value.some((o) => o.value === detail.entityCompanyDeptId)
+      ) {
+        companyOptions.value = [
+          {
+            value: detail.entityCompanyDeptId,
+            label:
+              detail.entityCompanyName ||
+              `公司 #${detail.entityCompanyDeptId}`,
+          },
+          ...companyOptions.value,
+        ];
+      }
     } finally {
       modalApi.unlock();
     }
@@ -189,8 +235,22 @@ watch(
         </Form.Item>
       </template>
 
-      <Form.Item label="银行账号" name="bankAccount">
-        <Input v-model:value="formData.bankAccount" placeholder="请输入银行账号" />
+      <Form.Item label="主体公司" name="entityCompanyDeptId">
+        <Select
+          v-model:value="formData.entityCompanyDeptId"
+          class="w-full"
+          show-search
+          allow-clear
+          :loading="loadingCompany"
+          :options="companyOptions"
+          option-filter-prop="label"
+          placeholder="请选择组织架构中的公司"
+          @dropdown-visible-change="
+            (open: boolean) => {
+              if (open && !companyOptions.length) loadCompanyOptions();
+            }
+          "
+        />
       </Form.Item>
       <Form.Item label="合同流程ID" name="contractProcessId">
         <Input v-model:value="formData.contractProcessId" placeholder="可选" />

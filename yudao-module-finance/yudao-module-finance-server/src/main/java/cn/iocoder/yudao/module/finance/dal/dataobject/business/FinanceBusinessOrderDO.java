@@ -22,9 +22,17 @@ public class FinanceBusinessOrderDO extends BaseDO {
     @TableId
     private Long id;
     private String orderNo;
+    /** 主体公司（我方签约主体）组织部门编号 */
+    private Long entityCompanyDeptId;
+    /** 主体公司名称快照 */
+    private String entityCompanyName;
     private LocalDate importDate;
     private Long importerId;
     private String contractProcessId;
+    /**
+     * 正式关联合同签约申请 id（CS-T1/T5）；legacy 文本见 {@link #contractProcessId}
+     */
+    private Long contractApplicationId;
     private LocalDate orderDate;
     private String productName;
     private String contactPerson;
@@ -34,7 +42,6 @@ public class FinanceBusinessOrderDO extends BaseDO {
     private BigDecimal signedExecutionAmount;
     private BigDecimal discountRate;
     private BigDecimal settlementAmount;
-    private String bankAccount;
     private String remark;
     private BigDecimal confirmedClaimedAmount;
     /**

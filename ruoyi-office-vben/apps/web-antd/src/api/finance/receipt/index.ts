@@ -9,6 +9,10 @@ export namespace FinanceBankReceiptApi {
     receiptNo: string;
     importDate: string;
     importerId: number;
+    /** 主体公司组织部门编号 */
+    entityCompanyDeptId?: number;
+    /** 主体公司名称快照 */
+    entityCompanyName?: string;
     bankAccount: string;
     transactionDate: string;
     payerName: string;
@@ -26,6 +30,7 @@ export namespace FinanceBankReceiptApi {
   export interface ReceiptPageQuery extends PageParam {
     receiptNo?: string;
     bankAccount?: string;
+    entityCompanyDeptId?: number;
     /** 交易日期范围 */
     transactionDate?: [string, string];
     payerName?: string;
@@ -40,6 +45,7 @@ export namespace FinanceBankReceiptApi {
   /** 新增/修改（transactionDate 传 epoch millis 或后端可解析时间） */
   export interface SaveForm {
     id?: number;
+    entityCompanyDeptId: number;
     bankAccount: string;
     transactionDate: number | string;
     payerName: string;

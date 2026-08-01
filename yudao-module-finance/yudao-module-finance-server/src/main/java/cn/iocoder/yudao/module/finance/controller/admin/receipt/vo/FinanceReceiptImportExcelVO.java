@@ -14,6 +14,9 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 public class FinanceReceiptImportExcelVO {
 
+    @ExcelProperty("主体公司")
+    private String entityCompanyName;
+
     @ExcelProperty("银行账户")
     private String bankAccount;
 

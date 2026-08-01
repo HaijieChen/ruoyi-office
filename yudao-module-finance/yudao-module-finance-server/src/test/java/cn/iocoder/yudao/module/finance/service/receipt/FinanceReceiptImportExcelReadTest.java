@@ -28,6 +28,7 @@ class FinanceReceiptImportExcelReadTest {
         // 用 VO 写出：一行日期时间文本、一行日期-only 文本（模拟手工改单元格）
         List<FinanceReceiptImportExcelVO> seed = List.of(
                 FinanceReceiptImportExcelVO.builder()
+                        .entityCompanyName("示例主体公司")
                         .bankAccount("文枢建行颛桥支行")
                         .transactionDate("2026-05-14 00:00:00")
                         .payerName("北京开心袋鼠软件有限公司")
@@ -37,6 +38,7 @@ class FinanceReceiptImportExcelReadTest {
                         .bankSerialNo("BANK-SERIAL-DEMO-023")
                         .build(),
                 FinanceReceiptImportExcelVO.builder()
+                        .entityCompanyName("示例主体公司")
                         .bankAccount("文枢建行颛桥支行")
                         .transactionDate("2026-05-25")
                         .payerName("安徽梦帆网络科技有限公司")

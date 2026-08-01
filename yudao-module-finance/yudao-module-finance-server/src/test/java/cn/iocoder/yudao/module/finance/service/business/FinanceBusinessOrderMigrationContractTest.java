@@ -106,6 +106,33 @@ class FinanceBusinessOrderMigrationContractTest {
         }
     }
 
+    @Test
+    void entityCompanyS1MigrationShouldAddEntityColumnsAndDropBusinessOrderBankAccount() throws IOException {
+        Path repositoryRoot = findRepositoryRoot();
+        Path migration = repositoryRoot.resolve("sql/mysql/finance_entity_company_s1.sql");
+
+        assertTrue(Files.exists(migration), "S1 entity company migration must exist");
+        String sql = Files.readString(migration);
+        String lowerSql = sql.toLowerCase(Locale.ROOT);
+
+        assertTrue(lowerSql.contains("information_schema"));
+        // 到款 + 签单：主体公司 deptId + 名称快照
+        assertTrue(sql.contains("`entity_company_dept_id`"));
+        assertTrue(sql.contains("`entity_company_name`"));
+        assertTrue(lowerSql.contains("finance_bank_receipt"));
+        assertTrue(lowerSql.contains("finance_business_order"));
+        // 签单物理删除 bank_account（含索引）
+        assertTrue(lowerSql.contains("drop index `idx_bank_account_order_date`")
+                || lowerSql.contains("drop index idx_bank_account_order_date"));
+        assertTrue(lowerSql.contains("drop column `bank_account`")
+                || lowerSql.contains("drop column bank_account"));
+        // 幂等：列存在性检查
+        assertTrue(lowerSql.contains("column_name = 'entity_company_dept_id'")
+                || lowerSql.contains("column_name` = 'entity_company_dept_id'"));
+        assertTrue(lowerSql.contains("column_name = 'bank_account'")
+                || lowerSql.contains("column_name` = 'bank_account'"));
+    }
+
     private static Path findRepositoryRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null && !Files.isDirectory(current.resolve("sql/mysql"))) {

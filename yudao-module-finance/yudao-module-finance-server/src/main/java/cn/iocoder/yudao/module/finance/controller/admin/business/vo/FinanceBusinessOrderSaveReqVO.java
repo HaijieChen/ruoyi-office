@@ -17,12 +17,15 @@ public class FinanceBusinessOrderSaveReqVO {
     @Schema(description = "编号")
     private Long id;
 
-    @Schema(description = "银行账户", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "银行账户不能为空")
-    private String bankAccount;
+    @Schema(description = "主体公司组织部门编号", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "主体公司不能为空")
+    private Long entityCompanyDeptId;
 
-    @Schema(description = "合同审批流程编号")
+    @Schema(description = "合同审批流程编号（legacy 脏文本，新写勿仅填此项）")
     private String contractProcessId;
+
+    @Schema(description = "合同签约申请编号（正式关联，新建必填）")
+    private Long contractApplicationId;
 
     @Schema(description = "下单日期", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "下单日期不能为空")

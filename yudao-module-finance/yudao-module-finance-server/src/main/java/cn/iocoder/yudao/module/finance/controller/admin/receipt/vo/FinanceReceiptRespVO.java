@@ -21,6 +21,10 @@ public class FinanceReceiptRespVO {
     private Long importerId;
     @Schema(description = "银行账户")
     private String bankAccount;
+    @Schema(description = "主体公司组织部门编号")
+    private Long entityCompanyDeptId;
+    @Schema(description = "主体公司名称")
+    private String entityCompanyName;
     @Schema(description = "交易日期")
     private LocalDateTime transactionDate;
     @Schema(description = "付款方名称")
