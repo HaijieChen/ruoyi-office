@@ -58,7 +58,8 @@ class FinanceBusinessOrderImportTest {
                         .applicantUserId(IMPORTER_ID)
                         .voided(false)
                         .build());
-        when(entityCompanyResolver.matchByNameOrError(anyString(), ArgumentMatchers.any()))
+        when(entityCompanyResolver.loadEnabledCompanies()).thenReturn(List.of());
+        when(entityCompanyResolver.matchByNameOrError(anyString(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenAnswer(invocation -> {
                     FinanceEntityCompanyResolver.ResolvedCompany[] out = invocation.getArgument(1);
                     out[0] = new FinanceEntityCompanyResolver.ResolvedCompany(
@@ -156,7 +157,7 @@ class FinanceBusinessOrderImportTest {
 
     @Test
     void importBusinessOrderListShouldRequireEntityCompany() {
-        when(entityCompanyResolver.matchByNameOrError(any(), ArgumentMatchers.any()))
+        when(entityCompanyResolver.matchByNameOrError(any(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn("主体公司不能为空");
 
         FinanceBusinessOrderImportExcelVO row = validRow();

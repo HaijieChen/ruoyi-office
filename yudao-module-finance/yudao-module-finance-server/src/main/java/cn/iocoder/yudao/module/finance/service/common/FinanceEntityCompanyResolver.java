@@ -47,18 +47,31 @@ public class FinanceEntityCompanyResolver {
 
     /**
      * 导入：名称精确匹配启用公司；0 命中 / 多命中返回错误文案（不抛异常，供行级 failureRows）。
+     * 大批量导入请先 {@link #loadEnabledCompanies()} 再调用
+     * {@link #matchByNameOrError(String, ResolvedCompany[], List)} 避免每行 RPC。
      */
     public String matchByNameOrError(String companyName, ResolvedCompany[] out) {
+        return matchByNameOrError(companyName, out, loadEnabledCompanies());
+    }
+
+    /** 加载启用公司 simple-list（导入入口缓存一次）。 */
+    public List<DeptRespDTO> loadEnabledCompanies() {
+        List<DeptRespDTO> companies = deptApi.getCompanySimpleList().getCheckedData();
+        return companies == null ? List.of() : companies;
+    }
+
+    /**
+     * 使用预加载公司列表做名称精确匹配。
+     */
+    public String matchByNameOrError(String companyName, ResolvedCompany[] out,
+                                     List<DeptRespDTO> companies) {
         if (StrUtil.isBlank(companyName)) {
             return "主体公司不能为空";
         }
         String name = companyName.trim();
-        List<DeptRespDTO> companies = deptApi.getCompanySimpleList().getCheckedData();
-        if (companies == null) {
-            companies = List.of();
-        }
+        List<DeptRespDTO> source = companies == null ? List.of() : companies;
         List<DeptRespDTO> hits = new ArrayList<>();
-        for (DeptRespDTO c : companies) {
+        for (DeptRespDTO c : source) {
             if (c != null && name.equals(StrUtil.trim(c.getName()))) {
                 hits.add(c);
             }

@@ -158,16 +158,14 @@ public class FinanceReceiptClaimController {
     public CommonResult<PageResult<FinanceReceiptRespVO>> getSourceReceiptPage(
             @Valid FinanceReceiptPageReqVO pageReqVO) {
         PageResult<FinanceReceiptDO> page = receiptService.getUnclaimedReceiptPage(pageReqVO);
+        // 保留 claimable=0 行并返回真实 total；FE 对 0 禁用（编辑可并入已选源）
         List<FinanceReceiptRespVO> list = new ArrayList<>();
         for (FinanceReceiptDO receipt : page.getList()) {
             FinanceReceiptRespVO vo = BeanUtils.toBean(receipt, FinanceReceiptRespVO.class);
             vo.setClaimableAmount(calcReceiptClaimable(receipt));
-            if (vo.getClaimableAmount().compareTo(BigDecimal.ZERO) > 0) {
-                list.add(vo);
-            }
+            list.add(vo);
         }
-        // 过滤后 total 以当前页可见条数为准（源列表选型页够用；精确 total 非本票目标）
-        return success(new PageResult<>(list, (long) list.size()));
+        return success(new PageResult<>(list, page.getTotal()));
     }
 
     @GetMapping("/source-business-order-page")
@@ -191,15 +189,14 @@ public class FinanceReceiptClaimController {
         }
         PageResult<FinanceInvoiceApplicationDO> page =
                 invoiceApplicationService.getApplicationPage(pageReqVO);
+        // 保留 claimable=0；total 用分页真实命中数
         List<FinanceInvoiceApplicationRespVO> list = new ArrayList<>();
         for (FinanceInvoiceApplicationDO app : page.getList()) {
             FinanceInvoiceApplicationRespVO vo = BeanUtils.toBean(app, FinanceInvoiceApplicationRespVO.class);
             vo.setClaimableAmount(calcInvoiceClaimable(app));
-            if (vo.getClaimableAmount().compareTo(BigDecimal.ZERO) > 0) {
-                list.add(vo);
-            }
+            list.add(vo);
         }
-        return success(new PageResult<>(list, (long) list.size()));
+        return success(new PageResult<>(list, page.getTotal()));
     }
 
     private static BigDecimal calcReceiptClaimable(FinanceReceiptDO receipt) {

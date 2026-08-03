@@ -419,56 +419,10 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     @Deprecated
     public void updateIssueProgress(FinanceInvoiceApplicationUpdateIssueProgressReqVO reqVO) {
-        FinanceInvoiceApplicationDO application = getApplication(reqVO.getApplicationId());
-        if (!FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus().equals(application.getApprovalStatus())
-                || Boolean.TRUE.equals(application.getVoided())) {
-            throw exception(INVOICE_APPLICATION_ISSUE_NOT_ALLOWED);
-        }
-
-        FinanceInvoiceApplicationLineDO line = lineMapper.selectById(reqVO.getLineId());
-        if (line == null || !Objects.equals(line.getApplicationId(), reqVO.getApplicationId())) {
-            throw exception(INVOICE_APPLICATION_LINE_NOT_EXISTS);
-        }
-        if (line.getIssueStatus() != null && line.getIssueStatus() == LINE_ISSUE_STATUS_ISSUED) {
-            throw exception(INVOICE_APPLICATION_LINE_ALREADY_ISSUED);
-        }
-
-        LocalDateTime issuedAt = reqVO.getIssuedAt() != null ? reqVO.getIssuedAt() : LocalDateTime.now();
-        FinanceInvoiceApplicationLineDO lineUpdate = new FinanceInvoiceApplicationLineDO();
-        lineUpdate.setId(line.getId());
-        lineUpdate.setIssueStatus(LINE_ISSUE_STATUS_ISSUED);
-        lineUpdate.setInvoiceNo(reqVO.getInvoiceNo());
-        lineUpdate.setFileUrl(reqVO.getFileUrl());
-        lineUpdate.setIssuedAt(issuedAt);
-        lineMapper.updateById(lineUpdate);
-
-        // 派生 app issue_status：0 无 / 1 部分 / 2 全部；不改 claimAllowed
-        List<FinanceInvoiceApplicationLineDO> allLines = lineMapper.selectListByApplicationId(reqVO.getApplicationId());
-        int total = allLines.size();
-        int issued = 0;
-        for (FinanceInvoiceApplicationLineDO item : allLines) {
-            int status = item.getId().equals(line.getId())
-                    ? LINE_ISSUE_STATUS_ISSUED
-                    : (item.getIssueStatus() == null ? 0 : item.getIssueStatus());
-            if (status == LINE_ISSUE_STATUS_ISSUED) {
-                issued++;
-            }
-        }
-        Integer appIssueStatus;
-        if (issued <= 0) {
-            appIssueStatus = FinanceInvoiceIssueStatusEnum.NONE.getStatus();
-        } else if (issued >= total) {
-            appIssueStatus = FinanceInvoiceIssueStatusEnum.FULL.getStatus();
-        } else {
-            appIssueStatus = FinanceInvoiceIssueStatusEnum.PARTIAL.getStatus();
-        }
-        FinanceInvoiceApplicationDO appUpdate = new FinanceInvoiceApplicationDO();
-        appUpdate.setId(reqVO.getApplicationId());
-        appUpdate.setIssueStatus(appIssueStatus);
-        applicationMapper.updateById(appUpdate);
+        // I2：废止一行一票写路径，避免绕过 complete-issue 产生 PARTIAL
+        throw exception(INVOICE_APPLICATION_USE_COMPLETE_ISSUE);
     }
 
     @Override

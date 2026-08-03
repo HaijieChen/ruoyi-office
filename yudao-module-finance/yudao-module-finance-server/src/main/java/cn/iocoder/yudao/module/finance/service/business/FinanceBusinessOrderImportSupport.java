@@ -68,12 +68,14 @@ final class FinanceBusinessOrderImportSupport {
     }
 
     /**
-     * 幂等键：不含 bank_account；含主体公司 deptId（C2）。
+     * 幂等键：不含 bank_account；含主体公司 deptId（C2）；含合同申请业务单号（区分换合同再导）。
      */
     static String calculateSourceRowHash(FinanceBusinessOrderImportExcelVO row, NormalizedAmounts amounts,
                                          Long entityCompanyDeptId) {
         String canonicalRow = String.join("\u001f",
-                normalize(row.getContractProcessId()), row.getOrderDate().toString(), normalize(row.getProductName()),
+                normalize(row.getContractProcessId()),
+                normalize(row.getContractApplicationNo()),
+                row.getOrderDate().toString(), normalize(row.getProductName()),
                 normalize(row.getContactPerson()), row.getExecutionStartDate().toString(),
                 row.getExecutionEndDate().toString(), normalize(row.getPayerName()),
                 normalize(amounts.signedExecutionAmount()), normalize(amounts.discountRate()),

@@ -22,6 +22,7 @@ import {
   getBusinessOrder,
   updateBusinessOrder,
 } from '#/api/finance/business-order';
+import { listSelectableContractsForBo } from '#/api/finance/contract-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { $t } from '#/locales';
 
@@ -30,6 +31,11 @@ defineOptions({ name: 'FinanceBusinessOrderForm' });
 const emit = defineEmits(['success']);
 
 interface CompanyOption {
+  label: string;
+  value: number;
+}
+
+interface ContractOption {
   label: string;
   value: number;
 }
@@ -60,11 +66,16 @@ interface FormData {
 const formRef = ref();
 const formData = ref<FormData>({});
 const companyOptions = ref<CompanyOption[]>([]);
+const contractOptions = ref<ContractOption[]>([]);
 const loadingCompany = ref(false);
+const loadingContract = ref(false);
 
 const rules: Record<string, Rule[]> = {
   entityCompanyDeptId: [
     { required: true, message: '主体公司不能为空', trigger: 'change' },
+  ],
+  contractApplicationId: [
+    { required: true, message: '请选择已通过的合同签约申请', trigger: 'change' },
   ],
   orderDate: [{ required: true, message: '签单日期不能为空', trigger: 'change' }],
   productName: [{ required: true, message: '产品/服务不能为空', trigger: 'blur' }],
@@ -134,6 +145,21 @@ async function loadCompanyOptions() {
   }
 }
 
+async function loadContractOptions() {
+  loadingContract.value = true;
+  try {
+    const list = (await listSelectableContractsForBo()) || [];
+    contractOptions.value = list
+      .filter((c) => c.id != null)
+      .map((c) => ({
+        value: c.id as number,
+        label: `${c.applicationNo || c.id}${c.counterpartyName ? ` | ${c.counterpartyName}` : ''}`,
+      }));
+  } finally {
+    loadingContract.value = false;
+  }
+}
+
 const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     await formRef.value?.validate();
@@ -166,9 +192,10 @@ const [Modal, modalApi] = useVbenModal({
     if (!isOpen) {
       resetForm();
       companyOptions.value = [];
+      contractOptions.value = [];
       return;
     }
-    await loadCompanyOptions();
+    await Promise.all([loadCompanyOptions(), loadContractOptions()]);
     const data = modalApi.getData<{ id?: number }>();
     if (!data?.id) return;
     modalApi.lock();
@@ -196,6 +223,19 @@ const [Modal, modalApi] = useVbenModal({
               `公司 #${detail.entityCompanyDeptId}`,
           },
           ...companyOptions.value,
+        ];
+      }
+      // 已关联合同若不在可选列表（历史/他人员），补一条便于编辑展示
+      if (
+        detail.contractApplicationId != null &&
+        !contractOptions.value.some((o) => o.value === detail.contractApplicationId)
+      ) {
+        contractOptions.value = [
+          {
+            value: detail.contractApplicationId,
+            label: `合同 #${detail.contractApplicationId}`,
+          },
+          ...contractOptions.value,
         ];
       }
     } finally {
@@ -252,8 +292,28 @@ watch(
           "
         />
       </Form.Item>
-      <Form.Item label="合同流程ID" name="contractProcessId">
-        <Input v-model:value="formData.contractProcessId" placeholder="可选" />
+      <Form.Item label="合同签约申请" name="contractApplicationId">
+        <Select
+          v-model:value="formData.contractApplicationId"
+          class="w-full"
+          show-search
+          allow-clear
+          :loading="loadingContract"
+          :options="contractOptions"
+          option-filter-prop="label"
+          placeholder="请选择已审批通过且本人申请的合同"
+          @dropdown-visible-change="
+            (open: boolean) => {
+              if (open && !contractOptions.length) loadContractOptions();
+            }
+          "
+        />
+      </Form.Item>
+      <Form.Item label="合同流程ID（legacy）" name="contractProcessId">
+        <Input
+          v-model:value="formData.contractProcessId"
+          placeholder="可选；正式关联以合同签约申请为准"
+        />
       </Form.Item>
       <Form.Item label="签单日期" name="orderDate">
         <DatePicker

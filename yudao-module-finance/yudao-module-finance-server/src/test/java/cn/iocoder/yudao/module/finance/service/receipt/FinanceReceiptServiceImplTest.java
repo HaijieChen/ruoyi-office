@@ -46,7 +46,8 @@ class FinanceReceiptServiceImplTest {
         entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         receiptService = new FinanceReceiptServiceImpl(
                 receiptMapper, lifecycleAuditMapper, receiptNoRedisDAO, entityCompanyResolver);
-        when(entityCompanyResolver.matchByNameOrError(anyString(), ArgumentMatchers.any()))
+        when(entityCompanyResolver.loadEnabledCompanies()).thenReturn(List.of());
+        when(entityCompanyResolver.matchByNameOrError(anyString(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenAnswer(invocation -> {
                     FinanceEntityCompanyResolver.ResolvedCompany[] out = invocation.getArgument(1);
                     out[0] = new FinanceEntityCompanyResolver.ResolvedCompany(

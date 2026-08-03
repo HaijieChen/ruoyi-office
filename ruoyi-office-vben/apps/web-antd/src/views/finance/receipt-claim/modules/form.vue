@@ -26,6 +26,9 @@ defineOptions({ name: 'FinanceReceiptClaimForm' });
 
 const emit = defineEmits(['success']);
 
+/** 0=待确认 2=已驳回（与 BE 一致） */
+const CLAIM_STATUS_PENDING = 0;
+
 interface LineItem {
   receiptId?: number;
   invoiceApplicationId?: number;
@@ -35,6 +38,8 @@ interface LineItem {
 
 interface FormData {
   id?: number;
+  /** 打开编辑时传入，用于 M2 仅 PENDING 加回 */
+  status?: number;
   remark?: string;
   items: LineItem[];
 }
@@ -43,6 +48,7 @@ const formRef = ref();
 const formData = ref<FormData>({ items: [{}] });
 /** 打开编辑时的原始明细（PENDING 编辑加回本单占用，M2） */
 const originalItems = ref<LineItem[]>([]);
+const editStatus = ref<number | undefined>(undefined);
 const receiptOptions = ref<
   Array<{ label: string; value: number; claimable: number }>
 >([]);
@@ -52,11 +58,14 @@ const invoiceOptions = ref<
 const loadingOptions = ref(false);
 
 const isEdit = computed(() => !!formData.value.id);
+const isPendingEdit = computed(
+  () => isEdit.value && editStatus.value === CLAIM_STATUS_PENDING,
+);
 const getTitle = computed(() =>
   isEdit.value ? '修改到款认领' : '新建到款认领',
 );
 
-/** 服务端 claimable + 编辑加回本单原占用 − 本单其他行草稿占用 */
+/** 服务端 claimable +（仅 PENDING）本单原占用 − 本单其他行草稿占用 */
 function displayClaimable(
   sourceKind: 'receipt' | 'invoice',
   sourceId: number | undefined,
@@ -68,9 +77,9 @@ function displayClaimable(
       ? (receiptOptions.value.find((o) => o.value === sourceId)?.claimable ?? 0)
       : (invoiceOptions.value.find((o) => o.value === sourceId)?.claimable ?? 0);
 
-  // M2：编辑时服务端 pending 已含本单 → 加回本单原占用
+  // M2：仅 PENDING 时服务端 pending 已含本单 → 加回本单原占用；REJECTED 已释放不加
   let originalOccupy = 0;
-  if (isEdit.value) {
+  if (isPendingEdit.value) {
     for (const item of originalItems.value) {
       const id =
         sourceKind === 'receipt' ? item.receiptId : item.invoiceApplicationId;
@@ -80,7 +89,6 @@ function displayClaimable(
     }
   }
 
-  // 本单其他行草稿占用（不含当前行）
   let draftOther = 0;
   formData.value.items.forEach((item, idx) => {
     if (idx === rowIndex) return;
@@ -136,6 +144,26 @@ const rules: Record<string, Rule[]> = {
   ],
 };
 
+function mergeSourceOption(
+  list: Array<{ label: string; value: number; claimable: number }>,
+  id: number | undefined,
+  kind: 'receipt' | 'invoice',
+) {
+  if (id == null) return list;
+  if (list.some((o) => o.value === id)) return list;
+  return [
+    {
+      value: id,
+      claimable: 0,
+      label:
+        kind === 'receipt'
+          ? `到款 #${id} | 可认领 ¥0.00（本单占用/已选）`
+          : `开票 #${id} | 可认领 ¥0.00（本单占用/已选）`,
+    },
+    ...list,
+  ];
+}
+
 async function loadSourceOptions() {
   loadingOptions.value = true;
   try {
@@ -143,7 +171,7 @@ async function loadSourceOptions() {
       getSourceReceiptPage({ pageNo: 1, pageSize: 100 }),
       getSourceInvoiceApplicationPage({ pageNo: 1, pageSize: 100 }),
     ]);
-    receiptOptions.value = (receiptPage?.list || []).map((r: any) => {
+    let receipts = (receiptPage?.list || []).map((r: any) => {
       const claimable = Number(
         r.claimableAmount ??
           Math.max(
@@ -152,12 +180,12 @@ async function loadSourceOptions() {
           ),
       );
       return {
-        value: r.id,
+        value: r.id as number,
         claimable,
         label: `${r.receiptNo || r.id} | ${r.payerName || '-'} | 可认领 ¥${claimable.toFixed(2)}`,
       };
     });
-    invoiceOptions.value = (invoicePage?.list || []).map((a: any) => {
+    let invoices = (invoicePage?.list || []).map((a: any) => {
       const claimable = Number(
         a.claimableAmount ??
           Math.max(
@@ -168,11 +196,32 @@ async function loadSourceOptions() {
           ),
       );
       return {
-        value: a.id,
+        value: a.id as number,
         claimable,
         label: `${a.applicationNo || a.id} | ${a.buyerName || '-'} | 可认领 ¥${claimable.toFixed(2)}`,
       };
     });
+
+    // 编辑态：强制并入本单已选源（即使服务端 claimable=0）
+    for (const item of originalItems.value) {
+      receipts = mergeSourceOption(receipts, item.receiptId, 'receipt');
+      invoices = mergeSourceOption(
+        invoices,
+        item.invoiceApplicationId,
+        'invoice',
+      );
+    }
+    for (const item of formData.value.items || []) {
+      receipts = mergeSourceOption(receipts, item.receiptId, 'receipt');
+      invoices = mergeSourceOption(
+        invoices,
+        item.invoiceApplicationId,
+        'invoice',
+      );
+    }
+
+    receiptOptions.value = receipts;
+    invoiceOptions.value = invoices;
   } finally {
     loadingOptions.value = false;
   }
@@ -181,13 +230,14 @@ async function loadSourceOptions() {
 function receiptSelectOptions(rowIndex: number) {
   return receiptOptions.value.map((o) => {
     const remaining = displayClaimable('receipt', o.value, rowIndex);
+    const selected = formData.value.items[rowIndex]?.receiptId === o.value;
     return {
       value: o.value,
       label: o.label.replace(
         /可认领 ¥[\d.]+/,
         `可认领 ¥${remaining.toFixed(2)}`,
       ),
-      disabled: remaining <= 0 && formData.value.items[rowIndex]?.receiptId !== o.value,
+      disabled: remaining <= 0 && !selected,
     };
   });
 }
@@ -195,15 +245,15 @@ function receiptSelectOptions(rowIndex: number) {
 function invoiceSelectOptions(rowIndex: number) {
   return invoiceOptions.value.map((o) => {
     const remaining = displayClaimable('invoice', o.value, rowIndex);
+    const selected =
+      formData.value.items[rowIndex]?.invoiceApplicationId === o.value;
     return {
       value: o.value,
       label: o.label.replace(
         /可认领 ¥[\d.]+/,
         `可认领 ¥${remaining.toFixed(2)}`,
       ),
-      disabled:
-        remaining <= 0 &&
-        formData.value.items[rowIndex]?.invoiceApplicationId !== o.value,
+      disabled: remaining <= 0 && !selected,
     };
   });
 }
@@ -223,6 +273,7 @@ function removeLine(index: number) {
 function resetForm() {
   formData.value = { items: [{}] };
   originalItems.value = [];
+  editStatus.value = undefined;
   formRef.value?.resetFields();
 }
 
@@ -232,7 +283,6 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     const data = modalApi.getData<FormData>() || {};
-    // 历史 LEGACY 单禁止在表单编辑
     if (
       data.items?.some(
         (i) =>
@@ -254,12 +304,12 @@ const [Modal, modalApi] = useVbenModal({
         : [{}];
     formData.value = {
       id: data.id,
+      status: data.status,
       remark: data.remark,
       items,
     };
-    originalItems.value = data.id
-      ? items.map((i) => ({ ...i }))
-      : [];
+    editStatus.value = data.status;
+    originalItems.value = data.id ? items.map((i) => ({ ...i })) : [];
     await loadSourceOptions();
   },
   async onConfirm() {

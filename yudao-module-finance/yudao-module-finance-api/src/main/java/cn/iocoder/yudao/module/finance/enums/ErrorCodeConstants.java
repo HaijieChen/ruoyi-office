@@ -95,6 +95,8 @@ public interface ErrorCodeConstants {
             "客户公司已停用，请重新选择");
     ErrorCode INVOICE_APPLICATION_COMPLETE_ISSUE_FILES_EMPTY = new ErrorCode(1_040_003_014,
             "整单办票至少需要一个发票附件");
+    ErrorCode INVOICE_APPLICATION_USE_COMPLETE_ISSUE = new ErrorCode(1_040_003_015,
+            "请使用整单办票 complete-issue，不再支持一行一票办票");
 
     // ========== 客户公司 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");

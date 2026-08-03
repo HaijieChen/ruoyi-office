@@ -46,11 +46,14 @@ async function handleEdit(row: FinanceReceiptClaimApi.ReceiptClaim) {
   const detail = await getMyClaim(row.id);
   formModalApi.setData({
     id: detail.id,
+    status: detail.status,
     remark: detail.remark,
     items: (detail.items || []).map((i) => ({
       receiptId: i.receiptId,
+      invoiceApplicationId: i.invoiceApplicationId,
       businessOrderId: i.businessOrderId,
       claimAmount: i.claimAmount,
+      claimSource: i.claimSource,
     })),
   });
   formModalApi.open();

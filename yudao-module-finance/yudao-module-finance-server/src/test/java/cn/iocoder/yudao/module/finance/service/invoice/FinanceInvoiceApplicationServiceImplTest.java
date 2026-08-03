@@ -338,44 +338,17 @@ class FinanceInvoiceApplicationServiceImplTest {
     }
 
     @Test
-    void updateIssueProgressShouldRejectWhenNotApproved() {
-        FinanceInvoiceApplicationDO app = pendingApp(100L);
-        when(applicationMapper.selectById(100L)).thenReturn(app);
+    void updateIssueProgressShouldRedirectToCompleteIssue() {
         cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO req =
                 new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO();
         req.setApplicationId(100L);
         req.setLineId(1L);
         req.setInvoiceNo("INV-NO-1");
         ServiceException ex = assertThrows(ServiceException.class, () -> service.updateIssueProgress(req));
-        assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_ISSUE_NOT_ALLOWED.getCode(),
+        assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_USE_COMPLETE_ISSUE.getCode(),
                 ex.getCode());
-    }
-
-    @Test
-    void updateIssueProgressPartialThenFull() {
-        FinanceInvoiceApplicationDO app = pendingApp(100L);
-        app.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
-        when(applicationMapper.selectById(100L)).thenReturn(app);
-        FinanceInvoiceApplicationLineDO line1 = FinanceInvoiceApplicationLineDO.builder()
-                .id(1L).applicationId(100L).businessOrderId(10L).amount(new BigDecimal("10"))
-                .issueStatus(0).build();
-        FinanceInvoiceApplicationLineDO line2 = FinanceInvoiceApplicationLineDO.builder()
-                .id(2L).applicationId(100L).businessOrderId(11L).amount(new BigDecimal("20"))
-                .issueStatus(0).build();
-        when(lineMapper.selectById(1L)).thenReturn(line1);
-        when(lineMapper.selectListByApplicationId(100L)).thenReturn(List.of(line1, line2));
-
-        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO req =
-                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO();
-        req.setApplicationId(100L);
-        req.setLineId(1L);
-        req.setInvoiceNo("NO-1");
-        service.updateIssueProgress(req);
-
-        ArgumentCaptor<FinanceInvoiceApplicationDO> appCaptor =
-                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
-        verify(applicationMapper).updateById(appCaptor.capture());
-        assertEquals(FinanceInvoiceIssueStatusEnum.PARTIAL.getStatus(), appCaptor.getValue().getIssueStatus());
+        verify(applicationMapper, never()).updateById(any(FinanceInvoiceApplicationDO.class));
+        verify(lineMapper, never()).updateById(any(FinanceInvoiceApplicationLineDO.class));
     }
 
     @Test

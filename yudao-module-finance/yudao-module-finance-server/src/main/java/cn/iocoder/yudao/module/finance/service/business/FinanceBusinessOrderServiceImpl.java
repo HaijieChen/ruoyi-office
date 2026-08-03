@@ -100,12 +100,8 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         updateObj.setConfirmedClaimedAmount(confirmedClaimedAmount);
         updateObj.setSourceRowHash(currentOrder.getSourceRowHash());
         updateObj.setContractApplicationId(resolvedContractId);
-        // 保留 legacy 脏文本列（未关联展示）；正式关联只认 contractApplicationId
-        if (resolvedContractId != null) {
-            updateObj.setContractProcessId(currentOrder.getContractProcessId());
-        } else {
-            updateObj.setContractProcessId(currentOrder.getContractProcessId());
-        }
+        // 正式关联只认 contractApplicationId；legacy 流程文本列保持原值
+        updateObj.setContractProcessId(currentOrder.getContractProcessId());
         businessOrderMapper.updateById(updateObj);
     }
 
@@ -147,6 +143,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         FinanceBusinessOrderImportRespVO response = FinanceBusinessOrderImportRespVO.builder()
                 .orderNos(new ArrayList<>()).failureRows(new LinkedHashMap<>()).skippedRows(new ArrayList<>()).build();
         Set<String> sourceRowHashes = new HashSet<>();
+        var enabledCompanies = entityCompanyResolver.loadEnabledCompanies();
         for (int index = 0; index < importRows.size(); index++) {
             int rowNumber = index + 2;
             FinanceBusinessOrderImportExcelVO row = importRows.get(index);
@@ -162,7 +159,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
             FinanceEntityCompanyResolver.ResolvedCompany[] companyOut =
                     new FinanceEntityCompanyResolver.ResolvedCompany[1];
             String companyError = entityCompanyResolver.matchByNameOrError(
-                    row.getEntityCompanyName(), companyOut);
+                    row.getEntityCompanyName(), companyOut, enabledCompanies);
             if (companyError != null) {
                 response.getFailureRows().put(rowNumber, companyError);
                 continue;

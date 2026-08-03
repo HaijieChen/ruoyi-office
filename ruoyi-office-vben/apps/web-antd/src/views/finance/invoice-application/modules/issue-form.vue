@@ -72,10 +72,14 @@ const [Modal, modalApi] = useVbenModal({
       await completeInvoiceIssue({
         applicationId: formData.value.applicationId,
         invoiceNos,
-        files: urls.map((url, idx) => ({
-          url,
-          name: `invoice-${idx + 1}`,
-        })),
+        files: urls.map((url, idx) => {
+          const path = String(url).split('?')[0] || '';
+          const base = path.substring(path.lastIndexOf('/') + 1);
+          return {
+            url,
+            name: base || `invoice-${idx + 1}`,
+          };
+        }),
       });
       message.success('整单办票完成');
       emit('success');

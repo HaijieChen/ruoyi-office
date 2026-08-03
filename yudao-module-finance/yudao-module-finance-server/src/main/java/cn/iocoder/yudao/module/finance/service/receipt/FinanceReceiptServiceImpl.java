@@ -101,6 +101,8 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         FinanceReceiptImportRespVO respVO = FinanceReceiptImportRespVO.builder()
                 .receiptNos(new ArrayList<>()).failureRows(new LinkedHashMap<>()).build();
         Set<String> bankSerialNos = new HashSet<>();
+        // 导入缓存公司列表，避免每行 RPC
+        var enabledCompanies = entityCompanyResolver.loadEnabledCompanies();
         for (int i = 0; i < importReceipts.size(); i++) {
             int rowNumber = i + 2;
             FinanceReceiptImportExcelVO importReceipt = importReceipts.get(i);
@@ -112,7 +114,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
             FinanceEntityCompanyResolver.ResolvedCompany[] companyOut =
                     new FinanceEntityCompanyResolver.ResolvedCompany[1];
             String companyError = entityCompanyResolver.matchByNameOrError(
-                    importReceipt.getEntityCompanyName(), companyOut);
+                    importReceipt.getEntityCompanyName(), companyOut, enabledCompanies);
             if (companyError != null) {
                 respVO.getFailureRows().put(rowNumber, companyError);
                 continue;
