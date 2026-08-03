@@ -20,6 +20,10 @@ export namespace FinanceBankReceiptApi {
     transactionAmount: number;
     summary: string;
     bankSerialNo: string;
+    /** 是否业务款（仅展示，不联动认领） */
+    businessFund?: boolean;
+    /** 款项类型备注 */
+    fundTypeRemark?: string;
     /** 0=未认领 1=部分认领 2=完全认领 3=已关闭 */
     claimStatus: number;
     claimedAmount: number;
@@ -40,6 +44,8 @@ export namespace FinanceBankReceiptApi {
     importDate?: [string, string];
     /** 认领状态 */
     claimStatus?: number;
+    /** 是否业务款 */
+    businessFund?: boolean;
   }
 
   /** 新增/修改（transactionDate 传 epoch millis 或后端可解析时间） */
@@ -53,6 +59,10 @@ export namespace FinanceBankReceiptApi {
     transactionAmount: number;
     summary?: string;
     bankSerialNo: string;
+    /** 是否业务款，必填，默认 true */
+    businessFund: boolean;
+    /** 款项类型备注，选填 */
+    fundTypeRemark?: string;
   }
 
   /**

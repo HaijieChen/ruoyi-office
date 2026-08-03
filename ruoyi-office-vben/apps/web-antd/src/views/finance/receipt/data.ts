@@ -12,8 +12,20 @@ export const CLAIM_STATUS_OPTIONS = [
   { label: '已关闭', value: 3 },
 ];
 
+/** 是否业务款 */
+export const BUSINESS_FUND_OPTIONS = [
+  { label: '是', value: true },
+  { label: '否', value: false },
+];
+
 export function claimStatusLabel(status: number): string {
   return CLAIM_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? String(status);
+}
+
+export function businessFundLabel(value: boolean | null | undefined): string {
+  if (value === true) return '是';
+  if (value === false) return '否';
+  return '-';
 }
 
 /** 列表搜索表单 */
@@ -85,6 +97,16 @@ export function useGridFormSchema(): VbenFormSchema[] {
         allowClear: true,
         options: CLAIM_STATUS_OPTIONS,
         placeholder: '全部状态',
+      },
+    },
+    {
+      fieldName: 'businessFund',
+      label: '是否业务款',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: BUSINESS_FUND_OPTIONS,
+        placeholder: '全部',
       },
     },
     {
@@ -170,6 +192,18 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'bankSerialNo',
       title: '银行流水号',
       minWidth: 180,
+    },
+    {
+      field: 'businessFund',
+      title: '是否业务款',
+      width: 100,
+      formatter: ({ cellValue }: { cellValue: boolean }) =>
+        businessFundLabel(cellValue),
+    },
+    {
+      field: 'fundTypeRemark',
+      title: '款项类型备注',
+      minWidth: 140,
     },
     {
       field: 'importDate',

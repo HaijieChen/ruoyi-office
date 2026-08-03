@@ -36,6 +36,10 @@ public class FinanceReceiptDO extends BaseDO {
     private BigDecimal transactionAmount;
     private String summary;
     private String bankSerialNo;
+    /** 是否业务款（仅展示，不联动认领） */
+    private Boolean businessFund;
+    /** 款项类型备注（选填） */
+    private String fundTypeRemark;
     private Integer claimStatus;
     private BigDecimal claimedAmount;
     /**

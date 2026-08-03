@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.springframework.format.annotation.DateTimeFormat;
 
@@ -50,5 +51,13 @@ public class FinanceReceiptSaveReqVO {
     @Schema(description = "银行流水号", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "银行流水号不能为空")
     private String bankSerialNo;
+
+    @Schema(description = "是否业务款", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "是否业务款不能为空")
+    private Boolean businessFund;
+
+    @Schema(description = "款项类型备注")
+    @Size(max = 255, message = "款项类型备注长度不能超过 255")
+    private String fundTypeRemark;
 
 }

@@ -200,8 +200,13 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 || StrUtil.isBlank(reqVO.getBankAccount()) || reqVO.getTransactionDate() == null
                 || StrUtil.isBlank(reqVO.getPayerName()) || reqVO.getTransactionAmount() == null
                 || reqVO.getTransactionAmount().compareTo(BigDecimal.ZERO) <= 0
-                || StrUtil.isBlank(reqVO.getBankSerialNo())) {
-            throw new IllegalArgumentException("主体公司、银行账户、交易日期、付款方名称、交易金额和银行流水号不能为空，且金额须大于 0");
+                || StrUtil.isBlank(reqVO.getBankSerialNo())
+                || reqVO.getBusinessFund() == null) {
+            throw new IllegalArgumentException(
+                    "主体公司、银行账户、交易日期、付款方名称、交易金额、银行流水号和是否业务款不能为空，且金额须大于 0");
+        }
+        if (reqVO.getFundTypeRemark() != null && reqVO.getFundTypeRemark().length() > 255) {
+            throw new IllegalArgumentException("款项类型备注长度不能超过 255");
         }
         FinanceReceiptDO exists = receiptMapper.selectByBankSerialNo(reqVO.getBankSerialNo().trim());
         if (exists != null && (excludeId == null || !exists.getId().equals(excludeId))) {
@@ -225,6 +230,8 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 .transactionAmount(reqVO.getTransactionAmount())
                 .summary(trimToNull(reqVO.getSummary()))
                 .bankSerialNo(reqVO.getBankSerialNo().trim())
+                .businessFund(reqVO.getBusinessFund())
+                .fundTypeRemark(trimToNull(reqVO.getFundTypeRemark()))
                 .claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
                 .claimedAmount(BigDecimal.ZERO)
                 .unclaimedAmount(reqVO.getTransactionAmount())
@@ -278,12 +285,42 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         if (bankSerialNos.contains(importReceipt.getBankSerialNo())) {
             return "银行流水号在文件内重复";
         }
+        if (parseImportBusinessFund(importReceipt.getBusinessFund()) == null) {
+            return "是否业务款格式错误（空=否；支持是/否、Y/N、true/false、1/0）";
+        }
+        if (importReceipt.getFundTypeRemark() != null && importReceipt.getFundTypeRemark().length() > 255) {
+            return "款项类型备注长度不能超过 255";
+        }
+        return null;
+    }
+
+    /**
+     * 导入「是否业务款」：空/空白 → false；可识别真值/假值 → 对应布尔；无法识别 → null（校验失败）。
+     */
+    static Boolean parseImportBusinessFund(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return Boolean.FALSE;
+        }
+        String v = raw.trim();
+        if ("是".equals(v) || "Y".equalsIgnoreCase(v) || "YES".equalsIgnoreCase(v)
+                || "TRUE".equalsIgnoreCase(v) || "1".equals(v)) {
+            return Boolean.TRUE;
+        }
+        if ("否".equals(v) || "N".equalsIgnoreCase(v) || "NO".equalsIgnoreCase(v)
+                || "FALSE".equalsIgnoreCase(v) || "0".equals(v)) {
+            return Boolean.FALSE;
+        }
         return null;
     }
 
     private static FinanceReceiptDO buildReceipt(FinanceReceiptImportExcelVO importReceipt, Long importerId,
                                                  String receiptNo, LocalDateTime transactionDate,
                                                  FinanceEntityCompanyResolver.ResolvedCompany company) {
+        Boolean businessFund = parseImportBusinessFund(importReceipt.getBusinessFund());
+        // validateImportReceipt 已保证非 null
+        if (businessFund == null) {
+            businessFund = Boolean.FALSE;
+        }
         return FinanceReceiptDO.builder()
                 .receiptNo(receiptNo)
                 .importDate(LocalDate.now())
@@ -297,6 +334,8 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 .transactionAmount(importReceipt.getTransactionAmount())
                 .summary(importReceipt.getSummary())
                 .bankSerialNo(importReceipt.getBankSerialNo())
+                .businessFund(businessFund)
+                .fundTypeRemark(trimToNull(importReceipt.getFundTypeRemark()))
                 .claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
                 .claimedAmount(BigDecimal.ZERO)
                 .unclaimedAmount(importReceipt.getTransactionAmount())

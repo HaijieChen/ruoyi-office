@@ -48,4 +48,7 @@ public class FinanceReceiptPageReqVO extends PageParam {
     @Schema(description = "认领状态（0-待认领，1-部分认领，2-完全认领，3-已关闭）")
     private Integer claimStatus;
 
+    @Schema(description = "是否业务款")
+    private Boolean businessFund;
+
 }

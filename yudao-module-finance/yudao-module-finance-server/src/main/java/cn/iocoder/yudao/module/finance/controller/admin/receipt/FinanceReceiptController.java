@@ -50,6 +50,8 @@ public class FinanceReceiptController {
                         .transactionAmount(new BigDecimal("10000.00"))
                         .summary("示例摘要/附言")
                         .bankSerialNo("BANK-SERIAL-DEMO-001")
+                        .businessFund("是")
+                        .fundTypeRemark("合同款")
                         .build(),
                 FinanceReceiptImportExcelVO.builder()
                         .entityCompanyName("示例主体公司")
@@ -60,6 +62,8 @@ public class FinanceReceiptController {
                         .transactionAmount(new BigDecimal("2500.50"))
                         .summary("示例摘要/附言")
                         .bankSerialNo("BANK-SERIAL-DEMO-002")
+                        .businessFund("否")
+                        .fundTypeRemark("往来款")
                         .build()
         );
         ExcelUtils.write(response, "银行到款导入模板.xls", "银行到款", FinanceReceiptImportExcelVO.class, list);

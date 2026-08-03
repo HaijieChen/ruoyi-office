@@ -71,9 +71,53 @@ class FinanceReceiptServiceImplTest {
                 "RC-20260722-1".equals(receipt.getReceiptNo())
                         && ENTITY_COMPANY_DEPT_ID.equals(receipt.getEntityCompanyDeptId())
                         && ENTITY_COMPANY_NAME.equals(receipt.getEntityCompanyName())
+                        && Boolean.FALSE.equals(receipt.getBusinessFund()) // 导入空=否
                         && receipt.getClaimStatus().equals(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
                         && BigDecimal.ZERO.compareTo(receipt.getClaimedAmount()) == 0
                         && new BigDecimal("100.50").compareTo(receipt.getUnclaimedAmount()) == 0));
+    }
+
+    @Test
+    void importReceiptListShouldParseBusinessFundAndFundTypeRemark() {
+        when(receiptNoRedisDAO.generate(LocalDate.now())).thenReturn("RC-BF-1", "RC-BF-2", "RC-BF-3");
+        when(receiptMapper.selectByBankSerialNo(any())).thenReturn(null);
+
+        FinanceReceiptImportExcelVO yesRow = row("招商银行 1234", "BSN-BF-YES", BigDecimal.TEN);
+        yesRow.setBusinessFund("是");
+        yesRow.setFundTypeRemark("合同尾款");
+
+        FinanceReceiptImportExcelVO emptyRow = row("招商银行 1234", "BSN-BF-EMPTY", BigDecimal.ONE);
+        emptyRow.setBusinessFund(null);
+        emptyRow.setFundTypeRemark("  ");
+
+        FinanceReceiptImportExcelVO invalidRow = row("招商银行 1234", "BSN-BF-BAD", BigDecimal.ONE);
+        invalidRow.setBusinessFund("maybe");
+
+        FinanceReceiptImportRespVO respVO = receiptService.importReceiptList(
+                List.of(yesRow, emptyRow, invalidRow), 100L);
+
+        assertEquals(List.of("RC-BF-1", "RC-BF-2"), respVO.getReceiptNos());
+        assertTrue(respVO.getFailureRows().get(4).contains("是否业务款格式错误"));
+        verify(receiptMapper).insert(argThat((FinanceReceiptDO r) ->
+                "BSN-BF-YES".equals(r.getBankSerialNo())
+                        && Boolean.TRUE.equals(r.getBusinessFund())
+                        && "合同尾款".equals(r.getFundTypeRemark())));
+        verify(receiptMapper).insert(argThat((FinanceReceiptDO r) ->
+                "BSN-BF-EMPTY".equals(r.getBankSerialNo())
+                        && Boolean.FALSE.equals(r.getBusinessFund())
+                        && r.getFundTypeRemark() == null));
+        verify(receiptMapper, times(2)).insert(any(FinanceReceiptDO.class));
+    }
+
+    @Test
+    void parseImportBusinessFundShouldTreatBlankAsFalseAndRejectUnknown() {
+        assertEquals(Boolean.FALSE, FinanceReceiptServiceImpl.parseImportBusinessFund(null));
+        assertEquals(Boolean.FALSE, FinanceReceiptServiceImpl.parseImportBusinessFund("  "));
+        assertEquals(Boolean.TRUE, FinanceReceiptServiceImpl.parseImportBusinessFund("是"));
+        assertEquals(Boolean.TRUE, FinanceReceiptServiceImpl.parseImportBusinessFund("Y"));
+        assertEquals(Boolean.FALSE, FinanceReceiptServiceImpl.parseImportBusinessFund("否"));
+        assertEquals(Boolean.FALSE, FinanceReceiptServiceImpl.parseImportBusinessFund("0"));
+        assertNull(FinanceReceiptServiceImpl.parseImportBusinessFund("maybe"));
     }
 
     @Test

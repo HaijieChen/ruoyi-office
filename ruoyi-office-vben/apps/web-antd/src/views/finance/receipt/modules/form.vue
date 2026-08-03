@@ -12,6 +12,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Radio,
   Select,
   Textarea,
   message,
@@ -46,7 +47,14 @@ interface FormData {
   transactionAmount?: number;
   summary?: string;
   bankSerialNo?: string;
+  /** 是否业务款，新增默认 true */
+  businessFund?: boolean;
+  fundTypeRemark?: string;
   receiptNo?: string;
+}
+
+function defaultFormData(): FormData {
+  return { businessFund: true };
 }
 
 function toDisplayDateTime(value: unknown): string | undefined {
@@ -110,10 +118,13 @@ const rules: Record<string, Rule[]> = {
   bankSerialNo: [
     { required: true, message: '银行流水号不能为空', trigger: 'blur' },
   ],
+  businessFund: [
+    { required: true, message: '是否业务款不能为空', trigger: 'change' },
+  ],
 };
 
 function resetForm() {
-  formData.value = {};
+  formData.value = defaultFormData();
   formRef.value?.resetFields();
 }
 
@@ -153,6 +164,8 @@ const [Modal, modalApi] = useVbenModal({
         transactionAmount: detail.transactionAmount,
         summary: detail.summary,
         bankSerialNo: detail.bankSerialNo,
+        businessFund: detail.businessFund ?? true,
+        fundTypeRemark: detail.fundTypeRemark,
         receiptNo: detail.receiptNo,
       };
       if (
@@ -170,7 +183,7 @@ const [Modal, modalApi] = useVbenModal({
         ];
       }
     } else {
-      formData.value = {};
+      formData.value = defaultFormData();
     }
   },
   async onConfirm() {
@@ -193,6 +206,8 @@ const [Modal, modalApi] = useVbenModal({
         transactionAmount: formData.value.transactionAmount!,
         summary: formData.value.summary,
         bankSerialNo: formData.value.bankSerialNo!,
+        businessFund: formData.value.businessFund ?? true,
+        fundTypeRemark: formData.value.fundTypeRemark,
       };
       if (payload.id) {
         await updateReceipt(payload);
@@ -287,6 +302,21 @@ const [Modal, modalApi] = useVbenModal({
           v-model:value="formData.bankSerialNo"
           placeholder="唯一，不可重复"
           allow-clear
+        />
+      </Form.Item>
+      <Form.Item label="是否业务款" name="businessFund">
+        <Radio.Group v-model:value="formData.businessFund">
+          <Radio :value="true">是</Radio>
+          <Radio :value="false">否</Radio>
+        </Radio.Group>
+      </Form.Item>
+      <Form.Item label="款项类型备注" name="fundTypeRemark">
+        <Input
+          v-model:value="formData.fundTypeRemark"
+          placeholder="可选，最长 255 字"
+          :maxlength="255"
+          allow-clear
+          show-count
         />
       </Form.Item>
       <Form.Item label="摘要/附言" name="summary">

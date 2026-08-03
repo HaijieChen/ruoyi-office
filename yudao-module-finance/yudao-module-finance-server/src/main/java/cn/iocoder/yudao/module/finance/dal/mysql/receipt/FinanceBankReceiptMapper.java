@@ -29,6 +29,7 @@ public interface FinanceBankReceiptMapper extends BaseMapperX<FinanceReceiptDO> 
                 .likeIfPresent(FinanceReceiptDO::getPayerName, reqVO.getPayerName())
                 .likeIfPresent(FinanceReceiptDO::getPayerAccount, reqVO.getPayerAccount())
                 .likeIfPresent(FinanceReceiptDO::getBankSerialNo, reqVO.getBankSerialNo())
+                .eqIfPresent(FinanceReceiptDO::getBusinessFund, reqVO.getBusinessFund())
                 .betweenIfPresent(FinanceReceiptDO::getImportDate, reqVO.getImportDate())
                 .orderByDesc(FinanceReceiptDO::getId));
     }
@@ -43,6 +44,7 @@ public interface FinanceBankReceiptMapper extends BaseMapperX<FinanceReceiptDO> 
                 .likeIfPresent(FinanceReceiptDO::getPayerName, reqVO.getPayerName())
                 .likeIfPresent(FinanceReceiptDO::getPayerAccount, reqVO.getPayerAccount())
                 .likeIfPresent(FinanceReceiptDO::getBankSerialNo, reqVO.getBankSerialNo())
+                .eqIfPresent(FinanceReceiptDO::getBusinessFund, reqVO.getBusinessFund())
                 .betweenIfPresent(FinanceReceiptDO::getImportDate, reqVO.getImportDate())
                 .orderByDesc(FinanceReceiptDO::getId));
     }

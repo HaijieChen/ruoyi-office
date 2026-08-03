@@ -45,4 +45,14 @@ public class FinanceReceiptImportExcelVO {
     @ExcelProperty("银行流水号")
     private String bankSerialNo;
 
+    /**
+     * 是否业务款原始值（字符串）。
+     * 空/空白 → 否；支持 是/否、Y/N、true/false、1/0（大小写不敏感）。
+     */
+    @ExcelProperty("是否业务款")
+    private String businessFund;
+
+    @ExcelProperty("款项类型备注")
+    private String fundTypeRemark;
+
 }

@@ -37,6 +37,10 @@ public class FinanceReceiptRespVO {
     private String summary;
     @Schema(description = "银行流水号")
     private String bankSerialNo;
+    @Schema(description = "是否业务款")
+    private Boolean businessFund;
+    @Schema(description = "款项类型备注")
+    private String fundTypeRemark;
     @Schema(description = "认领状态")
     private Integer claimStatus;
     @Schema(description = "已认领金额")
