@@ -1,6 +1,6 @@
 -- 财务业务角色：财务管理员 + 商务人员（幂等，tenant_id=1）
 -- 职责分离（SoD）矩阵（2026-07-29 与 GPT 评审对齐）：
---   finance_admin：银行到款全量；商务单只读；认领仅复核（confirm/reject/revoke/review）
+--   finance_admin：银行到款全量；商务单只读；认领仅复核（confirm/reject/revoke/review）；组织架构(dept CRUD)
 --   business_staff：银行到款只读；商务单维护；认领提交侧（create/update/resubmit/query）
 -- 双方均含工作台 /dashboard + /workspace + /home，避免 defaultHomePath=/home 登录 404。
 -- 可配首页 component=dashboard/home/index；旧 workspace 保留兼容（redirect→/home）。
@@ -11,7 +11,7 @@ INSERT INTO `system_role`
     (`name`, `code`, `sort`, `data_scope`, `data_scope_dept_ids`, `status`, `type`, `remark`,
      `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
 SELECT '财务管理员', 'finance_admin', 20, 1, '', 0, 2,
-       '财务职责：银行到款全量维护；商务单只读；到款认领仅复核（确认/驳回/撤销）。不含商务单写入与认领发起。',
+       '财务职责：银行到款全量维护；商务单只读；到款认领仅复核；组织架构维护主体公司。不含商务单写入与认领发起。',
        'admin', NOW(), 'admin', NOW(), b'0', 1
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_role` WHERE `deleted` = b'0' AND `code` = 'finance_admin' AND `tenant_id` = 1
@@ -31,7 +31,7 @@ UPDATE `system_role`
 SET `name` = '财务管理员',
     `sort` = 20,
     `status` = 0,
-    `remark` = '财务职责：银行到款全量维护；商务单只读；到款认领仅复核（确认/驳回/撤销）。不含商务单写入与认领发起。',
+    `remark` = '财务职责：银行到款全量维护；商务单只读；到款认领仅复核；组织架构维护主体公司。不含商务单写入与认领发起。',
     `updater` = 'admin',
     `update_time` = NOW()
 WHERE `deleted` = b'0' AND `code` = 'finance_admin' AND `tenant_id` = 1;
@@ -103,6 +103,14 @@ WHERE r.`deleted` = b'0' AND r.`code` = 'finance_admin' AND r.`tenant_id` = 1
             'bpm:process-instance-cc:query',
             'bpm:task:query',
             'bpm:task:update'
+        )
+        -- 组织架构（人力 → 组织架构 / 系统管理 → 部门管理）+ dept API
+     OR m.`id` IN (103, 5130, 5131, 5132, 5133)
+     OR m.`permission` IN (
+            'system:dept:query',
+            'system:dept:create',
+            'system:dept:update',
+            'system:dept:delete'
         )
   );
 
