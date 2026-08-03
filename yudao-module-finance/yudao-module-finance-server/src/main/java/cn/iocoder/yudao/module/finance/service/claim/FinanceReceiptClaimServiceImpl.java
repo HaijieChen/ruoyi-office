@@ -368,6 +368,10 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
                     .equals(receipt.getClaimStatus())) {
                 throw exception(RECEIPT_CLAIM_RECEIPT_CLOSED);
             }
+            // 仅业务款可认领（非业务款 / null 均拒绝）
+            if (receipt != null && !Boolean.TRUE.equals(receipt.getBusinessFund())) {
+                throw exception(RECEIPT_CLAIM_RECEIPT_NOT_BUSINESS_FUND);
+            }
             BigDecimal pending = defaultZero(receipt == null ? null : receipt.getPendingClaimedAmount());
             BigDecimal unclaimed = defaultZero(receipt == null ? null : receipt.getUnclaimedAmount());
             // 可认 = unclaimed - pending

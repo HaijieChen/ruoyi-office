@@ -153,10 +153,12 @@ public class FinanceReceiptClaimController {
     }
 
     @GetMapping("/source-receipt-page")
-    @Operation(summary = "获得可认领银行到款分页")
+    @Operation(summary = "获得可认领银行到款分页（仅业务款）")
     @PreAuthorize("@ss.hasPermission('finance:receipt-claim:query')")
     public CommonResult<PageResult<FinanceReceiptRespVO>> getSourceReceiptPage(
             @Valid FinanceReceiptPageReqVO pageReqVO) {
+        // 产品：认领单只可选业务款；强制过滤，忽略调用方传入的 businessFund
+        pageReqVO.setBusinessFund(Boolean.TRUE);
         PageResult<FinanceReceiptDO> page = receiptService.getUnclaimedReceiptPage(pageReqVO);
         // 保留 claimable=0 行并返回真实 total；FE 对 0 禁用（编辑可并入已选源）
         List<FinanceReceiptRespVO> list = new ArrayList<>();

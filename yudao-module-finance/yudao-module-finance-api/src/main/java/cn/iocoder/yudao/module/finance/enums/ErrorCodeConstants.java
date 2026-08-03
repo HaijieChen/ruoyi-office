@@ -67,6 +67,8 @@ public interface ErrorCodeConstants {
             "认领明细必须挂开票申请（新链路），且来源一致");
     ErrorCode RECEIPT_CLAIM_ITEM_DUPLICATE_INVOICE = new ErrorCode(1_040_002_015,
             "同一到款和开票申请不能重复分摊");
+    ErrorCode RECEIPT_CLAIM_RECEIPT_NOT_BUSINESS_FUND = new ErrorCode(1_040_002_016,
+            "仅业务款可发起到款认领");
 
     // ========== 开票申请 1-040-003-000 ==========
     ErrorCode INVOICE_APPLICATION_NOT_EXISTS = new ErrorCode(1_040_003_000, "开票申请不存在");

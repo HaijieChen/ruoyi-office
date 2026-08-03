@@ -109,11 +109,26 @@ class FinanceReceiptClaimServiceImplTest {
     void createClaimShouldRejectClosedReceipt() {
         when(receiptMapper.selectListByIds(any())).thenReturn(List.of(FinanceReceiptDO.builder()
                 .id(1L).claimStatus(FinanceReceiptClaimStatusEnum.CLOSED.getStatus())
+                .businessFund(Boolean.TRUE)
                 .unclaimedAmount(new BigDecimal("100.00")).pendingClaimedAmount(ZERO).build()));
 
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> claimService.createClaim(claim(null, item(1L, 20L, "10.00")), 100L));
         assertTrue(ex.getMessage().contains("关闭"));
+    }
+
+    @Test
+    void createClaimShouldRejectNonBusinessFundReceipt() {
+        when(receiptMapper.selectListByIds(any())).thenReturn(List.of(FinanceReceiptDO.builder()
+                .id(1L).claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
+                .businessFund(Boolean.FALSE)
+                .unclaimedAmount(new BigDecimal("100.00")).pendingClaimedAmount(ZERO).build()));
+        when(invoiceApplicationMapper.selectListByIds(any())).thenReturn(List.of(approvedApp(20L, 100L, "500.00")));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> claimService.createClaim(claim(null, item(1L, 20L, "10.00")), 100L));
+        assertTrue(ex.getMessage().contains("业务款"));
+        verify(claimMapper, never()).insert(any(FinanceReceiptClaimDO.class));
     }
 
     @Test
@@ -264,6 +279,7 @@ class FinanceReceiptClaimServiceImplTest {
     private static FinanceReceiptDO receipt(Long id, String unclaimed, String pending) {
         return FinanceReceiptDO.builder().id(id)
                 .claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
+                .businessFund(Boolean.TRUE)
                 .unclaimedAmount(new BigDecimal(unclaimed))
                 .pendingClaimedAmount(new BigDecimal(pending))
                 .build();

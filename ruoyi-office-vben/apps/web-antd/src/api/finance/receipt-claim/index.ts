@@ -168,8 +168,10 @@ export function getRevokeAuditList(claimId: number) {
   );
 }
 
-/** 可认领银行到款分页（创建认领时选源） */
-export function getSourceReceiptPage(params: PageParam) {
+/** 可认领银行到款分页（创建认领时选源；仅业务款，服务端强制） */
+export function getSourceReceiptPage(
+  params: PageParam & { businessFund?: boolean },
+) {
   return requestClient.get<PageResult<Record<string, any>>>(
     '/finance/receipt-claim/source-receipt-page',
     { params },

@@ -168,7 +168,8 @@ async function loadSourceOptions() {
   loadingOptions.value = true;
   try {
     const [receiptPage, invoicePage] = await Promise.all([
-      getSourceReceiptPage({ pageNo: 1, pageSize: 100 }),
+      // 服务端也会强制 businessFund=true；此处显式传入便于联调可读
+      getSourceReceiptPage({ pageNo: 1, pageSize: 100, businessFund: true }),
       getSourceInvoiceApplicationPage({ pageNo: 1, pageSize: 100 }),
     ]);
     let receipts = (receiptPage?.list || []).map((r: any) => {
@@ -394,7 +395,7 @@ const [Modal, modalApi] = useVbenModal({
                   :loading="loadingOptions"
                   :options="receiptSelectOptions(index)"
                   option-filter-prop="label"
-                  placeholder="选择可认领到款"
+                  placeholder="选择业务款到款（仅业务款可认领）"
                   class="w-full"
                 />
               </div>
