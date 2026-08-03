@@ -52,6 +52,7 @@ public class FinanceReceiptImportExcelVO {
     @ExcelProperty("是否业务款")
     private String businessFund;
 
+    /** 字典 finance_fund_type_remark 的 value（当前：利息收入/往来款项），选填 */
     @ExcelProperty("款项类型备注")
     private String fundTypeRemark;
 

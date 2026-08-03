@@ -51,7 +51,7 @@ public class FinanceReceiptController {
                         .summary("示例摘要/附言")
                         .bankSerialNo("BANK-SERIAL-DEMO-001")
                         .businessFund("是")
-                        .fundTypeRemark("合同款")
+                        .fundTypeRemark("利息收入")
                         .build(),
                 FinanceReceiptImportExcelVO.builder()
                         .entityCompanyName("示例主体公司")
@@ -63,7 +63,7 @@ public class FinanceReceiptController {
                         .summary("示例摘要/附言")
                         .bankSerialNo("BANK-SERIAL-DEMO-002")
                         .businessFund("否")
-                        .fundTypeRemark("往来款")
+                        .fundTypeRemark("往来款项")
                         .build()
         );
         ExcelUtils.write(response, "银行到款导入模板.xls", "银行到款", FinanceReceiptImportExcelVO.class, list);

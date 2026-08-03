@@ -22,7 +22,7 @@ export namespace FinanceBankReceiptApi {
     bankSerialNo: string;
     /** 是否业务款（仅展示，不联动认领） */
     businessFund?: boolean;
-    /** 款项类型备注 */
+    /** 款项类型备注（字典 finance_fund_type_remark） */
     fundTypeRemark?: string;
     /** 0=未认领 1=部分认领 2=完全认领 3=已关闭 */
     claimStatus: number;
@@ -61,7 +61,7 @@ export namespace FinanceBankReceiptApi {
     bankSerialNo: string;
     /** 是否业务款，必填，默认 true */
     businessFund: boolean;
-    /** 款项类型备注，选填 */
+    /** 款项类型备注，选填（字典 finance_fund_type_remark：利息收入/往来款项） */
     fundTypeRemark?: string;
   }
 

@@ -6,6 +6,8 @@ import type { FinanceBankReceiptApi } from '#/api/finance/receipt';
 import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 
 import {
   DatePicker,
@@ -56,6 +58,11 @@ interface FormData {
 function defaultFormData(): FormData {
   return { businessFund: true };
 }
+
+/** 款项类型备注：字典 finance_fund_type_remark（利息收入/往来款项，可扩展） */
+const fundTypeRemarkOptions = computed(() =>
+  getDictOptions(DICT_TYPE.FINANCE_FUND_TYPE_REMARK),
+);
 
 function toDisplayDateTime(value: unknown): string | undefined {
   if (value == null || value === '') {
@@ -311,12 +318,12 @@ const [Modal, modalApi] = useVbenModal({
         </Radio.Group>
       </Form.Item>
       <Form.Item label="款项类型备注" name="fundTypeRemark">
-        <Input
+        <Select
           v-model:value="formData.fundTypeRemark"
-          placeholder="可选，最长 255 字"
-          :maxlength="255"
+          :options="fundTypeRemarkOptions"
+          placeholder="请选择款项类型备注（可选）"
           allow-clear
-          show-count
+          class="w-full"
         />
       </Form.Item>
       <Form.Item label="摘要/附言" name="summary">
