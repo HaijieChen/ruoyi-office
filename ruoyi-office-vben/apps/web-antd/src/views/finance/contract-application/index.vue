@@ -184,7 +184,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
         formatter: ({ row }) => displayStatus(row),
       },
       { field: 'endDate', title: '结束日', minWidth: 110 },
-      { field: 'createTime', title: '创建时间', minWidth: 160 },
+      {
+        field: 'createTime',
+        title: '创建时间',
+        minWidth: 160,
+        formatter: 'formatDateTime',
+      },
       {
         field: 'actions',
         title: '操作',

@@ -28,6 +28,7 @@ class FinanceContractPublishAssetsContractTest {
                 "ruoyi-office-vben/apps/web-antd/src/views/finance/contract-application/index.vue",
                 "ruoyi-office-vben/apps/web-antd/src/views/finance/contract-application/modules/form.vue",
                 "ruoyi-office-vben/apps/web-antd/src/views/finance/contract-application/modules/info.vue",
+                "ruoyi-office-vben/apps/web-antd/src/views/finance/contract-application/info/index.vue",
         };
         for (String p : paths) {
             assertTrue(Files.exists(root.resolve(p)), "missing: " + p);
@@ -45,6 +46,9 @@ class FinanceContractPublishAssetsContractTest {
         assertTrue(text.contains("重新发布"));
         assertTrue(text.contains("createAndStart") || text.contains("S1"));
         assertTrue(text.contains("has_di"));
+        assertTrue(text.contains("formCustomViewPath")
+                || text.contains("contract-application/info/index"));
+        assertTrue(text.contains("formatDateTime"));
     }
 
     @Test

@@ -50,6 +50,8 @@
 ## 4. 前端
 
 - [ ] 组件路径：`finance/contract-application/index`  
+- [ ] BPM 自定义查看：`formCustomViewPath` = `/finance/contract-application/info/index`（待办详情只读单号，非列表）  
+- [ ] 列表「创建时间」列使用 `formatDateTime`  
 - [ ] 菜单可见「合同签约」；BS 可提交/重提/撤回；FA 可查  
 - [ ] 发起仅 createAndStart（无草稿）；catalog 可用 `?openCreate=1`  
 - [ ] 商务签单新建可选「合同签约申请」；导入列 **合同申请业务单号**

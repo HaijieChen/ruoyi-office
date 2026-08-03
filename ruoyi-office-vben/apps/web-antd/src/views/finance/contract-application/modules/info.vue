@@ -4,6 +4,7 @@ import type { FinanceContractApplicationApi } from '#/api/finance/contract-appli
 import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
+import { formatDateTime } from '@vben/utils';
 
 import { Descriptions, Spin } from 'ant-design-vue';
 
@@ -27,6 +28,11 @@ function statusText(row: FinanceContractApplicationApi.Application) {
     CANCELLED: '已取消',
   };
   return map[row.approvalStatus || ''] || row.approvalStatus || '-';
+}
+
+function displayTime(val?: string | number | null) {
+  if (val == null || val === '') return '-';
+  return (formatDateTime(val as any) as string) || String(val);
 }
 
 const [Modal, modalApi] = useVbenModal({
@@ -107,12 +113,15 @@ const [Modal, modalApi] = useVbenModal({
           {{ detail.sealFileUrl || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="归档时间">
-          {{ detail.archivedAt || '-' }}
+          {{ displayTime(detail.archivedAt) }}
         </Descriptions.Item>
         <Descriptions.Item label="邮寄单号">
           {{ detail.mailTrackingNo || '-' }}
         </Descriptions.Item>
-        <Descriptions.Item label="流程实例" :span="2">
+        <Descriptions.Item label="创建时间">
+          {{ displayTime(detail.createTime) }}
+        </Descriptions.Item>
+        <Descriptions.Item label="流程实例">
           {{ detail.processInstanceId || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="备注" :span="2">
