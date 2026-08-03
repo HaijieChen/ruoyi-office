@@ -241,6 +241,11 @@ class FinanceReceiptClaimServiceImplTest {
         verify(receiptMapper).decreasePendingClaimedAmount(1L, new BigDecimal("30.00"));
         verify(receiptMapper).increaseClaimedAmount(1L, new BigDecimal("30.00"));
         verify(invoiceApplicationMapper).confirmPendingToClaimed(20L, new BigDecimal("30.00"));
+        // 与 create 对称：状态 CONFIRMED 且 reviewerId=认领人
+        verify(claimMapper).updateStatusIfMatch(argThat(c ->
+                        FinanceReceiptClaimReviewStatusEnum.CONFIRMED.getStatus().equals(c.getStatus())
+                                && Long.valueOf(100L).equals(c.getReviewerId())),
+                eq(FinanceReceiptClaimReviewStatusEnum.PENDING.getStatus()));
     }
 
     @Test
