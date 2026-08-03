@@ -81,6 +81,8 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
         claimMapper.insert(claim);
         insertInvoiceItems(claim.getId(), createReqVO.getItems());
         applyPending(allocations.receiptAmounts(), allocations.invoiceAmounts());
+        // 产品：提交即自动确认（pending→claimed）；撤销仍走 revokeClaim
+        confirmClaim(claim.getId(), claimantId);
         return claim.getId();
     }
 
@@ -242,6 +244,8 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
         validateReceiptsPending(receiptAmounts);
         validateInvoiceApps(invoiceAmounts, claimantId);
         applyPending(receiptAmounts, invoiceAmounts);
+        // 与 create 一致：重提后自动确认
+        confirmClaim(id, claimantId);
     }
 
     @Override

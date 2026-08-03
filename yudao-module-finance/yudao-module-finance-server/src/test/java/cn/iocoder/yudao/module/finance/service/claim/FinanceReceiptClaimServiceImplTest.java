@@ -73,14 +73,31 @@ class FinanceReceiptClaimServiceImplTest {
     }
 
     @Test
-    void createClaimShouldOccupyDualPending() {
+    void createClaimShouldOccupyPendingThenAutoConfirm() {
         stubInvoiceSources(100L, "300.00", "0.00", "500.00", "0.00", "0.00");
+        when(claimMapper.selectById(7L)).thenReturn(
+                claimDO(7L, 100L, FinanceReceiptClaimReviewStatusEnum.PENDING.getStatus()));
+        when(itemMapper.selectListByClaimId(7L)).thenReturn(List.of(
+                invoiceItem(7L, 1L, 20L, "100.00"),
+                invoiceItem(7L, 1L, 21L, "50.00")));
+        when(claimMapper.updateStatusIfMatch(any(), eq(FinanceReceiptClaimReviewStatusEnum.PENDING.getStatus())))
+                .thenReturn(1);
+
         Long claimId = claimService.createClaim(claim(null, item(1L, 20L, "100.00"), item(1L, 21L, "50.00")), 100L);
 
         assertEquals(7L, claimId);
         verify(receiptMapper).increasePendingClaimedAmount(1L, new BigDecimal("150.00"));
         verify(invoiceApplicationMapper).increasePendingClaimedAmount(20L, new BigDecimal("100.00"));
         verify(invoiceApplicationMapper).increasePendingClaimedAmount(21L, new BigDecimal("50.00"));
+        // 自动确认：pending→claimed
+        verify(receiptMapper).decreasePendingClaimedAmount(1L, new BigDecimal("150.00"));
+        verify(receiptMapper).increaseClaimedAmount(1L, new BigDecimal("150.00"));
+        verify(invoiceApplicationMapper).confirmPendingToClaimed(20L, new BigDecimal("100.00"));
+        verify(invoiceApplicationMapper).confirmPendingToClaimed(21L, new BigDecimal("50.00"));
+        verify(claimMapper).updateStatusIfMatch(argThat(c ->
+                        FinanceReceiptClaimReviewStatusEnum.CONFIRMED.getStatus().equals(c.getStatus())
+                                && Long.valueOf(100L).equals(c.getReviewerId())),
+                eq(FinanceReceiptClaimReviewStatusEnum.PENDING.getStatus()));
         verify(itemMapper, times(2)).insert(argThat((FinanceReceiptClaimItemDO i) ->
                 FinanceReceiptClaimSourceEnum.INVOICE.getSource().equals(i.getClaimSource())
                         && i.getBusinessOrderId() == null
@@ -206,17 +223,24 @@ class FinanceReceiptClaimServiceImplTest {
     }
 
     @Test
-    void resubmitShouldReapplyPending() {
-        when(claimMapper.selectById(7L)).thenReturn(
-                claimDO(7L, 100L, FinanceReceiptClaimReviewStatusEnum.REJECTED.getStatus()));
+    void resubmitShouldReapplyPendingThenAutoConfirm() {
+        // resubmit 先读 REJECTED；confirm 再读 PENDING
+        when(claimMapper.selectById(7L))
+                .thenReturn(claimDO(7L, 100L, FinanceReceiptClaimReviewStatusEnum.REJECTED.getStatus()))
+                .thenReturn(claimDO(7L, 100L, FinanceReceiptClaimReviewStatusEnum.PENDING.getStatus()));
         when(itemMapper.selectListByClaimId(7L)).thenReturn(List.of(invoiceItem(7L, 1L, 20L, "30.00")));
         when(claimMapper.updateRejectedToPending(7L, 100L)).thenReturn(1);
+        when(claimMapper.updateStatusIfMatch(any(), eq(FinanceReceiptClaimReviewStatusEnum.PENDING.getStatus())))
+                .thenReturn(1);
         stubInvoiceSources(100L, "300.00", "0.00", "500.00", "0.00", "0.00");
 
         claimService.resubmitClaim(7L, 100L);
 
         verify(receiptMapper).increasePendingClaimedAmount(1L, new BigDecimal("30.00"));
         verify(invoiceApplicationMapper).increasePendingClaimedAmount(20L, new BigDecimal("30.00"));
+        verify(receiptMapper).decreasePendingClaimedAmount(1L, new BigDecimal("30.00"));
+        verify(receiptMapper).increaseClaimedAmount(1L, new BigDecimal("30.00"));
+        verify(invoiceApplicationMapper).confirmPendingToClaimed(20L, new BigDecimal("30.00"));
     }
 
     @Test
