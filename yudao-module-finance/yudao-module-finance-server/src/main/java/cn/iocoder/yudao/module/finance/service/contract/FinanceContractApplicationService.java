@@ -27,9 +27,17 @@ public interface FinanceContractApplicationService {
     FinanceContractApplicationDO getApplication(Long id);
 
     /**
-     * 详情：BS 仅本人；manageAll=true（FA）可看全部。
+     * 详情：BS 仅本人；manageAll=true（FA）可看全部；
+     * 当前用户为绑定 process 上 active 任务候选人/办理人时可读本笔（C29 任务语境）。
      */
     FinanceContractApplicationDO getApplication(Long id, Long userId, boolean manageAll);
+
+    /**
+     * 详情读权探针（C30 / CS-R5）：本人或 process 上 active 任务候选人/办理人。
+     * 不含 manageAll；供 HTTP 层在无静态 query 时放行进入 service。
+     * 申请不存在时返回 false（不抛业务异常）。
+     */
+    boolean canAccessDetail(Long id, Long userId);
 
     PageResult<FinanceContractApplicationDO> getApplicationPage(FinanceContractApplicationPageReqVO pageReqVO);
 

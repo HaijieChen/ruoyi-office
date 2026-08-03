@@ -308,10 +308,157 @@ class FinanceContractApplicationServiceImplTest {
         when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
                 .id(100L)
                 .applicantUserId(200L)
+                .processInstanceId("proc-1")
                 .build());
+        // TaskService unavailable → no task-context path
+        when(taskServiceProvider.getIfAvailable()).thenReturn(null);
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.getApplication(100L, 999L, false));
         assertEquals(CONTRACT_APPLICATION_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void getApplicationShouldAllowOwnerWithoutManageAll() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .build());
+        FinanceContractApplicationDO app = service.getApplication(100L, 200L, false);
+        assertEquals(100L, app.getId());
+    }
+
+    @Test
+    void getApplicationShouldAllowManageAllForNonOwner() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .build());
+        FinanceContractApplicationDO app = service.getApplication(100L, 999L, true);
+        assertEquals(100L, app.getId());
+    }
+
+    @Test
+    void getApplicationShouldAllowActiveTaskCandidate() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .processInstanceId("proc-1")
+                .build());
+        org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
+        org.flowable.task.api.TaskQuery taskQuery = mock(org.flowable.task.api.TaskQuery.class);
+        when(taskServiceProvider.getIfAvailable()).thenReturn(taskService);
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.processInstanceId("proc-1")).thenReturn(taskQuery);
+        when(taskQuery.taskCandidateOrAssigned("999")).thenReturn(taskQuery);
+        when(taskQuery.count()).thenReturn(1L);
+
+        FinanceContractApplicationDO app = service.getApplication(100L, 999L, false);
+        assertEquals(100L, app.getId());
+        verify(taskQuery).taskCandidateOrAssigned("999");
+    }
+
+    @Test
+    void canAccessDetailShouldAllowOwnerWithoutQueryPath() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .build());
+        assertTrue(service.canAccessDetail(100L, 200L));
+    }
+
+    @Test
+    void canAccessDetailShouldAllowTaskCandidate() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .processInstanceId("proc-1")
+                .build());
+        org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
+        org.flowable.task.api.TaskQuery taskQuery = mock(org.flowable.task.api.TaskQuery.class);
+        when(taskServiceProvider.getIfAvailable()).thenReturn(taskService);
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.processInstanceId("proc-1")).thenReturn(taskQuery);
+        when(taskQuery.taskCandidateOrAssigned("999")).thenReturn(taskQuery);
+        when(taskQuery.count()).thenReturn(1L);
+        assertTrue(service.canAccessDetail(100L, 999L));
+    }
+
+    @Test
+    void canAccessDetailShouldDenyStrangerAndMissing() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .processInstanceId("proc-1")
+                .build());
+        when(applicationMapper.selectById(404L)).thenReturn(null);
+        org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
+        org.flowable.task.api.TaskQuery taskQuery = mock(org.flowable.task.api.TaskQuery.class);
+        when(taskServiceProvider.getIfAvailable()).thenReturn(taskService);
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.processInstanceId("proc-1")).thenReturn(taskQuery);
+        when(taskQuery.taskCandidateOrAssigned("999")).thenReturn(taskQuery);
+        when(taskQuery.count()).thenReturn(0L);
+        assertFalse(service.canAccessDetail(100L, 999L));
+        assertFalse(service.canAccessDetail(404L, 200L));
+        assertFalse(service.canAccessDetail(null, 200L));
+    }
+
+    @Test
+    void getApplicationShouldDenyWhenNotTaskCandidate() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .processInstanceId("proc-1")
+                .build());
+        org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
+        org.flowable.task.api.TaskQuery taskQuery = mock(org.flowable.task.api.TaskQuery.class);
+        when(taskServiceProvider.getIfAvailable()).thenReturn(taskService);
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.processInstanceId("proc-1")).thenReturn(taskQuery);
+        when(taskQuery.taskCandidateOrAssigned("999")).thenReturn(taskQuery);
+        when(taskQuery.count()).thenReturn(0L);
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.getApplication(100L, 999L, false));
+        assertEquals(CONTRACT_APPLICATION_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void resubmitShouldClaimRejectedAndStartProcess() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicationNo("CT-1")
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.REJECTED.getStatus())
+                .voided(false)
+                .needMail(false)
+                .build());
+        when(applicationMapper.update(isNull(), any())).thenReturn(1);
+        when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("proc-new"));
+
+        assertDoesNotThrow(() -> service.resubmit(100L, toResubmit(validReq()), 200L));
+        verify(processInstanceApi).createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class));
+        verify(applicationMapper).updateById(argThat((FinanceContractApplicationDO u) ->
+                "proc-new".equals(u.getProcessInstanceId())));
+    }
+
+    @Test
+    void resubmitShouldNotStartWhenClaimLoses() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.REJECTED.getStatus())
+                .voided(false)
+                .build());
+        // 条件更新 0 行：另一请求已 claim
+        when(applicationMapper.update(isNull(), any())).thenReturn(0);
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.resubmit(100L, toResubmit(validReq()), 200L));
+        assertEquals(CONTRACT_APPLICATION_STATUS_INVALID.getCode(), ex.getCode());
+        verifyNoInteractions(processInstanceApi);
+        verify(applicationMapper, never()).updateById(any(FinanceContractApplicationDO.class));
     }
 
     @Test

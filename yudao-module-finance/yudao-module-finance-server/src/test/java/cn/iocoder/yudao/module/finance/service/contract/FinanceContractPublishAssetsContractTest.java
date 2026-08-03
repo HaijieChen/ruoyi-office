@@ -63,6 +63,24 @@ class FinanceContractPublishAssetsContractTest {
     }
 
     @Test
+    void controllerGetShouldAllowTaskContextWithoutOnlyStaticQuery() throws Exception {
+        // CS-R5 / C30：get 须为 query OR financeContractAccess（非仅 query）
+        String controller = Files.readString(findRepositoryRoot().resolve(
+                "yudao-module-finance/yudao-module-finance-server/src/main/java/cn/iocoder/yudao/module/finance/controller/admin/contract/FinanceContractApplicationController.java"));
+        assertTrue(controller.contains("financeContractAccess.canTaskContextOrOwnerRead"),
+                "get must allow task-context read without static query");
+        assertTrue(controller.contains("finance:contract-application:query"),
+                "query path retained");
+        // page 仍仅 query，不放开列表
+        int pageIdx = controller.indexOf("@GetMapping(\"/page\")");
+        assertTrue(pageIdx > 0);
+        String pageBlock = controller.substring(pageIdx, Math.min(controller.length(), pageIdx + 350));
+        assertTrue(pageBlock.contains("finance:contract-application:query"));
+        assertTrue(!pageBlock.contains("financeContractAccess"),
+                "page must not open via task-context alone");
+    }
+
+    @Test
     void menuSqlShouldGrantBsAndFa() throws Exception {
         String sql = Files.readString(findRepositoryRoot().resolve(
                 "sql/mysql/finance_contract_application_menu_phase1.sql"));
@@ -87,6 +105,27 @@ class FinanceContractPublishAssetsContractTest {
         assertTrue(controller.contains("finance:contract-application:record-mail"));
         assertTrue(!controller.contains(
                 "hasPermission('finance:contract-application:update')\")\n    public CommonResult<Boolean> recordSeal"));
+    }
+
+    @Test
+    void menuSqlShouldGrantQueryToApprovalRolesForTaskContextRead() throws Exception {
+        // CS-R1 / C29：审批四角色须有 query，才能在待办打开详情
+        String sql = Files.readString(findRepositoryRoot().resolve(
+                "sql/mysql/finance_contract_application_menu_phase1.sql"));
+        assertTrue(sql.contains("contract_biz_lead"));
+        assertTrue(sql.contains("contract_legal"));
+        assertTrue(sql.contains("contract_finance"));
+        assertTrue(sql.contains("contract_gm"));
+        assertTrue(sql.contains("contract_biz_lead', 'contract_legal', 'contract_finance', 'contract_gm'")
+                        || (sql.contains("contract_biz_lead") && sql.indexOf("finance:contract-application:query") > 0),
+                "approval roles must be granted query");
+        // 不得把 update 批给审批角色（仍仅 FA manageAll）
+        int approvalBlock = sql.indexOf("contract_biz_lead', 'contract_legal'");
+        if (approvalBlock > 0) {
+            String block = sql.substring(approvalBlock, Math.min(sql.length(), approvalBlock + 400));
+            assertTrue(!block.contains("finance:contract-application:update"),
+                    "approval roles must not get update");
+        }
     }
 
     private static Path findRepositoryRoot() {

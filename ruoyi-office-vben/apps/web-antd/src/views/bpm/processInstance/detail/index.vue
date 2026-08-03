@@ -473,6 +473,7 @@ onMounted(async () => {
         :process-definition="processDefinition"
         :node-key="nodeKey"
         :node-key-name="nodeKeyName"
+        :task-id="props.taskId || (route.query.taskId as string)"
       />
       <template #actions>
         <div class="px-4" v-if="isApproval">

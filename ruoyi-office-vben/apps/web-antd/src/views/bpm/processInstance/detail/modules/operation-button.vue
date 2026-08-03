@@ -632,8 +632,39 @@ function isEndProcessStatus(status: number) {
   return isEndStatus;
 }
 
+/**
+ * 合同签约执行节点：用印/归档/邮寄须走 finance record* API，
+ * 隐藏通用「通过」避免 complete guard 失败（CS-R2 / CS-R6）。
+ * 必须同时匹配 processKey，避免其他流程复用同名 task key 时被误伤。
+ */
+const CONTRACT_PROCESS_KEY = 'finance_contract_sign';
+const CONTRACT_EXEC_TASK_KEYS = new Set([
+  'taskArchive',
+  'taskMail',
+  'taskSeal',
+]);
+
+function isContractExecTask(): boolean {
+  const key = runningTask.value?.taskDefinitionKey as string | undefined;
+  if (!key || !CONTRACT_EXEC_TASK_KEYS.has(key)) {
+    return false;
+  }
+  const defKey =
+    props.processDefinition?.key ||
+    props.processInstance?.processDefinitionKey ||
+    props.processInstance?.processDefinition?.key;
+  return defKey === CONTRACT_PROCESS_KEY;
+}
+
 /** 是否显示按钮 */
 function isShowButton(btnType: BpmTaskOperationButtonTypeEnum): boolean {
+  // 合同执行节点禁用通用通过；驳回等仍可按模型配置显示
+  if (
+    btnType === BpmTaskOperationButtonTypeEnum.APPROVE &&
+    isContractExecTask()
+  ) {
+    return false;
+  }
   let isShow = true;
   if (
     runningTask.value?.buttonsSetting &&

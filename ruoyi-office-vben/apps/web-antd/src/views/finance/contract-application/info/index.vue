@@ -3,24 +3,36 @@
  * 合同签约 · BPM 自定义表单「查看」组件。
  * 由 processInstance/detail 经 formCustomViewPath 动态加载，
  * props.id = processInstance.businessKey（合同申请主键）。
- * 只读展示；通过/驳回走详情页操作条。
+ * 审批节点只读；用印/归档/邮寄节点展示 record* 执行面板（CS-R2）。
  */
 import type { FinanceContractApplicationApi } from '#/api/finance/contract-application';
 
-import { onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
+import { useTabs } from '@vben/hooks';
 import { formatDateTime } from '@vben/utils';
 
 import {
+  Alert,
+  Button,
+  Card,
   Descriptions,
   DescriptionsItem,
+  Input,
+  message,
+  Space,
   Spin,
   Tag,
-  message,
 } from 'ant-design-vue';
 
-import { getContractApplication } from '#/api/finance/contract-application';
+import {
+  getContractApplication,
+  recordContractArchive,
+  recordContractMail,
+  recordContractSeal,
+} from '#/api/finance/contract-application';
+import { FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'FinanceContractApplicationBpmInfo' });
 
@@ -32,31 +44,68 @@ const props = defineProps<{
   nodeKeyName?: string;
   processDefinition?: any;
   processInstance?: any;
+  /** 当前待办任务 id（待办进入时由路由/父页传入） */
+  taskId?: string;
 }>();
+const EXEC_SEAL = 'taskSeal';
+const EXEC_ARCHIVE = 'taskArchive';
+const EXEC_MAIL = 'taskMail';
+const EXEC_KEYS = new Set([EXEC_ARCHIVE, EXEC_MAIL, EXEC_SEAL]);
 
 const route = useRoute();
+const router = useRouter();
+const { closeCurrentTab } = useTabs();
+
 const loading = ref(false);
+const submitting = ref(false);
 const detail = ref<FinanceContractApplicationApi.Application | null>(null);
+/** FileUpload 可能返回 string 或 string[] */
+const sealFileUrl = ref<string | string[]>('');
+const mailTrackingNo = ref('');
 
 function resolveId(): number | undefined {
-  if (props.id != null && props.id !== '') {
+  if (props.id !== null && props.id !== undefined && props.id !== '') {
     const n = typeof props.id === 'string' ? Number(props.id) : props.id;
     return Number.isFinite(n) ? n : undefined;
   }
   const q = route.query.id;
-  if (q != null && q !== '') {
-    const n = Number(q);
+  if (q !== null && q !== undefined && q !== '') {
+    const n = Number(Array.isArray(q) ? q[0] : q);
     return Number.isFinite(n) ? n : undefined;
   }
   return undefined;
 }
 
+function resolveNodeKey(): string {
+  if (props.nodeKey) return props.nodeKey;
+  const q = route.query.nodeKey;
+  if (q !== null && q !== undefined && q !== '') {
+    return String(Array.isArray(q) ? q[0] : q);
+  }
+  return '';
+}
+
+function resolveTaskId(): string {
+  if (props.taskId) return String(props.taskId);
+  const q = route.query.taskId;
+  if (q !== null && q !== undefined && q !== '') {
+    return String(Array.isArray(q) ? q[0] : q);
+  }
+  return '';
+}
+
+/** Resolve node/task without shadowing props */
+const resolvedNodeKey = computed(() => resolveNodeKey());
+const resolvedTaskId = computed(() => resolveTaskId());
+const isExecNode = computed(() => EXEC_KEYS.has(resolvedNodeKey.value));
+const isSealNode = computed(() => resolvedNodeKey.value === EXEC_SEAL);
+const isArchiveNode = computed(() => resolvedNodeKey.value === EXEC_ARCHIVE);
+const isMailNode = computed(() => resolvedNodeKey.value === EXEC_MAIL);
+
 function statusText(row: FinanceContractApplicationApi.Application) {
   if (row.voided) return '已作废';
   if (row.approvalStatus === 'PENDING') {
-    return row.currentNodeName
-      ? `审批中 · ${row.currentNodeName}`
-      : '审批中';
+    return row.currentNodeName ? `审批中 · ${row.currentNodeName}` : '审批中';
   }
   const map: Record<string, string> = {
     APPROVED: '已通过',
@@ -66,27 +115,130 @@ function statusText(row: FinanceContractApplicationApi.Application) {
   return map[row.approvalStatus || ''] || row.approvalStatus || '-';
 }
 
-function displayTime(val?: string | number | null) {
-  if (val == null || val === '') return '-';
+function displayTime(val?: null | number | string) {
+  if (val === null || val === undefined || val === '') return '-';
   return (formatDateTime(val as any) as string) || String(val);
 }
 
+function sealUrlForSubmit(): string {
+  const v = sealFileUrl.value;
+  if (Array.isArray(v)) {
+    const first = v[0];
+    return (first === null || first === undefined ? '' : String(first)).trim();
+  }
+  return String(v || '').trim();
+}
+
+/** 文本框绑定：始终为 string */
+const sealUrlText = computed({
+  get: () => sealUrlForSubmit(),
+  set: (val: string) => {
+    sealFileUrl.value = val ?? '';
+  },
+});
+
 async function loadData() {
   const id = resolveId();
-  if (id == null) {
+  if (id === undefined) {
     detail.value = null;
     return;
   }
   loading.value = true;
   try {
     detail.value = await getContractApplication(id);
+    if (detail.value?.sealFileUrl) {
+      sealFileUrl.value = detail.value.sealFileUrl;
+    }
+    if (detail.value?.mailTrackingNo) {
+      mailTrackingNo.value = detail.value.mailTrackingNo;
+    }
   } catch (error) {
     detail.value = null;
-    const msg =
-      error instanceof Error ? error.message : '加载合同签约详情失败';
+    const msg = error instanceof Error ? error.message : '加载合同签约详情失败';
     message.error(msg);
   } finally {
     loading.value = false;
+  }
+}
+
+async function afterExecSuccess(tip: string) {
+  message.success(tip);
+  try {
+    await closeCurrentTab();
+  } catch {
+    // ignore
+  }
+  try {
+    await router.push({ path: '/bpm/task/todo' });
+  } catch {
+    // 关闭即可
+  }
+}
+
+async function handleRecordSeal() {
+  const id = resolveId();
+  const tid = resolvedTaskId.value;
+  const url = sealUrlForSubmit();
+  if (id === undefined || !tid) {
+    message.error('缺少申请或任务编号，请从待办进入');
+    return;
+  }
+  if (!url) {
+    message.warning('请先上传或填写用印扫描件');
+    return;
+  }
+  submitting.value = true;
+  try {
+    await recordContractSeal(id, tid, url);
+    await afterExecSuccess('用印登记成功，任务已推进');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '用印登记失败';
+    message.error(msg);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleRecordArchive() {
+  const id = resolveId();
+  const tid = resolvedTaskId.value;
+  if (id === undefined || !tid) {
+    message.error('缺少申请或任务编号，请从待办进入');
+    return;
+  }
+  submitting.value = true;
+  try {
+    await recordContractArchive(id, tid);
+    await afterExecSuccess('归档确认成功，任务已推进');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '归档失败';
+    message.error(msg);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleRecordMail() {
+  const id = resolveId();
+  const tid = resolvedTaskId.value;
+  const tracking = mailTrackingNo.value?.trim();
+  if (id === undefined || !tid) {
+    message.error('缺少申请或任务编号，请从待办进入');
+    return;
+  }
+  if (!tracking) {
+    message.warning('请填写邮寄单号');
+    return;
+  }
+  submitting.value = true;
+  try {
+    await recordContractMail(id, tid, tracking);
+    await afterExecSuccess('邮寄登记成功，流程将完成');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '邮寄登记失败';
+    message.error(msg);
+  } finally {
+    submitting.value = false;
   }
 }
 
@@ -111,7 +263,122 @@ watch(
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>{{ statusText(detail) }}</Tag>
           <Tag v-if="detail.voided" color="red">已作废</Tag>
+          <Tag v-if="isExecNode" color="orange">
+            执行节点 · {{ nodeKeyName || resolvedNodeKey }}
+          </Tag>
         </div>
+
+        <!-- CS-R2：用印 / 归档 / 邮寄 执行面板 -->
+        <Card
+          v-if="isSealNode && isApproval !== false"
+          class="mb-4"
+          size="small"
+          title="用印登记"
+        >
+          <Alert
+            class="mb-3"
+            type="info"
+            show-icon
+            message="请上传用印扫描件后提交。请勿使用底部通用「通过」——本节点须走用印登记。"
+          />
+          <div class="mb-3">
+            <div class="mb-1 text-sm text-gray-600">用印扫描件</div>
+            <FileUpload
+              v-model:value="sealFileUrl"
+              :max-number="1"
+              :max-size="30"
+              :multiple="false"
+              help-text="支持 PDF/图片；提交后写入台账并完成用印任务"
+            />
+            <Input
+              v-model:value="sealUrlText"
+              class="mt-2"
+              allow-clear
+              placeholder="或直接粘贴扫描件 URL"
+            />
+          </div>
+          <Space>
+            <Button
+              type="primary"
+              :loading="submitting"
+              :disabled="!resolvedTaskId"
+              @click="handleRecordSeal"
+            >
+              提交用印登记
+            </Button>
+            <span v-if="!resolvedTaskId" class="text-sm text-red-500">
+              未拿到 taskId，请从「我的待办」进入
+            </span>
+          </Space>
+        </Card>
+
+        <Card
+          v-if="isArchiveNode && isApproval !== false"
+          class="mb-4"
+          size="small"
+          title="归档确认"
+        >
+          <Alert
+            class="mb-3"
+            type="info"
+            show-icon
+            message="确认纸质/电子件已归档后提交。请勿使用底部通用「通过」。"
+          />
+          <Descriptions bordered size="small" :column="1" class="mb-3">
+            <DescriptionsItem label="用印扫描件">
+              {{ detail.sealFileUrl || '（尚未登记，归档将失败）' }}
+            </DescriptionsItem>
+          </Descriptions>
+          <Space>
+            <Button
+              type="primary"
+              :loading="submitting"
+              :disabled="!resolvedTaskId"
+              @click="handleRecordArchive"
+            >
+              确认归档
+            </Button>
+            <span v-if="!resolvedTaskId" class="text-sm text-red-500">
+              未拿到 taskId，请从「我的待办」进入
+            </span>
+          </Space>
+        </Card>
+
+        <Card
+          v-if="isMailNode && isApproval !== false"
+          class="mb-4"
+          size="small"
+          title="邮寄登记"
+        >
+          <Alert
+            class="mb-3"
+            type="info"
+            show-icon
+            message="填写快递单号后提交。空单号不可提交；请勿使用底部通用「通过」。"
+          />
+          <div class="mb-3 max-w-md">
+            <div class="mb-1 text-sm text-gray-600">邮寄单号</div>
+            <Input
+              v-model:value="mailTrackingNo"
+              allow-clear
+              placeholder="请输入快递/邮寄单号"
+              :maxlength="64"
+            />
+          </div>
+          <Space>
+            <Button
+              type="primary"
+              :loading="submitting"
+              :disabled="!resolvedTaskId || !mailTrackingNo?.trim()"
+              @click="handleRecordMail"
+            >
+              提交邮寄登记
+            </Button>
+            <span v-if="!resolvedTaskId" class="text-sm text-red-500">
+              未拿到 taskId，请从「我的待办」进入
+            </span>
+          </Space>
+        </Card>
 
         <Descriptions bordered :column="2" size="small">
           <DescriptionsItem label="业务单号">

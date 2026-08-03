@@ -110,8 +110,12 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         validateBusinessFields(reqVO);
         FinanceCustomerCompanyDO counterparty = resolveCounterparty(reqVO.getCounterpartyCompanyId());
 
-        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
+        // CS-R3：REJECTED→PENDING 条件更新（单胜者）；0 行则不 startProcess，避免双实例
+        int claimed = applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
                 .eq("id", id)
+                .eq("applicant_user_id", userId)
+                .eq("approval_status", FinanceContractApprovalStatusEnum.REJECTED.getStatus())
+                .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
                 .set("approval_status", FinanceContractApprovalStatusEnum.PENDING.getStatus())
                 .set("voided", Boolean.FALSE)
                 .set("current_node_key", null)
@@ -140,6 +144,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 .set("actual_sealer_user_id", null)
                 .set("archived_at", null)
                 .set("mail_tracking_no", null));
+        if (claimed == 0) {
+            throw exception(CONTRACT_APPLICATION_STATUS_INVALID);
+        }
 
         FinanceContractApplicationDO refreshed = getApplication(id);
         String processInstanceId = startProcess(userId, id, refreshed, reqVO);
@@ -261,10 +268,48 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     @Override
     public FinanceContractApplicationDO getApplication(Long id, Long userId, boolean manageAll) {
         FinanceContractApplicationDO application = getApplication(id);
-        if (!manageAll && !Objects.equals(application.getApplicantUserId(), userId)) {
-            throw exception(CONTRACT_APPLICATION_ACCESS_DENIED);
+        // C29 / CS-R1：本人 / FA(manageAll) / 当前 process 上 active 任务候选人·办理人 可读
+        if (manageAll || Objects.equals(application.getApplicantUserId(), userId)) {
+            return application;
         }
-        return application;
+        if (isActiveTaskCandidateOrAssignee(application, userId)) {
+            return application;
+        }
+        throw exception(CONTRACT_APPLICATION_ACCESS_DENIED);
+    }
+
+    @Override
+    public boolean canAccessDetail(Long id, Long userId) {
+        if (id == null || userId == null) {
+            return false;
+        }
+        FinanceContractApplicationDO application = applicationMapper.selectById(id);
+        if (application == null) {
+            return false;
+        }
+        if (Objects.equals(application.getApplicantUserId(), userId)) {
+            return true;
+        }
+        return isActiveTaskCandidateOrAssignee(application, userId);
+    }
+
+    /**
+     * 用户是否为该申请绑定 process 上任意 active 任务的候选人或办理人。
+     * 仅用于详情读权；不扩大列表（C29）。
+     */
+    private boolean isActiveTaskCandidateOrAssignee(FinanceContractApplicationDO application, Long userId) {
+        if (userId == null || StrUtil.isBlank(application.getProcessInstanceId())) {
+            return false;
+        }
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            return false;
+        }
+        long count = taskService.createTaskQuery()
+                .processInstanceId(application.getProcessInstanceId())
+                .taskCandidateOrAssigned(String.valueOf(userId))
+                .count();
+        return count > 0;
     }
 
     @Override
