@@ -193,7 +193,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
             try {
                 contractAppId = resolveContractByApplicationNo(row.getContractApplicationNo(), importerId);
             } catch (Exception ex) {
-                response.getFailureRows().put(rowNumber, "合同申请业务单号无效：未找到已通过且本人申请的合同");
+                response.getFailureRows().put(rowNumber, "合同业务单号无效：未找到已通过且本人申请的合同");
                 continue;
             }
             String orderNo = businessOrderNoRedisDAO.generate(LocalDate.now());

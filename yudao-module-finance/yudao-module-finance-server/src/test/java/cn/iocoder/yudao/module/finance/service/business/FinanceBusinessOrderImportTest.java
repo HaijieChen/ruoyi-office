@@ -82,7 +82,7 @@ class FinanceBusinessOrderImportTest {
 
         verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
                 "BO-20260723-1".equals(order.getOrderNo())
-                        && "PROC-001".equals(order.getContractProcessId())
+                        && order.getContractProcessId() == null
                         && CONTRACT_APP_ID.equals(order.getContractApplicationId())
                         && LocalDate.now().equals(order.getImportDate())
                         && IMPORTER_ID.equals(order.getImporterId())
@@ -206,17 +206,16 @@ class FinanceBusinessOrderImportTest {
     }
 
     @Test
-    void importBusinessOrderListShouldAcceptBlankContractProcessId() {
+    void importBusinessOrderListShouldRejectBlankContractApplicationNo() {
         FinanceBusinessOrderImportExcelVO row = validRow();
-        row.setContractProcessId(null);
-        when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
+        row.setContractApplicationNo("  ");
 
         FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
                 List.of(row), IMPORTER_ID);
 
-        assertEquals(1, respVO.getOrderNos().size());
-        assertTrue(respVO.getFailureRows().isEmpty());
-        verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) -> order.getContractProcessId() == null));
+        assertEquals(1, respVO.getFailureRows().size());
+        assertTrue(respVO.getFailureRows().values().stream().anyMatch(m -> m.contains("合同业务单号")));
+        verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
     }
 
     @Test
@@ -271,7 +270,6 @@ class FinanceBusinessOrderImportTest {
     private static FinanceBusinessOrderImportExcelVO validRow() {
         return FinanceBusinessOrderImportExcelVO.builder()
                 .entityCompanyName(ENTITY_COMPANY_NAME)
-                .contractProcessId("PROC-001")
                 .contractApplicationNo("CT-001")
                 .orderDate(LocalDate.of(2026, 7, 1))
                 .productName("产品A")

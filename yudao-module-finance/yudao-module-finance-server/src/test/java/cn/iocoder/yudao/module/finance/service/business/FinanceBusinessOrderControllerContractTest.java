@@ -75,7 +75,7 @@ class FinanceBusinessOrderControllerContractTest {
 
     @Test
     void importRowShouldNotAcceptAuthoritativeSettlement() {
-        assertEquals(Set.of("entityCompanyName", "contractProcessId", "contractApplicationNo", "orderDate", "productName", "contactPerson",
+        assertEquals(Set.of("entityCompanyName", "contractApplicationNo", "orderDate", "productName", "contactPerson",
                         "executionStartDate", "executionEndDate", "payerName", "signedExecutionAmount", "discountRate",
                         "summary"),
                 declaredFields(FinanceBusinessOrderImportExcelVO.class));
@@ -92,6 +92,8 @@ class FinanceBusinessOrderControllerContractTest {
                 "receivableAmount", "payableAmount", "ownerId", "status", "currency", "bankAccount");
 
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).containsAll(requiredFields));
+        // RespVO 额外展示 contractApplicationNo（非 DO 列）
+        assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("contractApplicationNo"));
         assertTrue(declaredFields(FinanceBusinessOrderDO.class).containsAll(requiredFields));
         assertTrue(Stream.concat(declaredFields(FinanceBusinessOrderRespVO.class).stream(),
                         declaredFields(FinanceBusinessOrderDO.class).stream())
@@ -100,8 +102,8 @@ class FinanceBusinessOrderControllerContractTest {
 
     @Test
     void pageRequestShouldFilterBySheetAndGeneratedFields() {
-        assertEquals(Set.of("orderNo", "entityCompanyDeptId", "contractProcessId", "productName", "payerName",
-                        "importerId", "importDate", "orderDate", "onlyOpenable"),
+        assertEquals(Set.of("orderNo", "entityCompanyDeptId", "contractProcessId", "contractApplicationNo",
+                        "productName", "payerName", "importerId", "importDate", "orderDate", "onlyOpenable"),
                 declaredFields(FinanceBusinessOrderPageReqVO.class));
     }
 

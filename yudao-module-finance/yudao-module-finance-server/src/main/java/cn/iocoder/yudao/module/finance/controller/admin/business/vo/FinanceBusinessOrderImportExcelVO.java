@@ -18,10 +18,8 @@ public class FinanceBusinessOrderImportExcelVO {
     @ExcelProperty("主体公司")
     private String entityCompanyName;
 
-    @ExcelProperty("合同审批流程ID")
-    private String contractProcessId;
-
-    @ExcelProperty("合同申请业务单号")
+    /** 正式合同业务单号（必填；导入不再暴露 legacy 合同流程 ID） */
+    @ExcelProperty("合同业务单号")
     private String contractApplicationNo;
 
     @ExcelProperty("下单日期")

@@ -62,7 +62,6 @@ public class FinanceBusinessOrderController {
         List<FinanceBusinessOrderImportExcelVO> list = Arrays.asList(
                 FinanceBusinessOrderImportExcelVO.builder()
                         .entityCompanyName("示例主体公司")
-                        .contractProcessId("PROC-DEMO-001")
                         .contractApplicationNo("HT-DEMO-001")
                         .orderDate(LocalDate.of(2026, 7, 20))
                         .productName("示例产品A")
@@ -76,7 +75,6 @@ public class FinanceBusinessOrderController {
                         .build(),
                 FinanceBusinessOrderImportExcelVO.builder()
                         .entityCompanyName("示例主体公司")
-                        .contractProcessId("")
                         .contractApplicationNo("HT-DEMO-002")
                         .orderDate(LocalDate.of(2026, 7, 21))
                         .productName("示例产品B")

@@ -58,7 +58,7 @@ final class FinanceBusinessOrderImportSupport {
             return "折扣率必须在 0 到 1 之间";
         }
         if (StrUtil.isBlank(row.getContractApplicationNo())) {
-            return "合同申请业务单号不能为空";
+            return "合同业务单号不能为空";
         }
         return null;
     }
@@ -73,7 +73,6 @@ final class FinanceBusinessOrderImportSupport {
     static String calculateSourceRowHash(FinanceBusinessOrderImportExcelVO row, NormalizedAmounts amounts,
                                          Long entityCompanyDeptId) {
         String canonicalRow = String.join("\u001f",
-                normalize(row.getContractProcessId()),
                 normalize(row.getContractApplicationNo()),
                 row.getOrderDate().toString(), normalize(row.getProductName()),
                 normalize(row.getContactPerson()), row.getExecutionStartDate().toString(),
@@ -92,7 +91,7 @@ final class FinanceBusinessOrderImportSupport {
                 .orderNo(orderNo).importDate(LocalDate.now()).importerId(importerId)
                 .entityCompanyDeptId(entityCompanyDeptId)
                 .entityCompanyName(entityCompanyName)
-                .contractProcessId(trimToNull(row.getContractProcessId()))
+                .contractProcessId(null)
                 .contractApplicationId(contractApplicationId)
                 .remark(trimToNull(row.getSummary()))
                 .confirmedClaimedAmount(ZERO)
