@@ -25,10 +25,12 @@ public class FinanceBusinessOrderRespVO {
     private Long importerId;
     @Schema(description = "导入人名称")
     private String importerName;
-    @Schema(description = "合同审批流程编号（legacy）")
+    @Schema(description = "合同审批流程编号（legacy，仅兼容历史）")
     private String contractProcessId;
     @Schema(description = "合同签约申请编号（正式关联）")
     private Long contractApplicationId;
+    @Schema(description = "合同业务单号（正式关联快照展示）")
+    private String contractApplicationNo;
     @Schema(description = "下单日期")
     private LocalDate orderDate;
     @Schema(description = "产品名称")

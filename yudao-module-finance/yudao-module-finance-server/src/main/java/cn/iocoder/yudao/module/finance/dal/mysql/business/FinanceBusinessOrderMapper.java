@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.finance.dal.mysql.business;
 
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.MPJLambdaWrapperX;
@@ -26,6 +27,13 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
                 .eqIfPresent(FinanceBusinessOrderDO::getImporterId, reqVO.getImporterId())
                 .betweenIfPresent(FinanceBusinessOrderDO::getImportDate, reqVO.getImportDate())
                 .betweenIfPresent(FinanceBusinessOrderDO::getOrderDate, reqVO.getOrderDate());
+        if (StrUtil.isNotBlank(reqVO.getContractApplicationNo())) {
+            String pattern = "%" + reqVO.getContractApplicationNo().trim() + "%";
+            wrapper.apply(
+                    "contract_application_id IN (SELECT id FROM finance_contract_application "
+                            + "WHERE deleted = b'0' AND application_no LIKE {0})",
+                    pattern);
+        }
         // 可开余额 > 0：settlement_amount - IFNULL(invoiced_occupied_amount,0) > 0
         if (Boolean.TRUE.equals(reqVO.getOnlyOpenable())) {
             wrapper.apply("settlement_amount > IFNULL(invoiced_occupied_amount, 0)");
@@ -35,7 +43,8 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
 
     default PageResult<FinanceBusinessOrderDO> selectClaimablePage(FinanceBusinessOrderPageReqVO reqVO,
                                                                    Long importerId) {
-        return selectPage(reqVO, new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
+        // 注意：apply() 返回父类型，不能接在变量声明的链式末尾，否则无法赋给 MPJLambdaWrapperX
+        MPJLambdaWrapperX<FinanceBusinessOrderDO> wrapper = new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
                 .likeIfPresent(FinanceBusinessOrderDO::getOrderNo, reqVO.getOrderNo())
                 .eqIfPresent(FinanceBusinessOrderDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
                 .likeIfPresent(FinanceBusinessOrderDO::getContractProcessId, reqVO.getContractProcessId())
@@ -43,9 +52,16 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
                 .likeIfPresent(FinanceBusinessOrderDO::getPayerName, reqVO.getPayerName())
                 .eq(FinanceBusinessOrderDO::getImporterId, importerId)
                 .betweenIfPresent(FinanceBusinessOrderDO::getImportDate, reqVO.getImportDate())
-                .betweenIfPresent(FinanceBusinessOrderDO::getOrderDate, reqVO.getOrderDate())
-                .apply("settlement_amount > confirmed_claimed_amount")
-                .orderByDesc(FinanceBusinessOrderDO::getId));
+                .betweenIfPresent(FinanceBusinessOrderDO::getOrderDate, reqVO.getOrderDate());
+        wrapper.apply("settlement_amount > confirmed_claimed_amount");
+        if (StrUtil.isNotBlank(reqVO.getContractApplicationNo())) {
+            String pattern = "%" + reqVO.getContractApplicationNo().trim() + "%";
+            wrapper.apply(
+                    "contract_application_id IN (SELECT id FROM finance_contract_application "
+                            + "WHERE deleted = b'0' AND application_no LIKE {0})",
+                    pattern);
+        }
+        return selectPage(reqVO, wrapper.orderByDesc(FinanceBusinessOrderDO::getId));
     }
 
     default FinanceBusinessOrderDO selectByOrderNo(String orderNo) {

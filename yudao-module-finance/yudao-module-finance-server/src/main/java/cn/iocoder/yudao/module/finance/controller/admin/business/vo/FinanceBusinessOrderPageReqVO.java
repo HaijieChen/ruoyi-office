@@ -21,8 +21,10 @@ public class FinanceBusinessOrderPageReqVO extends PageParam {
     private String orderNo;
     @Schema(description = "主体公司组织部门编号")
     private Long entityCompanyDeptId;
-    @Schema(description = "合同审批流程编号")
+    @Schema(description = "合同审批流程编号（legacy）")
     private String contractProcessId;
+    @Schema(description = "合同业务单号（正式关联 application_no）")
+    private String contractApplicationNo;
     @Schema(description = "产品名称")
     private String productName;
     @Schema(description = "付款方名称")

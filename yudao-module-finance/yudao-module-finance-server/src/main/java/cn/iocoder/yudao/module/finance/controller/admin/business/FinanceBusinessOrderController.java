@@ -11,6 +11,8 @@ import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusin
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.service.business.FinanceBusinessOrderService;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
@@ -29,8 +31,12 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
@@ -46,6 +52,8 @@ public class FinanceBusinessOrderController {
     private FinanceBusinessOrderService businessOrderService;
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private FinanceContractApplicationMapper contractApplicationMapper;
 
     @GetMapping("/get-import-template")
     @Operation(summary = "获得商务签单导入模板")
@@ -131,7 +139,10 @@ public class FinanceBusinessOrderController {
     @PreAuthorize("@ss.hasPermission('finance:business-order:query')")
     public CommonResult<PageResult<FinanceBusinessOrderRespVO>> getBusinessOrderPage(@Valid FinanceBusinessOrderPageReqVO pageReqVO) {
         PageResult<FinanceBusinessOrderDO> pageResult = businessOrderService.getBusinessOrderPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, FinanceBusinessOrderRespVO.class, this::fillImporterNames));
+        PageResult<FinanceBusinessOrderRespVO> voPage =
+                BeanUtils.toBean(pageResult, FinanceBusinessOrderRespVO.class, this::fillImporterNames);
+        fillContractApplicationNos(voPage.getList());
+        return success(voPage);
     }
 
     private FinanceBusinessOrderRespVO buildBusinessOrderVO(FinanceBusinessOrderDO businessOrder) {
@@ -140,6 +151,7 @@ public class FinanceBusinessOrderController {
         }
         FinanceBusinessOrderRespVO respVO = BeanUtils.toBean(businessOrder, FinanceBusinessOrderRespVO.class);
         enrichRemainingBalance(respVO);
+        fillContractApplicationNos(List.of(respVO));
         if (businessOrder.getImporterId() == null) {
             return respVO;
         }
@@ -159,6 +171,31 @@ public class FinanceBusinessOrderController {
                 convertSet(List.of(respVO), FinanceBusinessOrderRespVO::getImporterId));
         MapUtils.findAndThen(userMap, respVO.getImporterId(),
                 importer -> respVO.setImporterName(importer.getNickname()));
+    }
+
+    /** 列表/详情展示正式合同业务单号（application_no） */
+    private void fillContractApplicationNos(List<FinanceBusinessOrderRespVO> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        Collection<Long> ids = list.stream()
+                .map(FinanceBusinessOrderRespVO::getContractApplicationId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return;
+        }
+        Map<Long, String> noById = new HashMap<>();
+        for (FinanceContractApplicationDO contract : contractApplicationMapper.selectBatchIds(ids)) {
+            if (contract != null && contract.getId() != null) {
+                noById.put(contract.getId(), contract.getApplicationNo());
+            }
+        }
+        for (FinanceBusinessOrderRespVO respVO : list) {
+            if (respVO.getContractApplicationId() != null) {
+                respVO.setContractApplicationNo(noById.get(respVO.getContractApplicationId()));
+            }
+        }
     }
 
     private void enrichRemainingBalance(FinanceBusinessOrderRespVO respVO) {

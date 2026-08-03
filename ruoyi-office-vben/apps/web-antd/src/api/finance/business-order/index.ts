@@ -19,10 +19,12 @@ export namespace FinanceBusinessOrderApi {
     entityCompanyDeptId: number;
     /** 主体公司名称快照 */
     entityCompanyName?: string;
-    /** 可选：流程合同ID */
+    /** 可选：流程合同ID（legacy，列表不再主展示） */
     contractProcessId?: string;
     /** 合同签约申请编号（正式关联） */
     contractApplicationId?: number;
+    /** 合同业务单号（详情/列表展示） */
+    contractApplicationNo?: string;
     /** 签单日期 */
     orderDate: string;
     /** 产品/服务 */
@@ -62,7 +64,8 @@ export namespace FinanceBusinessOrderApi {
     importDate?: string;
     productName?: string;
     contactPerson?: string;
-    contractProcessId?: string;
+    /** 合同业务单号（正式关联） */
+    contractApplicationNo?: string;
     /** 仅可开余额 > 0（开票下拉用） */
     onlyOpenable?: boolean;
   }
@@ -79,7 +82,6 @@ export namespace FinanceBusinessOrderApi {
     | 'signedExecutionAmount'
   > & {
     id?: number;
-    contractProcessId?: string;
     contractApplicationId?: number;
     payerName?: string;
     discountRate?: number;

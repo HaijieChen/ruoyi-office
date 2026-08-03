@@ -175,7 +175,7 @@ const [Modal, modalApi] = useVbenModal({
     const saveData: FinanceBusinessOrderApi.SaveForm = {
       id: formData.value.id,
       entityCompanyDeptId: formData.value.entityCompanyDeptId!,
-      contractProcessId: formData.value.contractProcessId,
+      // 正式关联只提交 contractApplicationId；legacy 流程文本不再从 UI 写入
       contractApplicationId: formData.value.contractApplicationId,
       orderDate: formData.value.orderDate!,
       productName: formData.value.productName!,
@@ -315,12 +315,6 @@ watch(
               if (open && !contractOptions.length) loadContractOptions();
             }
           "
-        />
-      </Form.Item>
-      <Form.Item label="合同流程ID（legacy）" name="contractProcessId">
-        <Input
-          v-model:value="formData.contractProcessId"
-          placeholder="可选；正式关联以合同签约申请为准"
         />
       </Form.Item>
       <Form.Item label="签单日期" name="orderDate">

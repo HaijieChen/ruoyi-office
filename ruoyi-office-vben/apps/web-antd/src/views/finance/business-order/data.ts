@@ -44,10 +44,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
       componentProps: { placeholder: '请输入联系人', allowClear: true },
     },
     {
-      fieldName: 'contractProcessId',
-      label: '合同流程ID',
+      fieldName: 'contractApplicationNo',
+      label: '合同业务单号',
       component: 'Input',
-      componentProps: { placeholder: '请输入合同流程ID（可选）', allowClear: true },
+      componentProps: { placeholder: '请输入合同业务单号', allowClear: true },
     },
   ];
 }
@@ -59,7 +59,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'importDate', title: '导入日期', width: 120, formatter: 'formatDate' },
     { field: 'importerName', title: '导入人', width: 100 },
     { field: 'entityCompanyName', title: '主体公司', minWidth: 160 },
-    { field: 'contractProcessId', title: '合同流程ID', minWidth: 140 },
+    { field: 'contractApplicationNo', title: '合同业务单号', minWidth: 160 },
     { field: 'orderDate', title: '签单日期', width: 120, formatter: 'formatDate' },
     { field: 'productName', title: '产品/服务', minWidth: 150 },
     { field: 'contactPerson', title: '联系人', width: 100 },
