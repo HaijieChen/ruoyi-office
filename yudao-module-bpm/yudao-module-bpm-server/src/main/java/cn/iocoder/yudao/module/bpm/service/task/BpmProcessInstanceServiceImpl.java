@@ -1105,6 +1105,13 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     @Override
     @DataPermission(enable = false) // 关闭数据权限，避免查询不到用户数据。相关案例：https://gitee.com/zhijiantianya/yudao-cloud/issues/ID1UYA
     public void cancelProcessInstanceByStartUser(Long userId, @Valid BpmProcessInstanceCancelReqVO cancelReqVO) {
+        cancelProcessInstanceByStartUser(userId, cancelReqVO, null);
+    }
+
+    @Override
+    @DataPermission(enable = false)
+    public void cancelProcessInstanceByStartUser(Long userId, @Valid BpmProcessInstanceCancelReqVO cancelReqVO,
+                                                 Collection<String> forbiddenTaskDefinitionKeys) {
         // 1.1 校验流程实例存在
         ProcessInstance instance = getProcessInstance(cancelReqVO.getId());
         if (instance == null) {
@@ -1126,10 +1133,37 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         if (StrUtil.isNotBlank(instance.getSuperExecutionId())) {
             throw exception(PROCESS_INSTANCE_CANCEL_CHILD_FAIL_NOT_ALLOW);
         }
+        // 1.5 + 终止前二次复核（CS-F10/F13）：同 JVM 串行化该实例上的 cancel
+        String processInstanceId = cancelReqVO.getId();
+        synchronized (cancelLock(processInstanceId)) {
+            assertNoForbiddenActiveTasks(processInstanceId, forbiddenTaskDefinitionKeys);
+            updateProcessInstanceCancel(processInstanceId,
+                    BpmReasonEnum.CANCEL_PROCESS_INSTANCE_BY_START_USER.format(cancelReqVO.getReason()),
+                    forbiddenTaskDefinitionKeys);
+        }
+    }
 
-        // 2. 取消流程
-        updateProcessInstanceCancel(cancelReqVO.getId(),
-                BpmReasonEnum.CANCEL_PROCESS_INSTANCE_BY_START_USER.format(cancelReqVO.getReason()));
+    private static Object cancelLock(String processInstanceId) {
+        // intern 用于同 JVM 内串行化同一实例的 cancel 与（若也走此锁的）其它操作
+        return ("bpm-cancel-lock:" + processInstanceId).intern();
+    }
+
+    /**
+     * 若存在 forbidden 集合中的活动任务，则拒绝取消。
+     */
+    private void assertNoForbiddenActiveTasks(String processInstanceId,
+                                              Collection<String> forbiddenTaskDefinitionKeys) {
+        if (CollUtil.isEmpty(forbiddenTaskDefinitionKeys)) {
+            return;
+        }
+        List<Task> tasks = taskService0.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .list();
+        for (Task task : tasks) {
+            if (task != null && forbiddenTaskDefinitionKeys.contains(task.getTaskDefinitionKey())) {
+                throw exception(PROCESS_INSTANCE_CANCEL_FAIL_ACTIVE_TASK_FORBIDDEN);
+            }
+        }
     }
 
     @Override
@@ -1148,6 +1182,14 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     }
 
     private void updateProcessInstanceCancel(String id, String reason) {
+        updateProcessInstanceCancel(id, reason, null);
+    }
+
+    private void updateProcessInstanceCancel(String id, String reason,
+                                             Collection<String> forbiddenTaskDefinitionKeys) {
+        // 终止前再次复核禁止 active task（CS-F13）
+        assertNoForbiddenActiveTasks(id, forbiddenTaskDefinitionKeys);
+
         // 1. 更新流程实例 status
         runtimeService.setVariable(id, BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_STATUS,
                 BpmProcessInstanceStatusEnum.CANCEL.getStatus());
@@ -1157,9 +1199,12 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         List<ProcessInstance> childProcessInstances = runtimeService.createProcessInstanceQuery()
                 .superProcessInstanceId(id).list();
         childProcessInstances.forEach(processInstance -> updateProcessInstanceCancel(
-                processInstance.getProcessInstanceId(), BpmReasonEnum.CANCEL_CHILD_PROCESS_INSTANCE_BY_MAIN_PROCESS.getReason()));
+                processInstance.getProcessInstanceId(),
+                BpmReasonEnum.CANCEL_CHILD_PROCESS_INSTANCE_BY_MAIN_PROCESS.getReason(),
+                null));
 
-        // 3. 结束流程
+        // 3. 结束流程前最后一次复核（GM complete 与 cancel 竞态窗口）
+        assertNoForbiddenActiveTasks(id, forbiddenTaskDefinitionKeys);
         taskService.moveTaskToEnd(id, reason);
     }
 

@@ -91,7 +91,23 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         if (amounts.settlementAmount().compareTo(confirmedClaimedAmount) < 0) {
             throw exception(BUSINESS_ORDER_RECEIVABLE_BELOW_CONFIRMED);
         }
+        Long currentContractId = currentOrder.getContractApplicationId();
         Long resolvedContractId = resolveContractOnUpdate(currentOrder, updateReqVO, currentOrder.getImporterId());
+        // CS-F5/F8/F11：合同列仅经 CAS；任何 updateById 路径都不写 contract_application_id
+        if (currentContractId != null && resolvedContractId != null
+                && !java.util.Objects.equals(currentContractId, resolvedContractId)) {
+            int changed = businessOrderMapper.casChangeContractApplicationId(
+                    currentOrder.getId(), currentContractId, resolvedContractId);
+            if (changed == 0) {
+                throw exception(BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN);
+            }
+        } else if (currentContractId == null && resolvedContractId != null) {
+            int changed = businessOrderMapper.casSetContractApplicationIdWhenEmpty(
+                    currentOrder.getId(), resolvedContractId);
+            if (changed == 0) {
+                throw exception(BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN);
+            }
+        }
         FinanceBusinessOrderDO updateObj = buildBusinessOrder(updateReqVO, amounts, company);
         updateObj.setId(currentOrder.getId());
         updateObj.setOrderNo(currentOrder.getOrderNo());
@@ -99,9 +115,10 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         updateObj.setImporterId(currentOrder.getImporterId());
         updateObj.setConfirmedClaimedAmount(confirmedClaimedAmount);
         updateObj.setSourceRowHash(currentOrder.getSourceRowHash());
-        updateObj.setContractApplicationId(resolvedContractId);
         // 正式关联只认 contractApplicationId；legacy 流程文本列保持原值
         updateObj.setContractProcessId(currentOrder.getContractProcessId());
+        // 永不通过普通更新写合同列（避免与并发 CAS/占用竞态盲写回旧合同）
+        updateObj.setContractApplicationId(null);
         businessOrderMapper.updateById(updateObj);
     }
 

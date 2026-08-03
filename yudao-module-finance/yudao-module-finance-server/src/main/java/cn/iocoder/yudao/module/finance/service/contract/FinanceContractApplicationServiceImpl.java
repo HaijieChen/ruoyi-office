@@ -15,6 +15,9 @@ import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNo
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import org.flowable.engine.TaskService;
+import org.flowable.task.api.Task;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -32,7 +35,7 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
 
 /**
- * 合同签约申请。CS-T2：createAndStart / resubmit / cancel / onApprovalOutcome。
+ * 合同签约申请。含 CS-F1～F4 安全硬化。
  */
 @Service
 @Validated
@@ -40,8 +43,13 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     public static final String PROCESS_KEY = "finance_contract_sign";
 
+    public static final String TASK_SEAL = "taskSeal";
+    public static final String TASK_ARCHIVE = "taskArchive";
+    public static final String TASK_MAIL = "taskMail";
+
     /** 用印及之后节点：禁止申请人撤回（C17） */
     private static final Set<String> SEAL_OR_LATER_NODES = Set.of("seal", "archive", "mail");
+    private static final Set<String> SEAL_OR_LATER_TASK_KEYS = Set.of(TASK_SEAL, TASK_ARCHIVE, TASK_MAIL);
 
     private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
             "采购合同", "销售合同", "租赁合同", "借款合同", "推广充值业务合同");
@@ -54,15 +62,18 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private final FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
     private final BpmProcessInstanceApi processInstanceApi;
     private final FinanceCustomerCompanyService customerCompanyService;
+    private final ObjectProvider<TaskService> taskServiceProvider;
 
     public FinanceContractApplicationServiceImpl(FinanceContractApplicationMapper applicationMapper,
                                                  FinanceContractApplicationNoRedisDAO applicationNoRedisDAO,
                                                  BpmProcessInstanceApi processInstanceApi,
-                                                 FinanceCustomerCompanyService customerCompanyService) {
+                                                 FinanceCustomerCompanyService customerCompanyService,
+                                                 ObjectProvider<TaskService> taskServiceProvider) {
         this.applicationMapper = applicationMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
         this.customerCompanyService = customerCompanyService;
+        this.taskServiceProvider = taskServiceProvider;
     }
 
     @Override
@@ -91,6 +102,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     @Transactional(rollbackFor = Exception.class)
     public void resubmit(Long id, FinanceContractApplicationResubmitReqVO reqVO, Long userId) {
         FinanceContractApplicationDO application = getApplication(id);
+        assertOwner(application, userId);
         if (!FinanceContractApprovalStatusEnum.REJECTED.getStatus().equals(application.getApprovalStatus())
                 || Boolean.TRUE.equals(application.getVoided())) {
             throw exception(CONTRACT_APPLICATION_STATUS_INVALID);
@@ -141,19 +153,29 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     @Transactional(rollbackFor = Exception.class)
     public void cancel(Long id, Long userId) {
         FinanceContractApplicationDO application = getApplication(id);
+        assertOwner(application, userId);
         if (!FinanceContractApprovalStatusEnum.PENDING.getStatus().equals(application.getApprovalStatus())
                 || Boolean.TRUE.equals(application.getVoided())) {
             throw exception(CONTRACT_APPLICATION_STATUS_INVALID);
         }
+        // 台账节点快路径（最终以 BPM 侧 active task 禁止集为准，CS-F10）
         if (isSealOrLater(application.getCurrentNodeKey())) {
             throw exception(CONTRACT_APPLICATION_CANCEL_NOT_ALLOWED);
         }
-        onApprovalOutcome(id, FinanceContractApprovalStatusEnum.CANCELLED.getStatus());
+        String processInstanceId = application.getProcessInstanceId();
+        if (StrUtil.isNotBlank(processInstanceId)) {
+            // 禁止集：用印/归档/邮寄 active task 存在则拒绝取消，且不落 CANCELLED
+            processInstanceApi.cancelProcessInstanceByStartUser(
+                    userId, processInstanceId, "申请人撤回合同签约",
+                    SEAL_OR_LATER_TASK_KEYS).checkError();
+        }
+        // 同步落账（StatusListener 为辅路径，可能异步）；绑定当前 processInstanceId
+        onApprovalOutcome(id, FinanceContractApprovalStatusEnum.CANCELLED.getStatus(), processInstanceId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void onApprovalOutcome(Long appId, String outcome) {
+    public void onApprovalOutcome(Long appId, String outcome, String processInstanceId) {
         if (appId == null || StrUtil.isBlank(outcome)) {
             throw exception(CONTRACT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
@@ -163,18 +185,27 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         }
 
         FinanceContractApplicationDO application = getApplication(appId);
+
+        // CS-F7：旧流程实例的延迟终态不得改写重提后的台账
+        if (StrUtil.isNotBlank(processInstanceId)
+                && StrUtil.isNotBlank(application.getProcessInstanceId())
+                && !Objects.equals(processInstanceId, application.getProcessInstanceId())) {
+            return;
+        }
+
         String current = application.getApprovalStatus();
         if (Objects.equals(current, normalized)) {
             if (FinanceContractApprovalStatusEnum.CANCELLED.getStatus().equals(normalized)
                     && !Boolean.TRUE.equals(application.getVoided())) {
-                FinanceContractApplicationDO voidUpdate = new FinanceContractApplicationDO();
-                voidUpdate.setId(appId);
-                voidUpdate.setVoided(Boolean.TRUE);
-                applicationMapper.updateById(voidUpdate);
+                applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
+                        .eq("id", appId)
+                        .eq(StrUtil.isNotBlank(processInstanceId), "process_instance_id", processInstanceId)
+                        .set("voided", Boolean.TRUE));
             }
             return;
         }
         if (Boolean.TRUE.equals(application.getVoided())) {
+            // 旧实例打到已 void 台账：若 process 不匹配已在上方 return；匹配则非法
             throw exception(CONTRACT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
         if (FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(current)
@@ -186,19 +217,36 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
             throw exception(CONTRACT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
 
-        FinanceContractApplicationDO update = new FinanceContractApplicationDO();
-        update.setId(appId);
-        update.setApprovalStatus(normalized);
+        if (FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(normalized)) {
+            assertApprovedEvidence(application);
+        }
+
+        UpdateWrapper<FinanceContractApplicationDO> uw = new UpdateWrapper<FinanceContractApplicationDO>()
+                .eq("id", appId)
+                .eq("approval_status", FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
+                .set("approval_status", normalized)
+                .set("current_node_key", null)
+                .set("current_node_name", null);
+        if (StrUtil.isNotBlank(processInstanceId)) {
+            uw.eq("process_instance_id", processInstanceId);
+        }
         if (FinanceContractApprovalStatusEnum.CANCELLED.getStatus().equals(normalized)) {
-            update.setVoided(Boolean.TRUE);
+            uw.set("voided", Boolean.TRUE);
         }
-        if (FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(normalized)
-                || FinanceContractApprovalStatusEnum.REJECTED.getStatus().equals(normalized)
-                || FinanceContractApprovalStatusEnum.CANCELLED.getStatus().equals(normalized)) {
-            update.setCurrentNodeKey(null);
-            update.setCurrentNodeName(null);
+        int rows = applicationMapper.update(null, uw);
+        if (rows == 0) {
+            FinanceContractApplicationDO again = getApplication(appId);
+            if (Objects.equals(again.getApprovalStatus(), normalized)) {
+                return;
+            }
+            if (StrUtil.isNotBlank(processInstanceId)
+                    && StrUtil.isNotBlank(again.getProcessInstanceId())
+                    && !Objects.equals(processInstanceId, again.getProcessInstanceId())) {
+                return;
+            }
+            throw exception(CONTRACT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
-        applicationMapper.updateById(update);
     }
 
     @Override
@@ -211,7 +259,26 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     }
 
     @Override
+    public FinanceContractApplicationDO getApplication(Long id, Long userId, boolean manageAll) {
+        FinanceContractApplicationDO application = getApplication(id);
+        if (!manageAll && !Objects.equals(application.getApplicantUserId(), userId)) {
+            throw exception(CONTRACT_APPLICATION_ACCESS_DENIED);
+        }
+        return application;
+    }
+
+    @Override
     public PageResult<FinanceContractApplicationDO> getApplicationPage(FinanceContractApplicationPageReqVO pageReqVO) {
+        return applicationMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public PageResult<FinanceContractApplicationDO> getApplicationPage(FinanceContractApplicationPageReqVO pageReqVO,
+                                                                       Long userId, boolean manageAll) {
+        if (!manageAll) {
+            // BS：强制本人；忽略客户端伪造的 applicantUserId
+            pageReqVO.setApplicantUserId(userId);
+        }
         return applicationMapper.selectPage(pageReqVO);
     }
 
@@ -223,6 +290,178 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 .eq("id", appId)
                 .set("current_node_key", nodeKey)
                 .set("current_node_name", nodeName));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordSeal(Long id, String taskId, String sealFileUrl, Long userId) {
+        FinanceContractApplicationDO application = getApplication(id);
+        requirePending(application);
+        if (StrUtil.isBlank(sealFileUrl)) {
+            throw exception(CONTRACT_APPLICATION_SEAL_FILE_REQUIRED);
+        }
+        Task task = requireTask(taskId, application, TASK_SEAL, userId);
+        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
+                .eq("id", id)
+                .set("seal_file_url", sealFileUrl.trim())
+                .set("actual_sealer_user_id", userId));
+        completeTask(task.getId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordArchive(Long id, String taskId, Long userId) {
+        FinanceContractApplicationDO application = getApplication(id);
+        requirePending(application);
+        if (StrUtil.isBlank(application.getSealFileUrl())) {
+            throw exception(CONTRACT_APPLICATION_SEAL_FILE_REQUIRED);
+        }
+        Task task = requireTask(taskId, application, TASK_ARCHIVE, userId);
+        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
+                .eq("id", id)
+                .set("archived_at", LocalDateTime.now()));
+        // 权威回写 needMail，防止后续网关被篡改变量误导
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("needMail", Boolean.TRUE.equals(application.getNeedMail()));
+        completeTask(task.getId(), vars);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordMail(Long id, String taskId, String mailTrackingNo, Long userId) {
+        FinanceContractApplicationDO application = getApplication(id);
+        requirePending(application);
+        if (!Boolean.TRUE.equals(application.getNeedMail())) {
+            throw exception(CONTRACT_APPLICATION_EXEC_NOT_ALLOWED);
+        }
+        if (StrUtil.isBlank(mailTrackingNo)) {
+            throw exception(CONTRACT_APPLICATION_MAIL_TRACKING_REQUIRED);
+        }
+        Task task = requireTask(taskId, application, TASK_MAIL, userId);
+        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
+                .eq("id", id)
+                .set("mail_tracking_no", mailTrackingNo.trim()));
+        completeTask(task.getId());
+    }
+
+    @Override
+    public void assertExecutionEvidenceForComplete(Long appId, String taskDefinitionKey) {
+        FinanceContractApplicationDO application = getApplication(appId);
+        requirePending(application);
+        if (TASK_SEAL.equals(taskDefinitionKey)) {
+            if (StrUtil.isBlank(application.getSealFileUrl())) {
+                throw exception(CONTRACT_APPLICATION_SEAL_FILE_REQUIRED);
+            }
+            return;
+        }
+        if (TASK_ARCHIVE.equals(taskDefinitionKey)) {
+            if (StrUtil.isBlank(application.getSealFileUrl()) || application.getArchivedAt() == null) {
+                throw exception(CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE);
+            }
+            return;
+        }
+        if (TASK_MAIL.equals(taskDefinitionKey)) {
+            if (Boolean.TRUE.equals(application.getNeedMail()) && StrUtil.isBlank(application.getMailTrackingNo())) {
+                throw exception(CONTRACT_APPLICATION_MAIL_TRACKING_REQUIRED);
+            }
+        }
+    }
+
+    @Override
+    public boolean resolveNeedMailFromLedger(Long appId) {
+        FinanceContractApplicationDO application = getApplication(appId);
+        return Boolean.TRUE.equals(application.getNeedMail());
+    }
+
+    @Override
+    public List<FinanceContractApplicationDO> listSelectableForBo(Long applicantUserId) {
+        return applicationMapper.selectList(new LambdaQueryWrapperX<FinanceContractApplicationDO>()
+                .eq(FinanceContractApplicationDO::getApprovalStatus,
+                        FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .eq(FinanceContractApplicationDO::getApplicantUserId, applicantUserId)
+                .eq(FinanceContractApplicationDO::getVoided, Boolean.FALSE)
+                .orderByDesc(FinanceContractApplicationDO::getId));
+    }
+
+    private void assertApprovedEvidence(FinanceContractApplicationDO application) {
+        if (StrUtil.isBlank(application.getSealFileUrl()) || application.getArchivedAt() == null) {
+            throw exception(CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE);
+        }
+        if (Boolean.TRUE.equals(application.getNeedMail()) && StrUtil.isBlank(application.getMailTrackingNo())) {
+            throw exception(CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE);
+        }
+    }
+
+    private static void assertOwner(FinanceContractApplicationDO application, Long userId) {
+        if (!Objects.equals(application.getApplicantUserId(), userId)) {
+            throw exception(CONTRACT_APPLICATION_ACCESS_DENIED);
+        }
+    }
+
+    private Task requireTask(String taskId, FinanceContractApplicationDO application,
+                             String expectedTaskKey, Long userId) {
+        if (StrUtil.isBlank(taskId)) {
+            throw exception(CONTRACT_APPLICATION_TASK_INVALID);
+        }
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            throw exception(CONTRACT_APPLICATION_TASK_INVALID);
+        }
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            throw exception(CONTRACT_APPLICATION_TASK_INVALID);
+        }
+        if (!expectedTaskKey.equals(task.getTaskDefinitionKey())) {
+            throw exception(CONTRACT_APPLICATION_TASK_INVALID);
+        }
+        if (StrUtil.isBlank(application.getProcessInstanceId())
+                || !Objects.equals(application.getProcessInstanceId(), task.getProcessInstanceId())) {
+            throw exception(CONTRACT_APPLICATION_TASK_INVALID);
+        }
+        // 候选人/办理人：须对用户可见
+        long visible = taskService.createTaskQuery()
+                .taskId(taskId)
+                .taskCandidateOrAssigned(String.valueOf(userId))
+                .count();
+        if (visible <= 0) {
+            throw exception(CONTRACT_APPLICATION_TASK_INVALID);
+        }
+        return task;
+    }
+
+    private void completeTask(String taskId) {
+        completeTask(taskId, null);
+    }
+
+    private void completeTask(String taskId, Map<String, Object> variables) {
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            throw exception(CONTRACT_APPLICATION_TASK_INVALID);
+        }
+        if (variables == null || variables.isEmpty()) {
+            taskService.complete(taskId);
+        } else {
+            taskService.complete(taskId, variables);
+        }
+    }
+
+    private boolean hasActiveSealOrLaterTask(FinanceContractApplicationDO application) {
+        if (StrUtil.isBlank(application.getProcessInstanceId())) {
+            return false;
+        }
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            return false;
+        }
+        List<Task> tasks = taskService.createTaskQuery()
+                .processInstanceId(application.getProcessInstanceId())
+                .list();
+        for (Task task : tasks) {
+            if (SEAL_OR_LATER_TASK_KEYS.contains(task.getTaskDefinitionKey())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void validateBusinessFields(FinanceContractApplicationCreateAndStartReqVO reqVO) {
@@ -317,60 +556,6 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     private static boolean isSealOrLater(String nodeKey) {
         return nodeKey != null && SEAL_OR_LATER_NODES.contains(nodeKey);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void recordSeal(Long id, String sealFileUrl, Long actualSealerUserId) {
-        FinanceContractApplicationDO application = getApplication(id);
-        requirePending(application);
-        if (StrUtil.isBlank(sealFileUrl)) {
-            throw exception(CONTRACT_APPLICATION_SEAL_FILE_REQUIRED);
-        }
-        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
-                .eq("id", id)
-                .set("seal_file_url", sealFileUrl.trim())
-                .set("actual_sealer_user_id",
-                        actualSealerUserId != null ? actualSealerUserId : application.getApplicantUserId()));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void recordArchive(Long id) {
-        FinanceContractApplicationDO application = getApplication(id);
-        requirePending(application);
-        if (StrUtil.isBlank(application.getSealFileUrl())) {
-            throw exception(CONTRACT_APPLICATION_SEAL_FILE_REQUIRED);
-        }
-        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
-                .eq("id", id)
-                .set("archived_at", LocalDateTime.now()));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void recordMail(Long id, String mailTrackingNo) {
-        FinanceContractApplicationDO application = getApplication(id);
-        requirePending(application);
-        if (!Boolean.TRUE.equals(application.getNeedMail())) {
-            throw exception(CONTRACT_APPLICATION_EXEC_NOT_ALLOWED);
-        }
-        if (StrUtil.isBlank(mailTrackingNo)) {
-            throw exception(CONTRACT_APPLICATION_MAIL_TRACKING_REQUIRED);
-        }
-        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
-                .eq("id", id)
-                .set("mail_tracking_no", mailTrackingNo.trim()));
-    }
-
-    @Override
-    public List<FinanceContractApplicationDO> listSelectableForBo(Long applicantUserId) {
-        return applicationMapper.selectList(new LambdaQueryWrapperX<FinanceContractApplicationDO>()
-                .eq(FinanceContractApplicationDO::getApprovalStatus,
-                        FinanceContractApprovalStatusEnum.APPROVED.getStatus())
-                .eq(FinanceContractApplicationDO::getApplicantUserId, applicantUserId)
-                .eq(FinanceContractApplicationDO::getVoided, Boolean.FALSE)
-                .orderByDesc(FinanceContractApplicationDO::getId));
     }
 
     private static void requirePending(FinanceContractApplicationDO application) {

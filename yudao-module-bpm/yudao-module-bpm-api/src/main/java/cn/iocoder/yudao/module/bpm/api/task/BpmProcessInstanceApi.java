@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import jakarta.validation.Valid;
+import java.util.Collection;
 
 @FeignClient(name = ApiConstants.NAME) // TODO 芋艿：fallbackFactory =
 @Tag(name = "RPC 服务 - 流程实例")
@@ -30,5 +31,14 @@ public interface BpmProcessInstanceApi {
     @Parameter(name = "userId", description = "用户编号", required = true, example = "1")
     CommonResult<String> submitProcessInstance(@RequestParam("userId") Long userId,
                                                @Valid @RequestBody BpmProcessInstanceCreateReqDTO reqDTO);
+
+    @PostMapping(PREFIX + "/cancel-by-start-user")
+    @Operation(summary = "发起人取消运行中流程实例（提供给内部）")
+    CommonResult<Boolean> cancelProcessInstanceByStartUser(
+            @RequestParam("userId") Long userId,
+            @RequestParam("processInstanceId") String processInstanceId,
+            @RequestParam("reason") String reason,
+            @RequestParam(value = "forbiddenTaskDefinitionKeys", required = false)
+            Collection<String> forbiddenTaskDefinitionKeys);
 
 }

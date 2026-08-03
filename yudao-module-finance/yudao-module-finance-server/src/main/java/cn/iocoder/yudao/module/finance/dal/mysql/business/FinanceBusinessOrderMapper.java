@@ -90,4 +90,25 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
             "AND invoiced_occupied_amount >= #{amount} AND deleted = b'0'")
     int decreaseInvoicedOccupiedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
 
+    /**
+     * 换合同 CAS：仅当开票占用仍为 0 且当前合同 id 未变时允许写入新合同。
+     */
+    @Update("UPDATE finance_business_order SET contract_application_id = #{newContractId}, update_time = NOW() " +
+            "WHERE id = #{id} AND deleted = b'0' " +
+            "AND contract_application_id = #{oldContractId} " +
+            "AND IFNULL(invoiced_occupied_amount, 0) = 0")
+    int casChangeContractApplicationId(@Param("id") Long id,
+                                       @Param("oldContractId") Long oldContractId,
+                                       @Param("newContractId") Long newContractId);
+
+    /**
+     * 历史空首次映射：仅当合同仍为空且占用为 0 时写入。
+     */
+    @Update("UPDATE finance_business_order SET contract_application_id = #{newContractId}, update_time = NOW() " +
+            "WHERE id = #{id} AND deleted = b'0' " +
+            "AND contract_application_id IS NULL " +
+            "AND IFNULL(invoiced_occupied_amount, 0) = 0")
+    int casSetContractApplicationIdWhenEmpty(@Param("id") Long id,
+                                             @Param("newContractId") Long newContractId);
+
 }

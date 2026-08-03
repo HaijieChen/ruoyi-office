@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.bpm.api.task;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.instance.BpmProcessInstanceCancelReqVO;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +34,18 @@ public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
     @Override
     public CommonResult<String> submitProcessInstance(Long userId, @Valid BpmProcessInstanceCreateReqDTO reqDTO) {
         return success(processInstanceService.submitProcessInstance(userId, reqDTO));
+    }
+
+    @Override
+    public CommonResult<Boolean> cancelProcessInstanceByStartUser(
+            Long userId, String processInstanceId, String reason,
+            java.util.Collection<String> forbiddenTaskDefinitionKeys) {
+        BpmProcessInstanceCancelReqVO cancelReqVO = new BpmProcessInstanceCancelReqVO();
+        cancelReqVO.setId(processInstanceId);
+        cancelReqVO.setReason(reason);
+        processInstanceService.cancelProcessInstanceByStartUser(
+                userId, cancelReqVO, forbiddenTaskDefinitionKeys);
+        return success(true);
     }
 
 }

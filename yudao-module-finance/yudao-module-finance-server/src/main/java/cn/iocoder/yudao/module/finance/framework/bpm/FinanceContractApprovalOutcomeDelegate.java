@@ -59,9 +59,10 @@ public class FinanceContractApprovalOutcomeDelegate implements JavaDelegate, Exe
                             + statusVar + " to contract approval outcome");
         }
 
+        String processInstanceId = execution.getProcessInstanceId();
         log.info("[applyOutcome][contract appId({}) processInstanceId({}) PROCESS_STATUS={} -> {}]",
-                appId, execution.getProcessInstanceId(), processStatus, outcome);
-        contractApplicationService.onApprovalOutcome(appId, outcome);
+                appId, processInstanceId, processStatus, outcome);
+        contractApplicationService.onApprovalOutcome(appId, outcome, processInstanceId);
     }
 
     public static String mapProcessStatusToOutcome(Integer processStatus) {

@@ -131,5 +131,11 @@ public interface ErrorCodeConstants {
             "邮寄单号不能为空");
     ErrorCode CONTRACT_APPLICATION_EXEC_NOT_ALLOWED = new ErrorCode(1_040_005_012,
             "当前状态或节点不允许执行该用印/归档/邮寄操作");
+    ErrorCode CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE = new ErrorCode(1_040_005_013,
+            "合同签约未完成用印/归档/邮寄证据，不能标记为已通过");
+    ErrorCode CONTRACT_APPLICATION_ACCESS_DENIED = new ErrorCode(1_040_005_014,
+            "无权查看或操作该合同签约申请");
+    ErrorCode CONTRACT_APPLICATION_TASK_INVALID = new ErrorCode(1_040_005_015,
+            "BPM 任务无效、节点不匹配或当前用户无权执行");
 
 }

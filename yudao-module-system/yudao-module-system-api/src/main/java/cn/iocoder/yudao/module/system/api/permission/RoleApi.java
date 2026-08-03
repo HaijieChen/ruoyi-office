@@ -22,4 +22,9 @@ public interface RoleApi {
     @Parameter(name = "ids", description = "角色编号数组", example = "1,2", required = true)
     CommonResult<Boolean> validRoleList(@RequestParam("ids") Collection<Long> ids);
 
+    @GetMapping(PREFIX + "/list-ids-by-codes")
+    @Operation(summary = "按角色编码解析角色编号列表（不存在则忽略对应 code）")
+    @Parameter(name = "codes", description = "角色编码数组", example = "contract_seal_admin", required = true)
+    CommonResult<java.util.List<Long>> getRoleIdListByCodes(@RequestParam("codes") Collection<String> codes);
+
 }

@@ -139,6 +139,7 @@ class FinanceBusinessOrderServiceImplTest {
     void updateBusinessOrderShouldPreserveGeneratedMetadataAndRecomputeSettlement() {
         when(businessOrderMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
                 .id(1L).orderNo(ORDER_NO).importDate(LocalDate.of(2026, 7, 1)).importerId(IMPORTER_ID)
+                .contractApplicationId(CONTRACT_APP_ID)
                 .confirmedClaimedAmount(new BigDecimal("50.00")).sourceRowHash("hash").build());
         FinanceBusinessOrderSaveReqVO reqVO = validOrder();
         reqVO.setId(1L);
@@ -146,12 +147,14 @@ class FinanceBusinessOrderServiceImplTest {
 
         businessOrderService.updateBusinessOrder(reqVO);
 
+        // CS-F11：普通 update 不写合同列（null 跳过），合同仅 CAS
         verify(businessOrderMapper).updateById(argThat((FinanceBusinessOrderDO order) ->
                 ORDER_NO.equals(order.getOrderNo())
                         && LocalDate.of(2026, 7, 1).equals(order.getImportDate())
                         && IMPORTER_ID.equals(order.getImporterId())
                         && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
                         && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
+                        && order.getContractApplicationId() == null
                         && new BigDecimal("750.00").compareTo(order.getSettlementAmount()) == 0
                         && new BigDecimal("50.00").compareTo(order.getConfirmedClaimedAmount()) == 0
                         && "hash".equals(order.getSourceRowHash())));

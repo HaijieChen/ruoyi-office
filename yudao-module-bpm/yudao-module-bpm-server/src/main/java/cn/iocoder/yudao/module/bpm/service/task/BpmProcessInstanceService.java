@@ -152,6 +152,14 @@ public interface BpmProcessInstanceService {
     void cancelProcessInstanceByStartUser(Long userId, @Valid BpmProcessInstanceCancelReqVO cancelReqVO);
 
     /**
+     * 发起人取消流程实例；若当前 active task 落在 forbidden 集合内则拒绝（取消前原子复核）。
+     *
+     * @param forbiddenTaskDefinitionKeys 禁止取消时的 taskDefinitionKey 集合；null/空则不校验
+     */
+    void cancelProcessInstanceByStartUser(Long userId, @Valid BpmProcessInstanceCancelReqVO cancelReqVO,
+                                          java.util.Collection<String> forbiddenTaskDefinitionKeys);
+
+    /**
      * 管理员取消流程实例
      *
      * @param userId      用户编号

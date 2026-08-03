@@ -4,7 +4,7 @@
   - 语义：业务主管→法务→财务→总经理→用印→归档→(needMail?)邮寄→end
   - 含 BPMNDiagram/DI，可在流程设计器查看与修改
   - 结束事件挂载：${financeContractApprovalOutcomeDelegate}
-  - 候选组 key 可在设计器中调整（biz_lead/legal/finance/gm/seal_admin/mail）
+  - 候选人：flowable:candidateStrategy=10(ROLE) + candidateParam=角色 code（CS-F12；兼容 role id）
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -17,40 +17,57 @@
   <process id="finance_contract_sign" name="合同签约申请" isExecutable="true">
 
     <startEvent id="startEvent" name="开始"/>
-    <userTask id="taskBizLead" name="业务主管审批" flowable:candidateGroups="contract_biz_lead">
+    <userTask id="taskBizLead" name="业务主管审批" flowable:candidateGroups="contract_biz_lead" flowable:candidateStrategy="10" flowable:candidateParam="contract_biz_lead">
       <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>contract_biz_lead</flowable:candidateParam>
         <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
       </extensionElements>
     </userTask>
-    <userTask id="taskLegal" name="法务审批" flowable:candidateGroups="contract_legal">
+    <userTask id="taskLegal" name="法务审批" flowable:candidateGroups="contract_legal" flowable:candidateStrategy="10" flowable:candidateParam="contract_legal">
       <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>contract_legal</flowable:candidateParam>
         <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
       </extensionElements>
     </userTask>
-    <userTask id="taskFinance" name="财务审批" flowable:candidateGroups="contract_finance">
+    <userTask id="taskFinance" name="财务审批" flowable:candidateGroups="contract_finance" flowable:candidateStrategy="10" flowable:candidateParam="contract_finance">
       <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>contract_finance</flowable:candidateParam>
         <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
       </extensionElements>
     </userTask>
-    <userTask id="taskGm" name="总经理审批" flowable:candidateGroups="contract_gm">
+    <userTask id="taskGm" name="总经理审批" flowable:candidateGroups="contract_gm" flowable:candidateStrategy="10" flowable:candidateParam="contract_gm">
       <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>contract_gm</flowable:candidateParam>
         <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
       </extensionElements>
     </userTask>
-    <userTask id="taskSeal" name="用印" flowable:candidateGroups="contract_seal_admin">
+    <userTask id="taskSeal" name="用印" flowable:candidateGroups="contract_seal_admin" flowable:candidateStrategy="10" flowable:candidateParam="contract_seal_admin">
       <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>contract_seal_admin</flowable:candidateParam>
         <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+        <flowable:taskListener event="complete" delegateExpression="${financeContractExecCompleteGuardListener}"/>
       </extensionElements>
     </userTask>
-    <userTask id="taskArchive" name="归档" flowable:candidateGroups="contract_seal_admin">
+    <userTask id="taskArchive" name="归档" flowable:candidateGroups="contract_seal_admin" flowable:candidateStrategy="10" flowable:candidateParam="contract_seal_admin">
       <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>contract_seal_admin</flowable:candidateParam>
         <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+        <flowable:taskListener event="complete" delegateExpression="${financeContractExecCompleteGuardListener}"/>
       </extensionElements>
     </userTask>
     <exclusiveGateway id="gatewayMail" name="是否邮寄"/>
-    <userTask id="taskMail" name="邮寄" flowable:candidateGroups="contract_mail">
+    <userTask id="taskMail" name="邮寄" flowable:candidateGroups="contract_mail" flowable:candidateStrategy="10" flowable:candidateParam="contract_mail">
       <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>contract_mail</flowable:candidateParam>
         <flowable:taskListener event="create" delegateExpression="${financeContractTaskNodeLabelListener}"/>
+        <flowable:taskListener event="complete" delegateExpression="${financeContractExecCompleteGuardListener}"/>
       </extensionElements>
     </userTask>
     <endEvent id="endEvent" name="结束">

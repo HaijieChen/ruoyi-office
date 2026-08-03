@@ -41,7 +41,9 @@ public class FinanceContractApplicationStatusListener extends BpmProcessInstance
             return;
         }
         Long appId = Long.parseLong(businessKey.trim());
-        log.info("[onEvent][AUX][contract appId({}) status={} -> {}]", appId, processStatus, outcome);
-        contractApplicationService.onApprovalOutcome(appId, outcome);
+        String processInstanceId = event.getProcessInstanceId();
+        log.info("[onEvent][AUX][contract appId({}) processInstanceId({}) status={} -> {}]",
+                appId, processInstanceId, processStatus, outcome);
+        contractApplicationService.onApprovalOutcome(appId, outcome, processInstanceId);
     }
 }

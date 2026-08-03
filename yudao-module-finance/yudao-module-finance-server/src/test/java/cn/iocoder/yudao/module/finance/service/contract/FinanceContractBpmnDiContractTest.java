@@ -28,6 +28,11 @@ class FinanceContractBpmnDiContractTest {
         assertTrue(xml.contains("taskSeal") && xml.contains("taskArchive") && xml.contains("taskMail"));
         assertTrue(xml.contains("financeContractApprovalOutcomeDelegate"));
         assertTrue(xml.contains("gatewayMail"));
+        assertTrue(xml.contains("financeContractExecCompleteGuardListener"),
+                "exec complete guard must be on seal/archive/mail");
+        assertTrue(xml.contains("candidateStrategy") && xml.contains("candidateParam"),
+                "platform ROLE candidate strategy required");
+        assertTrue(xml.contains("contract_seal_admin") && xml.contains("contract_mail"));
     }
 
     @Test

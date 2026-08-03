@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
@@ -12,17 +13,25 @@ import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplica
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import org.flowable.engine.TaskService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
 import static cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicationServiceImpl.PROCESS_KEY;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 class FinanceContractApplicationServiceImplTest {
@@ -31,6 +40,7 @@ class FinanceContractApplicationServiceImplTest {
     private FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
     private BpmProcessInstanceApi processInstanceApi;
     private FinanceCustomerCompanyService customerCompanyService;
+    private ObjectProvider<TaskService> taskServiceProvider;
     private FinanceContractApplicationServiceImpl service;
 
     @BeforeEach
@@ -39,8 +49,11 @@ class FinanceContractApplicationServiceImplTest {
         applicationNoRedisDAO = mock(FinanceContractApplicationNoRedisDAO.class);
         processInstanceApi = mock(BpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
+        taskServiceProvider = mock(ObjectProvider.class);
+        when(taskServiceProvider.getIfAvailable()).thenReturn(null);
         service = new FinanceContractApplicationServiceImpl(
-                applicationMapper, applicationNoRedisDAO, processInstanceApi, customerCompanyService);
+                applicationMapper, applicationNoRedisDAO, processInstanceApi, customerCompanyService,
+                taskServiceProvider);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("CT-20260731-1");
         when(customerCompanyService.getEnabledCustomerCompany(50L)).thenReturn(
@@ -121,6 +134,7 @@ class FinanceContractApplicationServiceImplTest {
     void cancelShouldRejectWhenAtSealNode() {
         when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
                 .id(100L)
+                .applicantUserId(200L)
                 .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
                 .currentNodeKey("seal")
                 .voided(false)
@@ -131,9 +145,68 @@ class FinanceContractApplicationServiceImplTest {
     }
 
     @Test
+    void cancelShouldRejectWhenNotOwner() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .currentNodeKey("legal")
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.cancel(100L, 999L));
+        assertEquals(CONTRACT_APPLICATION_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void cancelShouldCancelFlowableAndMarkCancelled() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .processInstanceId("proc-x")
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .currentNodeKey("legal")
+                .voided(false)
+                .build());
+        when(processInstanceApi.cancelProcessInstanceByStartUser(
+                eq(200L), eq("proc-x"), anyString(), anyCollection()))
+                .thenReturn(CommonResult.success(true));
+        when(applicationMapper.update(isNull(), any())).thenReturn(1);
+
+        service.cancel(100L, 200L);
+
+        verify(processInstanceApi).cancelProcessInstanceByStartUser(
+                eq(200L), eq("proc-x"), anyString(),
+                argThat(keys -> keys != null
+                        && keys.contains("taskSeal")
+                        && keys.contains("taskArchive")
+                        && keys.contains("taskMail")));
+        verify(applicationMapper).update(isNull(), any());
+    }
+
+    @Test
+    void cancelShouldNotMarkCancelledWhenBpmRejectsForbiddenTask() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .processInstanceId("proc-x")
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .currentNodeKey("gm") // 台账仍显示用印前，但 BPM 已进入 seal
+                .voided(false)
+                .build());
+        when(processInstanceApi.cancelProcessInstanceByStartUser(
+                eq(200L), eq("proc-x"), anyString(), anyCollection()))
+                .thenThrow(new ServiceException(CONTRACT_APPLICATION_CANCEL_NOT_ALLOWED));
+
+        assertThrows(ServiceException.class, () -> service.cancel(100L, 200L));
+        verify(applicationMapper, never()).update(isNull(), any());
+        verify(applicationMapper, never()).updateById(any(FinanceContractApplicationDO.class));
+    }
+
+    @Test
     void resubmitShouldRejectWhenNotRejected() {
         when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
                 .id(100L)
+                .applicantUserId(200L)
                 .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
                 .voided(false)
                 .build());
@@ -144,14 +217,110 @@ class FinanceContractApplicationServiceImplTest {
     }
 
     @Test
+    void resubmitShouldRejectWhenNotOwner() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.REJECTED.getStatus())
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.resubmit(100L, toResubmit(validReq()), 999L));
+        assertEquals(CONTRACT_APPLICATION_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
     void onApprovalOutcomeShouldBeIdempotentForSameOutcome() {
         when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
                 .id(100L)
+                .processInstanceId("proc-1")
                 .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                 .voided(false)
                 .build());
-        assertDoesNotThrow(() -> service.onApprovalOutcome(100L, "APPROVED"));
+        assertDoesNotThrow(() -> service.onApprovalOutcome(100L, "APPROVED", "proc-1"));
+        verify(applicationMapper, never()).update(isNull(), any());
         verify(applicationMapper, never()).updateById(any(FinanceContractApplicationDO.class));
+    }
+
+    @Test
+    void onApprovalOutcomeShouldIgnoreStaleProcessInstance() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .processInstanceId("proc-new")
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .voided(false)
+                .build());
+        assertDoesNotThrow(() -> service.onApprovalOutcome(100L, "REJECTED", "proc-old"));
+        verify(applicationMapper, never()).update(isNull(), any());
+        verify(applicationMapper, never()).updateById(any(FinanceContractApplicationDO.class));
+    }
+
+    @Test
+    void onApprovalOutcomeApprovedShouldRequireExecutionEvidence() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .processInstanceId("proc-1")
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .voided(false)
+                .needMail(false)
+                .sealFileUrl(null)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.onApprovalOutcome(100L, "APPROVED", "proc-1"));
+        assertEquals(CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE.getCode(), ex.getCode());
+    }
+
+    @Test
+    void onApprovalOutcomeApprovedShouldSucceedWithEvidence() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .processInstanceId("proc-1")
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .voided(false)
+                .needMail(false)
+                .sealFileUrl("https://x/seal.pdf")
+                .archivedAt(LocalDateTime.now())
+                .build());
+        when(applicationMapper.update(isNull(), any())).thenReturn(1);
+        assertDoesNotThrow(() -> service.onApprovalOutcome(100L, "APPROVED", "proc-1"));
+        verify(applicationMapper).update(isNull(), any());
+    }
+
+    @Test
+    void onApprovalOutcomeApprovedShouldRequireMailWhenNeedMail() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .processInstanceId("proc-1")
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .voided(false)
+                .needMail(true)
+                .sealFileUrl("https://x/seal.pdf")
+                .archivedAt(LocalDateTime.now())
+                .mailTrackingNo(null)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.onApprovalOutcome(100L, "APPROVED", "proc-1"));
+        assertEquals(CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE.getCode(), ex.getCode());
+    }
+
+    @Test
+    void getApplicationShouldDenyNonOwnerWithoutManageAll() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.getApplication(100L, 999L, false));
+        assertEquals(CONTRACT_APPLICATION_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void getApplicationPageShouldForceApplicantForNonManage() {
+        FinanceContractApplicationPageReqVO pageReq = new FinanceContractApplicationPageReqVO();
+        pageReq.setApplicantUserId(1L); // client spoof
+        service.getApplicationPage(pageReq, 200L, false);
+        assertEquals(200L, pageReq.getApplicantUserId());
+        verify(applicationMapper).selectPage(pageReq);
     }
 
     private static FinanceContractApplicationCreateAndStartReqVO validReq() {

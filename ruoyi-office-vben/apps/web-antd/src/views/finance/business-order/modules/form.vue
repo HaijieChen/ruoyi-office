@@ -75,7 +75,15 @@ const rules: Record<string, Rule[]> = {
     { required: true, message: '主体公司不能为空', trigger: 'change' },
   ],
   contractApplicationId: [
-    { required: true, message: '请选择已通过的合同签约申请', trigger: 'change' },
+    {
+      validator: async (_: Rule, v: number | undefined) => {
+        // 新建必须选合同；历史空编辑可不选（后端允许只改其它字段）
+        if (formData.value?.id) return Promise.resolve();
+        if (v == null) return Promise.reject('请选择已通过的合同签约申请');
+        return Promise.resolve();
+      },
+      trigger: 'change',
+    },
   ],
   orderDate: [{ required: true, message: '签单日期不能为空', trigger: 'change' }],
   productName: [{ required: true, message: '产品/服务不能为空', trigger: 'blur' }],
