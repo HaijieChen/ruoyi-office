@@ -57,14 +57,42 @@ async function consumeOpenCreateQuery() {
   await router.replace({ path: route.path, query: nextQuery });
 }
 
+/** BPM 详情 / 深链：?openResubmit=<appId> 打开驳回后重提表单 */
+function resolveOpenResubmitId(): number | undefined {
+  const raw = route.query.openResubmit;
+  if (raw == null || raw === '') return undefined;
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+async function consumeOpenResubmitQuery() {
+  const id = resolveOpenResubmitId();
+  if (id === undefined) return;
+  await nextTick();
+  createModalApi.setData({ id, mode: 'resubmit' });
+  createModalApi.open();
+  const nextQuery = { ...route.query };
+  delete nextQuery.openResubmit;
+  await router.replace({ path: route.path, query: nextQuery });
+}
+
 onMounted(() => {
   void consumeOpenCreateQuery();
+  void consumeOpenResubmitQuery();
 });
 
 watch(
   () => route.query.openCreate,
   () => {
     void consumeOpenCreateQuery();
+  },
+);
+
+watch(
+  () => route.query.openResubmit,
+  () => {
+    void consumeOpenResubmitQuery();
   },
 );
 

@@ -1,20 +1,41 @@
 <script lang="ts" setup>
 import type { FinanceContractApplicationApi } from '#/api/finance/contract-application';
 
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { useVbenModal } from '@vben/common-ui';
+import { useUserStore } from '@vben/stores';
 import { formatDateTime } from '@vben/utils';
 
-import { Descriptions, Divider, Spin, message } from 'ant-design-vue';
+import { Button, Descriptions, Divider, Space, Spin, message } from 'ant-design-vue';
 
 import { getContractApplication } from '#/api/finance/contract-application';
 import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
 defineOptions({ name: 'FinanceContractApplicationInfo' });
 
+const router = useRouter();
+const userStore = useUserStore();
 const detail = ref<FinanceContractApplicationApi.Application | null>(null);
 const loading = ref(false);
+
+const canResubmit = computed(() => {
+  const d = detail.value;
+  if (!d || d.voided || d.approvalStatus !== 'REJECTED') return false;
+  const uid = userStore.userInfo?.id;
+  return uid != null && Number(d.applicantUserId) === Number(uid);
+});
+
+async function handleGoResubmit() {
+  const id = detail.value?.id;
+  if (id == null) return;
+  modalApi.close();
+  await router.push({
+    path: '/finance/contract-application',
+    query: { openResubmit: String(id) },
+  });
+}
 
 function statusText(row: FinanceContractApplicationApi.Application) {
   if (row.voided) return '已作废';
@@ -65,6 +86,14 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal title="合同签约详情">
     <Spin :spinning="loading">
+      <div v-if="detail && canResubmit" class="mb-3">
+        <Space>
+          <Button type="primary" @click="handleGoResubmit">修改并重提</Button>
+          <span class="text-sm text-gray-500">
+            已驳回：修改后重新提交，将整链重批
+          </span>
+        </Space>
+      </div>
       <Descriptions v-if="detail" bordered :column="2" size="small">
         <Descriptions.Item label="业务单号">
           {{ detail.applicationNo }}

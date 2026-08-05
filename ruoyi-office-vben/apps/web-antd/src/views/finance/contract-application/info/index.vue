@@ -11,6 +11,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useTabs } from '@vben/hooks';
+import { useUserStore } from '@vben/stores';
 import { formatDateTime } from '@vben/utils';
 
 import {
@@ -54,6 +55,7 @@ const EXEC_KEYS = new Set([EXEC_ARCHIVE, EXEC_MAIL, EXEC_SEAL]);
 
 const route = useRoute();
 const router = useRouter();
+const userStore = useUserStore();
 const { closeCurrentTab } = useTabs();
 
 const loading = ref(false);
@@ -101,6 +103,31 @@ const isExecNode = computed(() => EXEC_KEYS.has(resolvedNodeKey.value));
 const isSealNode = computed(() => resolvedNodeKey.value === EXEC_SEAL);
 const isArchiveNode = computed(() => resolvedNodeKey.value === EXEC_ARCHIVE);
 const isMailNode = computed(() => resolvedNodeKey.value === EXEC_MAIL);
+
+/** 已驳回且当前用户为发起人：展示「修改并重提」（C16；流程详情/我的流程入口） */
+const canResubmit = computed(() => {
+  const d = detail.value;
+  if (!d || d.voided || d.approvalStatus !== 'REJECTED') return false;
+  const uid = userStore.userInfo?.id;
+  return uid != null && Number(d.applicantUserId) === Number(uid);
+});
+
+async function handleGoResubmit() {
+  const id = resolveId() ?? detail.value?.id;
+  if (id === undefined) {
+    message.warning('缺少申请编号');
+    return;
+  }
+  try {
+    await closeCurrentTab();
+  } catch {
+    // ignore
+  }
+  await router.push({
+    path: '/finance/contract-application',
+    query: { openResubmit: String(id) },
+  });
+}
 
 function statusText(row: FinanceContractApplicationApi.Application) {
   if (row.voided) return '已作废';
@@ -267,6 +294,22 @@ watch(
             执行节点 · {{ nodeKeyName || resolvedNodeKey }}
           </Tag>
         </div>
+
+        <!-- 拒绝后：流程已结束，须从业务台账改单 resubmit（整链重批） -->
+        <Alert
+          v-if="canResubmit"
+          class="mb-4"
+          type="warning"
+          show-icon
+          message="本单已驳回"
+          description="请修改合同内容后重新提交，将按整条审批链重新审批（非流程内退回）。"
+        >
+          <template #action>
+            <Button type="primary" @click="handleGoResubmit">
+              修改并重提
+            </Button>
+          </template>
+        </Alert>
 
         <!-- CS-R2：用印 / 归档 / 邮寄 执行面板 -->
         <Card
