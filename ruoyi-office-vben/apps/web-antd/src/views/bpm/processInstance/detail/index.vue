@@ -167,11 +167,9 @@ const useLegacyCustom = computed(
 
 /** 获取详情 */
 async function getDetail() {
-  // 获得审批详情
-  getApprovalDetail();
-
-  // 获得流程模型视图
-  getProcessModelView();
+  // 先拉审批详情（含 processDefinition.modelType），再拉流程图，避免竞态导致图不渲染
+  await getApprovalDetail();
+  await getProcessModelView();
 }
 
 async function getApprovalDetail() {
@@ -327,6 +325,9 @@ async function handleBeforeApproval(): Promise<boolean> {
 /** 当前的Tab */
 const activeTab = ref('form');
 const taskListRef = ref();
+const bpmnViewerRef = ref<{ refreshViewport?: () => void } | null>(null);
+/** 切换到流程图时递增，强制重挂载 viewer（修复隐藏 Tab 下画布高度为 0） */
+const diagramRenderKey = ref(0);
 
 /** 监听 Tab 切换，当切换到 "record" 标签时刷新任务列表 */
 watch(
@@ -336,6 +337,15 @@ watch(
       // 如果切换到流转记录标签，刷新任务列表
       nextTick(() => {
         taskListRef.value?.refresh();
+      });
+    }
+    if (newVal === 'diagram') {
+      diagramRenderKey.value += 1;
+      nextTick(() => {
+        // 再等一帧确保 DOM 可见后再 fit-viewport
+        requestAnimationFrame(() => {
+          bpmnViewerRef.value?.refreshViewport?.();
+        });
       });
     }
   },
@@ -375,9 +385,9 @@ onMounted(async () => {
                 <Col
                   :xs="24"
                   :sm="24"
-                  :md="20"
-                  :lg="20"
-                  :xl="20"
+                  :md="isPShellCustom ? 17 : 20"
+                  :lg="isPShellCustom ? 17 : 20"
+                  :xl="isPShellCustom ? 17 : 20"
                   class="h-full"
                 >
                   <!-- NORMAL: form-create -->
@@ -409,34 +419,40 @@ onMounted(async () => {
                     />
                   </div>
                 </Col>
-                <Col :xs="24" :sm="24" :md="4" :lg="4" :xl="4" class="h-full">
-                  <div class="mt-4 h-full">
+                <Col
+                  :xs="24"
+                  :sm="24"
+                  :md="isPShellCustom ? 7 : 4"
+                  :lg="isPShellCustom ? 7 : 4"
+                  :xl="isPShellCustom ? 7 : 4"
+                  class="h-full"
+                >
+                  <div class="timeline-pane mt-4 max-h-[70vh] overflow-y-auto pr-1">
                     <ProcessInstanceTimeline :activity-nodes="activityNodes" />
                   </div>
                 </Col>
               </Row>
             </TabPane>
 
-            <TabPane
-              tab="流程图"
-              key="diagram"
-              class="tab-pane-content"
-              :force-render="true"
-            >
-              <div class="h-full">
+            <TabPane tab="流程图" key="diagram" class="tab-pane-content">
+              <div class="diagram-pane min-h-[520px] w-full">
                 <ProcessInstanceSimpleViewer
-                  v-show="
-                    processDefinition.modelType &&
-                    processDefinition.modelType === BpmModelType.SIMPLE
+                  v-if="
+                    processDefinition.modelType === BpmModelType.SIMPLE &&
+                    activeTab === 'diagram'
                   "
+                  :key="`simple-${id}-${diagramRenderKey}`"
                   :loading="processInstanceLoading"
                   :model-view="processModelView"
                 />
                 <ProcessInstanceBpmnViewer
-                  v-show="
-                    processDefinition.modelType &&
-                    processDefinition.modelType === BpmModelType.BPMN
+                  v-else-if="
+                    (processDefinition.modelType === BpmModelType.BPMN ||
+                      !!processModelView?.bpmnXml) &&
+                    activeTab === 'diagram'
                   "
+                  ref="bpmnViewerRef"
+                  :key="`bpmn-${id}-${diagramRenderKey}`"
                   :loading="processInstanceLoading"
                   :model-view="processModelView"
                 />

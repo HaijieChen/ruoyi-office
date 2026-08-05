@@ -151,6 +151,14 @@ const importXML = async (xml: string) => {
       await bpmnViewer.value.importXML(xml);
       // 自定义成功的箭头
       addCustomDefs();
+      // 容器若在隐藏 Tab 中初始化，画布高度可能为 0；导入后强制适应视口
+      try {
+        const canvas: any = bpmnViewer.value.get('canvas');
+        canvas?.resized?.();
+        canvas?.zoom?.('fit-viewport', 'auto');
+      } catch {
+        /* ignore resize errors */
+      }
     } catch {
       clearViewer();
     } finally {
@@ -160,6 +168,26 @@ const importXML = async (xml: string) => {
     }
   }
 };
+
+/** 供父级在 Tab 显示后调用，修复隐藏态初始化导致的空白图 */
+const refreshViewport = () => {
+  try {
+    if (!bpmnViewer.value) {
+      if (props.xml) {
+        void importXML(props.xml);
+      }
+      return;
+    }
+    const canvas: any = bpmnViewer.value.get('canvas');
+    canvas?.resized?.();
+    canvas?.zoom?.('fit-viewport', 'auto');
+    setProcessStatus(props.view);
+  } catch {
+    /* ignore */
+  }
+};
+
+defineExpose({ refreshViewport, importXML });
 
 /** 高亮流程 */
 const setProcessStatus = (view: any) => {
@@ -265,8 +293,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="process-viewer">
-    <div style="height: 100%" ref="processCanvas" v-show="!isLoading"></div>
+  <div class="process-viewer" style="min-height: 500px; width: 100%">
+    <!-- 固定最小高度：避免父级 height:100% 在隐藏 Tab 中解析为 0 导致图空白 -->
+    <div
+      ref="processCanvas"
+      v-show="!isLoading"
+      style="width: 100%; height: 500px; min-height: 500px"
+    ></div>
     <!-- 自定义箭头样式，用于已完成状态下流程连线箭头 -->
     <defs ref="customDefs">
       <marker

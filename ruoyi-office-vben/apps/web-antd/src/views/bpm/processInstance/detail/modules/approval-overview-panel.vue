@@ -38,6 +38,8 @@ const processModelView = ref<any>({});
 const modelType = ref<number | undefined>();
 const activeTab = ref('progress');
 const taskListRef = ref<InstanceType<typeof BpmProcessInstanceTaskList>>();
+const bpmnViewerRef = ref<{ refreshViewport?: () => void } | null>(null);
+const diagramRenderKey = ref(0);
 
 const hasId = computed(
   () => !!props.processInstanceId && String(props.processInstanceId).trim() !== '',
@@ -113,6 +115,12 @@ watch(activeTab, (key) => {
   if (key === 'record' && hasId.value) {
     taskListRef.value?.refresh?.();
   }
+  if (key === 'diagram') {
+    diagramRenderKey.value += 1;
+    requestAnimationFrame(() => {
+      bpmnViewerRef.value?.refreshViewport?.();
+    });
+  }
 });
 </script>
 
@@ -142,8 +150,8 @@ watch(activeTab, (key) => {
             />
           </div>
         </TabPane>
-        <TabPane key="diagram" tab="流程图" :force-render="true">
-          <div class="min-h-[200px]">
+        <TabPane key="diagram" tab="流程图">
+          <div class="min-h-[520px]">
             <Alert
               v-if="diagramErrorMsg"
               type="warning"
@@ -151,14 +159,17 @@ watch(activeTab, (key) => {
               class="mb-3"
               :message="diagramErrorMsg"
             />
-            <template v-else>
+            <template v-else-if="activeTab === 'diagram'">
               <ProcessInstanceSimpleViewer
-                v-show="modelType === BpmModelType.SIMPLE"
+                v-if="modelType === BpmModelType.SIMPLE"
+                :key="`simple-${processInstanceId}-${diagramRenderKey}`"
                 :loading="loading"
                 :model-view="processModelView"
               />
               <ProcessInstanceBpmnViewer
-                v-show="modelType === BpmModelType.BPMN || modelType == null"
+                v-else
+                ref="bpmnViewerRef"
+                :key="`bpmn-${processInstanceId}-${diagramRenderKey}`"
                 :loading="loading"
                 :model-view="processModelView"
               />

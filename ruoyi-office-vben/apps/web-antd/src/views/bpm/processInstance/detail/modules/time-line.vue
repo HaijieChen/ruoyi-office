@@ -121,6 +121,26 @@ const nodeTypeSvgMap = {
 // 只有状态是 -1、0、1 才展示头像右小角状态小icon
 const onlyStatusIconShow = [-1, 0, 1];
 
+/** 节点状态文案：避免「结束」节点在未到达时被理解成流程已结束 */
+function getActivityStatusLabel(
+  status: number,
+  nodeType: BpmNodeTypeEnum,
+): string {
+  if (status === BpmTaskStatusEnum.SKIP || status === -2) return '已跳过';
+  if (status === BpmTaskStatusEnum.NOT_START || status === -1) return '未到达';
+  if (status === BpmTaskStatusEnum.WAIT || status === 0) return '待审批';
+  if (status === BpmTaskStatusEnum.RUNNING || status === 1) return '审批中';
+  if (status === BpmTaskStatusEnum.APPROVE || status === 2) {
+    return nodeType === BpmNodeTypeEnum.END_EVENT_NODE ? '已结束' : '已通过';
+  }
+  if (status === BpmTaskStatusEnum.REJECT || status === 3) return '不通过';
+  if (status === BpmTaskStatusEnum.CANCEL || status === 4) return '已取消';
+  if (status === BpmTaskStatusEnum.RETURN || status === 5) return '已退回';
+  if (status === 6) return '委派中';
+  if (status === BpmTaskStatusEnum.APPROVING || status === 7) return '通过中';
+  return '';
+}
+
 // 获取审批节点类型图标
 function getApprovalNodeTypeIcon(nodeType: BpmNodeTypeEnum) {
   return nodeTypeSvgMap[nodeType]?.icon;
@@ -339,27 +359,27 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
         :color="getApprovalNodeColor(activity.status)"
       >
         <template #dot>
-          <div class="relative">
+          <div class="relative size-8 shrink-0">
             <div
-              class="position-absolute left--2.5 top--1.5 flex h-8 w-8 items-center justify-center rounded-full border border-solid border-gray-200 bg-blue-500 p-1.5"
+              class="flex h-8 w-8 items-center justify-center rounded-full border border-solid border-gray-200 bg-blue-500 p-1.5"
             >
               <IconifyIcon
                 :icon="getApprovalNodeTypeIcon(activity.nodeType)"
-                class="size-6 text-white"
+                class="size-5 text-white"
               />
             </div>
 
             <div
               v-if="showStatusIcon"
-              class="absolute right--2.5 top-4 flex size-5 items-center rounded-full border-2 border-solid border-white p-0.5"
+              class="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-solid border-white"
               :style="{
                 backgroundColor: getApprovalNodeColor(activity.status),
               }"
             >
               <IconifyIcon
                 :icon="getApprovalNodeIcon(activity.status, activity.nodeType)"
-                class="text-white"
-                :class="[statusIconMap[activity.status]?.animation]"
+                class="size-2.5 text-white"
+                :class="[statusIconMap[String(activity.status)]?.animation]"
               />
             </div>
           </div>
@@ -367,20 +387,23 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
 
         <div
           :id="`activity-task-${activity.id}-${index}`"
-          class="ml-2 flex flex-col items-start gap-2"
+          class="ml-3 flex min-w-0 flex-col items-start gap-1.5"
         >
-          <!-- 第一行：节点名称、时间 -->
-          <div class="flex w-full">
-            <div class="font-bold">
+          <!-- 第一行：节点名称、状态、时间 -->
+          <div class="flex w-full min-w-0 flex-wrap items-baseline gap-x-2">
+            <div class="font-bold leading-snug">
               {{ activity.name }}
-              <span v-if="activity.status === BpmTaskStatusEnum.SKIP">
-                【跳过】
-              </span>
             </div>
+            <span
+              class="shrink-0 text-xs"
+              :style="{ color: getApprovalNodeColor(activity.status) }"
+            >
+              {{ getActivityStatusLabel(activity.status, activity.nodeType) }}
+            </span>
             <!-- 信息：时间 -->
             <div
               v-if="activity.status !== BpmTaskStatusEnum.NOT_START"
-              class="ml-auto mt-1 text-sm text-gray-500"
+              class="ml-auto text-sm text-gray-500"
             >
               {{ getApprovalNodeTime(activity) }}
             </div>
