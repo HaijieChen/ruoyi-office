@@ -25,7 +25,9 @@ import org.flowable.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.flowable.engine.impl.util.CommandContextUtil;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.TaskInfo;
+import org.flowable.task.api.history.HistoricTaskInstance;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -287,7 +289,9 @@ public class FlowableUtils {
      */
     public static Integer getTaskStatus(TaskInfo task) {
         Integer status = (Integer) task.getTaskLocalVariables().get(BpmnVariableConstants.TASK_VARIABLE_STATUS);
-        if (task.getEndTime() != null
+        // TaskInfo 无 getEndTime；仅历史任务有结束时间。运行中 Task 不做此兜底。
+        Date endTime = task instanceof HistoricTaskInstance historicTask ? historicTask.getEndTime() : null;
+        if (endTime != null
                 && (Objects.equals(status, BpmTaskStatusEnum.RUNNING.getStatus())
                 || Objects.equals(status, BpmTaskStatusEnum.WAIT.getStatus())
                 || Objects.equals(status, BpmTaskStatusEnum.APPROVING.getStatus()))) {
