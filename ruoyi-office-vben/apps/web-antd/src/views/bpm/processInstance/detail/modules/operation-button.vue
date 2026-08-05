@@ -92,6 +92,8 @@ const popOverVisible: any = ref({
   deleteSign: false,
 }); // 气泡卡是否展示
 const returnList = ref([] as any); // 退回节点
+/** 当前任务是否有可退回节点；无则不展示「退回」按钮（合同 C16：拒绝≠退回） */
+const canReturn = ref(false);
 
 // ========== 审批信息 ==========
 const runningTask = ref<any>(); // 运行中的任务
@@ -250,7 +252,24 @@ watch(
   },
 );
 
-/** 弹出气泡卡（仅程序控制 open，避免 trigger=click 在异步校验失败后仍打开空弹窗） */
+/** 刷新可退回节点；用于控制「退回」按钮显隐 */
+async function refreshReturnAvailability(taskId?: string) {
+  if (!taskId) {
+    canReturn.value = false;
+    returnList.value = [];
+    return;
+  }
+  try {
+    const list = await TaskApi.getTaskListByReturn(taskId);
+    returnList.value = list || [];
+    canReturn.value = returnList.value.length > 0;
+  } catch {
+    returnList.value = [];
+    canReturn.value = false;
+  }
+}
+
+/** 弹出气泡卡（程序控制 open，避免 trigger=click 在异步校验失败后仍打开空弹窗） */
 async function openPopover(type: string) {
   if (type === 'approve') {
     // 校验流程表单
@@ -263,18 +282,13 @@ async function openPopover(type: string) {
     initNextAssigneesFormField();
   }
   if (type === 'return') {
-    // 获取退回节点
-    try {
-      returnList.value = await TaskApi.getTaskListByReturn(runningTask.value.id);
-    } catch {
-      returnList.value = [];
-    }
-    if (!returnList.value?.length) {
+    // 再拉一次可退回节点，防止状态变化
+    await refreshReturnAvailability(runningTask.value?.id);
+    if (!canReturn.value) {
       message.warning('当前没有可退回的节点');
       popOverVisible.value.return = false;
       return;
     }
-    // 仅一个可选节点时默认选中（常见：第一审批 → 发起人）
     if (returnList.value.length === 1) {
       returnForm.targetTaskDefinitionKey =
         returnList.value[0].taskDefinitionKey;
@@ -716,6 +730,8 @@ function loadTodoTask(task: any) {
   } else {
     approveForm.value = {}; // 占位，避免为空
   }
+  // 预检可退回节点：无节点则不展示「退回」
+  void refreshReturnAvailability(task?.id);
 }
 
 /** 校验流程表单 */
@@ -870,7 +886,63 @@ defineExpose({ loadTodoTask });
         </template>
       </Popover>
 
-      <!-- 【退回】按钮 - 改为拒绝样式；trigger 不用 click，避免空列表仍弹窗 -->
+      <!-- 【拒绝】= 真拒绝（结束本轮 → 台账 REJECTED → 可 resubmit 整链重批） -->
+      <Popover
+        v-model:open="popOverVisible.reject"
+        placement="top"
+        :overlay-style="{ minWidth: '400px' }"
+        :trigger="[]"
+        v-if="
+          runningTask &&
+          isHandleTaskStatus() &&
+          isShowButton(BpmTaskOperationButtonTypeEnum.REJECT)
+        "
+      >
+        <Button danger type="primary" @click="openPopover('reject')">
+          {{ getButtonDisplayName(BpmTaskOperationButtonTypeEnum.REJECT) }}
+        </Button>
+        <template #content>
+          <div class="flex flex-1 flex-col px-5 pt-5" v-loading="formLoading">
+            <Form
+              layout="vertical"
+              class="mb-auto"
+              ref="rejectFormRef"
+              :model="rejectReasonForm"
+              :rules="rejectReasonRule"
+              label-width="100px"
+            >
+              <FormItem label="审批意见" name="reason">
+                <Textarea
+                  v-model:value="rejectReasonForm.reason"
+                  placeholder="请输入审批意见"
+                  :rows="4"
+                />
+              </FormItem>
+              <FormItem>
+                <Space>
+                  <Button
+                    :disabled="formLoading"
+                    danger
+                    type="primary"
+                    @click="handleAudit(false, rejectFormRef)"
+                  >
+                    {{
+                      getButtonDisplayName(
+                        BpmTaskOperationButtonTypeEnum.REJECT,
+                      )
+                    }}
+                  </Button>
+                  <Button @click="closePopover('reject', rejectFormRef)">
+                    取消
+                  </Button>
+                </Space>
+              </FormItem>
+            </Form>
+          </div>
+        </template>
+      </Popover>
+
+      <!-- 【退回】= 流程内回到已办节点；仅当存在可退回节点时显示 -->
       <Popover
         v-model:open="popOverVisible.return"
         placement="top"
@@ -879,11 +951,12 @@ defineExpose({ loadTodoTask });
         v-if="
           runningTask &&
           isHandleTaskStatus() &&
-          isShowButton(BpmTaskOperationButtonTypeEnum.REJECT)
+          canReturn &&
+          isShowButton(BpmTaskOperationButtonTypeEnum.RETURN)
         "
       >
-        <Button danger type="primary" @click="openPopover('return')">
-          {{ getButtonDisplayName(BpmTaskOperationButtonTypeEnum.REJECT) }}
+        <Button danger @click="openPopover('return')">
+          {{ getButtonDisplayName(BpmTaskOperationButtonTypeEnum.RETURN) }}
         </Button>
         <template #content>
           <div class="flex flex-1 flex-col px-5 pt-5" v-loading="formLoading">
@@ -929,7 +1002,7 @@ defineExpose({ loadTodoTask });
                   >
                     {{
                       getButtonDisplayName(
-                        BpmTaskOperationButtonTypeEnum.REJECT,
+                        BpmTaskOperationButtonTypeEnum.RETURN,
                       )
                     }}
                   </Button>
@@ -937,58 +1010,6 @@ defineExpose({ loadTodoTask });
                     取消
                   </Button>
                 </Space>
-              </FormItem>
-            </Form>
-          </div>
-        </template>
-      </Popover>
-
-      <!-- 【拒绝】按钮 - 已隐藏 -->
-      <Popover
-        v-model:open="popOverVisible.reject"
-        placement="top"
-        :overlay-style="{ minWidth: '400px' }"
-        trigger="click"
-        v-if="false"
-      >
-        <Button danger type="primary" @click="openPopover('reject')">
-          {{ getButtonDisplayName(BpmTaskOperationButtonTypeEnum.REJECT) }}
-        </Button>
-        <template #content>
-          <!-- 审批表单 -->
-          <div class="flex flex-1 flex-col px-5 pt-5" v-loading="formLoading">
-            <Form
-              layout="vertical"
-              class="mb-auto"
-              ref="rejectFormRef"
-              :model="rejectReasonForm"
-              :rules="rejectReasonRule"
-              label-width="100px"
-            >
-              <FormItem label="审批意见" name="reason">
-                <Textarea
-                  v-model:value="rejectReasonForm.reason"
-                  placeholder="请输入审批意见"
-                  :rows="4"
-                />
-              </FormItem>
-              <FormItem>
-                <Button
-                  :disabled="formLoading"
-                  danger
-                  type="primary"
-                  @click="handleAudit(false, rejectFormRef)"
-                >
-                  {{
-                    getButtonDisplayName(BpmTaskOperationButtonTypeEnum.REJECT)
-                  }}
-                </Button>
-                <Button
-                  class="ml-2"
-                  @click="closePopover('reject', rejectFormRef)"
-                >
-                  取消
-                </Button>
               </FormItem>
             </Form>
           </div>

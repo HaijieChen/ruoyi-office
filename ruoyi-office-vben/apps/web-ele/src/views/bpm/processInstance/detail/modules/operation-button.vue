@@ -92,6 +92,8 @@ const popOverVisible: any = ref({
   deleteSign: false,
 }); // 气泡卡是否展示
 const returnList = ref([] as any); // 退回节点
+/** 当前任务是否有可退回节点；无则不展示「退回」 */
+const canReturn = ref(false);
 
 /** 创建流程表达式 */
 function openSignatureModal() {
@@ -255,6 +257,23 @@ watch(
   },
 );
 
+/** 刷新可退回节点；用于控制「退回」按钮显隐 */
+async function refreshReturnAvailability(taskId?: string) {
+  if (!taskId) {
+    canReturn.value = false;
+    returnList.value = [];
+    return;
+  }
+  try {
+    const list = await getTaskListByReturn(taskId);
+    returnList.value = list || [];
+    canReturn.value = returnList.value.length > 0;
+  } catch {
+    returnList.value = [];
+    canReturn.value = false;
+  }
+}
+
 /** 弹出气泡卡（程序控制 visible，避免异步校验失败后仍打开空弹窗） */
 async function openPopover(type: string) {
   if (type === 'approve') {
@@ -268,13 +287,8 @@ async function openPopover(type: string) {
     await initNextAssigneesFormField();
   }
   if (type === 'return') {
-    // 获取退回节点
-    try {
-      returnList.value = await getTaskListByReturn(runningTask.value.id);
-    } catch {
-      returnList.value = [];
-    }
-    if (!returnList.value?.length) {
+    await refreshReturnAvailability(runningTask.value?.id);
+    if (!canReturn.value) {
       ElMessage.warning('当前没有可退回的节点');
       popOverVisible.value.return = false;
       return;
@@ -682,6 +696,7 @@ function loadTodoTask(task: any) {
   } else {
     approveForm.value = {}; // 占位，避免为空
   }
+  void refreshReturnAvailability(task?.id);
 }
 
 /** 校验流程表单 */
@@ -826,12 +841,12 @@ defineExpose({ loadTodoTask });
         </div>
       </ElPopover>
 
-      <!-- 【拒绝】按钮 -->
+      <!-- 【拒绝】= 真拒绝（结束本轮 → 可 resubmit） -->
       <ElPopover
         :visible="popOverVisible.reject"
         placement="top"
         :popper-style="{ minWidth: '400px' }"
-        trigger="click"
+        :trigger="[]"
         v-if="
           runningTask &&
           isHandleTaskStatus() &&
@@ -1274,7 +1289,7 @@ defineExpose({ loadTodoTask });
         </div>
       </ElPopover>
 
-      <!-- 【退回】按钮：visible 由 openPopover 程序控制 -->
+      <!-- 【退回】：仅有可退回节点时显示 -->
       <ElPopover
         :visible="popOverVisible.return"
         placement="top"
@@ -1283,6 +1298,7 @@ defineExpose({ loadTodoTask });
         v-if="
           runningTask &&
           isHandleTaskStatus() &&
+          canReturn &&
           isShowButton(BpmTaskOperationButtonTypeEnum.RETURN)
         "
       >

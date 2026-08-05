@@ -438,11 +438,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
             throw exception(TASK_NOT_EXISTS);
         }
 
-        // 2.1 查询该任务的前置任务节点的 key 集合（拷贝为可变列表，便于补全发起人节点）
-        List<UserTask> previousUserList = new ArrayList<>(
-                ObjectUtil.defaultIfNull(BpmnModelUtils.getPreviousUserTaskList(source, null, null), Collections.emptyList()));
-        // 2.1.1 方案 B：第一审批节点常出现空列表——串行可达时始终把发起人节点纳入可退回候选
-        ensureStartUserNodeInReturnCandidates(bpmnModel, source, previousUserList);
+        // 2.1 查询该任务的前置任务节点的 key 集合
+        List<UserTask> previousUserList = BpmnModelUtils.getPreviousUserTaskList(source, null, null);
         if (CollUtil.isEmpty(previousUserList)) {
             return Collections.emptyList();
         }
@@ -450,38 +447,10 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         previousUserList.removeIf(userTask -> !BpmnModelUtils.isSequentialReachable(source, userTask, null));
 
         // 2.3 过滤：只能退回到已经处理过的节点（排除审批未经过的节点）。相关 issue：https://gitee.com/yqzy1688/ruoyi-office.git/issues/982
-        // 发起人节点：流程已启动即视为已完成；历史 local 变量查询可能漏掉 StartUserNode，故不按 finished 过滤
         List<HistoricTaskInstance> finishedTasks = getFinishedTaskListByProcessInstanceIdWithoutCancel(task.getProcessInstanceId());
         Set<String> finishedTaskDefinitionKeys = convertSet(finishedTasks, HistoricTaskInstance::getTaskDefinitionKey);
-        previousUserList.removeIf(userTask -> {
-            if (START_USER_NODE_ID.equals(userTask.getId())) {
-                return false;
-            }
-            return !finishedTaskDefinitionKeys.contains(userTask.getId());
-        });
+        previousUserList.removeIf(userTask -> !finishedTaskDefinitionKeys.contains(userTask.getId()));
         return previousUserList;
-    }
-
-    /**
-     * 若模型含发起人 UserTask，且从当前节点串行可回退到该节点，则补入可退回列表。
-     * 覆盖：前置扫描漏掉 StartUserNode、或第一审批节点 previous 为空 的情况。
-     */
-    private void ensureStartUserNodeInReturnCandidates(BpmnModel bpmnModel, FlowElement source,
-                                                       List<UserTask> previousUserList) {
-        if (previousUserList.stream().anyMatch(ut -> START_USER_NODE_ID.equals(ut.getId()))) {
-            return;
-        }
-        // 当前就在发起人节点时无需「退回自己」
-        if (START_USER_NODE_ID.equals(source.getId())) {
-            return;
-        }
-        FlowElement startUserElement = BpmnModelUtils.getFlowElementById(bpmnModel, START_USER_NODE_ID);
-        if (!(startUserElement instanceof UserTask startUserTask)) {
-            return;
-        }
-        if (BpmnModelUtils.isSequentialReachable(source, startUserTask, null)) {
-            previousUserList.add(0, startUserTask);
-        }
     }
 
     @Override
@@ -1027,16 +996,11 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         // 为什么不直接使用 runTaskKeyList 呢？因为可能存在多个审批分支，例如说：A -> B -> C 和 D -> F，而只要 C 撤回到 A，需要排除掉 F
         List<UserTask> returnUserTaskList = BpmnModelUtils.iteratorFindChildUserTasks(targetElement, runTaskKeyList, null, null);
         List<String> returnTaskKeyList = convertList(returnUserTaskList, UserTask::getId);
-        // 兜底：退回发起人等场景下子节点扫描可能为空，至少撤回当前运行节点
-        if (CollUtil.isEmpty(returnTaskKeyList)) {
-            returnTaskKeyList = CollUtil.newArrayList(currentTask.getTaskDefinitionKey());
-        }
 
         // 2. 给当前要被退回的 task 数组，设置退回意见
-        List<String> finalReturnTaskKeyList = returnTaskKeyList;
         taskList.forEach(task -> {
             // 需要排除掉，不需要设置退回意见的任务
-            if (!finalReturnTaskKeyList.contains(task.getTaskDefinitionKey())) {
+            if (!returnTaskKeyList.contains(task.getTaskDefinitionKey())) {
                 return;
             }
 
@@ -1062,7 +1026,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         //    相关 issue：https://gitee.com/yqzy1688/ruoyi-office.git/issues/1018
         runtimeService.createChangeActivityStateBuilder()
                 .processInstanceId(currentTask.getProcessInstanceId())
-                .moveActivityIdsToSingleActivityId(finalReturnTaskKeyList, reqVO.getTargetTaskDefinitionKey())
+                .moveActivityIdsToSingleActivityId(returnTaskKeyList, reqVO.getTargetTaskDefinitionKey())
                 // 设置需要预测的任务 ids 的流程变量，用于辅助预测
                 .processVariable(BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_NEED_SIMULATE_TASK_IDS, needSimulateTaskDefinitionKeys)
                 // 设置流程变量（local）节点退回标记, 用于退回到节点，不执行 BpmUserTaskAssignStartUserHandlerTypeEnum 策略，导致自动通过
