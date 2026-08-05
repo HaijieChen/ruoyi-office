@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { Form, Input, message } from 'ant-design-vue';
+import { Button, Form, Input, Space, message } from 'ant-design-vue';
 
 import {
   completeInvoiceIssue,
@@ -19,9 +19,35 @@ const formRef = ref();
 const formData = ref({
   applicationId: undefined as number | undefined,
   invoiceNos: '',
-  /** FileUpload 多附件 URL 列表 */
+  /** 附件 URL 列表：上传与粘贴共用唯一数据源 */
   fileUrls: [] as string[],
 });
+
+/** 避免 FileUpload 与行内编辑互相顶掉 */
+let syncingFromUpload = false;
+
+function normalizeUrls(urls: string[]): string[] {
+  return (urls || []).map((u) => String(u ?? '').trim()).filter(Boolean);
+}
+
+function addUrlRow() {
+  formData.value.fileUrls = [...formData.value.fileUrls, ''];
+}
+
+function removeUrlRow(index: number) {
+  const next = [...formData.value.fileUrls];
+  next.splice(index, 1);
+  formData.value.fileUrls = next.length ? next : [];
+}
+
+function onFileUploadUpdate(val: string | string[]) {
+  syncingFromUpload = true;
+  const list = Array.isArray(val) ? val : val ? [val] : [];
+  formData.value.fileUrls = list.map((u) => String(u ?? ''));
+  queueMicrotask(() => {
+    syncingFromUpload = false;
+  });
+}
 
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
@@ -56,9 +82,9 @@ const [Modal, modalApi] = useVbenModal({
       message.warning('缺少开票申请编号');
       return;
     }
-    const urls = (formData.value.fileUrls || []).filter(Boolean);
+    const urls = normalizeUrls(formData.value.fileUrls);
     if (!urls.length) {
-      message.warning('请至少上传一个发票附件');
+      message.warning('请至少提供一个发票附件 URL（上传或粘贴）');
       return;
     }
     modalApi.lock();
@@ -89,11 +115,22 @@ const [Modal, modalApi] = useVbenModal({
     }
   },
 });
+
+// 若外部清空导致列表为空，保持可编辑体验
+watch(
+  () => formData.value.fileUrls.length,
+  (len) => {
+    if (syncingFromUpload) return;
+    if (len === 0) {
+      // 无行时仍可粘贴：不强制加空行，用户可点「添加」或仅上传
+    }
+  },
+);
 </script>
 
 <template>
   <Modal title="整单办票" class="w-[560px]">
-    <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+    <Form ref="formRef" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
       <Form.Item label="票号备注">
         <Input
           v-model:value="formData.invoiceNos"
@@ -101,13 +138,34 @@ const [Modal, modalApi] = useVbenModal({
         />
       </Form.Item>
       <Form.Item label="发票附件" required>
-        <FileUpload
-          v-model:value="formData.fileUrls"
-          :max-number="20"
-          :max-size="20"
-          :multiple="true"
-          help-text="支持多附件；再次办票将覆盖整单附件列表"
-        />
+        <div class="space-y-2">
+          <FileUpload
+            :value="formData.fileUrls"
+            :max-number="20"
+            :max-size="20"
+            :multiple="true"
+            help-text="可上传；成功后写入下方 URL 列表。再次办票将覆盖整单附件"
+            @update:value="onFileUploadUpdate"
+          />
+          <div class="text-xs text-gray-500">
+            或手动填写 / 粘贴 URL（每条可改；至少一条非空）
+          </div>
+          <div
+            v-for="(_url, index) in formData.fileUrls"
+            :key="index"
+            class="flex items-center gap-2"
+          >
+            <Input
+              v-model:value="formData.fileUrls[index]"
+              placeholder="https://… 或上传回填的地址"
+              allow-clear
+            />
+            <Button type="link" danger @click="removeUrlRow(index)">删除</Button>
+          </div>
+          <Space>
+            <Button size="small" @click="addUrlRow">添加 URL</Button>
+          </Space>
+        </div>
       </Form.Item>
     </Form>
   </Modal>

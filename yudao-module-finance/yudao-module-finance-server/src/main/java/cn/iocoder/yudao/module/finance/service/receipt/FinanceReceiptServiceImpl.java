@@ -198,12 +198,16 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     private void validateWritableReceipt(FinanceReceiptSaveReqVO reqVO, Long excludeId) {
         if (reqVO.getEntityCompanyDeptId() == null
                 || StrUtil.isBlank(reqVO.getBankAccount()) || reqVO.getTransactionDate() == null
-                || StrUtil.isBlank(reqVO.getPayerName()) || reqVO.getTransactionAmount() == null
+                || reqVO.getTransactionAmount() == null
                 || reqVO.getTransactionAmount().compareTo(BigDecimal.ZERO) <= 0
                 || StrUtil.isBlank(reqVO.getBankSerialNo())
                 || reqVO.getBusinessFund() == null) {
             throw new IllegalArgumentException(
-                    "主体公司、银行账户、交易日期、付款方名称、交易金额、银行流水号和是否业务款不能为空，且金额须大于 0");
+                    "主体公司、银行账户、交易日期、交易金额、银行流水号和是否业务款不能为空，且金额须大于 0");
+        }
+        // 业务款必须填付款方；非业务款可选
+        if (Boolean.TRUE.equals(reqVO.getBusinessFund()) && StrUtil.isBlank(reqVO.getPayerName())) {
+            throw new IllegalArgumentException("业务款时付款方名称不能为空");
         }
         if (reqVO.getFundTypeRemark() != null && reqVO.getFundTypeRemark().length() > 255) {
             throw new IllegalArgumentException("款项类型备注长度不能超过 255");
@@ -225,7 +229,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 .entityCompanyDeptId(company.deptId())
                 .entityCompanyName(company.name())
                 .transactionDate(reqVO.getTransactionDate())
-                .payerName(reqVO.getPayerName().trim())
+                .payerName(trimToNull(reqVO.getPayerName()))
                 .payerAccount(trimToNull(reqVO.getPayerAccount()))
                 .transactionAmount(reqVO.getTransactionAmount())
                 .summary(trimToNull(reqVO.getSummary()))
@@ -273,9 +277,6 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         if (FinanceReceiptImportDateParser.tryParse(importReceipt.getTransactionDate()) == null) {
             return "交易日期格式错误";
         }
-        if (StrUtil.isBlank(importReceipt.getPayerName())) {
-            return "付款方名称不能为空";
-        }
         if (importReceipt.getTransactionAmount() == null || importReceipt.getTransactionAmount().compareTo(BigDecimal.ZERO) <= 0) {
             return "交易金额必须大于 0";
         }
@@ -285,8 +286,13 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         if (bankSerialNos.contains(importReceipt.getBankSerialNo())) {
             return "银行流水号在文件内重复";
         }
-        if (parseImportBusinessFund(importReceipt.getBusinessFund()) == null) {
+        Boolean businessFund = parseImportBusinessFund(importReceipt.getBusinessFund());
+        if (businessFund == null) {
             return "是否业务款格式错误（空=否；支持是/否、Y/N、true/false、1/0）";
+        }
+        // 业务款必须填付款方；非业务款可选
+        if (Boolean.TRUE.equals(businessFund) && StrUtil.isBlank(importReceipt.getPayerName())) {
+            return "业务款时付款方名称不能为空";
         }
         if (importReceipt.getFundTypeRemark() != null && importReceipt.getFundTypeRemark().length() > 255) {
             return "款项类型备注长度不能超过 255";
@@ -329,11 +335,11 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 .entityCompanyDeptId(company.deptId())
                 .entityCompanyName(company.name())
                 .transactionDate(transactionDate)
-                .payerName(importReceipt.getPayerName())
-                .payerAccount(importReceipt.getPayerAccount())
+                .payerName(trimToNull(importReceipt.getPayerName()))
+                .payerAccount(trimToNull(importReceipt.getPayerAccount()))
                 .transactionAmount(importReceipt.getTransactionAmount())
-                .summary(importReceipt.getSummary())
-                .bankSerialNo(importReceipt.getBankSerialNo())
+                .summary(trimToNull(importReceipt.getSummary()))
+                .bankSerialNo(importReceipt.getBankSerialNo().trim())
                 .businessFund(businessFund)
                 .fundTypeRemark(trimToNull(importReceipt.getFundTypeRemark()))
                 .claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())

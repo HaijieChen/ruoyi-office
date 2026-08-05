@@ -33,8 +33,7 @@ public class FinanceReceiptSaveReqVO {
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime transactionDate;
 
-    @Schema(description = "付款方名称", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "付款方名称不能为空")
+    @Schema(description = "付款方名称（业务款必填；非业务款可选）")
     private String payerName;
 
     @Schema(description = "付款方账号")

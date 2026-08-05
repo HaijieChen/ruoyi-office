@@ -3,7 +3,7 @@ import type { Rule } from 'ant-design-vue/es/form';
 
 import type { FinanceBankReceiptApi } from '#/api/finance/receipt';
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
@@ -105,7 +105,7 @@ const getTitle = computed(() =>
   isEdit.value ? '编辑银行到款' : '新增银行到款',
 );
 
-const rules: Record<string, Rule[]> = {
+const rules = computed<Record<string, Rule[]>>(() => ({
   entityCompanyDeptId: [
     { required: true, message: '主体公司不能为空', trigger: 'change' },
   ],
@@ -113,7 +113,18 @@ const rules: Record<string, Rule[]> = {
   transactionDate: [
     { required: true, message: '交易日期不能为空', trigger: 'change' },
   ],
-  payerName: [{ required: true, message: '付款方名称不能为空', trigger: 'blur' }],
+  payerName: [
+    {
+      validator: async (_: Rule, v: string | undefined) => {
+        // 业务款必填；非业务款可选
+        if (formData.value.businessFund === true && !String(v ?? '').trim()) {
+          return Promise.reject('业务款时付款方名称不能为空');
+        }
+        return Promise.resolve();
+      },
+      trigger: 'blur',
+    },
+  ],
   transactionAmount: [
     { required: true, message: '交易金额不能为空' },
     {
@@ -128,7 +139,14 @@ const rules: Record<string, Rule[]> = {
   businessFund: [
     { required: true, message: '是否业务款不能为空', trigger: 'change' },
   ],
-};
+}));
+
+watch(
+  () => formData.value.businessFund,
+  () => {
+    void formRef.value?.validateFields(['payerName']).catch(() => undefined);
+  },
+);
 
 function resetForm() {
   formData.value = defaultFormData();
@@ -208,7 +226,7 @@ const [Modal, modalApi] = useVbenModal({
         bankAccount: formData.value.bankAccount!,
         // 后端 LocalDateTime 使用 epoch millis 反序列化
         transactionDate: transactionDate as unknown as string,
-        payerName: formData.value.payerName!,
+        payerName: formData.value.payerName?.trim() || undefined,
         payerAccount: formData.value.payerAccount,
         transactionAmount: formData.value.transactionAmount!,
         summary: formData.value.summary,
@@ -284,7 +302,11 @@ const [Modal, modalApi] = useVbenModal({
       <Form.Item label="付款方名称" name="payerName">
         <Input
           v-model:value="formData.payerName"
-          placeholder="请输入付款方名称"
+          :placeholder="
+            formData.businessFund === false
+              ? '非业务款可选'
+              : '请输入付款方名称'
+          "
           allow-clear
         />
       </Form.Item>

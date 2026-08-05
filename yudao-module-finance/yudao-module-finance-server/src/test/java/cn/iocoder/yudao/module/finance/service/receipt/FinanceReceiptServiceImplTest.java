@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptLifecycleAuditDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
@@ -107,6 +108,77 @@ class FinanceReceiptServiceImplTest {
                         && Boolean.FALSE.equals(r.getBusinessFund())
                         && r.getFundTypeRemark() == null));
         verify(receiptMapper, times(2)).insert(any(FinanceReceiptDO.class));
+    }
+
+    @Test
+    void createReceiptNonBusinessFundMayOmitPayerName() {
+        when(entityCompanyResolver.requireByDeptId(ENTITY_COMPANY_DEPT_ID))
+                .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(
+                        ENTITY_COMPANY_DEPT_ID, ENTITY_COMPANY_NAME));
+        when(receiptNoRedisDAO.generate(LocalDate.now())).thenReturn("RC-NB-1");
+        when(receiptMapper.selectByBankSerialNo("BSN-NB-1")).thenReturn(null);
+        when(receiptMapper.insert(any(FinanceReceiptDO.class))).thenAnswer(inv -> {
+            FinanceReceiptDO r = inv.getArgument(0);
+            r.setId(99L);
+            return 1;
+        });
+
+        FinanceReceiptSaveReqVO req = new FinanceReceiptSaveReqVO();
+        req.setEntityCompanyDeptId(ENTITY_COMPANY_DEPT_ID);
+        req.setBankAccount("招商银行 1234");
+        req.setTransactionDate(LocalDateTime.of(2026, 7, 22, 10, 0));
+        req.setPayerName(null);
+        req.setTransactionAmount(new BigDecimal("50.00"));
+        req.setBankSerialNo("BSN-NB-1");
+        req.setBusinessFund(Boolean.FALSE);
+
+        Long id = receiptService.createReceipt(req, 100L);
+        assertEquals(99L, id);
+        verify(receiptMapper).insert(argThat((FinanceReceiptDO r) ->
+                r.getPayerName() == null
+                        && Boolean.FALSE.equals(r.getBusinessFund())
+                        && "BSN-NB-1".equals(r.getBankSerialNo())));
+    }
+
+    @Test
+    void createReceiptBusinessFundRequiresPayerName() {
+        FinanceReceiptSaveReqVO req = new FinanceReceiptSaveReqVO();
+        req.setEntityCompanyDeptId(ENTITY_COMPANY_DEPT_ID);
+        req.setBankAccount("招商银行 1234");
+        req.setTransactionDate(LocalDateTime.of(2026, 7, 22, 10, 0));
+        req.setPayerName("  ");
+        req.setTransactionAmount(new BigDecimal("50.00"));
+        req.setBankSerialNo("BSN-B-EMPTY");
+        req.setBusinessFund(Boolean.TRUE);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> receiptService.createReceipt(req, 100L));
+        assertTrue(ex.getMessage().contains("付款方"));
+        verify(receiptMapper, never()).insert(any(FinanceReceiptDO.class));
+    }
+
+    @Test
+    void importBusinessFundMissingPayerShouldFailNonBusinessMayOmit() {
+        when(receiptNoRedisDAO.generate(LocalDate.now())).thenReturn("RC-IMP-NB");
+        when(receiptMapper.selectByBankSerialNo(any())).thenReturn(null);
+
+        FinanceReceiptImportExcelVO businessMissingPayer = row("招商银行 1234", "BSN-IMP-B", BigDecimal.TEN);
+        businessMissingPayer.setBusinessFund("是");
+        businessMissingPayer.setPayerName(null);
+
+        FinanceReceiptImportExcelVO nonBusinessNoPayer = row("招商银行 1234", "BSN-IMP-NB", BigDecimal.ONE);
+        nonBusinessNoPayer.setBusinessFund("否");
+        nonBusinessNoPayer.setPayerName(null);
+
+        FinanceReceiptImportRespVO respVO = receiptService.importReceiptList(
+                List.of(businessMissingPayer, nonBusinessNoPayer), 100L);
+
+        assertEquals(List.of("RC-IMP-NB"), respVO.getReceiptNos());
+        assertTrue(respVO.getFailureRows().get(2).contains("付款方"));
+        verify(receiptMapper).insert(argThat((FinanceReceiptDO r) ->
+                "BSN-IMP-NB".equals(r.getBankSerialNo())
+                        && r.getPayerName() == null
+                        && Boolean.FALSE.equals(r.getBusinessFund())));
     }
 
     @Test

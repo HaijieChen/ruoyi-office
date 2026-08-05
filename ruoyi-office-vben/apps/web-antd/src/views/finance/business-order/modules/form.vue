@@ -69,6 +69,12 @@ const companyOptions = ref<CompanyOption[]>([]);
 const contractOptions = ref<ContractOption[]>([]);
 const loadingCompany = ref(false);
 const loadingContract = ref(false);
+/** 合同 id → 对方名称（回填源） */
+const contractCounterpartyMap = ref<Record<number, string>>({});
+/** 用户是否手改过付款方；true 时换合同不覆盖 */
+const payerDirty = ref(false);
+/** 系统回填中，忽略 Input 可能触发的 change */
+let payerAutofilling = false;
 
 const rules: Record<string, Rule[]> = {
   entityCompanyDeptId: [
@@ -121,7 +127,28 @@ const getTitle = computed(() =>
 
 function resetForm() {
   formData.value = {};
+  payerDirty.value = false;
+  contractCounterpartyMap.value = {};
   formRef.value?.resetFields();
+}
+
+function onPayerNameUserEdit() {
+  if (payerAutofilling) return;
+  payerDirty.value = true;
+}
+
+/** 未手改时，按所选合同对方名回填付款方 */
+function maybeAutofillPayerFromContract(contractId?: number | null) {
+  if (payerDirty.value) return;
+  if (contractId == null) return;
+  const name = contractCounterpartyMap.value[contractId];
+  if (!name || !String(name).trim()) return;
+  payerAutofilling = true;
+  formData.value.payerName = String(name).trim();
+  payerDirty.value = false;
+  queueMicrotask(() => {
+    payerAutofilling = false;
+  });
 }
 
 function formatDateField(value: unknown): string | undefined {
@@ -157,12 +184,20 @@ async function loadContractOptions() {
   loadingContract.value = true;
   try {
     const list = (await listSelectableContractsForBo()) || [];
+    const map: Record<number, string> = {};
     contractOptions.value = list
       .filter((c) => c.id != null)
-      .map((c) => ({
-        value: c.id as number,
-        label: `${c.applicationNo || c.id}${c.counterpartyName ? ` | ${c.counterpartyName}` : ''}`,
-      }));
+      .map((c) => {
+        const id = c.id as number;
+        if (c.counterpartyName && String(c.counterpartyName).trim()) {
+          map[id] = String(c.counterpartyName).trim();
+        }
+        return {
+          value: id,
+          label: `${c.applicationNo || c.id}${c.counterpartyName ? ` | ${c.counterpartyName}` : ''}`,
+        };
+      });
+    contractCounterpartyMap.value = map;
   } finally {
     loadingContract.value = false;
   }
@@ -203,9 +238,13 @@ const [Modal, modalApi] = useVbenModal({
       contractOptions.value = [];
       return;
     }
+    payerDirty.value = false;
     await Promise.all([loadCompanyOptions(), loadContractOptions()]);
     const data = modalApi.getData<{ id?: number }>();
-    if (!data?.id) return;
+    if (!data?.id) {
+      // 新建：不预填；用户选合同时 @change 回填
+      return;
+    }
     modalApi.lock();
     try {
       const detail = await getBusinessOrder(data.id);
@@ -218,6 +257,8 @@ const [Modal, modalApi] = useVbenModal({
         importDate: formatDateField(detail.importDate),
         importer: detail.importerName || String(detail.importerId ?? ''),
       };
+      // 编辑打开：保留库中付款方，不覆盖
+      payerDirty.value = false;
       // 详情中的主体公司若不在启用列表中，补一条选项以便展示
       if (
         detail.entityCompanyDeptId != null &&
@@ -260,6 +301,11 @@ watch(
     }
   },
 );
+
+/** 仅用户变更合同时回填；避免编辑打开写入 detail 时 watch 覆盖库中 payer */
+function onContractChange(id: number | undefined) {
+  maybeAutofillPayerFromContract(id);
+}
 </script>
 
 <template>
@@ -310,6 +356,7 @@ watch(
           :options="contractOptions"
           option-filter-prop="label"
           placeholder="请选择已审批通过且本人申请的合同"
+          @change="onContractChange"
           @dropdown-visible-change="
             (open: boolean) => {
               if (open && !contractOptions.length) loadContractOptions();
@@ -348,7 +395,12 @@ watch(
         />
       </Form.Item>
       <Form.Item label="付款方" name="payerName">
-        <Input v-model:value="formData.payerName" placeholder="可选" />
+        <Input
+          v-model:value="formData.payerName"
+          placeholder="选合同后自动带出，可改"
+          @change="onPayerNameUserEdit"
+          @input="onPayerNameUserEdit"
+        />
       </Form.Item>
       <Form.Item label="签约执行金额" name="signedExecutionAmount">
         <InputNumber

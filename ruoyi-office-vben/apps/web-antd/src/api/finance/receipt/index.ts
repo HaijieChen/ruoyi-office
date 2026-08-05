@@ -15,12 +15,12 @@ export namespace FinanceBankReceiptApi {
     entityCompanyName?: string;
     bankAccount: string;
     transactionDate: string;
-    payerName: string;
-    payerAccount: string;
+    payerName?: string;
+    payerAccount?: string;
     transactionAmount: number;
-    summary: string;
+    summary?: string;
     bankSerialNo: string;
-    /** 是否业务款（仅展示，不联动认领） */
+    /** 是否业务款（非业务款 payer 可空；认领仅业务款） */
     businessFund?: boolean;
     /** 款项类型备注（字典 finance_fund_type_remark） */
     fundTypeRemark?: string;
@@ -54,7 +54,8 @@ export namespace FinanceBankReceiptApi {
     entityCompanyDeptId: number;
     bankAccount: string;
     transactionDate: number | string;
-    payerName: string;
+    /** 业务款必填；非业务款可选 */
+    payerName?: string;
     payerAccount?: string;
     transactionAmount: number;
     summary?: string;
