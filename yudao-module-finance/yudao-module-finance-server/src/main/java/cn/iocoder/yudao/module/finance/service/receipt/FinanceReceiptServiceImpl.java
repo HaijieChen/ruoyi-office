@@ -205,9 +205,9 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
             throw new IllegalArgumentException(
                     "主体公司、银行账户、交易日期、交易金额、银行流水号和是否业务款不能为空，且金额须大于 0");
         }
-        // 业务款必须填付款方；非业务款可选
+        // 业务款必须填付款方；非业务款可选 → 业务错误码（前端 400），勿用 IllegalArgumentException 落到 500
         if (Boolean.TRUE.equals(reqVO.getBusinessFund()) && StrUtil.isBlank(reqVO.getPayerName())) {
-            throw new IllegalArgumentException("业务款时付款方名称不能为空");
+            throw exception(RECEIPT_PAYER_NAME_REQUIRED_FOR_BUSINESS_FUND);
         }
         if (reqVO.getFundTypeRemark() != null && reqVO.getFundTypeRemark().length() > 255) {
             throw new IllegalArgumentException("款项类型备注长度不能超过 255");

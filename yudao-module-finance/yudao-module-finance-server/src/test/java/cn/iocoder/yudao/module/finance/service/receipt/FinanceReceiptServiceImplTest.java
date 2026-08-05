@@ -1,10 +1,12 @@
 package cn.iocoder.yudao.module.finance.service.receipt;
 
+import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptSaveReqVO;
+import cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptLifecycleAuditDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
@@ -151,8 +153,9 @@ class FinanceReceiptServiceImplTest {
         req.setBankSerialNo("BSN-B-EMPTY");
         req.setBusinessFund(Boolean.TRUE);
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        ServiceException ex = assertThrows(ServiceException.class,
                 () -> receiptService.createReceipt(req, 100L));
+        assertEquals(ErrorCodeConstants.RECEIPT_PAYER_NAME_REQUIRED_FOR_BUSINESS_FUND.getCode(), ex.getCode());
         assertTrue(ex.getMessage().contains("付款方"));
         verify(receiptMapper, never()).insert(any(FinanceReceiptDO.class));
     }

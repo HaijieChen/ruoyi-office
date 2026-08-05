@@ -19,6 +19,9 @@ public interface ErrorCodeConstants {
             "仅未认领且无认领金额的银行到款可修改");
     ErrorCode RECEIPT_DELETE_STATUS_INVALID = new ErrorCode(1_040_000_009,
             "仅未认领且无认领金额的银行到款可删除");
+    /** 业务款写路径：付款方必填（非业务款可空） */
+    ErrorCode RECEIPT_PAYER_NAME_REQUIRED_FOR_BUSINESS_FUND = new ErrorCode(1_040_000_013,
+            "业务款时付款方名称不能为空");
     ErrorCode ENTITY_COMPANY_REQUIRED = new ErrorCode(1_040_000_010, "主体公司不能为空");
     ErrorCode ENTITY_COMPANY_INVALID = new ErrorCode(1_040_000_011, "主体公司不存在或未启用");
     ErrorCode ENTITY_COMPANY_NAME_DUPLICATE = new ErrorCode(1_040_000_012,
