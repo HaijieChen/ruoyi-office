@@ -121,6 +121,29 @@ const nodeTypeSvgMap = {
 // 只有状态是 -1、0、1 才展示头像右小角状态小icon
 const onlyStatusIconShow = [-1, 0, 1];
 
+/**
+ * 展示用状态：任务/节点已有 endTime，但 status 仍停留在进行中态时，按已通过展示。
+ * 对齐后端 FlowableUtils#getTaskStatus 兜底，修复 CT-16「流程已结束 + 用印/归档审批中」。
+ */
+function resolveDisplayStatus(
+  status: number | undefined | null,
+  endTime?: string | Date | number | null,
+): number {
+  const s = status ?? BpmTaskStatusEnum.NOT_START;
+  if (
+    endTime &&
+    (s === BpmTaskStatusEnum.RUNNING ||
+      s === BpmTaskStatusEnum.WAIT ||
+      s === BpmTaskStatusEnum.APPROVING ||
+      s === 1 ||
+      s === 0 ||
+      s === 7)
+  ) {
+    return BpmTaskStatusEnum.APPROVE;
+  }
+  return s;
+}
+
 /** 节点状态文案：避免「结束」节点在未到达时被理解成流程已结束 */
 function getActivityStatusLabel(
   status: number,
@@ -270,12 +293,30 @@ const batchSetCustomApproveUsers = (data: Record<string, any[]>) => {
   });
 };
 
+function getActivityDisplayStatus(
+  activity: BpmProcessInstanceApi.ApprovalNodeInfo,
+): number {
+  return resolveDisplayStatus(activity.status, activity.endTime);
+}
+
+function getTaskDisplayStatus(
+  task: {
+    status?: number;
+    endTime?: string | Date | number | null;
+  },
+  activity?: BpmProcessInstanceApi.ApprovalNodeInfo,
+): number {
+  // ActivityNodeTask 无 endTime 字段时，用父节点 endTime 兜底
+  return resolveDisplayStatus(task.status, task.endTime ?? activity?.endTime);
+}
+
 // 转换审批节点数据为Steps格式
 function convertActivityNodesToSteps() {
   return props.activityNodes.map((activity, _index) => {
+    const displayStatus = getActivityDisplayStatus(activity);
     // 确定步骤状态
     let status: 'error' | 'finish' | 'process' | 'wait' = 'wait';
-    switch (activity.status) {
+    switch (displayStatus) {
       case 0:
       case 1: {
         status = 'process'; // 审批中或待审批
@@ -329,9 +370,10 @@ function convertActivityNodesToSteps() {
 
 // 获取当前激活的步骤索引
 function getCurrentStepIndex() {
-  const currentIndex = props.activityNodes.findIndex(
-    (activity) => activity.status === 1 || activity.status === 0, // 审批中或待审批
-  );
+  const currentIndex = props.activityNodes.findIndex((activity) => {
+    const s = getActivityDisplayStatus(activity);
+    return s === 1 || s === 0; // 审批中或待审批
+  });
   return currentIndex === -1 ? props.activityNodes.length - 1 : currentIndex;
 }
 
@@ -356,7 +398,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
       <Timeline.Item
         v-for="(activity, index) in activityNodes"
         :key="index"
-        :color="getApprovalNodeColor(activity.status)"
+        :color="getApprovalNodeColor(getActivityDisplayStatus(activity))"
       >
         <template #dot>
           <div class="relative size-8 shrink-0">
@@ -373,13 +415,23 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
               v-if="showStatusIcon"
               class="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-solid border-white"
               :style="{
-                backgroundColor: getApprovalNodeColor(activity.status),
+                backgroundColor: getApprovalNodeColor(
+                  getActivityDisplayStatus(activity),
+                ),
               }"
             >
               <IconifyIcon
-                :icon="getApprovalNodeIcon(activity.status, activity.nodeType)"
+                :icon="
+                  getApprovalNodeIcon(
+                    getActivityDisplayStatus(activity),
+                    activity.nodeType,
+                  )
+                "
                 class="size-2.5 text-white"
-                :class="[statusIconMap[String(activity.status)]?.animation]"
+                :class="[
+                  statusIconMap[String(getActivityDisplayStatus(activity))]
+                    ?.animation,
+                ]"
               />
             </div>
           </div>
@@ -396,13 +448,22 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
             </div>
             <span
               class="shrink-0 text-xs"
-              :style="{ color: getApprovalNodeColor(activity.status) }"
+              :style="{
+                color: getApprovalNodeColor(getActivityDisplayStatus(activity)),
+              }"
             >
-              {{ getActivityStatusLabel(activity.status, activity.nodeType) }}
+              {{
+                getActivityStatusLabel(
+                  getActivityDisplayStatus(activity),
+                  activity.nodeType,
+                )
+              }}
             </span>
             <!-- 信息：时间 -->
             <div
-              v-if="activity.status !== BpmTaskStatusEnum.NOT_START"
+              v-if="
+                getActivityDisplayStatus(activity) !== BpmTaskStatusEnum.NOT_START
+              "
               class="ml-auto text-sm text-gray-500"
             >
               {{ getApprovalNodeTime(activity) }}
@@ -514,17 +575,28 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
                   <!-- 信息：任务状态图标 -->
                   <div
                     v-if="
-                      showStatusIcon && onlyStatusIconShow.includes(task.status)
+                      showStatusIcon &&
+                      onlyStatusIconShow.includes(
+                        getTaskDisplayStatus(task, activity),
+                      )
                     "
                     class="absolute left-6 top-5 flex items-center rounded-full border-2 border-solid border-white p-1"
                     :style="{
-                      backgroundColor: statusIconMap[task.status]?.color,
+                      backgroundColor:
+                        statusIconMap[getTaskDisplayStatus(task, activity)]
+                          ?.color,
                     }"
                   >
                     <IconifyIcon
-                      :icon="statusIconMap[task.status]?.icon || 'lucide:clock'"
+                      :icon="
+                        statusIconMap[getTaskDisplayStatus(task, activity)]
+                          ?.icon || 'lucide:clock'
+                      "
                       class="size-2 text-white"
-                      :class="[statusIconMap[task.status]?.animation]"
+                      :class="[
+                        statusIconMap[getTaskDisplayStatus(task, activity)]
+                          ?.animation,
+                      ]"
                     />
                   </div>
                 </div>

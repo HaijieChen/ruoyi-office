@@ -1870,6 +1870,20 @@ public class BpmTaskServiceImpl implements BpmTaskService {
 
     @Override
     public void processTaskCompleted(Task task) {
+        // 写路径兜底：complete 时若仍停留在进行中态（非 approveTask 入口），回填为已通过
+        // 注意：status=null 可能是 skipExpression 跳过，勿写成 APPROVE
+        Integer taskStatus = (Integer) task.getTaskLocalVariables().get(BpmnVariableConstants.TASK_VARIABLE_STATUS);
+        if (ObjectUtil.equal(taskStatus, BpmTaskStatusEnum.RUNNING.getStatus())
+                || ObjectUtil.equal(taskStatus, BpmTaskStatusEnum.WAIT.getStatus())
+                || ObjectUtil.equal(taskStatus, BpmTaskStatusEnum.APPROVING.getStatus())) {
+            try {
+                updateTaskStatus(task.getId(), BpmTaskStatusEnum.APPROVE.getStatus());
+            } catch (Exception ex) {
+                // complete 过程中任务可能已转历史，写失败时由读路径 FlowableUtils#getTaskStatus 兜底
+                log.warn("[processTaskCompleted][taskId({}) 回填 APPROVE 失败: {}]", task.getId(), ex.getMessage());
+            }
+        }
+
         ProcessInstance processInstance = processInstanceService.getProcessInstance(task.getProcessInstanceId());
         if (processInstance == null) {
             log.error("[processTaskCompleted][taskId({}) 没有找到流程实例]", task.getId());

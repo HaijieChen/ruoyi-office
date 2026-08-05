@@ -10,6 +10,7 @@ import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.form.BpmFormFieldVO;
 import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
 import cn.iocoder.yudao.module.bpm.enums.definition.BpmModelFormTypeEnum;
+import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.bpm.framework.flowable.core.enums.BpmnVariableConstants;
 import lombok.SneakyThrows;
 import org.flowable.common.engine.api.delegate.Expression;
@@ -277,12 +278,22 @@ public class FlowableUtils {
 
     /**
      * 获得任务的状态
+     * <p>
+     * 兜底：任务已有 endTime，但本地变量仍停留在「审批中 / 待审批 / 通过中」时（例如非标准 complete 路径、
+     * 历史脏数据），按「已通过」返回，避免审批时间线出现「流程已结束 + 节点仍审批中」。
      *
      * @param task 任务
      * @return 状态
      */
     public static Integer getTaskStatus(TaskInfo task) {
-        return (Integer) task.getTaskLocalVariables().get(BpmnVariableConstants.TASK_VARIABLE_STATUS);
+        Integer status = (Integer) task.getTaskLocalVariables().get(BpmnVariableConstants.TASK_VARIABLE_STATUS);
+        if (task.getEndTime() != null
+                && (Objects.equals(status, BpmTaskStatusEnum.RUNNING.getStatus())
+                || Objects.equals(status, BpmTaskStatusEnum.WAIT.getStatus())
+                || Objects.equals(status, BpmTaskStatusEnum.APPROVING.getStatus()))) {
+            return BpmTaskStatusEnum.APPROVE.getStatus();
+        }
+        return status;
     }
 
     /**
