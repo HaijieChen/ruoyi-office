@@ -34,6 +34,8 @@ import {
 } from '#/components/form-create';
 import { registerComponent } from '#/utils';
 
+import { isFinanceApprovalPShellViewPath } from '../constants';
+
 import ProcessInstanceBpmnViewer from './modules/bpm-viewer.vue';
 import ProcessInstanceOperationButton from './modules/operation-button.vue';
 import ProcessInstanceSimpleViewer from './modules/simple-bpm-viewer.vue';
@@ -147,6 +149,22 @@ const writableFields: Array<string> = []; // 表单可以编辑的字段
 const BusinessFormComponent = shallowRef<any>(null); // 异步组件
 const businessFormRef = ref(); // 业务表单组件引用
 
+/** NORMAL form or finance whitelist CUSTOM → unified P-shell */
+const isPShellCustom = computed(() =>
+  isFinanceApprovalPShellViewPath(processDefinition.value?.formCustomViewPath),
+);
+const usePShell = computed(
+  () =>
+    processDefinition.value?.formType === BpmModelFormType.NORMAL ||
+    isPShellCustom.value,
+);
+/** Other CUSTOM forms keep legacy shell-less layout */
+const useLegacyCustom = computed(
+  () =>
+    processDefinition.value?.formType === BpmModelFormType.CUSTOM &&
+    !isPShellCustom.value,
+);
+
 /** 获取详情 */
 async function getDetail() {
   // 获得审批详情
@@ -233,7 +251,8 @@ async function getApprovalDetail() {
     // 获取审批节点，显示 Timeline 的数据
     activityNodes.value = data.activityNodes;
 
-    // 获取待办任务显示操作按钮
+    // 壳切换后 ref 需下一帧再挂操作条
+    await nextTick();
     operationButtonRef.value?.loadTodoTask(data.todoTask);
   } catch {
     message.error('获取审批详情失败！');
@@ -332,10 +351,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Page
-    auto-content-height
-    v-if="processDefinition?.formType === BpmModelFormType.NORMAL"
-  >
+  <!-- P-shell: NORMAL forms + finance contract/invoice CUSTOM whitelist -->
+  <Page auto-content-height v-if="usePShell">
     <Card
       :body-style="{
         overflowY: 'auto',
@@ -343,7 +360,6 @@ onMounted(async () => {
       }"
     >
       <div class="flex h-full flex-col">
-        <!-- 流程基本信息 -->
         <div class="flex flex-col gap-2">
           <component
             v-if="processInstance?.status"
@@ -352,7 +368,6 @@ onMounted(async () => {
           />
         </div>
 
-        <!-- 流程操作 -->
         <div class="process-tabs-container flex flex-1 flex-col">
           <Tabs v-model:active-key="activeTab" class="mt-0 h-full">
             <TabPane tab="审批详情" key="form" class="tab-pane-content">
@@ -365,8 +380,13 @@ onMounted(async () => {
                   :xl="20"
                   class="h-full"
                 >
-                  <!-- 流程表单 -->
-                  <div class="h-full">
+                  <!-- NORMAL: form-create -->
+                  <div
+                    v-if="
+                      processDefinition?.formType === BpmModelFormType.NORMAL
+                    "
+                    class="h-full"
+                  >
                     <form-create
                       v-model="detailForm.value"
                       v-model:api="fApi"
@@ -374,15 +394,20 @@ onMounted(async () => {
                       :rule="detailForm.rule"
                     />
                   </div>
-
-                  <!-- <div
-                    v-if="
-                      processDefinition?.formType === BpmModelFormType.CUSTOM
-                    "
-                    class="h-full"
-                  >
-                    <BusinessFormComponent :id="processInstance?.businessKey" />
-                  </div> -->
+                  <!-- Finance CUSTOM whitelist: business form in main column -->
+                  <div v-else-if="isPShellCustom" class="h-full">
+                    <BusinessFormComponent
+                      ref="businessFormRef"
+                      :id="processInstance?.businessKey"
+                      :is-approval="isApproval"
+                      :activity-nodes="activityNodes"
+                      :process-instance="processInstance"
+                      :process-definition="processDefinition"
+                      :node-key="nodeKey"
+                      :node-key-name="nodeKeyName"
+                      :task-id="props.taskId || (route.query.taskId as string)"
+                    />
+                  </div>
                 </Col>
                 <Col :xs="24" :sm="24" :md="4" :lg="4" :xl="4" class="h-full">
                   <div class="mt-4 h-full">
@@ -428,7 +453,6 @@ onMounted(async () => {
               </div>
             </TabPane>
 
-            <!-- TODO 待开发 -->
             <TabPane
               tab="流转评论"
               key="comment"
@@ -442,7 +466,7 @@ onMounted(async () => {
       </div>
 
       <template #actions>
-        <div class="px-4">
+        <div class="px-4" v-if="!isPShellCustom || isApproval">
           <ProcessInstanceOperationButton
             ref="operationButtonRef"
             :process-instance="processInstance"
@@ -451,13 +475,17 @@ onMounted(async () => {
             :normal-form="detailForm"
             :normal-form-api="fApi"
             :writable-fields="writableFields"
+            :before-approval="
+              isPShellCustom ? handleBeforeApproval : undefined
+            "
             @success="getDetail"
           />
         </div>
       </template>
     </Card>
   </Page>
-  <div v-else>
+  <!-- Legacy CUSTOM (non-whitelist): business form only -->
+  <div v-else-if="useLegacyCustom">
     <Card
       :body-style="{
         overflowY: 'auto',
@@ -492,6 +520,10 @@ onMounted(async () => {
       </template>
     </Card>
   </div>
+  <!-- Before processDefinition loads: avoid blank frame -->
+  <Page v-else auto-content-height>
+    <Card :loading="processInstanceLoading" :body-style="{ minHeight: '200px' }" />
+  </Page>
 </template>
 
 <style lang="scss" scoped>

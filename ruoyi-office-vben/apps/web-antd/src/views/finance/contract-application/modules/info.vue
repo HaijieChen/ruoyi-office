@@ -6,9 +6,10 @@ import { ref } from 'vue';
 import { useVbenModal } from '@vben/common-ui';
 import { formatDateTime } from '@vben/utils';
 
-import { Descriptions, Spin } from 'ant-design-vue';
+import { Descriptions, Divider, Spin, message } from 'ant-design-vue';
 
 import { getContractApplication } from '#/api/finance/contract-application';
+import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
 defineOptions({ name: 'FinanceContractApplicationInfo' });
 
@@ -30,7 +31,7 @@ function statusText(row: FinanceContractApplicationApi.Application) {
   return map[row.approvalStatus || ''] || row.approvalStatus || '-';
 }
 
-function displayTime(val?: string | number | null) {
+function displayTime(val?: null | number | string) {
   if (val == null || val === '') return '-';
   return (formatDateTime(val as any) as string) || String(val);
 }
@@ -38,6 +39,7 @@ function displayTime(val?: string | number | null) {
 const [Modal, modalApi] = useVbenModal({
   showConfirmButton: false,
   cancelText: '关闭',
+  class: 'w-[960px]',
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       detail.value = null;
@@ -48,6 +50,11 @@ const [Modal, modalApi] = useVbenModal({
     loading.value = true;
     try {
       detail.value = await getContractApplication(data.id);
+    } catch (error: any) {
+      detail.value = null;
+      message.error(
+        error?.msg || error?.message || '加载合同签约详情失败',
+      );
     } finally {
       loading.value = false;
     }
@@ -56,7 +63,7 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal title="合同签约详情" class="w-[720px]">
+  <Modal title="合同签约详情">
     <Spin :spinning="loading">
       <Descriptions v-if="detail" bordered :column="2" size="small">
         <Descriptions.Item label="业务单号">
@@ -81,9 +88,7 @@ const [Modal, modalApi] = useVbenModal({
           {{ detail.productType || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="合同金额">
-          {{
-            detail.amountNa ? '不适用' : (detail.contractAmount ?? '-')
-          }}
+          {{ detail.amountNa ? '不适用' : (detail.contractAmount ?? '-') }}
         </Descriptions.Item>
         <Descriptions.Item label="返点比例">
           {{ detail.rebateRatio }}
@@ -128,6 +133,13 @@ const [Modal, modalApi] = useVbenModal({
           {{ detail.remark || '-' }}
         </Descriptions.Item>
       </Descriptions>
+
+      <template v-if="detail">
+        <Divider orientation="left" class="!mt-6">审批全貌</Divider>
+        <ApprovalOverviewPanel
+          :process-instance-id="detail.processInstanceId"
+        />
+      </template>
     </Spin>
   </Modal>
 </template>

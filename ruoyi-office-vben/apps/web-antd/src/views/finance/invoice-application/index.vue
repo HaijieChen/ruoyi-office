@@ -15,6 +15,7 @@ import {
 import { message } from 'ant-design-vue';
 
 import FormModal from './modules/form.vue';
+import DetailModal from './modules/info.vue';
 import IssueModal from './modules/issue-form.vue';
 
 defineOptions({ name: 'FinanceInvoiceApplication' });
@@ -32,6 +33,11 @@ const [IssueFormModal, issueModalApi] = useVbenModal({
   destroyOnClose: true,
 });
 
+const [InfoModal, infoModalApi] = useVbenModal({
+  connectedComponent: DetailModal,
+  destroyOnClose: true,
+});
+
 function handleRefresh() {
   gridApi.query();
 }
@@ -39,6 +45,11 @@ function handleRefresh() {
 function handleCreate() {
   createModalApi.setData({});
   createModalApi.open();
+}
+
+function handleDetail(row: FinanceInvoiceApplicationApi.Application) {
+  infoModalApi.setData({ id: row.id });
+  infoModalApi.open();
 }
 
 /**
@@ -151,7 +162,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       {
         field: 'actions',
         title: '操作',
-        width: 200,
+        width: 240,
         fixed: 'right',
         slots: { default: 'actions' },
       },
@@ -179,6 +190,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height>
     <CreateModal @success="handleRefresh" />
     <IssueFormModal @success="handleRefresh" />
+    <InfoModal />
     <Grid table-title="开票申请">
       <template #toolbar-tools>
         <TableAction
@@ -196,6 +208,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
       <template #actions="{ row }">
         <TableAction
           :actions="[
+            {
+              label: '详情',
+              auth: ['finance:invoice-application:query'],
+              onClick: () => handleDetail(row),
+            },
             {
               label: '重提',
               auth: ['finance:invoice-application:resubmit'],
