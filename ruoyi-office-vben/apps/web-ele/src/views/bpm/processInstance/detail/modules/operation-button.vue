@@ -255,27 +255,37 @@ watch(
   },
 );
 
-/** 弹出气泡卡 */
+/** 弹出气泡卡（程序控制 visible，避免异步校验失败后仍打开空弹窗） */
 async function openPopover(type: string) {
   if (type === 'approve') {
     // 校验流程表单
     const valid = await validateNormalForm();
     if (!valid) {
       ElMessage.warning('表单校验不通过，请先完善表单!!');
+      popOverVisible.value.approve = false;
       return;
     }
     await initNextAssigneesFormField();
   }
   if (type === 'return') {
     // 获取退回节点
-    returnList.value = await getTaskListByReturn(runningTask.value.id);
-    if (returnList.value.length === 0) {
+    try {
+      returnList.value = await getTaskListByReturn(runningTask.value.id);
+    } catch {
+      returnList.value = [];
+    }
+    if (!returnList.value?.length) {
       ElMessage.warning('当前没有可退回的节点');
+      popOverVisible.value.return = false;
       return;
+    }
+    if (returnList.value.length === 1) {
+      returnForm.targetTaskDefinitionKey =
+        returnList.value[0].taskDefinitionKey;
     }
   }
   Object.keys(popOverVisible.value).forEach((item) => {
-    if (popOverVisible.value[item]) popOverVisible.value[item] = item === type;
+    popOverVisible.value[item] = item === type;
   });
 }
 
@@ -1264,12 +1274,12 @@ defineExpose({ loadTodoTask });
         </div>
       </ElPopover>
 
-      <!-- 【退回】按钮 -->
+      <!-- 【退回】按钮：visible 由 openPopover 程序控制 -->
       <ElPopover
         :visible="popOverVisible.return"
         placement="top"
         :popper-style="{ width: '400px' }"
-        trigger="click"
+        :trigger="[]"
         v-if="
           runningTask &&
           isHandleTaskStatus() &&

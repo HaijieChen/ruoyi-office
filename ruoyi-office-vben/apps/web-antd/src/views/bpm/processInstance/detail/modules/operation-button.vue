@@ -250,30 +250,39 @@ watch(
   },
 );
 
-/** 弹出气泡卡 */
+/** 弹出气泡卡（仅程序控制 open，避免 trigger=click 在异步校验失败后仍打开空弹窗） */
 async function openPopover(type: string) {
   if (type === 'approve') {
     // 校验流程表单
     const valid = await validateNormalForm();
     if (!valid) {
       message.warning('表单校验不通过，请先完善表单!!');
+      popOverVisible.value.approve = false;
       return;
     }
     initNextAssigneesFormField();
   }
   if (type === 'return') {
     // 获取退回节点
-    returnList.value = await TaskApi.getTaskListByReturn(runningTask.value.id);
-    if (returnList.value.length === 0) {
+    try {
+      returnList.value = await TaskApi.getTaskListByReturn(runningTask.value.id);
+    } catch {
+      returnList.value = [];
+    }
+    if (!returnList.value?.length) {
       message.warning('当前没有可退回的节点');
+      popOverVisible.value.return = false;
       return;
+    }
+    // 仅一个可选节点时默认选中（常见：第一审批 → 发起人）
+    if (returnList.value.length === 1) {
+      returnForm.targetTaskDefinitionKey =
+        returnList.value[0].taskDefinitionKey;
     }
   }
   Object.keys(popOverVisible.value).forEach((item) => {
-    if (popOverVisible.value[item]) popOverVisible.value[item] = item === type;
+    popOverVisible.value[item] = item === type;
   });
-  // await nextTick()
-  // formRef.value.resetFields()
 }
 
 /** 关闭气泡卡 */
@@ -861,12 +870,12 @@ defineExpose({ loadTodoTask });
         </template>
       </Popover>
 
-      <!-- 【退回】按钮 - 改为拒绝样式 -->
+      <!-- 【退回】按钮 - 改为拒绝样式；trigger 不用 click，避免空列表仍弹窗 -->
       <Popover
         v-model:open="popOverVisible.return"
         placement="top"
         :overlay-style="{ width: '400px' }"
-        trigger="click"
+        :trigger="[]"
         v-if="
           runningTask &&
           isHandleTaskStatus() &&
