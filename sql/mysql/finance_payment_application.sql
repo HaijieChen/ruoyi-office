@@ -1,0 +1,58 @@
+-- 财务付款申请台账（PAY-P1-1）
+-- 幂等：CREATE IF NOT EXISTS
+
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `finance_payment_application` (
+    `id`                            bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+    `application_no`                varchar(64)  NOT NULL COMMENT '业务单号',
+    `process_instance_id`           varchar(64)  DEFAULT NULL COMMENT '最新 BPM 实例',
+    `status`                        varchar(32)  NOT NULL DEFAULT 'PENDING'
+        COMMENT 'PENDING/WAIT_PAY/PAID/REJECTED/CANCELLED',
+    `current_node_key`              varchar(64)  DEFAULT NULL COMMENT '当前节点 key',
+    `current_node_name`             varchar(128) DEFAULT NULL COMMENT '当前节点名',
+    `process_title`                 varchar(255) DEFAULT NULL COMMENT '流程标题',
+    `applicant_user_id`             bigint NOT NULL COMMENT '申请人',
+    `applicant_dept_id`             bigint DEFAULT NULL COMMENT '申请人部门',
+    `apply_date`                    date DEFAULT NULL COMMENT '申请日',
+    `payment_timing`                varchar(32)  NOT NULL COMMENT 'IMMEDIATE/MONTH_END/ON_NOTICE',
+    `payment_reason`                varchar(32)  NOT NULL
+        COMMENT 'BUSINESS/PURCHASE/SALARY/TAX/LEASE/OTHER',
+    `purchase_process_instance_id`  varchar(64)  DEFAULT NULL COMMENT '采购流程实例',
+    `purchase_snapshot`             varchar(1024) DEFAULT NULL COMMENT '采购摘要',
+    `lease_contract_application_id` bigint DEFAULT NULL COMMENT '租赁合同申请 id',
+    `related_contract_application_id` bigint DEFAULT NULL COMMENT '可选关联合同',
+    `payee_company_id`              bigint NOT NULL COMMENT '收款方客商 id',
+    `payee_name`                    varchar(255) NOT NULL COMMENT '收款方名称快照',
+    `payee_bank_name`               varchar(255) NOT NULL COMMENT '开户行快照',
+    `payee_bank_account`            varchar(128) NOT NULL COMMENT '账号快照',
+    `apply_amount`                  decimal(18,2) NOT NULL COMMENT '申请金额',
+    `currency`                      varchar(16)  NOT NULL DEFAULT 'CNY',
+    `amount_in_words`               varchar(128) DEFAULT NULL COMMENT '大写',
+    `contract_settlement_method`    varchar(64)  DEFAULT NULL COMMENT '合同结算方式带出',
+    `business_settlement_term`      varchar(255) NOT NULL COMMENT '业务结算账期',
+    `pay_method`                    varchar(32)  NOT NULL COMMENT '支付方式',
+    `cost_project`                  varchar(64)  NOT NULL COMMENT '费用归属项目',
+    `accounting_subject`            varchar(64)  DEFAULT NULL COMMENT '会计科目',
+    `evidence_file_urls`            varchar(2048) NOT NULL COMMENT '依据附件 JSON URL 数组',
+    `special_note`                  varchar(1000) DEFAULT NULL COMMENT '特殊说明',
+    `actual_pay_date`               date DEFAULT NULL COMMENT '实际支付日',
+    `pay_voucher_url`               varchar(1024) DEFAULT NULL COMMENT '支付凭证',
+    `erp_voucher_no`                varchar(64)  DEFAULT NULL COMMENT 'ERP 凭证号',
+    `voided`                        bit(1) NOT NULL DEFAULT b'0' COMMENT '是否作废',
+    `creator`                       varchar(64)  DEFAULT '' COMMENT '创建者',
+    `create_time`                   datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updater`                       varchar(64)  DEFAULT '' COMMENT '更新者',
+    `update_time`                   datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`                       bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+    `tenant_id`                     bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_pay_app_no_tenant_deleted` (`application_no`, `tenant_id`, `deleted`),
+    KEY `idx_pay_status` (`status`),
+    KEY `idx_pay_payee` (`payee_company_id`),
+    KEY `idx_pay_applicant` (`applicant_user_id`),
+    KEY `idx_pay_process` (`process_instance_id`),
+    KEY `idx_pay_purchase_pi` (`purchase_process_instance_id`),
+    KEY `idx_pay_lease_contract` (`lease_contract_application_id`),
+    KEY `idx_pay_create_time` (`create_time`)
+) ENGINE=InnoDB COMMENT='财务付款申请';

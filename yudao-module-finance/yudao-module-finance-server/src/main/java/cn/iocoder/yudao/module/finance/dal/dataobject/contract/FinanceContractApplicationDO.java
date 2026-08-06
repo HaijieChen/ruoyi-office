@@ -1,6 +1,6 @@
 package cn.iocoder.yudao.module.finance.dal.dataobject.contract;
 
-import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class FinanceContractApplicationDO extends BaseDO {
+public class FinanceContractApplicationDO extends TenantBaseDO {
 
     @TableId
     private Long id;

@@ -22,4 +22,10 @@ public class FinanceCustomerCompanyPageReqVO extends PageParam {
     @Schema(description = "状态：0启用 1停用")
     private Integer status;
 
+    @Schema(description = "是否客户角色")
+    private Boolean isCustomer;
+
+    @Schema(description = "是否供应商角色")
+    private Boolean isSupplier;
+
 }

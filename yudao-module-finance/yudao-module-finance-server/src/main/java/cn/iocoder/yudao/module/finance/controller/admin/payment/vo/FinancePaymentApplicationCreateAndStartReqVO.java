@@ -1,0 +1,78 @@
+package cn.iocoder.yudao.module.finance.controller.admin.payment.vo;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+
+@Schema(description = "管理后台 - 付款申请 createAndStart Request VO")
+@Data
+public class FinancePaymentApplicationCreateAndStartReqVO {
+
+    @Schema(description = "支付时效 IMMEDIATE/MONTH_END/ON_NOTICE")
+    @NotEmpty(message = "支付时效不能为空")
+    private String paymentTiming;
+
+    @Schema(description = "付款事由 BUSINESS/PURCHASE/SALARY/TAX/LEASE/OTHER")
+    @NotEmpty(message = "付款事由不能为空")
+    private String paymentReason;
+
+    @Schema(description = "采购流程实例 id（事由=PURCHASE 必填）")
+    private String purchaseProcessInstanceId;
+
+    @Schema(description = "租赁合同申请 id（事由=LEASE 必填）")
+    private Long leaseContractApplicationId;
+
+    @Schema(description = "可选关联合同申请 id（带出结算方式）")
+    private Long relatedContractApplicationId;
+
+    @Schema(description = "收款方客商 id")
+    @NotNull(message = "收款方不能为空")
+    private Long payeeCompanyId;
+
+    @Schema(description = "本次开户行快照（空则用档案）")
+    private String payeeBankName;
+
+    @Schema(description = "本次账号快照（空则用档案）")
+    private String payeeBankAccount;
+
+    @Schema(description = "申请金额")
+    @NotNull(message = "申请金额不能为空")
+    private BigDecimal applyAmount;
+
+    @Schema(description = "币种，默认 CNY")
+    private String currency;
+
+    @Schema(description = "业务结算账期")
+    @NotEmpty(message = "业务结算账期不能为空")
+    private String businessSettlementTerm;
+
+    @Schema(description = "支付方式")
+    @NotEmpty(message = "支付方式不能为空")
+    private String payMethod;
+
+    @Schema(description = "费用归属项目")
+    @NotEmpty(message = "费用归属项目不能为空")
+    private String costProject;
+
+    @Schema(description = "会计科目（发起可选）")
+    private String accountingSubject;
+
+    @Schema(description = "付款依据文件 URL 列表")
+    @NotEmpty(message = "付款依据附件不能为空")
+    private List<String> evidenceFileUrls;
+
+    @Schema(description = "特殊说明")
+    private String specialNote;
+
+    @Schema(description = "申请人部门")
+    private Long applicantDeptId;
+
+    @Schema(description = "自选审批人")
+    private Map<String, List<Long>> startUserSelectAssignees;
+
+}

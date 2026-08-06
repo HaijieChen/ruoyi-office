@@ -25,6 +25,30 @@ export function useGridFormSchema(): VbenFormSchema[] {
         ],
       },
     },
+    {
+      fieldName: 'isCustomer',
+      label: '客户角色',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: [
+          { label: '是', value: true },
+          { label: '否', value: false },
+        ],
+      },
+    },
+    {
+      fieldName: 'isSupplier',
+      label: '供应商角色',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: [
+          { label: '是', value: true },
+          { label: '否', value: false },
+        ],
+      },
+    },
   ];
 }
 
@@ -33,6 +57,18 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'code', title: '编码', minWidth: 140 },
     { field: 'name', title: '名称', minWidth: 160 },
     { field: 'taxNo', title: '纳税人识别号', minWidth: 160 },
+    {
+      field: 'isCustomer',
+      title: '客户',
+      width: 70,
+      formatter: ({ cellValue }) => (cellValue === false ? '否' : '是'),
+    },
+    {
+      field: 'isSupplier',
+      title: '供应商',
+      width: 80,
+      formatter: ({ cellValue }) => (cellValue ? '是' : '否'),
+    },
     { field: 'bankName', title: '开户银行', minWidth: 120 },
     { field: 'bankAccount', title: '银行账号', minWidth: 140 },
     { field: 'address', title: '地址', minWidth: 140 },

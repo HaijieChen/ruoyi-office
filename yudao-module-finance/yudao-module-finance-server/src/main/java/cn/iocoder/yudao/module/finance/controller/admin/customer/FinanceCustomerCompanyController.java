@@ -75,10 +75,12 @@ public class FinanceCustomerCompanyController {
     }
 
     @GetMapping("/simple-list")
-    @Operation(summary = "获得启用中的客户公司精简列表（开票选择）")
+    @Operation(summary = "启用中的客商精简列表；role=CUSTOMER（默认，开票/合同）或 SUPPLIER（付款收款方，须银行齐全）")
+    @Parameter(name = "role", description = "CUSTOMER | SUPPLIER，默认 CUSTOMER")
     @PreAuthorize("@ss.hasPermission('finance:customer-company:simple-list')")
-    public CommonResult<List<FinanceCustomerCompanyRespVO>> getEnabledSimpleList() {
-        List<FinanceCustomerCompanyDO> list = customerCompanyService.getEnabledSimpleList();
+    public CommonResult<List<FinanceCustomerCompanyRespVO>> getEnabledSimpleList(
+            @RequestParam(value = "role", required = false) String role) {
+        List<FinanceCustomerCompanyDO> list = customerCompanyService.getEnabledSimpleList(role);
         return success(BeanUtils.toBean(list, FinanceCustomerCompanyRespVO.class));
     }
 

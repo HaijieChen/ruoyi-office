@@ -18,13 +18,26 @@ public interface FinanceCustomerCompanyService {
     FinanceCustomerCompanyDO getCustomerCompany(Long id);
 
     /**
-     * 开票选用：必须存在且启用。
+     * 开票/合同对方：必须存在、启用、且含客户角色。
      */
     FinanceCustomerCompanyDO getEnabledCustomerCompany(Long id);
 
+    /**
+     * 付款收款方：必须存在、启用、含供应商角色、银行齐全。
+     */
+    FinanceCustomerCompanyDO getEnabledSupplierCompany(Long id);
+
     PageResult<FinanceCustomerCompanyDO> getCustomerCompanyPage(FinanceCustomerCompanyPageReqVO pageReqVO);
 
+    /**
+     * 默认客户角色精简列表（开票/合同兼容）。
+     */
     List<FinanceCustomerCompanyDO> getEnabledSimpleList();
+
+    /**
+     * @param role CUSTOMER（默认）或 SUPPLIER（供应商且银行齐全）
+     */
+    List<FinanceCustomerCompanyDO> getEnabledSimpleList(String role);
 
     /**
      * 合成开票 buyer 快照字段。

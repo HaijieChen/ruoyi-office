@@ -7,6 +7,7 @@ import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.*;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicationService;
+import cn.iocoder.yudao.module.finance.service.payment.FinancePaymentPredocService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,8 @@ public class FinanceContractApplicationController {
 
     @Resource
     private FinanceContractApplicationService contractApplicationService;
+    @Resource
+    private FinancePaymentPredocService paymentPredocService;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
 
@@ -96,6 +99,15 @@ public class FinanceContractApplicationController {
     public CommonResult<java.util.List<FinanceContractApplicationRespVO>> listSelectableForBo() {
         return success(BeanUtils.toBean(
                 contractApplicationService.listSelectableForBo(getLoginUserId()),
+                FinanceContractApplicationRespVO.class));
+    }
+
+    @GetMapping("/list-selectable-for-lease-payment")
+    @Operation(summary = "付款可选租赁合同（已通过 · fileType=租赁合同 · 本人申请）")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:query')")
+    public CommonResult<java.util.List<FinanceContractApplicationRespVO>> listSelectableForLeasePayment() {
+        return success(BeanUtils.toBean(
+                paymentPredocService.listSelectableLeaseContracts(getLoginUserId()),
                 FinanceContractApplicationRespVO.class));
     }
 

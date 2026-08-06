@@ -37,6 +37,12 @@ public class FinanceCustomerCompanySaveReqVO {
     @Schema(description = "联系邮箱")
     private String email;
 
+    @Schema(description = "是否客户角色；创建未传默认 true（仅客户）")
+    private Boolean isCustomer;
+
+    @Schema(description = "是否供应商角色；创建未传默认 false")
+    private Boolean isSupplier;
+
     @Schema(description = "状态：0启用 1停用；创建默认 0")
     private Integer status;
 

@@ -39,8 +39,14 @@ public class FinanceCustomerCompanyRespVO {
     @Schema(description = "联系邮箱")
     private String email;
 
-    @Schema(description = "类型")
+    @Schema(description = "类型（兼容列）")
     private String partyType;
+
+    @Schema(description = "是否客户角色")
+    private Boolean isCustomer;
+
+    @Schema(description = "是否供应商角色")
+    private Boolean isSupplier;
 
     @Schema(description = "状态：0启用 1停用")
     private Integer status;

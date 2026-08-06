@@ -15,6 +15,8 @@ export namespace FinanceCustomerCompanyApi {
     contactName?: string;
     email?: string;
     partyType?: string;
+    isCustomer?: boolean;
+    isSupplier?: boolean;
     /** 0 启用 1 停用 */
     status?: number;
     createTime?: string;
@@ -25,6 +27,8 @@ export namespace FinanceCustomerCompanyApi {
     taxNo?: string;
     code?: string;
     status?: number;
+    isCustomer?: boolean;
+    isSupplier?: boolean;
   }
 
   export interface SaveForm {
@@ -37,8 +41,13 @@ export namespace FinanceCustomerCompanyApi {
     phone?: string;
     contactName?: string;
     email?: string;
+    isCustomer?: boolean;
+    isSupplier?: boolean;
     status?: number;
   }
+
+  /** CUSTOMER=开票/合同；SUPPLIER=付款收款方 */
+  export type SimpleListRole = 'CUSTOMER' | 'SUPPLIER';
 }
 
 export function getCustomerCompanyPage(params: FinanceCustomerCompanyApi.PageQuery) {
@@ -69,9 +78,15 @@ export function updateCustomerCompanyStatus(id: number, status: number) {
   });
 }
 
-/** 启用中的客户公司（开票选择） */
-export function getCustomerCompanySimpleList() {
+/**
+ * 启用中的客商精简列表。
+ * @param role 默认 CUSTOMER（开票/合同兼容）；付款收款方传 SUPPLIER
+ */
+export function getCustomerCompanySimpleList(
+  role: FinanceCustomerCompanyApi.SimpleListRole = 'CUSTOMER',
+) {
   return requestClient.get<FinanceCustomerCompanyApi.CustomerCompany[]>(
     '/finance/customer-company/simple-list',
+    { params: { role } },
   );
 }

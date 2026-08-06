@@ -1,0 +1,65 @@
+import type { VbenFormSchema } from '#/adapter/form';
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+
+export function useGridFormSchema(): VbenFormSchema[] {
+  return [
+    {
+      fieldName: 'applicationNo',
+      label: '单号',
+      component: 'Input',
+    },
+    {
+      fieldName: 'status',
+      label: '状态',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: [
+          { label: '审批中', value: 'PENDING' },
+          { label: '待支付', value: 'WAIT_PAY' },
+          { label: '已支付', value: 'PAID' },
+          { label: '已驳回', value: 'REJECTED' },
+          { label: '已取消', value: 'CANCELLED' },
+        ],
+      },
+    },
+    {
+      fieldName: 'payeeName',
+      label: '收款方',
+      component: 'Input',
+    },
+  ];
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: '审批中',
+  WAIT_PAY: '待支付',
+  PAID: '已支付',
+  REJECTED: '已驳回',
+  CANCELLED: '已取消',
+};
+
+export function useGridColumns(): VxeTableGridOptions['columns'] {
+  return [
+    { field: 'applicationNo', title: '单号', minWidth: 150 },
+    { field: 'processTitle', title: '标题', minWidth: 180 },
+    { field: 'payeeName', title: '收款方', minWidth: 140 },
+    { field: 'applyAmount', title: '金额', minWidth: 100 },
+    { field: 'paymentReason', title: '事由', minWidth: 100 },
+    {
+      field: 'status',
+      title: '状态',
+      width: 100,
+      formatter: ({ cellValue }) => STATUS_LABEL[cellValue] || cellValue,
+    },
+    { field: 'currentNodeName', title: '当前节点', minWidth: 120 },
+    { field: 'createTime', title: '创建时间', minWidth: 160 },
+    {
+      field: 'actions',
+      title: '操作',
+      width: 200,
+      fixed: 'right',
+      slots: { default: 'actions' },
+    },
+  ];
+}

@@ -667,24 +667,39 @@ const CONTRACT_EXEC_TASK_KEYS = new Set([
   'taskSeal',
 ]);
 
+/** 付款出纳节点：须走 finance recordPay，隐藏通用通过（review F1） */
+const PAYMENT_PROCESS_KEY = 'finance_payment_apply';
+const PAYMENT_CASHIER_TASK_KEY = 'taskCashier';
+
+function processDefKey(): string | undefined {
+  return (
+    props.processDefinition?.key ||
+    props.processInstance?.processDefinitionKey ||
+    props.processInstance?.processDefinition?.key
+  );
+}
+
 function isContractExecTask(): boolean {
   const key = runningTask.value?.taskDefinitionKey as string | undefined;
   if (!key || !CONTRACT_EXEC_TASK_KEYS.has(key)) {
     return false;
   }
-  const defKey =
-    props.processDefinition?.key ||
-    props.processInstance?.processDefinitionKey ||
-    props.processInstance?.processDefinition?.key;
-  return defKey === CONTRACT_PROCESS_KEY;
+  return processDefKey() === CONTRACT_PROCESS_KEY;
+}
+
+function isPaymentCashierTask(): boolean {
+  const key = runningTask.value?.taskDefinitionKey as string | undefined;
+  return (
+    key === PAYMENT_CASHIER_TASK_KEY && processDefKey() === PAYMENT_PROCESS_KEY
+  );
 }
 
 /** 是否显示按钮 */
 function isShowButton(btnType: BpmTaskOperationButtonTypeEnum): boolean {
-  // 合同执行节点禁用通用通过；驳回等仍可按模型配置显示
+  // 合同执行 / 付款出纳：禁用通用通过；驳回等仍可按模型配置显示
   if (
     btnType === BpmTaskOperationButtonTypeEnum.APPROVE &&
-    isContractExecTask()
+    (isContractExecTask() || isPaymentCashierTask())
   ) {
     return false;
   }

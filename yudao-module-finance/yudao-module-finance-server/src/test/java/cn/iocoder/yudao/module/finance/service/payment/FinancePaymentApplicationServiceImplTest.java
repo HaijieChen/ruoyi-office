@@ -1,0 +1,536 @@
+package cn.iocoder.yudao.module.finance.service.payment;
+
+import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentRecordPayReqVO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.redis.no.FinancePaymentApplicationNoRedisDAO;
+import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum;
+import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
+import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
+import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class FinancePaymentApplicationServiceImplTest {
+
+    private FinancePaymentApplicationMapper mapper;
+    private FinancePaymentApplicationNoRedisDAO noRedisDAO;
+    private BpmProcessInstanceApi processInstanceApi;
+    private FinanceCustomerCompanyService customerCompanyService;
+    private FinancePaymentPredocService predocService;
+    private FinanceContractApplicationMapper contractMapper;
+    private AdminUserApi adminUserApi;
+    private DictDataApi dictDataApi;
+    private ObjectProvider<org.flowable.engine.TaskService> taskProvider;
+    private ObjectProvider<org.flowable.engine.HistoryService> historyProvider;
+    private ObjectProvider<cn.iocoder.yudao.module.system.api.dept.DeptApi> deptProvider;
+    private FinancePaymentApplicationServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        mapper = mock(FinancePaymentApplicationMapper.class);
+        noRedisDAO = mock(FinancePaymentApplicationNoRedisDAO.class);
+        processInstanceApi = mock(BpmProcessInstanceApi.class);
+        customerCompanyService = mock(FinanceCustomerCompanyService.class);
+        predocService = mock(FinancePaymentPredocService.class);
+        contractMapper = mock(FinanceContractApplicationMapper.class);
+        adminUserApi = mock(AdminUserApi.class);
+        dictDataApi = mock(DictDataApi.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<org.flowable.engine.TaskService> tp = mock(ObjectProvider.class);
+        taskProvider = tp;
+        when(taskProvider.getIfAvailable()).thenReturn(null);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<org.flowable.engine.HistoryService> hp = mock(ObjectProvider.class);
+        historyProvider = hp;
+        when(historyProvider.getIfAvailable()).thenReturn(null);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<cn.iocoder.yudao.module.system.api.dept.DeptApi> dp = mock(ObjectProvider.class);
+        deptProvider = dp;
+        when(deptProvider.getIfAvailable()).thenReturn(null);
+
+        AdminUserRespDTO user = new AdminUserRespDTO();
+        user.setId(1L);
+        user.setDeptId(10L);
+        when(adminUserApi.getUser(anyLong())).thenReturn(CommonResult.success(user));
+        // PAY-R10：默认字典合法
+        when(dictDataApi.validateDictDataList(anyString(), anyCollection()))
+                .thenReturn(CommonResult.success(true));
+
+        service = new FinancePaymentApplicationServiceImpl(
+                mapper, noRedisDAO, processInstanceApi, customerCompanyService,
+                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi, deptProvider);
+        when(noRedisDAO.generate(any(LocalDate.class))).thenReturn("PAY-20260806-1");
+        doAnswer(inv -> {
+            FinancePaymentApplicationDO a = inv.getArgument(0);
+            a.setId(100L);
+            return 1;
+        }).when(mapper).insert(any(FinancePaymentApplicationDO.class));
+
+        when(customerCompanyService.getEnabledSupplierCompany(anyLong())).thenReturn(
+                FinanceCustomerCompanyDO.builder()
+                        .id(9L).name("供应商甲").bankName("行").bankAccount("6222")
+                        .isSupplier(true).status(0).build());
+
+        CommonResult<String> pi = mock(CommonResult.class);
+        when(pi.getCheckedData()).thenReturn("proc-1");
+        when(processInstanceApi.createProcessInstance(anyLong(), any())).thenReturn(pi);
+    }
+
+    private FinancePaymentApplicationCreateAndStartReqVO baseReq() {
+        FinancePaymentApplicationCreateAndStartReqVO req = new FinancePaymentApplicationCreateAndStartReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPaymentReason(FinancePaymentReasonEnum.BUSINESS.getCode());
+        req.setPayeeCompanyId(9L);
+        req.setApplyAmount(new BigDecimal("100.00"));
+        req.setBusinessSettlementTerm("月结30天");
+        req.setPayMethod("wire");
+        req.setCostProject("office_purchase");
+        req.setEvidenceFileUrls(List.of("https://x/a.pdf"));
+        return req;
+    }
+
+    @Test
+    void createAndStartBusinessOk() {
+        Long id = service.createAndStart(baseReq(), 1L);
+        assertEquals(100L, id);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals(FinancePaymentApplicationStatusEnum.PENDING.getStatus(), cap.getValue().getStatus());
+        assertEquals("供应商甲", cap.getValue().getPayeeName());
+        verify(processInstanceApi).createProcessInstance(eq(1L), any());
+    }
+
+    @Test
+    void createPurchaseRequiresRef() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setPaymentReason(FinancePaymentReasonEnum.PURCHASE.getCode());
+        when(predocService.validateAndSummarizePurchaseRef(isNull(), eq(1L)))
+                .thenThrow(new ServiceException(PAYMENT_PURCHASE_REF_INVALID));
+        // blank purchase id path
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_PURCHASE_REF_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void createPurchaseWithRefOk() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setPaymentReason(FinancePaymentReasonEnum.PURCHASE.getCode());
+        req.setPurchaseProcessInstanceId("pi-ok");
+        when(predocService.validateAndSummarizePurchaseRef("pi-ok", 1L)).thenReturn("采购摘要");
+        Long id = service.createAndStart(req, 1L);
+        assertEquals(100L, id);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals("pi-ok", cap.getValue().getPurchaseProcessInstanceId());
+        assertEquals("采购摘要", cap.getValue().getPurchaseSnapshot());
+    }
+
+    @Test
+    void amountMustBePositive() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setApplyAmount(BigDecimal.ZERO);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_AMOUNT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void evidenceRequired() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setEvidenceFileUrls(List.of("  "));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_EVIDENCE_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void sumPaidDelegates() {
+        when(mapper.sumPaidByPayee(9L)).thenReturn(new BigDecimal("50.00"));
+        assertEquals(new BigDecimal("50.00"), service.sumPaidByPayee(9L));
+    }
+
+    @Test
+    void onApprovalOutcomePaidIdempotent() {
+        when(mapper.selectById(1L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(1L).status(FinancePaymentApplicationStatusEnum.PAID.getStatus())
+                .actualPayDate(LocalDate.now()).payVoucherUrl("http://v").build());
+        service.onApprovalOutcome(1L, "PAID", "p1");
+        verify(mapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void onApprovalOutcomePaidRequiresEvidence() {
+        when(mapper.selectById(2L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(2L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus()).build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.onApprovalOutcome(2L, "PAID", "p2"));
+        assertEquals(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED.getCode(), ex.getCode());
+        verify(mapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void assertCashierEvidenceForCompleteRejectsEmpty() {
+        when(mapper.selectById(3L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(3L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus()).build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.assertCashierEvidenceForComplete(3L));
+        assertEquals(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void recordPayRequiresCashierFields() {
+        when(mapper.selectById(1L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(1L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("p1").build());
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(1L);
+        req.setTaskId("t1");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void recordPayRejectsWhenNotTaskCandidate() {
+        when(mapper.selectById(4L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(4L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-4").build());
+
+        org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
+        org.flowable.task.api.TaskQuery tq = mock(org.flowable.task.api.TaskQuery.class);
+        org.flowable.task.api.Task task = mock(org.flowable.task.api.Task.class);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId("task-x")).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(task);
+        when(task.getTaskDefinitionKey()).thenReturn("taskCashier");
+        when(task.getProcessInstanceId()).thenReturn("pi-4");
+        when(tq.taskCandidateOrAssigned("99")).thenReturn(tq);
+        when(tq.count()).thenReturn(0L);
+
+        @SuppressWarnings("unchecked")
+        ObjectProvider<org.flowable.engine.TaskService> taskProvider = mock(ObjectProvider.class);
+        when(taskProvider.getIfAvailable()).thenReturn(taskService);
+        service = new FinancePaymentApplicationServiceImpl(
+                mapper, noRedisDAO, processInstanceApi, customerCompanyService,
+                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi, deptProvider);
+
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(4L);
+        req.setTaskId("task-x");
+        req.setActualPayDate(LocalDate.now());
+        req.setPayVoucherUrl("http://voucher");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 99L));
+        assertEquals(PAYMENT_APPLICATION_TASK_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void assertFinanceSubjectRejectsBlank() {
+        when(mapper.selectById(5L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(5L).status(FinancePaymentApplicationStatusEnum.PENDING.getStatus()).build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.assertFinanceSubjectForComplete(5L));
+        assertEquals(PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void createUsesAuthoritativeDeptFromUser() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setApplicantDeptId(999L); // client spoof ignored
+        service.createAndStart(req, 1L);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals(10L, cap.getValue().getApplicantDeptId());
+        assertNotNull(cap.getValue().getAmountInWords());
+        assertTrue(cap.getValue().getProcessTitle().contains("付款申请"));
+    }
+
+    @Test
+    void createRejectsWhenUserHasNoDept() {
+        AdminUserRespDTO user = new AdminUserRespDTO();
+        user.setId(1L);
+        user.setDeptId(null);
+        when(adminUserApi.getUser(1L)).thenReturn(CommonResult.success(user));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(baseReq(), 1L));
+        assertEquals(PAYMENT_APPLICATION_DEPT_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void createRejectsAmountWithExcessScale() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setApplyAmount(new BigDecimal("0.001"));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_AMOUNT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void relatedContractOnlyForBusiness() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setPaymentReason(FinancePaymentReasonEnum.PURCHASE.getCode());
+        req.setPurchaseProcessInstanceId("pi-ok");
+        req.setRelatedContractApplicationId(51L);
+        when(predocService.validateAndSummarizePurchaseRef("pi-ok", 1L)).thenReturn("采购");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_RELATED_CONTRACT_REASON_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void canAccessDetailAllowsOwner() {
+        when(mapper.selectById(7L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(7L).applicantUserId(1L).processInstanceId("pi-7").build());
+        assertTrue(service.canAccessDetail(7L, 1L));
+    }
+
+    @Test
+    void getApplicationForReadDeniesStrangerWithoutTask() {
+        when(mapper.selectById(8L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(8L).applicantUserId(1L).processInstanceId("pi-8").build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.getApplicationForRead(8L, 99L, false));
+        assertEquals(PAYMENT_APPLICATION_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateAccountingSubjectRejectsBlank() {
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.updateAccountingSubject(5L, "  ", "t1", 1L));
+        assertEquals(PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void relatedContractInvalidIdRejected() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setRelatedContractApplicationId(404L);
+        when(contractMapper.selectById(404L)).thenReturn(null);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_RELATED_CONTRACT_INVALID.getCode(), ex.getCode());
+        verify(mapper, never()).insert(any(FinancePaymentApplicationDO.class));
+    }
+
+    @Test
+    void relatedContractPendingRejected() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setRelatedContractApplicationId(50L);
+        when(contractMapper.selectById(50L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(50L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_RELATED_CONTRACT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void relatedContractApprovedUsesSettlement() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setRelatedContractApplicationId(51L);
+        when(contractMapper.selectById(51L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(51L)
+                .applicantUserId(1L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .settlementMethod("月结30天")
+                .build());
+        service.createAndStart(req, 1L);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals(51L, cap.getValue().getRelatedContractApplicationId());
+        assertEquals("月结30天", cap.getValue().getContractSettlementMethod());
+    }
+
+    @Test
+    void relatedContractRejectsNonOwner() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setRelatedContractApplicationId(52L);
+        when(contractMapper.selectById(52L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(52L)
+                .applicantUserId(99L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_RELATED_CONTRACT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void onApprovalOutcomeIgnoresStaleProcessInstance() {
+        when(mapper.selectById(11L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(11L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-new")
+                .build());
+        // 旧实例终态回调
+        service.onApprovalOutcome(11L, "REJECTED", "pi-old");
+        verify(mapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void dictInvalidFailsCreate() {
+        when(dictDataApi.validateDictDataList(anyString(), anyCollection()))
+                .thenThrow(new RuntimeException("bad dict"));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(baseReq(), 1L));
+        assertEquals(PAYMENT_APPLICATION_DICT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void replayRejectsPaidOutcome() {
+        when(mapper.selectById(12L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(12L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-12")
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.replayTerminalOutcome(12L, "PAID", "pi-12"));
+        assertEquals(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void replayRejectsPiMismatch() {
+        when(mapper.selectById(13L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(13L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-current")
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.replayTerminalOutcome(13L, "REJECTED", "pi-other"));
+        assertEquals(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void replayRejectedUpdatesLedgerWhenHistoricEnded() {
+        when(mapper.selectById(14L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(14L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-14")
+                .build());
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        org.flowable.engine.history.HistoricProcessInstance hi =
+                mock(org.flowable.engine.history.HistoricProcessInstance.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceId("pi-14")).thenReturn(hq);
+        when(hq.includeProcessVariables()).thenReturn(hq);
+        when(hq.singleResult()).thenReturn(hi);
+        when(hi.getEndTime()).thenReturn(new java.util.Date());
+        when(hi.getProcessVariables()).thenReturn(java.util.Map.of(
+                cn.iocoder.yudao.module.finance.framework.bpm.FinancePaymentApprovalOutcomeDelegate.PROCESS_STATUS_VARIABLE,
+                cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum.REJECT.getStatus()));
+        service.replayTerminalOutcome(14L, "REJECTED", "pi-14");
+        verify(mapper, atLeastOnce()).update(isNull(), any());
+    }
+
+    @Test
+    void replayFailsWhenProcessStillRunning() {
+        when(mapper.selectById(16L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(16L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-16")
+                .build());
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        org.flowable.engine.history.HistoricProcessInstance hi =
+                mock(org.flowable.engine.history.HistoricProcessInstance.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceId("pi-16")).thenReturn(hq);
+        when(hq.includeProcessVariables()).thenReturn(hq);
+        when(hq.singleResult()).thenReturn(hi);
+        when(hi.getEndTime()).thenReturn(null); // still running
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.replayTerminalOutcome(16L, "REJECTED", "pi-16"));
+        assertEquals(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID.getCode(), ex.getCode());
+        verify(mapper, never()).update(isNull(), any());
+    }
+
+    /** PAY-R16 推荐：历史已结束但缺 PROCESS_STATUS → fail-closed */
+    @Test
+    void replayFailsWhenHistoricEndedButProcessStatusMissing() {
+        when(mapper.selectById(17L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(17L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-17")
+                .build());
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        org.flowable.engine.history.HistoricProcessInstance hi =
+                mock(org.flowable.engine.history.HistoricProcessInstance.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceId("pi-17")).thenReturn(hq);
+        when(hq.includeProcessVariables()).thenReturn(hq);
+        when(hq.singleResult()).thenReturn(hi);
+        when(hi.getEndTime()).thenReturn(new java.util.Date());
+        when(hi.getProcessVariables()).thenReturn(java.util.Collections.emptyMap());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.replayTerminalOutcome(17L, "REJECTED", "pi-17"));
+        assertEquals(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID.getCode(), ex.getCode());
+        verify(mapper, never()).update(isNull(), any());
+    }
+
+    /** PAY-R16 推荐：历史 CANCEL 不可 replay 为 REJECTED */
+    @Test
+    void replayFailsWhenHistoricStatusDoesNotMatchOutcome() {
+        when(mapper.selectById(18L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(18L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-18")
+                .build());
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        org.flowable.engine.history.HistoricProcessInstance hi =
+                mock(org.flowable.engine.history.HistoricProcessInstance.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceId("pi-18")).thenReturn(hq);
+        when(hq.includeProcessVariables()).thenReturn(hq);
+        when(hq.singleResult()).thenReturn(hi);
+        when(hi.getEndTime()).thenReturn(new java.util.Date());
+        when(hi.getProcessVariables()).thenReturn(java.util.Map.of(
+                cn.iocoder.yudao.module.finance.framework.bpm.FinancePaymentApprovalOutcomeDelegate.PROCESS_STATUS_VARIABLE,
+                cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum.CANCEL.getStatus()));
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.replayTerminalOutcome(18L, "REJECTED", "pi-18"));
+        assertEquals(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID.getCode(), ex.getCode());
+        verify(mapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void cancelWritesCancelledWhenNoProcess() {
+        when(mapper.selectById(15L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(15L)
+                .applicantUserId(1L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId(null)
+                .build());
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        service.cancel(15L, 1L);
+        verify(mapper, atLeastOnce()).update(isNull(), any());
+        verify(processInstanceApi, never()).cancelProcessInstanceByStartUser(anyLong(), anyString(), anyString(), any());
+    }
+
+}

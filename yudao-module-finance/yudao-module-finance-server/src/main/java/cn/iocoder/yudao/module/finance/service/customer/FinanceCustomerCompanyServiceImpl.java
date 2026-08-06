@@ -43,14 +43,24 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
                 : FinanceCustomerCompanyDO.STATUS_ENABLE;
         validateStatus(status);
 
-        FinanceCustomerCompanyDO company = buildFromSave(createReqVO, name, taxNo);
+        boolean isCustomer = resolveIsCustomer(createReqVO.getIsCustomer(), createReqVO.getIsSupplier());
+        boolean isSupplier = resolveIsSupplier(createReqVO.getIsCustomer(), createReqVO.getIsSupplier());
+        validateRoles(isCustomer, isSupplier);
+        String bankName = trimToNull(createReqVO.getBankName());
+        String bankAccount = trimToNull(createReqVO.getBankAccount());
+        if (status == FinanceCustomerCompanyDO.STATUS_ENABLE) {
+            validateSupplierBankIfNeeded(isSupplier, bankName, bankAccount);
+        }
+
+        FinanceCustomerCompanyDO company = buildFromSave(createReqVO, name, taxNo, bankName, bankAccount);
         company.setCode(customerCompanyNoRedisDAO.generate(LocalDate.now()));
-        company.setPartyType(FinanceCustomerCompanyDO.PARTY_TYPE_CUSTOMER);
+        company.setIsCustomer(isCustomer);
+        company.setIsSupplier(isSupplier);
+        company.setPartyType(derivePartyType(isCustomer, isSupplier));
         company.setStatus(status);
         try {
             customerCompanyMapper.insert(company);
         } catch (DuplicateKeyException ex) {
-            // 并发下 select-then-insert 竞态：uk_tax_no_tenant_deleted / uk_code_tenant_deleted
             throw mapDuplicateKey(ex);
         }
         return company.getId();
@@ -69,19 +79,45 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
         Integer status = updateReqVO.getStatus() != null ? updateReqVO.getStatus() : existing.getStatus();
         validateStatus(status);
 
-        // 显式 set 可空列，支持清空银行/地址；避免 updateById 跳过 null
+        Boolean reqCustomer = updateReqVO.getIsCustomer();
+        Boolean reqSupplier = updateReqVO.getIsSupplier();
+        boolean isCustomer = reqCustomer != null || reqSupplier != null
+                ? resolveIsCustomer(reqCustomer, reqSupplier)
+                : Boolean.TRUE.equals(existing.getIsCustomer());
+        boolean isSupplier = reqCustomer != null || reqSupplier != null
+                ? resolveIsSupplier(reqCustomer, reqSupplier)
+                : Boolean.TRUE.equals(existing.getIsSupplier());
+        // 若请求未带角色字段，沿用库中；仍须至少一个
+        if (reqCustomer == null && reqSupplier == null) {
+            isCustomer = Boolean.TRUE.equals(existing.getIsCustomer());
+            isSupplier = Boolean.TRUE.equals(existing.getIsSupplier());
+            // 历史无列时 isCustomer 可能 null → 视为仅客户
+            if (!isCustomer && !isSupplier) {
+                isCustomer = true;
+            }
+        }
+        validateRoles(isCustomer, isSupplier);
+
+        String bankName = trimToNull(updateReqVO.getBankName());
+        String bankAccount = trimToNull(updateReqVO.getBankAccount());
+        if (status == FinanceCustomerCompanyDO.STATUS_ENABLE) {
+            validateSupplierBankIfNeeded(isSupplier, bankName, bankAccount);
+        }
+
         try {
             customerCompanyMapper.update(null, new UpdateWrapper<FinanceCustomerCompanyDO>()
                     .eq("id", existing.getId())
                     .set("name", name)
                     .set("tax_no", taxNo)
-                    .set("bank_name", trimToNull(updateReqVO.getBankName()))
-                    .set("bank_account", trimToNull(updateReqVO.getBankAccount()))
+                    .set("bank_name", bankName)
+                    .set("bank_account", bankAccount)
                     .set("address", trimToNull(updateReqVO.getAddress()))
                     .set("phone", trimToNull(updateReqVO.getPhone()))
                     .set("contact_name", trimToNull(updateReqVO.getContactName()))
                     .set("email", trimToNull(updateReqVO.getEmail()))
-                    .set("party_type", FinanceCustomerCompanyDO.PARTY_TYPE_CUSTOMER)
+                    .set("is_customer", isCustomer)
+                    .set("is_supplier", isSupplier)
+                    .set("party_type", derivePartyType(isCustomer, isSupplier))
                     .set("status", status));
         } catch (DuplicateKeyException ex) {
             throw mapDuplicateKey(ex);
@@ -90,12 +126,13 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
 
     @Override
     public void updateStatus(Long id, Integer status) {
-        validateExists(id);
+        FinanceCustomerCompanyDO current = validateExists(id);
         validateStatus(status);
         if (status == FinanceCustomerCompanyDO.STATUS_ENABLE) {
-            FinanceCustomerCompanyDO current = customerCompanyMapper.selectById(id);
             requireName(current.getName());
             requireTaxNo(current.getTaxNo());
+            boolean isSupplier = Boolean.TRUE.equals(current.getIsSupplier());
+            validateSupplierBankIfNeeded(isSupplier, current.getBankName(), current.getBankAccount());
         }
         FinanceCustomerCompanyDO update = new FinanceCustomerCompanyDO();
         update.setId(id);
@@ -120,6 +157,28 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
         if (!Objects.equals(company.getStatus(), FinanceCustomerCompanyDO.STATUS_ENABLE)) {
             throw exception(INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED);
         }
+        // 历史 null 视为客户；显式 false 拒绝
+        if (Boolean.FALSE.equals(company.getIsCustomer())) {
+            throw exception(CUSTOMER_COMPANY_NOT_CUSTOMER_ROLE);
+        }
+        return company;
+    }
+
+    @Override
+    public FinanceCustomerCompanyDO getEnabledSupplierCompany(Long id) {
+        if (id == null) {
+            throw exception(CUSTOMER_COMPANY_NOT_EXISTS);
+        }
+        FinanceCustomerCompanyDO company = customerCompanyMapper.selectById(id);
+        if (company == null) {
+            throw exception(CUSTOMER_COMPANY_NOT_EXISTS);
+        }
+        if (!Objects.equals(company.getStatus(), FinanceCustomerCompanyDO.STATUS_ENABLE)
+                || !Boolean.TRUE.equals(company.getIsSupplier())
+                || StrUtil.isBlank(company.getBankName())
+                || StrUtil.isBlank(company.getBankAccount())) {
+            throw exception(CUSTOMER_COMPANY_NOT_SUPPLIER_ROLE);
+        }
         return company;
     }
 
@@ -130,7 +189,17 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
 
     @Override
     public List<FinanceCustomerCompanyDO> getEnabledSimpleList() {
-        return customerCompanyMapper.selectEnabledList();
+        return getEnabledSimpleList(FinanceCustomerCompanyDO.ROLE_CUSTOMER);
+    }
+
+    @Override
+    public List<FinanceCustomerCompanyDO> getEnabledSimpleList(String role) {
+        String normalized = normalizeRole(role);
+        if (FinanceCustomerCompanyDO.ROLE_SUPPLIER.equals(normalized)) {
+            return customerCompanyMapper.selectEnabledSupplierList();
+        }
+        // 默认 CUSTOMER：开票/合同兼容
+        return customerCompanyMapper.selectEnabledCustomerList();
     }
 
     private FinanceCustomerCompanyDO validateExists(Long id) {
@@ -148,18 +217,12 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
         }
     }
 
-    /**
-     * 将 DB 唯一约束冲突映射为业务错误；税号 uk 为常见竞态路径。
-     */
     private static RuntimeException mapDuplicateKey(DuplicateKeyException ex) {
         String msg = ex.getMessage() != null ? ex.getMessage() : "";
         String lower = msg.toLowerCase();
-        // 税号唯一索引名或列名命中 → 税号冲突
         if (lower.contains("tax_no") || lower.contains("uk_tax_no")) {
             return exception(CUSTOMER_COMPANY_TAX_NO_EXISTS);
         }
-        // 编码唯一冲突（极低概率：同秒 Redis 序号异常）也按税号业务语义对外统一，避免泄漏 SQL
-        // 若 message 无列信息，默认税号冲突（并发建档最常见）
         return exception(CUSTOMER_COMPANY_TAX_NO_EXISTS);
     }
 
@@ -169,6 +232,59 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
                 && status != FinanceCustomerCompanyDO.STATUS_DISABLE)) {
             throw exception(CUSTOMER_COMPANY_STATUS_INVALID);
         }
+    }
+
+    /**
+     * 创建时：未传角色默认仅客户；若任一侧显式传入则按布尔解析（null→false）。
+     */
+    private static boolean resolveIsCustomer(Boolean isCustomer, Boolean isSupplier) {
+        if (isCustomer == null && isSupplier == null) {
+            return true;
+        }
+        return Boolean.TRUE.equals(isCustomer);
+    }
+
+    private static boolean resolveIsSupplier(Boolean isCustomer, Boolean isSupplier) {
+        if (isCustomer == null && isSupplier == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(isSupplier);
+    }
+
+    private static void validateRoles(boolean isCustomer, boolean isSupplier) {
+        if (!isCustomer && !isSupplier) {
+            throw exception(CUSTOMER_COMPANY_ROLE_REQUIRED);
+        }
+    }
+
+    private static void validateSupplierBankIfNeeded(boolean isSupplier, String bankName, String bankAccount) {
+        if (!isSupplier) {
+            return;
+        }
+        if (StrUtil.isBlank(bankName) || StrUtil.isBlank(bankAccount)) {
+            throw exception(CUSTOMER_COMPANY_SUPPLIER_BANK_REQUIRED);
+        }
+    }
+
+    private static String derivePartyType(boolean isCustomer, boolean isSupplier) {
+        if (isCustomer && isSupplier) {
+            return FinanceCustomerCompanyDO.PARTY_TYPE_BOTH;
+        }
+        if (isSupplier) {
+            return FinanceCustomerCompanyDO.PARTY_TYPE_SUPPLIER;
+        }
+        return FinanceCustomerCompanyDO.PARTY_TYPE_CUSTOMER;
+    }
+
+    private static String normalizeRole(String role) {
+        if (StrUtil.isBlank(role)) {
+            return FinanceCustomerCompanyDO.ROLE_CUSTOMER;
+        }
+        String r = role.trim().toUpperCase();
+        if (FinanceCustomerCompanyDO.ROLE_SUPPLIER.equals(r)) {
+            return FinanceCustomerCompanyDO.ROLE_SUPPLIER;
+        }
+        return FinanceCustomerCompanyDO.ROLE_CUSTOMER;
     }
 
     private static String requireName(String name) {
@@ -186,12 +302,13 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
     }
 
     private static FinanceCustomerCompanyDO buildFromSave(FinanceCustomerCompanySaveReqVO reqVO,
-                                                          String name, String taxNo) {
+                                                          String name, String taxNo,
+                                                          String bankName, String bankAccount) {
         return FinanceCustomerCompanyDO.builder()
                 .name(name)
                 .taxNo(taxNo)
-                .bankName(trimToNull(reqVO.getBankName()))
-                .bankAccount(trimToNull(reqVO.getBankAccount()))
+                .bankName(bankName)
+                .bankAccount(bankAccount)
                 .address(trimToNull(reqVO.getAddress()))
                 .phone(trimToNull(reqVO.getPhone()))
                 .contactName(trimToNull(reqVO.getContactName()))

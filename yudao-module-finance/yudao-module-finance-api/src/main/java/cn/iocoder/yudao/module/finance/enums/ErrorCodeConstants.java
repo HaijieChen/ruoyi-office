@@ -103,12 +103,19 @@ public interface ErrorCodeConstants {
     ErrorCode INVOICE_APPLICATION_USE_COMPLETE_ISSUE = new ErrorCode(1_040_003_015,
             "请使用整单办票 complete-issue，不再支持一行一票办票");
 
-    // ========== 客户公司 1-040-004-000 ==========
+    // ========== 客户公司 / 客商 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");
     ErrorCode CUSTOMER_COMPANY_TAX_NO_EXISTS = new ErrorCode(1_040_004_001, "纳税人识别号已存在");
     ErrorCode CUSTOMER_COMPANY_NAME_REQUIRED = new ErrorCode(1_040_004_002, "客户公司名称不能为空");
     ErrorCode CUSTOMER_COMPANY_TAX_NO_REQUIRED = new ErrorCode(1_040_004_003, "纳税人识别号不能为空");
     ErrorCode CUSTOMER_COMPANY_STATUS_INVALID = new ErrorCode(1_040_004_004, "客户公司状态无效");
+    ErrorCode CUSTOMER_COMPANY_ROLE_REQUIRED = new ErrorCode(1_040_004_005, "至少选择客户或供应商角色之一");
+    ErrorCode CUSTOMER_COMPANY_SUPPLIER_BANK_REQUIRED = new ErrorCode(1_040_004_006,
+            "供应商角色启用时开户银行与银行账号不能为空");
+    ErrorCode CUSTOMER_COMPANY_NOT_CUSTOMER_ROLE = new ErrorCode(1_040_004_007,
+            "所选客商不含客户角色，不能作为开票购方或合同对方");
+    ErrorCode CUSTOMER_COMPANY_NOT_SUPPLIER_ROLE = new ErrorCode(1_040_004_008,
+            "所选客商不含供应商角色或银行信息不齐全，不能作为付款收款方");
 
     // ========== 合同签约申请 1-040-005-000 ==========
     ErrorCode CONTRACT_APPLICATION_NOT_EXISTS = new ErrorCode(1_040_005_000, "合同签约申请不存在");
@@ -142,5 +149,44 @@ public interface ErrorCodeConstants {
             "无权查看或操作该合同签约申请");
     ErrorCode CONTRACT_APPLICATION_TASK_INVALID = new ErrorCode(1_040_005_015,
             "BPM 任务无效、节点不匹配或当前用户无权执行");
+
+    // ========== 付款申请 / 前置引用 1-040-006-000 ==========
+    ErrorCode PAYMENT_PURCHASE_REF_INVALID = new ErrorCode(1_040_006_000,
+            "采购前置无效：须为本人发起且已通过的白名单采购流程实例");
+    ErrorCode PAYMENT_LEASE_REF_INVALID = new ErrorCode(1_040_006_001,
+            "租赁前置无效：须为本人发起且已通过的租赁合同签约申请");
+    ErrorCode PAYMENT_BPM_HISTORY_UNAVAILABLE = new ErrorCode(1_040_006_002,
+            "BPM 历史服务不可用，无法校验或列出采购流程实例");
+    ErrorCode PAYMENT_APPLICATION_NOT_EXISTS = new ErrorCode(1_040_006_003, "付款申请不存在");
+    ErrorCode PAYMENT_APPLICATION_STATUS_INVALID = new ErrorCode(1_040_006_004,
+            "当前状态不允许执行该操作");
+    ErrorCode PAYMENT_APPLICATION_ACCESS_DENIED = new ErrorCode(1_040_006_005,
+            "无权查看或操作该付款申请");
+    ErrorCode PAYMENT_APPLICATION_AMOUNT_INVALID = new ErrorCode(1_040_006_006,
+            "申请付款金额必须大于 0");
+    ErrorCode PAYMENT_APPLICATION_FIELD_REQUIRED = new ErrorCode(1_040_006_007,
+            "付款申请必填字段不完整");
+    ErrorCode PAYMENT_APPLICATION_EVIDENCE_REQUIRED = new ErrorCode(1_040_006_008,
+            "付款依据附件至少一份");
+    ErrorCode PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED = new ErrorCode(1_040_006_009,
+            "出纳办结须填写实际支付日期与支付凭证");
+    ErrorCode PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID = new ErrorCode(1_040_006_010,
+            "审批结果非法或状态迁移不被允许");
+    ErrorCode PAYMENT_APPLICATION_TASK_INVALID = new ErrorCode(1_040_006_011,
+            "BPM 任务无效、节点不匹配或当前用户无权执行");
+    ErrorCode PAYMENT_APPLICATION_REASON_INVALID = new ErrorCode(1_040_006_012, "付款事由无效");
+    ErrorCode PAYMENT_APPLICATION_TIMING_INVALID = new ErrorCode(1_040_006_013, "支付时效无效");
+    ErrorCode PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED = new ErrorCode(1_040_006_014,
+            "财务主管节点须填写费用会计科目");
+    ErrorCode PAYMENT_RELATED_CONTRACT_INVALID = new ErrorCode(1_040_006_015,
+            "关联合同无效：须为已通过且未作废的合同签约申请");
+    ErrorCode PAYMENT_RELATED_CONTRACT_REASON_INVALID = new ErrorCode(1_040_006_016,
+            "仅业务付款允许关联合同；租赁请使用租赁前置合同");
+    ErrorCode PAYMENT_APPLICATION_DICT_INVALID = new ErrorCode(1_040_006_017,
+            "费用项目、支付方式或会计科目不在启用字典中");
+    ErrorCode PAYMENT_APPLICATION_DEPT_REQUIRED = new ErrorCode(1_040_006_018,
+            "申请人档案缺少部门，无法发起付款");
+    ErrorCode PAYMENT_APPLICATION_EVIDENCE_URL_INVALID = new ErrorCode(1_040_006_019,
+            "付款依据或支付凭证须为可识别的文件 URL");
 
 }

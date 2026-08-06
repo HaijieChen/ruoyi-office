@@ -1,0 +1,72 @@
+package cn.iocoder.yudao.module.finance.service.payment;
+
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationPageReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationResubmitReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentRecordPayReqVO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentApplicationDO;
+
+import java.math.BigDecimal;
+
+public interface FinancePaymentApplicationService {
+
+    String PROCESS_KEY = "finance_payment_apply";
+    String TASK_CASHIER = "taskCashier";
+    String TASK_FINANCE = "taskFinance";
+    String TASK_DEPT_HEAD = "taskDeptHead";
+
+    Long createAndStart(FinancePaymentApplicationCreateAndStartReqVO reqVO, Long applicantUserId);
+
+    void resubmit(Long id, FinancePaymentApplicationResubmitReqVO reqVO, Long userId);
+
+    /**
+     * 申请人撤回：取消 BPM 实例并同步台账 CANCELLED（PAY-R2，对齐合同 cancel）。
+     */
+    void cancel(Long id, Long userId);
+
+    /**
+     * PAY-R8：FA/运维重放 REJECTED/CANCELLED（禁止 PAID），须 processInstanceId 与台账一致。
+     */
+    void replayTerminalOutcome(Long id, String outcome, String processInstanceId);
+
+    FinancePaymentApplicationDO getApplication(Long id);
+
+    /**
+     * 详情可读：本人 / FA manageAll / 当前流程 active 任务候选人办理人（F3）。
+     */
+    FinancePaymentApplicationDO getApplicationForRead(Long id, Long userId, boolean manageAll);
+
+    boolean canAccessDetail(Long id, Long userId);
+
+    PageResult<FinancePaymentApplicationDO> getApplicationPage(FinancePaymentApplicationPageReqVO pageReqVO,
+                                                               Long loginUserId, boolean manageAll);
+
+    BigDecimal sumPaidByPayee(Long payeeCompanyId);
+
+    void updateCurrentNode(Long appId, String nodeKey, String nodeName);
+
+    /**
+     * 流程终态：APPROVED→PAID，REJECTED，CANCELLED（幂等）
+     * <p>PAID 时台账必须已有 actual_pay_date + pay_voucher_url（F1）。
+     */
+    void onApprovalOutcome(Long appId, String outcome, String processInstanceId);
+
+    void recordPay(FinancePaymentRecordPayReqVO reqVO, Long userId);
+
+    /**
+     * 出纳 task complete 守卫：台账须已写支付日+凭证（F1，对齐合同 assertExecutionEvidence）。
+     */
+    void assertCashierEvidenceForComplete(Long appId);
+
+    /**
+     * 财务主管节点 complete 守卫：会计科目非空（F4 / CF-P7）。
+     */
+    void assertFinanceSubjectForComplete(Long appId);
+
+    /**
+     * 财务节点写入会计科目（办理人/候选人）。
+     */
+    void updateAccountingSubject(Long id, String accountingSubject, String taskId, Long userId);
+
+}
