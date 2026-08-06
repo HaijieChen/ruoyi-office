@@ -45,6 +45,9 @@ public interface ErrorCodeConstants {
     ErrorCode PROCESS_INSTANCE_HTTP_CALL_ERROR = new ErrorCode(1_009_004_006, "流程 Http 请求调用失败");
     ErrorCode PROCESS_INSTANCE_APPROVE_USER_SELECT_ASSIGNEES_NOT_CONFIG = new ErrorCode(1_009_004_007, "下一个任务({})的审批人未配置");
     ErrorCode PROCESS_INSTANCE_CANCEL_CHILD_FAIL_NOT_ALLOW = new ErrorCode(1_009_004_008, "子流程取消失败，子流程不允许取消");
+    /** PAY-R19：付款申请须走领域 cancel，禁止流程详情通用发起人取消（同步落账） */
+    ErrorCode PROCESS_INSTANCE_CANCEL_FAIL_USE_PAYMENT_DOMAIN = new ErrorCode(1_009_004_010,
+            "付款申请请从「付款申请」台账撤回，不能使用流程通用取消");
 
     // ========== 流程任务 1-009-005-000 ==========
     ErrorCode TASK_OPERATE_FAIL_ASSIGN_NOT_SELF = new ErrorCode(1_009_005_001, "操作失败，原因：该任务的审批人不是你");

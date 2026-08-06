@@ -1102,6 +1102,12 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         return StrUtil.format(definitionInfo.getTitleSetting().getTitle(), cloneVariables);
     }
 
+    /**
+     * PAY-R19：付款申请须走 finance 领域 cancel（同步落账），禁止 HTTP 通用 start-user 取消绕过。
+     * 与 finance 模块常量对齐，BPM 侧不依赖 finance 模块。
+     */
+    private static final String PAYMENT_PROCESS_DEFINITION_KEY = "finance_payment_apply";
+
     @Override
     @DataPermission(enable = false) // 关闭数据权限，避免查询不到用户数据。相关案例：https://gitee.com/zhijiantianya/yudao-cloud/issues/ID1UYA
     public void cancelProcessInstanceByStartUser(Long userId, @Valid BpmProcessInstanceCancelReqVO cancelReqVO) {
@@ -1120,6 +1126,12 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         // 1.2 只能取消自己的
         if (!Objects.equals(instance.getStartUserId(), String.valueOf(userId))) {
             throw exception(PROCESS_INSTANCE_CANCEL_FAIL_NOT_SELF);
+        }
+        // PAY-R19：付款申请禁止通用发起人取消（Controller 直调 forbidden=null）。
+        // 仅允许 finance 领域路径经 Feign 传入非空禁止集（至少含 taskCashier）后取消。
+        if (PAYMENT_PROCESS_DEFINITION_KEY.equals(instance.getProcessDefinitionKey())
+                && CollUtil.isEmpty(forbiddenTaskDefinitionKeys)) {
+            throw exception(PROCESS_INSTANCE_CANCEL_FAIL_USE_PAYMENT_DOMAIN);
         }
         // 1.3 校验允许撤销审批中的申请
         BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionService

@@ -533,4 +533,58 @@ class FinancePaymentApplicationServiceImplTest {
         verify(processInstanceApi, never()).cancelProcessInstanceByStartUser(anyLong(), anyString(), anyString(), any());
     }
 
+    /** PAY-R18：WAIT_PAY 不可撤 */
+    @Test
+    void cancelRejectsWhenWaitPay() {
+        when(mapper.selectById(16L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(16L)
+                .applicantUserId(1L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-16")
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.cancel(16L, 1L));
+        assertEquals(PAYMENT_APPLICATION_STATUS_INVALID.getCode(), ex.getCode());
+        verify(processInstanceApi, never()).cancelProcessInstanceByStartUser(anyLong(), anyString(), anyString(), any());
+        verify(mapper, never()).update(isNull(), any());
+    }
+
+    /** PAY-R18：PENDING + PI 取消须带 taskCashier 禁止集 */
+    @Test
+    void cancelPendingWithProcessPassesCashierForbiddenKeys() {
+        when(mapper.selectById(17L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(17L)
+                .applicantUserId(1L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-17")
+                .build());
+        when(processInstanceApi.cancelProcessInstanceByStartUser(anyLong(), anyString(), anyString(), any()))
+                .thenReturn(CommonResult.success(true));
+        when(mapper.update(isNull(), any())).thenReturn(1);
+
+        service.cancel(17L, 1L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Collection<String>> keysCap = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(processInstanceApi).cancelProcessInstanceByStartUser(
+                eq(1L), eq("pi-17"), anyString(), keysCap.capture());
+        assertTrue(keysCap.getValue().contains(FinancePaymentApplicationService.TASK_CASHIER));
+        verify(mapper, atLeastOnce()).update(isNull(), any());
+    }
+
+    /** PAY-R18：BPM 禁止集拒绝时不落 CANCELLED */
+    @Test
+    void cancelDoesNotWriteWhenBpmForbiddenRejects() {
+        when(mapper.selectById(18L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(18L)
+                .applicantUserId(1L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-18")
+                .build());
+        when(processInstanceApi.cancelProcessInstanceByStartUser(anyLong(), anyString(), anyString(), any()))
+                .thenReturn(CommonResult.error(1_009_004_009, "流程取消失败，当前活动任务已进入禁止取消的节点"));
+
+        assertThrows(ServiceException.class, () -> service.cancel(18L, 1L));
+        verify(mapper, never()).update(isNull(), any());
+    }
+
 }

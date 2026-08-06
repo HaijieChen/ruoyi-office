@@ -1395,6 +1395,7 @@ defineExpose({ loadTodoTask });
       </Popover>
 
       <!--【取消】按钮 这个对应发起人的取消, 只有发起人可以取消 -->
+      <!-- PAY-R19：付款申请 finance_payment_apply 隐藏通用取消，须走付款台账领域 cancel -->
       <Popover
         v-model:open="popOverVisible.cancel"
         placement="top"
@@ -1402,7 +1403,8 @@ defineExpose({ loadTodoTask });
         trigger="click"
         v-if="
           userId === processInstance?.startUser?.id &&
-          !isEndProcessStatus(processInstance?.status)
+          !isEndProcessStatus(processInstance?.status) &&
+          processDefKey() !== PAYMENT_PROCESS_KEY
         "
       >
         <Button @click="openPopover('cancel')"> 取消 </Button>

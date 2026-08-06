@@ -95,6 +95,17 @@ const returnList = ref([] as any); // 退回节点
 /** 当前任务是否有可退回节点；无则不展示「退回」 */
 const canReturn = ref(false);
 
+/** PAY-R19：付款申请禁止流程通用取消（与 web-antd 对齐） */
+const PAYMENT_PROCESS_KEY = 'finance_payment_apply';
+
+function processDefKey(): string | undefined {
+  return (
+    props.processDefinition?.key ||
+    props.processInstance?.processDefinitionKey ||
+    props.processInstance?.processDefinition?.key
+  );
+}
+
 /** 创建流程表达式 */
 function openSignatureModal() {
   signatureModalApi.setData(null).open();
@@ -1365,6 +1376,7 @@ defineExpose({ loadTodoTask });
       </ElPopover>
 
       <!--【取消】按钮 这个对应发起人的取消, 只有发起人可以取消 -->
+      <!-- PAY-R19：付款申请 finance_payment_apply 隐藏通用取消，须走付款台账领域 cancel -->
       <ElPopover
         :visible="popOverVisible.cancel"
         placement="top"
@@ -1372,7 +1384,8 @@ defineExpose({ loadTodoTask });
         trigger="click"
         v-if="
           userId === processInstance?.startUser?.id &&
-          !isEndProcessStatus(processInstance?.status)
+          !isEndProcessStatus(processInstance?.status) &&
+          processDefKey() !== PAYMENT_PROCESS_KEY
         "
       >
         <template #reference>

@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -59,6 +60,12 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private static final String DICT_COST_PROJECT = "finance_cost_project";
     private static final String DICT_PAY_METHOD = "finance_pay_method";
     private static final String DICT_ACCOUNTING_SUBJECT = "finance_accounting_subject";
+
+    /**
+     * PAY-R18：出纳节点 active 时禁止申请人撤回（TOCTOU 防线，对标合同 seal 禁止集）。
+     * 台账侧另仅允许 PENDING；禁止集与 WAIT_PAY 双保险。
+     */
+    private static final Set<String> CANCEL_FORBIDDEN_TASK_KEYS = Set.of(TASK_CASHIER);
 
     private final FinancePaymentApplicationMapper applicationMapper;
     private final FinancePaymentApplicationNoRedisDAO applicationNoRedisDAO;
@@ -184,14 +191,15 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     public void cancel(Long id, Long userId) {
         FinancePaymentApplicationDO application = getApplication(id);
         assertOwner(application, userId);
-        if (!FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())
-                && !FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())) {
+        // PAY-R18 / decision-wait-pay-no-cancel：仅审批中可撤；WAIT_PAY 禁止
+        if (!FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
         }
         String processInstanceId = application.getProcessInstanceId();
         if (StrUtil.isNotBlank(processInstanceId)) {
             processInstanceApi.cancelProcessInstanceByStartUser(
-                    userId, processInstanceId, "申请人撤回付款申请", null).checkError();
+                    userId, processInstanceId, "申请人撤回付款申请",
+                    CANCEL_FORBIDDEN_TASK_KEYS).checkError();
         }
         // 同步落账（主路径之一；不依赖 async StatusListener）
         onApprovalOutcome(id, FinancePaymentApplicationStatusEnum.CANCELLED.getStatus(), processInstanceId);
