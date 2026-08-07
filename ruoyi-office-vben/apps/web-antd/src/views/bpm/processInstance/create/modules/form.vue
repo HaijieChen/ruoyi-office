@@ -1,8 +1,10 @@
 <script lang="ts" setup>
+import type { Component } from 'vue';
+
 import type { BpmProcessDefinitionApi } from '#/api/bpm/definition';
 import type { BpmProcessInstanceApi } from '#/api/bpm/processInstance';
 
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, shallowRef, watch } from 'vue';
 
 import {
   BpmCandidateStrategyEnum,
@@ -15,7 +17,17 @@ import { useTabs } from '@vben/hooks';
 import { IconifyIcon } from '@vben/icons';
 
 import formCreate from '@form-create/ant-design-vue';
-import { Button, Card, Col, message, Row, Space, Tabs } from 'ant-design-vue';
+import {
+  Button,
+  Card,
+  Col,
+  Empty,
+  message,
+  Row,
+  Space,
+  Spin,
+  Tabs,
+} from 'ant-design-vue';
 
 import { getProcessDefinition } from '#/api/bpm/definition';
 import {
@@ -28,10 +40,11 @@ import {
   setConfAndFields2,
 } from '#/components/form-create';
 import { router } from '#/router';
-import { parsePathWithQuery } from '#/utils';
 import ProcessInstanceBpmnViewer from '#/views/bpm/processInstance/detail/modules/bpm-viewer.vue';
 import ProcessInstanceSimpleViewer from '#/views/bpm/processInstance/detail/modules/simple-bpm-viewer.vue';
 import ProcessInstanceTimeline from '#/views/bpm/processInstance/detail/modules/time-line.vue';
+
+import { resolveCreateShellEmbedLoader } from '../embed-registry';
 
 /** 类型定义 */
 interface ProcessFormData {
@@ -41,7 +54,7 @@ interface ProcessFormData {
 }
 
 interface UserTask {
-  id: number;
+  id: number | string;
   name: string;
 }
 
@@ -79,33 +92,104 @@ const activeTab = ref('form');
 const activityNodes = ref<BpmProcessInstanceApi.ApprovalNodeInfo[]>([]);
 const processInstanceStartLoading = ref(false);
 
+/** NORMAL vs CUSTOM embed */
+const shellMode = ref<'embed' | 'normal' | 'unregistered'>('normal');
+const EmbedComponent = shallowRef<Component | null>(null);
+/** 动态业务表单实例（async SFC expose） */
+const embedBodyRef = ref<any>(null);
+/** embed 表单是否已完成 reset（可提交） */
+const embedReady = ref(false);
+const embedLoading = ref(false);
+const embedError = ref<null | string>(null);
+/** 取消过期的 embed 初始化 */
+let embedInitGen = 0;
+/** 预测请求序号，仅应用最新结果（P2） */
+let predictGen = 0;
+let predictTimer: ReturnType<typeof setTimeout> | undefined;
+
+const isNormalShell = computed(() => shellMode.value === 'normal');
+const isEmbedShell = computed(() => shellMode.value === 'embed');
+const isUnregistered = computed(() => shellMode.value === 'unregistered');
+const canSubmit = computed(() => {
+  if (isUnregistered.value) return false;
+  if (isEmbedShell.value) return embedReady.value && !embedLoading.value;
+  return true;
+});
+
+async function loadDiagram(definitionId: string) {
+  const processDefinitionDetail: BpmProcessDefinitionApi.ProcessDefinition =
+    await getProcessDefinition(definitionId);
+  if (processDefinitionDetail) {
+    bpmnXML.value = processDefinitionDetail.bpmnXml;
+    simpleJson.value = processDefinitionDetail.simpleModel;
+  }
+}
+
+/** 自选审批人：壳 UI 用 string[]，领域 API 用 number[] */
+function buildStartUserSelectAssigneesForDomain(): Record<string, number[]> {
+  const out: Record<string, number[]> = {};
+  for (const [activityId, ids] of Object.entries(
+    startUserSelectAssignees.value || {},
+  )) {
+    out[activityId] = (ids || []).map(Number).filter((n) => Number.isFinite(n));
+  }
+  return out;
+}
+
+function validateStartUserSelect(): boolean {
+  if (startUserSelectTasks.value?.length > 0) {
+    for (const userTask of startUserSelectTasks.value) {
+      const key = String(userTask.id);
+      const assignees = startUserSelectAssignees.value[key];
+      if (!Array.isArray(assignees) || assignees.length === 0) {
+        message.warning(`请选择${userTask.name}的候选人`);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 /** 提交按钮 */
 async function submitForm() {
+  if (isEmbedShell.value) {
+    if (!embedReady.value || !embedBodyRef.value?.submit) {
+      message.error(embedError.value || '表单未就绪，请稍候或重试');
+      return;
+    }
+    if (!validateStartUserSelect()) {
+      return;
+    }
+    processInstanceStartLoading.value = true;
+    try {
+      await embedBodyRef.value.submit({
+        startUserSelectAssignees: buildStartUserSelectAssigneesForDomain(),
+      });
+      await closeCurrentTab();
+      await router.push({ name: 'BpmProcessInstanceMy' });
+    } catch {
+      // validation / domain error already surfaced
+    } finally {
+      processInstanceStartLoading.value = false;
+    }
+    return;
+  }
+
   if (!fApi.value || !props.selectProcessDefinition) {
     return;
   }
-  // 流程表单校验
   await fApi.value.validate();
-  // 校验指定审批人
-  if (startUserSelectTasks.value?.length > 0) {
-    for (const userTask of startUserSelectTasks.value) {
-      const assignees = startUserSelectAssignees.value[userTask.id];
-      if (Array.isArray(assignees) && assignees.length === 0) {
-        message.warning(`请选择${userTask.name}的候选人`);
-        return;
-      }
-    }
+  if (!validateStartUserSelect()) {
+    return;
   }
 
   processInstanceStartLoading.value = true;
   try {
-    // 提交请求
     await createProcessInstance({
       processDefinitionId: props.selectProcessDefinition.id,
       variables: detailForm.value.value,
       startUserSelectAssignees: startUserSelectAssignees.value,
     });
-    // 关闭并提示
     message.success('发起流程成功');
     await closeCurrentTab();
     await router.push({ name: 'BpmProcessInstanceMy' });
@@ -114,26 +198,101 @@ async function submitForm() {
   }
 }
 
+function schedulePredict(
+  processDefinitionId: string,
+  vars: Record<string, unknown>,
+) {
+  if (predictTimer) clearTimeout(predictTimer);
+  predictTimer = setTimeout(() => {
+    // 预测前快照已选人，避免 getApprovalDetail 清空后无法恢复
+    tempStartUserSelectAssignees.value = {
+      ...startUserSelectAssignees.value,
+    };
+    void getApprovalDetail({
+      id: processDefinitionId,
+      processVariablesStr: JSON.stringify(vars || {}),
+    });
+  }, 400);
+}
+
+function onEmbedPredictChange(vars: Record<string, unknown>) {
+  const id = props.selectProcessDefinition?.id;
+  if (!id || !embedReady.value) return;
+  schedulePredict(id, vars || {});
+}
+
+/**
+ * 等待 FormBody 实例暴露 reset（chunk 已 await 后再 mount，通常很快；
+ * 用 watch + 长超时错误态，避免固定 1.5s 半初始化）。
+ */
+function waitForEmbedBody(gen: number): Promise<any> {
+  if (embedBodyRef.value?.reset) {
+    return Promise.resolve(embedBodyRef.value);
+  }
+  return new Promise((resolve, reject) => {
+    const stop = watch(
+      embedBodyRef,
+      (v) => {
+        if (gen !== embedInitGen) {
+          stop();
+          resolve(null);
+          return;
+        }
+        if (v?.reset) {
+          stop();
+          resolve(v);
+        }
+      },
+      { flush: 'post' },
+    );
+    // 硬超时仅用于失败态；正常路径靠 loader Promise + mount
+    window.setTimeout(() => {
+      stop();
+      if (gen !== embedInitGen) {
+        resolve(null);
+        return;
+      }
+      if (embedBodyRef.value?.reset) {
+        resolve(embedBodyRef.value);
+      } else {
+        reject(new Error('业务表单挂载超时'));
+      }
+    }, 30_000);
+  });
+}
+
+async function retryEmbedInit() {
+  const row = props.selectProcessDefinition;
+  if (!row) return;
+  await initProcessInfo(row);
+}
+
 /** 设置表单信息、获取流程图数据 */
 async function initProcessInfo(row: any, formVariables?: any) {
-  // 重置指定审批人
+  embedInitGen += 1;
+  const gen = embedInitGen;
+  predictGen += 1;
+
   startUserSelectTasks.value = [];
   startUserSelectAssignees.value = {};
+  tempStartUserSelectAssignees.value = {};
+  activityNodes.value = [];
+  bpmnXML.value = undefined;
+  simpleJson.value = undefined;
+  EmbedComponent.value = null;
+  embedBodyRef.value = null;
+  embedReady.value = false;
+  embedLoading.value = false;
+  embedError.value = null;
+  activeTab.value = 'form';
 
-  // 情况一：流程表单
   if (row.formType === BpmModelFormType.NORMAL) {
-    // 设置表单
-    // 注意：需要从 formVariables 中，移除不在 row.formFields 的值。
-    // 原因是：后端返回的 formVariables 里面，会有一些非表单的信息。例如说，某个流程节点的审批人。
-    //        这样，就可能导致一个流程被审批不通过后，重新发起时，会直接后端报错！！！
-
-    // 解析表单字段列表（不创建实例，避免重复渲染）
+    shellMode.value = 'normal';
     const decodedFields = decodeFields(row.formFields);
     const allowedFields = new Set(
       decodedFields.map((field: any) => field.field).filter(Boolean),
     );
 
-    // 过滤掉不允许的字段
     if (formVariables) {
       for (const key in formVariables) {
         if (!allowedFields.has(key)) {
@@ -144,7 +303,6 @@ async function initProcessInfo(row: any, formVariables?: any) {
 
     setConfAndFields2(detailForm, row.formConf, row.formFields, formVariables);
 
-    // Hydrate RemoteDataSourceSelect rules with runtime context
     hydrateRemoteDataSourceRules(
       detailForm.value.rule,
       Number.isInteger(row.formId) && row.formId > 0 && row.id
@@ -156,7 +314,6 @@ async function initProcessInfo(row: any, formVariables?: any) {
         : undefined,
     );
 
-    // 在配置中禁用 form-create 自带的提交和重置按钮
     detailForm.value.option = {
       ...detailForm.value.option,
       submitBtn: false,
@@ -164,43 +321,78 @@ async function initProcessInfo(row: any, formVariables?: any) {
     };
 
     await nextTick();
-
-    // 获取流程审批信息,当再次发起时，流程审批节点要根据原始表单参数预测出来
     await getApprovalDetail({
       id: row.id,
-      processVariablesStr: JSON.stringify(formVariables),
+      processVariablesStr: JSON.stringify(formVariables || {}),
     });
+    await loadDiagram(row.id);
+    return;
+  }
 
-    // 加载流程图
-    const processDefinitionDetail: BpmProcessDefinitionApi.ProcessDefinition =
-      await getProcessDefinition(row.id);
-    if (processDefinitionDetail) {
-      bpmnXML.value = processDefinitionDetail.bpmnXml;
-      simpleJson.value = processDefinitionDetail.simpleModel;
-    }
-    // 情况二：业务表单
-  } else if (row.formCustomCreatePath) {
-    // 这里暂时无需加载流程图，因为跳出到另外个 Tab；
-    // 支持 path?query（如开票 ?openCreate=1 自动弹创建窗）
-    const { path, query } = parsePathWithQuery(
-      row.formCustomCreatePath as string,
+  // CUSTOM：壳内嵌注册表（禁止 router.push 业务列表）
+  const loader = resolveCreateShellEmbedLoader(row.key);
+  if (!loader) {
+    shellMode.value = 'unregistered';
+    message.error(
+      `流程「${row.name || row.key}」未配置发起表单组件，请联系管理员`,
     );
-    await router.push({ path, query });
+    return;
+  }
+
+  shellMode.value = 'embed';
+  embedLoading.value = true;
+  embedError.value = null;
+
+  try {
+    // 1) 先 await 动态 import，chunk 慢也不会假 ready
+    const mod = await loader();
+    if (gen !== embedInitGen) return;
+    const comp = (mod as any)?.default ?? mod;
+    EmbedComponent.value = comp as Component;
+    await nextTick();
+    await nextTick();
+
+    // 2) 等实例 expose reset
+    const body = await waitForEmbedBody(gen);
+    if (gen !== embedInitGen) return;
+    if (!body?.reset) {
+      throw new Error('业务表单未就绪');
+    }
+
+    // 3) 业务数据初始化
+    await body.reset({ mode: 'create' });
+    if (gen !== embedInitGen) return;
+
+    embedReady.value = true;
+    embedLoading.value = false;
+
+    await getApprovalDetail({
+      id: row.id,
+      processVariablesStr: JSON.stringify(body.getPredictVariables?.() || {}),
+    });
+    await loadDiagram(row.id);
+  } catch (error: any) {
+    if (gen !== embedInitGen) return;
+    console.error(error);
+    embedReady.value = false;
+    embedLoading.value = false;
+    embedError.value = error?.message || '加载业务表单失败';
+    message.error(embedError.value);
   }
 }
 
-/** 预测流程节点会因为输入的参数值而产生新的预测结果值，所以需重新预测一次 */
 watch(
   () => detailForm.value.value,
   (newValue) => {
+    if (!isNormalShell.value) return;
     if (newValue && Object.keys(newValue).length > 0) {
-      // 记录之前的节点审批人
-      tempStartUserSelectAssignees.value = startUserSelectAssignees.value;
+      tempStartUserSelectAssignees.value = {
+        ...startUserSelectAssignees.value,
+      };
       startUserSelectAssignees.value = {};
-      // 加载最新的审批详情
       getApprovalDetail({
         id: props.selectProcessDefinition.id,
-        processVariablesStr: JSON.stringify(newValue), // 解决 GET 无法传递对象的问题，后端 String 再转 JSON
+        processVariablesStr: JSON.stringify(newValue),
       });
     }
   },
@@ -209,50 +401,61 @@ watch(
   },
 );
 
-/** 获取审批详情 */
 async function getApprovalDetail(row: {
   id: string;
   processVariablesStr: string;
 }) {
-  const data = await getApprovalDetailApi({
-    processDefinitionId: row.id,
-    activityId: BpmNodeIdEnum.START_USER_NODE_ID,
-    processVariablesStr: row.processVariablesStr,
-  });
-  if (!data) {
-    message.error('查询不到审批详情信息！');
-    return;
-  }
-
-  // 获取审批节点
-  activityNodes.value = data.activityNodes;
-
-  // 获取发起人自选的任务
-  startUserSelectTasks.value = (data.activityNodes?.filter(
-    (node) =>
-      BpmCandidateStrategyEnum.START_USER_SELECT === node.candidateStrategy,
-  ) || []) as unknown as UserTask[];
-
-  // 恢复之前的选择审批人
-  if (startUserSelectTasks.value.length > 0) {
-    for (const node of startUserSelectTasks.value) {
-      const tempAssignees = tempStartUserSelectAssignees.value[node.id];
-      startUserSelectAssignees.value[node.id] = tempAssignees?.length
-        ? tempAssignees
-        : [];
-    }
-  }
-
-  // 设置表单字段权限
-  const formFieldsPermission = data.formFieldsPermission;
-  if (formFieldsPermission) {
-    Object.entries(formFieldsPermission).forEach(([field, permission]) => {
-      setFieldPermission(field, permission as string);
+  const seq = ++predictGen;
+  try {
+    const data = await getApprovalDetailApi({
+      processDefinitionId: row.id,
+      activityId: BpmNodeIdEnum.START_USER_NODE_ID,
+      processVariablesStr: row.processVariablesStr,
     });
+    // P2：乱序响应丢弃
+    if (seq !== predictGen) {
+      return;
+    }
+    if (!data) {
+      return;
+    }
+    activityNodes.value = data.activityNodes;
+
+    startUserSelectTasks.value = (data.activityNodes?.filter(
+      (node) =>
+        BpmCandidateStrategyEnum.START_USER_SELECT === node.candidateStrategy,
+    ) || []) as unknown as UserTask[];
+
+    if (startUserSelectTasks.value.length > 0) {
+      const nextAssignees: Record<string, string[]> = {
+        ...startUserSelectAssignees.value,
+      };
+      for (const node of startUserSelectTasks.value) {
+        const key = String(node.id);
+        const tempAssignees = tempStartUserSelectAssignees.value[key];
+        const current = startUserSelectAssignees.value[key];
+        if (tempAssignees?.length) {
+          nextAssignees[key] = tempAssignees;
+        } else if (current?.length) {
+          nextAssignees[key] = current;
+        } else {
+          nextAssignees[key] = [];
+        }
+      }
+      startUserSelectAssignees.value = nextAssignees;
+    }
+
+    const formFieldsPermission = data.formFieldsPermission;
+    if (formFieldsPermission && isNormalShell.value) {
+      Object.entries(formFieldsPermission).forEach(([field, permission]) => {
+        setFieldPermission(field, permission as string);
+      });
+    }
+  } catch {
+    // 预测失败不阻断填表
   }
 }
 
-/** 设置表单权限 */
 function setFieldPermission(field: string, permission: string) {
   if (permission === BpmFieldPermissionType.READ) {
     fApi.value?.disabled(true, field);
@@ -265,15 +468,20 @@ function setFieldPermission(field: string, permission: string) {
   }
 }
 
-/** 取消发起审批 */
 function handleCancel() {
   emit('cancel');
 }
 
-/** 选择发起人 */
 function selectUserConfirm(activityId: string, userList: any[]) {
   if (!activityId || !Array.isArray(userList)) return;
-  startUserSelectAssignees.value[activityId] = userList.map((item) => item.id);
+  startUserSelectAssignees.value[activityId] = userList.map((item) =>
+    String(item.id),
+  );
+  // 用户手选后写入 temp，避免随后预测刷新抹掉
+  tempStartUserSelectAssignees.value = {
+    ...tempStartUserSelectAssignees.value,
+    [activityId]: startUserSelectAssignees.value[activityId] || [],
+  };
 }
 
 defineExpose({ initProcessInfo });
@@ -297,7 +505,12 @@ defineExpose({ initProcessInfo });
       </Space>
     </template>
 
+    <div v-if="isUnregistered" class="py-16">
+      <Empty description="该流程未配置发起表单组件，无法在统一发起中提交" />
+    </div>
+
     <Tabs
+      v-else
       v-model:active-key="activeTab"
       class="flex flex-1 flex-col overflow-hidden"
     >
@@ -312,12 +525,35 @@ defineExpose({ initProcessInfo });
             class="flex-1 overflow-auto"
           >
             <form-create
+              v-if="isNormalShell"
               :rule="detailForm.rule"
               v-model:api="fApi"
               v-model="detailForm.value"
               :option="detailForm.option"
               @submit="submitForm"
             />
+            <template v-else-if="isEmbedShell">
+              <div v-if="embedLoading" class="flex justify-center py-16">
+                <Spin tip="加载业务表单…" />
+              </div>
+              <div
+                v-else-if="embedError && !embedReady"
+                class="py-12 text-center"
+              >
+                <Empty :description="embedError" />
+                <Button type="primary" class="mt-4" @click="retryEmbedInit">
+                  重试
+                </Button>
+              </div>
+              <component
+                :is="EmbedComponent"
+                v-show="EmbedComponent && !embedLoading"
+                v-if="EmbedComponent"
+                ref="embedBodyRef"
+                @predict-change="onEmbedPredictChange"
+                @success="() => {}"
+              />
+            </template>
           </Col>
           <Col :xs="24" :sm="24" :md="6" :lg="6" :xl="6">
             <ProcessInstanceTimeline
@@ -335,7 +571,6 @@ defineExpose({ initProcessInfo });
         :force-render="true"
       >
         <div class="h-full w-full">
-          <!-- BPMN 流程图预览 -->
           <ProcessInstanceBpmnViewer
             :bpmn-xml="bpmnXML"
             v-if="BpmModelType.BPMN === selectProcessDefinition.modelType"
@@ -349,13 +584,14 @@ defineExpose({ initProcessInfo });
     </Tabs>
 
     <template #actions>
-      <template v-if="activeTab === 'form'">
+      <template v-if="activeTab === 'form' && !isUnregistered">
         <Space wrap class="flex w-full justify-center">
           <Button
             plain
             type="primary"
+            :disabled="!canSubmit"
+            :loading="processInstanceStartLoading || embedLoading"
             @click="submitForm"
-            :loading="processInstanceStartLoading"
           >
             <IconifyIcon icon="lucide:check" />
             发起

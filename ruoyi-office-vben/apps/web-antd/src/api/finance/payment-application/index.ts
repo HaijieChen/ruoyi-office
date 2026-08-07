@@ -66,6 +66,8 @@ export namespace FinancePaymentApplicationApi {
     evidenceFileUrls: string[];
     specialNote?: string;
     applicantDeptId?: number;
+    /** 发起人自选节点审批人 activityId -> userIds */
+    startUserSelectAssignees?: Record<string, number[]>;
   }
 
   export type ResubmitRequest = CreateAndStartRequest;

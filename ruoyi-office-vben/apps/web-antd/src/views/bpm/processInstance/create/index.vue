@@ -6,7 +6,6 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
-import { BpmModelFormType } from '@vben/constants';
 import { groupBy } from '@vben/utils';
 
 import {
@@ -23,8 +22,6 @@ import {
 import { getCategorySimpleList } from '#/api/bpm/category';
 import { getProcessDefinitionList } from '#/api/bpm/definition';
 import { getProcessInstance } from '#/api/bpm/processInstance';
-import { router } from '#/router';
-import { parsePathWithQuery } from '#/utils';
 
 import ProcessDefinitionDetail from './modules/form.vue';
 
@@ -136,26 +133,17 @@ const processDefinitionGroup = computed(() => {
   return orderedGroup;
 });
 
-/** 处理选择流程的按钮操作 */
+/**
+ * 处理选择流程：通用发起一律留在 BPM 壳内（U1）。
+ * CUSTOM 不再 router.push 业务列表；由 form 模块按 key 注册表挂 FormBody。
+ */
 async function handleSelect(
   row: BpmProcessDefinitionApi.ProcessDefinition,
   formVariables?: any,
 ) {
-  if (row.formType === BpmModelFormType.CUSTOM) {
-    if (row.formCustomCreatePath) {
-      // 支持 path?query（如开票 /finance/invoice-application?openCreate=1）
-      const { path, query } = parsePathWithQuery(row.formCustomCreatePath);
-      await router.push({ path, query });
-    } else {
-      message.error('流程定义中未配置业务表单路径');
-    }
-  } else {
-    // 设置选择的流程
-    selectProcessDefinition.value = row;
-    // 初始化流程定义详情
-    await nextTick();
-    processDefinitionDetailRef.value?.initProcessInfo(row, formVariables);
-  }
+  selectProcessDefinition.value = row;
+  await nextTick();
+  processDefinitionDetailRef.value?.initProcessInfo(row, formVariables);
 }
 
 /** 过滤出有流程的分类列表。目的：只展示有流程的分类 */
@@ -260,7 +248,7 @@ onMounted(() => {
                       />
                       <div
                         v-else
-                        class="bg-primary flex size-12 flex-shrink-0 items-center justify-center rounded"
+                        class="flex size-12 flex-shrink-0 items-center justify-center rounded bg-primary"
                       >
                         <span class="text-xs text-white">
                           {{ definition.name?.slice(0, 2) }}

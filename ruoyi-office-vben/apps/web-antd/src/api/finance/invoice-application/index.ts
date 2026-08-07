@@ -80,6 +80,8 @@ export namespace FinanceInvoiceApplicationApi {
       billingPeriod?: string;
       sort?: number;
     }>;
+    /** 发起人自选节点审批人 activityId -> userIds */
+    startUserSelectAssignees?: Record<string, number[]>;
   }
 
   export interface ResubmitRequest extends CreateAndStartRequest {
