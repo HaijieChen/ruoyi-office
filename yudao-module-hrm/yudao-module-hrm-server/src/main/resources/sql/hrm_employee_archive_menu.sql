@@ -2,39 +2,84 @@
 -- 员工档案管理菜单 SQL
 -- ----------------------------
 
--- 菜单 SQL (注意：parent_id 需要根据实际的 HRM 模块父菜单 ID 进行调整)
--- 假设 HRM 模块的父菜单 ID 为 2000（需要根据实际情况调整）
+-- 菜单 SQL 使用动态父菜单和前端真实组件路径，避免依赖硬编码 ID。
+SET @hrm_menu_id = (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `name` = '人力资源管理' AND `parent_id` = 0
+    ORDER BY `id` LIMIT 1
+);
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`)
+SELECT '人力资源管理', '', 1, 30, 0, '/hrm', 'ep:user', NULL, NULL, 0, b'1', b'1', b'1'
+WHERE @hrm_menu_id IS NULL;
+SET @hrm_menu_id = (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `name` = '人力资源管理' AND `parent_id` = 0
+    ORDER BY `id` LIMIT 1
+);
 
--- 员工档案管理 - 父菜单
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案管理', '', 2, 1, 2000, 'employee-archive', 'ant-design:solution-outlined', '', 0, true, true, true, '1', NOW(), '1', NOW(), false);
+SET @parent_menu_id = (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'hrm/employee/list/index'
+    ORDER BY `id` LIMIT 1
+);
+SET @legacy_parent_menu_id = (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `name` = '员工档案管理'
+    ORDER BY `id` LIMIT 1
+);
+SET @parent_menu_id = COALESCE(@parent_menu_id, @legacy_parent_menu_id);
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`)
+SELECT '员工档案管理', '', 2, 10, @hrm_menu_id, 'employee', 'ant-design:solution-outlined',
+       'hrm/employee/list/index', 'HrmEmployeeArchiveList', 0, b'1', b'1', b'1'
+WHERE @parent_menu_id IS NULL;
+SET @parent_menu_id = (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'hrm/employee/list/index'
+    ORDER BY `id` LIMIT 1
+);
+SET @parent_menu_id = COALESCE(@parent_menu_id, @legacy_parent_menu_id);
+UPDATE `system_menu`
+SET `parent_id` = @hrm_menu_id, `path` = 'employee', `component` = 'hrm/employee/list/index',
+    `component_name` = 'HrmEmployeeArchiveList', `status` = 0, `visible` = b'1', `deleted` = b'0'
+WHERE `id` = @parent_menu_id;
 
--- 获取刚插入的父菜单ID（MySQL 8.0+）
-SET @parent_menu_id = LAST_INSERT_ID();
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`)
+SELECT '员工档案详情', 'hrm:employee-archive:query', 2, 11, @parent_menu_id,
+       '/hrm/employee/employee-archive-info', '', 'hrm/employee/info/index', 'HrmEmployeeArchiveInfo',
+       0, b'0', b'1', b'1'
+WHERE NOT EXISTS (
+    SELECT 1 FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'hrm/employee/info/index'
+);
+UPDATE `system_menu`
+SET `parent_id` = @parent_menu_id, `path` = '/hrm/employee/employee-archive-info',
+    `component` = 'hrm/employee/info/index', `component_name` = 'HrmEmployeeArchiveInfo',
+    `permission` = 'hrm:employee-archive:query', `status` = 0, `visible` = b'0', `deleted` = b'0'
+WHERE `deleted` = b'0' AND `component` = 'hrm/employee/info/index';
 
--- 员工档案管理 - 列表页面
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案列表', 'hrm:employee-archive:query', 2, 1, @parent_menu_id, 'list', '', 'hrm/employee-archive/list/index', 0, true, true, true, '1', NOW(), '1', NOW(), false);
-
--- 员工档案管理 - 详情页面
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案详情', 'hrm:employee-archive:query', 2, 2, @parent_menu_id, 'info', '', 'hrm/employee-archive/info/index', 0, false, true, true, '1', NOW(), '1', NOW(), false);
-
--- 员工档案管理 - 按钮权限
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案查询', 'hrm:employee-archive:query', 3, 1, @parent_menu_id, '', '', '', 0, true, true, true, '1', NOW(), '1', NOW(), false);
-
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案创建', 'hrm:employee-archive:create', 3, 2, @parent_menu_id, '', '', '', 0, true, true, true, '1', NOW(), '1', NOW(), false);
-
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案更新', 'hrm:employee-archive:update', 3, 3, @parent_menu_id, '', '', '', 0, true, true, true, '1', NOW(), '1', NOW(), false);
-
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案删除', 'hrm:employee-archive:delete', 3, 4, @parent_menu_id, '', '', '', 0, true, true, true, '1', NOW(), '1', NOW(), false);
-
-INSERT INTO system_menu(name, permission, type, sort, parent_id, path, icon, component, status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-VALUES ('员工档案导出', 'hrm:employee-archive:export', 3, 5, @parent_menu_id, '', '', '', 0, true, true, true, '1', NOW(), '1', NOW(), false);
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`)
+SELECT p.`name`, p.`permission`, 3, p.`sort`, @parent_menu_id, '', '', NULL, NULL,
+       0, b'1', b'1', b'1'
+FROM (
+    SELECT '员工档案查询' AS `name`, 'hrm:employee-archive:query' AS `permission`, 1 AS `sort`
+    UNION ALL SELECT '员工档案创建', 'hrm:employee-archive:create', 2
+    UNION ALL SELECT '员工档案更新', 'hrm:employee-archive:update', 3
+    UNION ALL SELECT '员工档案删除', 'hrm:employee-archive:delete', 4
+    UNION ALL SELECT '员工档案导出', 'hrm:employee-archive:export', 5
+) p
+WHERE NOT EXISTS (
+    SELECT 1 FROM `system_menu` m
+    WHERE m.`deleted` = b'0' AND m.`parent_id` = @parent_menu_id
+      AND m.`permission` = p.`permission`
+);
 
 -- ----------------------------
 -- 字典数据 SQL
@@ -189,4 +234,3 @@ INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, 
 (@dict_type_id, '已婚', '2', 2, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
 (@dict_type_id, '离异', '3', 3, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
 (@dict_type_id, '丧偶', '4', 4, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
-

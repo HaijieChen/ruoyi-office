@@ -34,7 +34,7 @@ SET @regular_menu_id = (SELECT `id` FROM `system_menu` WHERE `name` = '员工转
 
 -- 员工转正 - 详情页面（隐藏菜单）
 INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`)
-VALUES ('转正申请详情', 'hrm:employee-regular-bill:query', 2, 21, @personnel_management_menu_id, 'regular-info', '', 'hrm/employee-relation/regular/info/index', 'HrmEmployeeRegularBillInfo', 0, 0, 1, 1)
+VALUES ('转正申请详情', 'hrm:employee-regular-bill:query', 2, 21, @regular_menu_id, '/hrm/employee-relation/regular-info', '', 'hrm/employee-relation/regular/info/index', 'HrmEmployeeRegularBillInfo', 0, 0, 1, 1)
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 -- 员工转正 - 按钮权限
@@ -49,4 +49,3 @@ INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `p
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 COMMIT;
-

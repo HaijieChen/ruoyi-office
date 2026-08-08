@@ -34,7 +34,7 @@ SET @resignation_menu_id = (SELECT `id` FROM `system_menu` WHERE `name` = '员�
 
 -- 员工离职 - 详情页面（隐藏菜单）
 INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`)
-VALUES ('离职申请详情', 'hrm:employee-resignation-bill:query', 2, 41, @personnel_management_menu_id, 'resignation-info', '', 'hrm/employee-relation/resignation/info/index', 'HrmEmployeeResignationBillInfo', 0, 0, 1, 1)
+VALUES ('离职申请详情', 'hrm:employee-resignation-bill:query', 2, 41, @resignation_menu_id, '/hrm/employee-relation/resignation-info', '', 'hrm/employee-relation/resignation/info/index', 'HrmEmployeeResignationBillInfo', 0, 0, 1, 1)
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 -- 员工离职 - 按钮权限
@@ -49,4 +49,3 @@ INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `p
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 COMMIT;
-

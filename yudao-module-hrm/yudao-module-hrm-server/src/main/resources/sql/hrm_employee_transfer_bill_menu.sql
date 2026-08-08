@@ -34,7 +34,7 @@ SET @transfer_menu_id = (SELECT `id` FROM `system_menu` WHERE `name` = '人事�
 
 -- 人事调动 - 详情页面（隐藏菜单）
 INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`)
-VALUES ('调动申请详情', 'hrm:employee-transfer-bill:query', 2, 31, @personnel_management_menu_id, 'transfer-info', '', 'hrm/employee-relation/transfer/info/index', 'HrmEmployeeTransferBillInfo', 0, 0, 1, 1)
+VALUES ('调动申请详情', 'hrm:employee-transfer-bill:query', 2, 31, @transfer_menu_id, '/hrm/employee-relation/transfer-info', '', 'hrm/employee-relation/transfer/info/index', 'HrmEmployeeTransferBillInfo', 0, 0, 1, 1)
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 -- 人事调动 - 按钮权限
@@ -49,7 +49,6 @@ INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `p
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 COMMIT;
-
 
 
 

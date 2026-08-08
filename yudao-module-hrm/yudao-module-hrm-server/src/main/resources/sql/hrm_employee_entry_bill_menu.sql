@@ -34,7 +34,7 @@ SET @entry_menu_id = (SELECT `id` FROM `system_menu` WHERE `name` = '入职管�
 
 -- 入职管理 - 详情页面（隐藏菜单）
 INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`, `status`, `visible`, `keep_alive`, `always_show`)
-VALUES ('入职申请详情', 'hrm:employee-entry-bill:query', 2, 1, @entry_menu_id, 'info', '', 'hrm/employee-relation/entry/info/index', 'HrmEmployeeEntryBillInfo', 0, 0, 1, 1)
+VALUES ('入职申请详情', 'hrm:employee-entry-bill:query', 2, 1, @entry_menu_id, '/hrm/employee-relation/entry-info', '', 'hrm/employee-relation/entry/info/index', 'HrmEmployeeEntryBillInfo', 0, 0, 1, 1)
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 -- 入职管理 - 按钮权限
@@ -49,5 +49,4 @@ INSERT INTO `system_menu` (`name`, `permission`, `type`, `sort`, `parent_id`, `p
 ON DUPLICATE KEY UPDATE `permission` = VALUES(`permission`);
 
 COMMIT;
-
 
