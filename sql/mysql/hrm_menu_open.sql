@@ -2,40 +2,72 @@
 --
 -- 覆盖当前已实现的员工档案、入职、转正、调动、离职页面；详情页保留为隐藏
 -- 动态路由。普通角色（tenant_id = 1 的 common）获得这棵菜单树的完整权限。
+--
+-- 产品口径：子菜单挂在现有一级「人力」下，禁止再造平行根「人力资源管理」。
 
 SET NAMES utf8mb4;
 START TRANSACTION;
 
--- 人力资源管理一级菜单
+-- 一级菜单：优先复用现有「人力」(parent_id=0, path=/hrm 或 name=人力)
 SET @hrm_menu_id = (
     SELECT `id`
     FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '人力资源管理' AND `parent_id` = 0
-    ORDER BY `id`
+    WHERE `deleted` = b'0' AND `parent_id` = 0
+      AND (`name` = '人力' OR `path` = '/hrm')
+      AND `name` <> '人力资源管理'
+    ORDER BY CASE WHEN `name` = '人力' THEN 0 ELSE 1 END, `id`
     LIMIT 1
 );
 
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '人力资源管理', '', 1, 30, 0, '/hrm', 'ep:user', NULL, NULL,
+SELECT '人力', '', 1, 25, 0, '/hrm', 'ep:user', NULL, NULL,
        0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @hrm_menu_id IS NULL;
 
 SET @hrm_menu_id = (
-    SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '人力资源管理' AND `parent_id` = 0
-    ORDER BY `id` LIMIT 1
+    SELECT `id`
+    FROM `system_menu`
+    WHERE `deleted` = b'0' AND `parent_id` = 0
+      AND (`name` = '人力' OR `path` = '/hrm')
+      AND `name` <> '人力资源管理'
+    ORDER BY CASE WHEN `name` = '人力' THEN 0 ELSE 1 END, `id`
+    LIMIT 1
 );
 
+-- 仅校正「人力」根节点字段；不改名成「人力资源管理」
 UPDATE `system_menu`
-SET `name` = '人力资源管理', `permission` = '', `type` = 1, `sort` = 30, `parent_id` = 0,
-    `path` = '/hrm', `icon` = 'ep:user', `component` = NULL, `component_name` = NULL,
-    `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1',
+SET `permission` = '', `type` = 1, `parent_id` = 0,
+    `path` = '/hrm', `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1',
     `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
 WHERE `id` = @hrm_menu_id;
 
--- 员工档案页：修正旧脚本的硬编码父菜单和失效组件路径
+-- 软删平行一级根「人力资源管理」，避免侧栏两套 /hrm
+UPDATE `system_menu`
+SET `deleted` = b'1', `updater` = 'admin', `update_time` = NOW()
+WHERE `deleted` = b'0' AND `parent_id` = 0 AND `name` = '人力资源管理'
+  AND `id` <> @hrm_menu_id;
+
+-- 复用「人力」下已有二级目录：人事档案 / 人事管理
+SET @personnel_archive_menu_id = (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `name` = '人事档案' AND `parent_id` = @hrm_menu_id
+    ORDER BY `id` LIMIT 1
+);
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '人事档案', '', 1, 20, @hrm_menu_id, 'personnel-archive', 'ep:folder', NULL, NULL,
+       0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
+WHERE @personnel_archive_menu_id IS NULL;
+SET @personnel_archive_menu_id = (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `name` = '人事档案' AND `parent_id` = @hrm_menu_id
+    ORDER BY `id` LIMIT 1
+);
+
+-- 员工档案页：挂到「人力 → 人事档案」下
 SET @employee_menu_id = (
     SELECT `id` FROM `system_menu`
     WHERE `deleted` = b'0' AND `component` = 'hrm/employee/list/index'
@@ -57,7 +89,7 @@ SET @legacy_archive_list_id = (
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '员工档案管理', '', 2, 10, @hrm_menu_id, 'employee', 'ant-design:solution-outlined',
+SELECT '员工档案管理', '', 2, 10, @personnel_archive_menu_id, 'employee', 'ant-design:solution-outlined',
        'hrm/employee/list/index', 'HrmEmployeeArchiveList', 0, b'1', b'1', b'1',
        'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @employee_menu_id IS NULL;
@@ -71,7 +103,7 @@ SET @employee_menu_id = COALESCE(
 
 UPDATE `system_menu`
 SET `name` = '员工档案管理', `permission` = '', `type` = 2, `sort` = 10,
-    `parent_id` = @hrm_menu_id, `path` = 'employee', `icon` = 'ant-design:solution-outlined',
+    `parent_id` = @personnel_archive_menu_id, `path` = 'employee', `icon` = 'ant-design:solution-outlined',
     `component` = 'hrm/employee/list/index', `component_name` = 'HrmEmployeeArchiveList',
     `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1',
     `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
@@ -135,28 +167,31 @@ WHERE NOT EXISTS (
       AND m.`permission` = p.`permission`
 );
 
--- 员工关系目录和入职管理
-SET @employee_relation_menu_id = (
+-- 人事管理目录（复用「人力」下已有节点）+ 入职/转正/离职/调动
+SET @personnel_management_menu_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '员工关系' AND `parent_id` = @hrm_menu_id
+    WHERE `deleted` = b'0' AND `name` = '人事管理' AND `parent_id` = @hrm_menu_id
     ORDER BY `id` LIMIT 1
 );
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '员工关系', '', 1, 20, @hrm_menu_id, 'employee-relation', 'ep:connection', NULL, NULL,
+SELECT '人事管理', '', 1, 30, @hrm_menu_id, 'personnel-management', 'ep:user-filled', NULL, NULL,
        0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
-WHERE @employee_relation_menu_id IS NULL;
-SET @employee_relation_menu_id = (
+WHERE @personnel_management_menu_id IS NULL;
+SET @personnel_management_menu_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '员工关系' AND `parent_id` = @hrm_menu_id
+    WHERE `deleted` = b'0' AND `name` = '人事管理' AND `parent_id` = @hrm_menu_id
     ORDER BY `id` LIMIT 1
 );
 UPDATE `system_menu`
-SET `type` = 1, `sort` = 20, `path` = 'employee-relation', `icon` = 'ep:connection',
-    `component` = NULL, `component_name` = NULL, `status` = 0, `visible` = b'1',
+SET `type` = 1, `sort` = 30, `parent_id` = @hrm_menu_id, `path` = 'personnel-management',
+    `icon` = 'ep:user-filled', `component` = NULL, `component_name` = NULL, `status` = 0, `visible` = b'1',
     `keep_alive` = b'1', `always_show` = b'1', `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
-WHERE `id` = @employee_relation_menu_id;
+WHERE `id` = @personnel_management_menu_id;
+
+-- 兼容旧脚本变量名：入职等挂在人事管理下，不再使用「员工关系」中间层
+SET @employee_relation_menu_id = @personnel_management_menu_id;
 
 SET @entry_menu_id = (
     SELECT `id` FROM `system_menu`
@@ -165,14 +200,14 @@ SET @entry_menu_id = (
 );
 SET @entry_by_name_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '入职管理' AND `parent_id` = @employee_relation_menu_id
+    WHERE `deleted` = b'0' AND `name` = '入职管理'
     ORDER BY `id` LIMIT 1
 );
 SET @entry_menu_id = COALESCE(@entry_menu_id, @entry_by_name_id);
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '入职管理', '', 2, 10, @employee_relation_menu_id, 'entry', 'ep:user-filled',
+SELECT '入职管理', '', 2, 10, @personnel_management_menu_id, 'entry', 'ep:user-filled',
        'hrm/employee-relation/entry/list/index', 'HrmEmployeeEntryBillList',
        0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @entry_menu_id IS NULL;
@@ -184,7 +219,7 @@ SET @entry_menu_id = COALESCE(
 );
 UPDATE `system_menu`
 SET `name` = '入职管理', `permission` = '', `type` = 2, `sort` = 10,
-    `parent_id` = @employee_relation_menu_id, `path` = 'entry', `icon` = 'ep:user-filled',
+    `parent_id` = @personnel_management_menu_id, `path` = 'entry', `icon` = 'ep:user-filled',
     `component` = 'hrm/employee-relation/entry/list/index', `component_name` = 'HrmEmployeeEntryBillList',
     `status` = 0, `visible` = b'1', `keep_alive` = b'1', `always_show` = b'1',
     `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
@@ -240,29 +275,7 @@ WHERE NOT EXISTS (
       AND m.`permission` = p.`permission`
 );
 
--- 人事管理目录和转正管理
-SET @personnel_management_menu_id = (
-    SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '人事管理' AND `parent_id` = @hrm_menu_id
-    ORDER BY `id` LIMIT 1
-);
-INSERT INTO `system_menu`
-    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
-     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '人事管理', '', 1, 30, @hrm_menu_id, 'personnel-management', 'ep:user-filled', NULL, NULL,
-       0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
-WHERE @personnel_management_menu_id IS NULL;
-SET @personnel_management_menu_id = (
-    SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '人事管理' AND `parent_id` = @hrm_menu_id
-    ORDER BY `id` LIMIT 1
-);
-UPDATE `system_menu`
-SET `type` = 1, `sort` = 30, `path` = 'personnel-management', `icon` = 'ep:user-filled',
-    `component` = NULL, `component_name` = NULL, `status` = 0, `visible` = b'1',
-    `keep_alive` = b'1', `always_show` = b'1', `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
-WHERE `id` = @personnel_management_menu_id;
-
+-- 转正管理（父目录 @personnel_management_menu_id 已在入职段就绪）
 SET @regular_menu_id = (
     SELECT `id` FROM `system_menu`
     WHERE `deleted` = b'0' AND `component` = 'hrm/employee-relation/regular/list/index'
@@ -511,6 +524,22 @@ WHERE NOT EXISTS (
       AND m.`permission` = p.`permission`
 );
 
+-- 软删残留中间层：旧「员工关系」空目录（MySQL 禁止同表 UPDATE 子查询，拆两步）
+DROP TEMPORARY TABLE IF EXISTS tmp_empty_employee_relation;
+CREATE TEMPORARY TABLE tmp_empty_employee_relation AS
+SELECT m.`id`
+FROM `system_menu` m
+WHERE m.`deleted` = b'0' AND m.`name` = '员工关系'
+  AND m.`id` <> COALESCE(@personnel_management_menu_id, 0)
+  AND NOT EXISTS (
+      SELECT 1 FROM `system_menu` c
+      WHERE c.`deleted` = b'0' AND c.`parent_id` = m.`id`
+  );
+UPDATE `system_menu` m
+JOIN tmp_empty_employee_relation t ON t.`id` = m.`id`
+SET m.`deleted` = b'1', m.`updater` = 'admin', m.`update_time` = NOW();
+DROP TEMPORARY TABLE IF EXISTS tmp_empty_employee_relation;
+
 -- common 是 tenant 1 的普通角色；超级管理员本身拥有全部菜单，无需额外写入。
 INSERT INTO `system_role_menu`
     (`role_id`, `menu_id`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
@@ -521,9 +550,10 @@ WHERE r.`deleted` = b'0' AND r.`status` = 0 AND r.`code` = 'common' AND r.`tenan
   AND m.`deleted` = b'0'
   AND (
        m.`id` IN (
-           @hrm_menu_id, @employee_menu_id, @employee_info_id,
-           @employee_relation_menu_id, @entry_menu_id, @entry_info_id,
-           @personnel_management_menu_id, @regular_menu_id, @regular_info_id,
+           @hrm_menu_id, @personnel_archive_menu_id,
+           @employee_menu_id, @employee_info_id,
+           @personnel_management_menu_id, @entry_menu_id, @entry_info_id,
+           @regular_menu_id, @regular_info_id,
            @resignation_menu_id, @resignation_info_id, @transfer_menu_id, @transfer_info_id
        )
        OR m.`permission` IN (
