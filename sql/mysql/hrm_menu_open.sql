@@ -116,15 +116,16 @@ SET @employee_info_id = (
 );
 SET @employee_info_by_name_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '员工档案详情' AND `parent_id` = @employee_menu_id
+    WHERE `deleted` = b'0' AND `name` = '员工档案详情'
     ORDER BY `id` LIMIT 1
 );
 SET @employee_info_id = COALESCE(@employee_info_id, @employee_info_by_name_id);
 
+-- 详情必须与列表平级挂在目录下，不可作为列表子节点（否则前端 convert 会清空列表 component，点菜单直达详情/新增）
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '员工档案详情', 'hrm:employee-archive:query', 2, 11, @employee_menu_id,
+SELECT '员工档案详情', 'hrm:employee-archive:query', 2, 11, @personnel_archive_menu_id,
        '/hrm/employee/employee-archive-info', '', 'hrm/employee/info/index', 'HrmEmployeeArchiveInfo',
        0, b'0', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @employee_info_id IS NULL;
@@ -138,7 +139,7 @@ SET @employee_info_id = COALESCE(
 
 UPDATE `system_menu`
 SET `name` = '员工档案详情', `permission` = 'hrm:employee-archive:query', `type` = 2, `sort` = 11,
-    `parent_id` = @employee_menu_id, `path` = '/hrm/employee/employee-archive-info', `icon` = '',
+    `parent_id` = @personnel_archive_menu_id, `path` = '/hrm/employee/employee-archive-info', `icon` = '',
     `component` = 'hrm/employee/info/index', `component_name` = 'HrmEmployeeArchiveInfo',
     `status` = 0, `visible` = b'0', `keep_alive` = b'1', `always_show` = b'1',
     `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
@@ -231,14 +232,14 @@ SET @entry_info_id = (
 );
 SET @entry_info_by_name_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '入职申请详情' AND `parent_id` = @entry_menu_id
+    WHERE `deleted` = b'0' AND `name` = '入职申请详情'
     ORDER BY `id` LIMIT 1
 );
 SET @entry_info_id = COALESCE(@entry_info_id, @entry_info_by_name_id);
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '入职申请详情', 'hrm:employee-entry-bill:query', 2, 11, @entry_menu_id,
+SELECT '入职申请详情', 'hrm:employee-entry-bill:query', 2, 11, @personnel_management_menu_id,
        '/hrm/employee-relation/entry-info', '', 'hrm/employee-relation/entry/info/index', 'HrmEmployeeEntryBillInfo',
        0, b'0', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @entry_info_id IS NULL;
@@ -250,7 +251,7 @@ SET @entry_info_id = COALESCE(
 );
 UPDATE `system_menu`
 SET `name` = '入职申请详情', `permission` = 'hrm:employee-entry-bill:query', `type` = 2, `sort` = 11,
-    `parent_id` = @entry_menu_id, `path` = '/hrm/employee-relation/entry-info', `icon` = '',
+    `parent_id` = @personnel_management_menu_id, `path` = '/hrm/employee-relation/entry-info', `icon` = '',
     `component` = 'hrm/employee-relation/entry/info/index', `component_name` = 'HrmEmployeeEntryBillInfo',
     `status` = 0, `visible` = b'0', `keep_alive` = b'1', `always_show` = b'1',
     `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
@@ -314,14 +315,14 @@ SET @regular_info_id = (
 );
 SET @regular_info_by_name_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '转正申请详情' AND `parent_id` = @regular_menu_id
+    WHERE `deleted` = b'0' AND `name` = '转正申请详情'
     ORDER BY `id` LIMIT 1
 );
 SET @regular_info_id = COALESCE(@regular_info_id, @regular_info_by_name_id);
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '转正申请详情', 'hrm:employee-regular-bill:query', 2, 21, @regular_menu_id,
+SELECT '转正申请详情', 'hrm:employee-regular-bill:query', 2, 21, @personnel_management_menu_id,
        '/hrm/employee-relation/regular-info', '', 'hrm/employee-relation/regular/info/index', 'HrmEmployeeRegularBillInfo',
        0, b'0', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @regular_info_id IS NULL;
@@ -333,7 +334,7 @@ SET @regular_info_id = COALESCE(
 );
 UPDATE `system_menu`
 SET `name` = '转正申请详情', `permission` = 'hrm:employee-regular-bill:query', `type` = 2, `sort` = 21,
-    `parent_id` = @regular_menu_id, `path` = '/hrm/employee-relation/regular-info', `icon` = '',
+    `parent_id` = @personnel_management_menu_id, `path` = '/hrm/employee-relation/regular-info', `icon` = '',
     `component` = 'hrm/employee-relation/regular/info/index', `component_name` = 'HrmEmployeeRegularBillInfo',
     `status` = 0, `visible` = b'0', `keep_alive` = b'1', `always_show` = b'1',
     `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
@@ -397,14 +398,14 @@ SET @resignation_info_id = (
 );
 SET @resignation_info_by_name_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '离职申请详情' AND `parent_id` = @resignation_menu_id
+    WHERE `deleted` = b'0' AND `name` = '离职申请详情'
     ORDER BY `id` LIMIT 1
 );
 SET @resignation_info_id = COALESCE(@resignation_info_id, @resignation_info_by_name_id);
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '离职申请详情', 'hrm:employee-resignation-bill:query', 2, 41, @resignation_menu_id,
+SELECT '离职申请详情', 'hrm:employee-resignation-bill:query', 2, 41, @personnel_management_menu_id,
        '/hrm/employee-relation/resignation-info', '', 'hrm/employee-relation/resignation/info/index',
        'HrmEmployeeResignationBillInfo', 0, b'0', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @resignation_info_id IS NULL;
@@ -416,7 +417,7 @@ SET @resignation_info_id = COALESCE(
 );
 UPDATE `system_menu`
 SET `name` = '离职申请详情', `permission` = 'hrm:employee-resignation-bill:query', `type` = 2, `sort` = 41,
-    `parent_id` = @resignation_menu_id, `path` = '/hrm/employee-relation/resignation-info', `icon` = '',
+    `parent_id` = @personnel_management_menu_id, `path` = '/hrm/employee-relation/resignation-info', `icon` = '',
     `component` = 'hrm/employee-relation/resignation/info/index',
     `component_name` = 'HrmEmployeeResignationBillInfo', `status` = 0, `visible` = b'0',
     `keep_alive` = b'1', `always_show` = b'1', `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
@@ -480,14 +481,14 @@ SET @transfer_info_id = (
 );
 SET @transfer_info_by_name_id = (
     SELECT `id` FROM `system_menu`
-    WHERE `deleted` = b'0' AND `name` = '调动申请详情' AND `parent_id` = @transfer_menu_id
+    WHERE `deleted` = b'0' AND `name` = '调动申请详情'
     ORDER BY `id` LIMIT 1
 );
 SET @transfer_info_id = COALESCE(@transfer_info_id, @transfer_info_by_name_id);
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
-SELECT '调动申请详情', 'hrm:employee-transfer-bill:query', 2, 51, @transfer_menu_id,
+SELECT '调动申请详情', 'hrm:employee-transfer-bill:query', 2, 51, @personnel_management_menu_id,
        '/hrm/employee-relation/transfer-info', '', 'hrm/employee-relation/transfer/info/index', 'HrmEmployeeTransferBillInfo',
        0, b'0', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 WHERE @transfer_info_id IS NULL;
@@ -499,7 +500,7 @@ SET @transfer_info_id = COALESCE(
 );
 UPDATE `system_menu`
 SET `name` = '调动申请详情', `permission` = 'hrm:employee-transfer-bill:query', `type` = 2, `sort` = 51,
-    `parent_id` = @transfer_menu_id, `path` = '/hrm/employee-relation/transfer-info', `icon` = '',
+    `parent_id` = @personnel_management_menu_id, `path` = '/hrm/employee-relation/transfer-info', `icon` = '',
     `component` = 'hrm/employee-relation/transfer/info/index', `component_name` = 'HrmEmployeeTransferBillInfo',
     `status` = 0, `visible` = b'0', `keep_alive` = b'1', `always_show` = b'1',
     `updater` = 'admin', `update_time` = NOW(), `deleted` = b'0'
