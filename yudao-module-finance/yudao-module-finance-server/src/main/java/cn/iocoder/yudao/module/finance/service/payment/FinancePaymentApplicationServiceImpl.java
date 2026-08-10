@@ -166,7 +166,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .set("contract_settlement_method", prepared.getContractSettlementMethod())
                 .set("pay_method", prepared.getPayMethod())
                 .set("cost_project", prepared.getCostProject())
-                .set("accounting_subject", prepared.getAccountingSubject())
+                // 费用科目/性质仅由财务审批节点填写；申请人重提时清除上一轮财务填写。
+                .set("accounting_subject", null)
                 .set("evidence_file_urls", prepared.getEvidenceFileUrls())
                 .set("special_note", prepared.getSpecialNote())
                 .set("process_title", prepared.getProcessTitle())
@@ -524,11 +525,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         String costProject = reqVO.getCostProject().trim();
         validateDictValue(DICT_PAY_METHOD, payMethod);
         validateDictValue(DICT_COST_PROJECT, costProject);
-        String accountingSubject = trimToNull(reqVO.getAccountingSubject());
-        if (accountingSubject != null) {
-            validateDictValue(DICT_ACCOUNTING_SUBJECT, accountingSubject);
-        }
-
         FinanceCustomerCompanyDO payee = customerCompanyService.getEnabledSupplierCompany(reqVO.getPayeeCompanyId());
         String bankName = StrUtil.blankToDefault(trimToNull(reqVO.getPayeeBankName()), payee.getBankName());
         String bankAccount = StrUtil.blankToDefault(trimToNull(reqVO.getPayeeBankAccount()), payee.getBankAccount());
@@ -606,7 +602,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .contractSettlementMethod(settlement)
                 .payMethod(payMethod)
                 .costProject(costProject)
-                .accountingSubject(accountingSubject)
                 .evidenceFileUrls(evidenceJson)
                 .specialNote(trimToNull(reqVO.getSpecialNote()))
                 .processTitle(title)
@@ -813,7 +808,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         String contractSettlementMethod;
         String payMethod;
         String costProject;
-        String accountingSubject;
         String evidenceFileUrls;
         String specialNote;
         String processTitle;
@@ -839,7 +833,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .contractSettlementMethod(contractSettlementMethod)
                     .payMethod(payMethod)
                     .costProject(costProject)
-                    .accountingSubject(accountingSubject)
                     .evidenceFileUrls(evidenceFileUrls)
                     .specialNote(specialNote)
                     .processTitle(processTitle)

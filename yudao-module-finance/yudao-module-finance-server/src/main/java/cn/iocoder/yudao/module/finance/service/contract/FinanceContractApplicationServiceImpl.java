@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplica
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
@@ -25,6 +26,7 @@ import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,23 +59,27 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private static final Set<String> PRE_PROCESS_REQUIRED_TYPES = Set.of("采购合同", "租赁合同");
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
+    private static final String DICT_PRODUCT_TYPE = "finance_product_type";
 
     private final FinanceContractApplicationMapper applicationMapper;
     private final FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
     private final BpmProcessInstanceApi processInstanceApi;
     private final FinanceCustomerCompanyService customerCompanyService;
     private final ObjectProvider<TaskService> taskServiceProvider;
+    private final DictDataApi dictDataApi;
 
     public FinanceContractApplicationServiceImpl(FinanceContractApplicationMapper applicationMapper,
                                                  FinanceContractApplicationNoRedisDAO applicationNoRedisDAO,
                                                  BpmProcessInstanceApi processInstanceApi,
                                                  FinanceCustomerCompanyService customerCompanyService,
-                                                 ObjectProvider<TaskService> taskServiceProvider) {
+                                                 ObjectProvider<TaskService> taskServiceProvider,
+                                                 DictDataApi dictDataApi) {
         this.applicationMapper = applicationMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
         this.customerCompanyService = customerCompanyService;
         this.taskServiceProvider = taskServiceProvider;
+        this.dictDataApi = dictDataApi;
     }
 
     @Override
@@ -513,6 +519,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         if (!ALLOWED_FILE_TYPES.contains(reqVO.getFileType())) {
             throw exception(CONTRACT_APPLICATION_FILE_TYPE_INVALID);
         }
+        if (StrUtil.isNotBlank(reqVO.getProductType())) {
+            validateProductType(reqVO.getProductType().trim());
+        }
         if (PRE_PROCESS_REQUIRED_TYPES.contains(reqVO.getFileType()) && StrUtil.isBlank(reqVO.getPreProcessRef())) {
             throw exception(CONTRACT_APPLICATION_PRE_PROCESS_REQUIRED);
         }
@@ -527,6 +536,17 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         }
         if (reqVO.getCopyCount() == null || reqVO.getCopyCount() <= 0) {
             throw exception(CONTRACT_APPLICATION_FIELD_REQUIRED);
+        }
+    }
+
+    private void validateProductType(String productType) {
+        if (dictDataApi == null) {
+            throw exception(CONTRACT_APPLICATION_PRODUCT_TYPE_INVALID);
+        }
+        try {
+            dictDataApi.validateDictDataList(DICT_PRODUCT_TYPE, Collections.singletonList(productType)).checkError();
+        } catch (Exception ex) {
+            throw exception(CONTRACT_APPLICATION_PRODUCT_TYPE_INVALID);
         }
     }
 

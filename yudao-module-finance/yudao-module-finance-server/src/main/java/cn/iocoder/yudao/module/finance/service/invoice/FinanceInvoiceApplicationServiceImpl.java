@@ -23,6 +23,7 @@ import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoR
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +64,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     public static final int LINE_ISSUE_STATUS_ISSUED = 1;
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
+    private static final String DICT_PRODUCT_TYPE = "finance_product_type";
 
     private final FinanceInvoiceApplicationMapper applicationMapper;
     private final FinanceInvoiceApplicationLineMapper lineMapper;
@@ -70,6 +73,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     private final FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private final BpmProcessInstanceApi processInstanceApi;
     private final FinanceCustomerCompanyService customerCompanyService;
+    private final DictDataApi dictDataApi;
 
     public FinanceInvoiceApplicationServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
                                                 FinanceInvoiceApplicationLineMapper lineMapper,
@@ -77,7 +81,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                                                 FinanceBusinessOrderMapper businessOrderMapper,
                                                 FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO,
                                                 BpmProcessInstanceApi processInstanceApi,
-                                                FinanceCustomerCompanyService customerCompanyService) {
+                                                FinanceCustomerCompanyService customerCompanyService,
+                                                DictDataApi dictDataApi) {
         this.applicationMapper = applicationMapper;
         this.lineMapper = lineMapper;
         this.fileMapper = fileMapper;
@@ -85,11 +90,13 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
         this.customerCompanyService = customerCompanyService;
+        this.dictDataApi = dictDataApi;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createAndStart(FinanceInvoiceApplicationCreateAndStartReqVO reqVO, Long applicantUserId) {
+        validateProductType(reqVO.getTaxContent());
         List<FinanceInvoiceApplicationCreateAndStartReqVO.Line> lines = reqVO.getLines();
         if (CollUtil.isEmpty(lines)) {
             throw exception(INVOICE_APPLICATION_LINES_EMPTY);
@@ -259,6 +266,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 || Boolean.TRUE.equals(application.getVoided())) {
             throw exception(INVOICE_APPLICATION_STATUS_INVALID);
         }
+        validateProductType(reqVO.getTaxContent());
 
         List<FinanceInvoiceApplicationResubmitReqVO.Line> lines = reqVO.getLines();
         if (CollUtil.isEmpty(lines)) {
@@ -560,6 +568,21 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         return FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus().equals(outcome)
                 || FinanceInvoiceApprovalStatusEnum.REJECTED.getStatus().equals(outcome)
                 || FinanceInvoiceApprovalStatusEnum.CANCELLED.getStatus().equals(outcome);
+    }
+
+    private void validateProductType(String productType) {
+        if (StrUtil.isBlank(productType)) {
+            return;
+        }
+        if (dictDataApi == null) {
+            throw exception(INVOICE_APPLICATION_PRODUCT_TYPE_INVALID);
+        }
+        try {
+            dictDataApi.validateDictDataList(DICT_PRODUCT_TYPE,
+                    Collections.singletonList(productType.trim())).checkError();
+        } catch (Exception ex) {
+            throw exception(INVOICE_APPLICATION_PRODUCT_TYPE_INVALID);
+        }
     }
 
     private static BigDecimal defaultZero(BigDecimal value) {

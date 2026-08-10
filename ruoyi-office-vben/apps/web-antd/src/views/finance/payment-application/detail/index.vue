@@ -3,7 +3,7 @@
  * 付款申请 · BPM 自定义表单「查看」组件（F3）。
  * processInstance/detail 经 formCustomViewPath 加载，
  * props.id = businessKey（付款申请主键）。
- * 财务节点：填写会计科目；出纳节点：支付登记（勿用通用通过）。
+ * 财务节点：填写费用科目/性质；出纳节点：支付登记（勿用通用通过）。
  */
 import type { FinancePaymentApplicationApi } from '#/api/finance/payment-application';
 
@@ -130,9 +130,7 @@ async function loadData() {
   loading.value = true;
   try {
     detail.value = await getPaymentApplication(id);
-    if (detail.value?.accountingSubject) {
-      accountingSubject.value = detail.value.accountingSubject;
-    }
+    accountingSubject.value = detail.value?.accountingSubject || '';
   } catch (error) {
     detail.value = null;
     message.error(error instanceof Error ? error.message : '加载付款详情失败');
@@ -149,13 +147,13 @@ async function handleSaveSubject() {
     return;
   }
   if (!accountingSubject.value?.trim()) {
-    message.warning('请选择会计科目');
+    message.warning('请选择费用科目/性质');
     return;
   }
   submitting.value = true;
   try {
     await updatePaymentAccountingSubject(id, tid, accountingSubject.value.trim());
-    message.success('会计科目已保存，可点击底部「通过」完成财务节点');
+    message.success('费用科目/性质已保存，可点击底部「通过」完成财务节点');
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '保存失败');
@@ -244,34 +242,33 @@ watch(
           </template>
         </Alert>
 
-        <!-- F4 财务节点：会计科目 -->
+        <!-- F4 财务节点：费用科目/性质，仅财务审批节点可见 -->
         <Card
           v-if="isFinanceNode && isApproval !== false"
           class="mb-4"
           size="small"
-          title="财务审核 · 会计科目"
+          title="财务审核 · 费用科目/性质"
         >
           <Alert
             class="mb-3"
             type="info"
             show-icon
-            message="请先保存会计科目，再使用底部「通过」。未填科目无法 complete。"
+            message="请先保存费用科目/性质，再使用底部「通过」。未填写无法 complete。"
           />
           <div class="mb-3 flex flex-wrap items-center gap-2">
             <Select
               v-model:value="accountingSubject"
               class="min-w-[220px]"
               :options="dictOptions('finance_accounting_subject')"
-              placeholder="费用会计科目"
-              allow-clear
+              placeholder="请选择费用科目/性质"
             />
             <Button
               type="primary"
               :loading="submitting"
-              :disabled="!resolvedTaskId"
+              :disabled="!resolvedTaskId || !accountingSubject"
               @click="handleSaveSubject"
             >
-              保存科目
+              保存费用科目/性质
             </Button>
           </div>
           <div v-if="!resolvedTaskId" class="text-sm text-orange-600">
@@ -343,7 +340,10 @@ watch(
           <Descriptions.Item label="账户" :span="2">
             {{ detail.payeeBankName }} / {{ detail.payeeBankAccount }}
           </Descriptions.Item>
-          <Descriptions.Item label="会计科目">
+          <Descriptions.Item
+            v-if="isFinanceNode && isApproval !== false"
+            label="费用科目/性质"
+          >
             {{ detail.accountingSubject || '-' }}
           </Descriptions.Item>
           <Descriptions.Item label="累计已付">

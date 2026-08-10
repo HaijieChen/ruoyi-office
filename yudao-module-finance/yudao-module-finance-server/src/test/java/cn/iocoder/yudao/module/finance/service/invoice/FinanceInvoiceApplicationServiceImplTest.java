@@ -18,6 +18,7 @@ import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoR
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +30,7 @@ import java.util.List;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_OCCUPY_CONCURRENT;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_OCCUPY_EXCEED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_PRODUCT_TYPE_INVALID;
 import static cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationServiceImpl.PROCESS_KEY;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -47,6 +49,7 @@ class FinanceInvoiceApplicationServiceImplTest {
     private FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private BpmProcessInstanceApi processInstanceApi;
     private FinanceCustomerCompanyService customerCompanyService;
+    private DictDataApi dictDataApi;
     private FinanceInvoiceApplicationServiceImpl service;
 
     @BeforeEach
@@ -58,8 +61,10 @@ class FinanceInvoiceApplicationServiceImplTest {
         applicationNoRedisDAO = mock(FinanceInvoiceApplicationNoRedisDAO.class);
         processInstanceApi = mock(BpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
+        dictDataApi = mock(DictDataApi.class);
+        when(dictDataApi.validateDictDataList(anyString(), anyCollection())).thenReturn(CommonResult.success(true));
         service = new FinanceInvoiceApplicationServiceImpl(applicationMapper, lineMapper, fileMapper, businessOrderMapper,
-                applicationNoRedisDAO, processInstanceApi, customerCompanyService);
+                applicationNoRedisDAO, processInstanceApi, customerCompanyService, dictDataApi);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("INV-20260729-1");
         when(customerCompanyService.getEnabledCustomerCompany(anyLong())).thenReturn(
@@ -98,6 +103,20 @@ class FinanceInvoiceApplicationServiceImplTest {
         verify(lineMapper, never()).insert(any(FinanceInvoiceApplicationLineDO.class));
         verify(businessOrderMapper, never()).increaseInvoicedOccupiedAmount(anyLong(), any());
         verifyNoInteractions(processInstanceApi);
+    }
+
+    @Test
+    void createAndStartShouldRejectUnknownProductType() {
+        FinanceInvoiceApplicationCreateAndStartReqVO req = req(line(10L, "10.00"));
+        req.setTaxContent("未知产品类型");
+        when(dictDataApi.validateDictDataList(eq("finance_product_type"), anyCollection()))
+                .thenThrow(new IllegalArgumentException("unknown dictionary value"));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(req, 200L));
+
+        assertEquals(INVOICE_APPLICATION_PRODUCT_TYPE_INVALID.getCode(), ex.getCode());
+        verifyNoInteractions(businessOrderMapper, applicationMapper, processInstanceApi);
     }
 
     @Test
@@ -234,6 +253,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         resubmitReq.setBuyerTaxNo("FAKE");
         resubmitReq.setInvoiceCompany("开票公司");
         resubmitReq.setInvoiceType("普票");
+        resubmitReq.setTaxContent("软件");
         resubmitReq.setLines(List.of(line(10L, "30.00")));
 
         service.resubmit(100L, resubmitReq, 200L);
@@ -257,6 +277,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         FinanceInvoiceApplicationResubmitReqVO resubmitReq = new FinanceInvoiceApplicationResubmitReqVO();
         resubmitReq.setId(100L);
         resubmitReq.setCustomerCompanyId(88L);
+        resubmitReq.setTaxContent("软件");
         resubmitReq.setLines(List.of(line(10L, "10.00")));
 
         ServiceException ex = assertThrows(ServiceException.class,
@@ -274,6 +295,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         reqVO.setBuyerTaxNo("FAKE");
         reqVO.setInvoiceCompany("开票公司");
         reqVO.setInvoiceType("专票");
+        reqVO.setTaxContent("软件");
         reqVO.setLines(List.of(lines));
         return reqVO;
     }

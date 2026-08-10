@@ -44,7 +44,6 @@ interface FormData {
   businessSettlementTerm?: string;
   payMethod?: string;
   costProject?: string;
-  accountingSubject?: string;
   evidenceFileUrls?: string[];
   specialNote?: string;
 }
@@ -246,7 +245,6 @@ async function reset(opts?: { id?: number; mode?: string }) {
       businessSettlementTerm: detail.businessSettlementTerm,
       payMethod: detail.payMethod,
       costProject: detail.costProject,
-      accountingSubject: detail.accountingSubject,
       evidenceFileUrls: parseEvidenceUrls(detail.evidenceFileUrls),
       specialNote: detail.specialNote,
     };
@@ -304,7 +302,6 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       businessSettlementTerm: formData.value.businessSettlementTerm!,
       payMethod: formData.value.payMethod!,
       costProject: formData.value.costProject!,
-      accountingSubject: formData.value.accountingSubject,
       evidenceFileUrls: urls,
       specialNote: formData.value.specialNote,
       startUserSelectAssignees: ctx?.startUserSelectAssignees,

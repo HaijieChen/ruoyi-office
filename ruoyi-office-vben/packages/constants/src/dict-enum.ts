@@ -181,7 +181,9 @@ const IOT_DICT = {
 /** ========== FINANCE - 财务模块 ========== */
 const FINANCE_DICT = {
   FINANCE_INVOICE_TYPE: 'finance_invoice_type', // 发票类型：专票/普票
-  FINANCE_FUND_TYPE_REMARK: 'finance_fund_type_remark', // 款项类型备注：利息收入/往来款项
+  FINANCE_FUND_TYPE_REMARK: 'finance_fund_type_remark', // 款项类型备注：其他收益-政府补助/利息收入/其他应付款
+  FINANCE_ACCOUNTING_SUBJECT: 'finance_accounting_subject', // 付款费用科目/性质
+  FINANCE_PRODUCT_TYPE: 'finance_product_type', // 合同签约/开票产品类型
 } as const;
 
 /** ========== OA - 办公模块 ========== */

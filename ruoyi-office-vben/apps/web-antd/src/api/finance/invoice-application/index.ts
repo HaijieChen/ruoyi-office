@@ -42,6 +42,8 @@ export namespace FinanceInvoiceApplicationApi {
     /** 弱关联客户公司 */
     customerCompanyId?: number;
     specialInvoiceRequirement?: string;
+    /** 产品类型（服务端字段 taxContent） */
+    taxContent?: string;
     remark?: string;
     invoiceCompany?: string;
     /** 开票公司组织部门 id */
@@ -66,6 +68,7 @@ export namespace FinanceInvoiceApplicationApi {
     buyerBankAccount?: string;
     /** 特别开票要求（单据级） */
     specialInvoiceRequirement?: string;
+    /** 产品类型（服务端字段 taxContent，可选） */
     taxContent?: string;
     taxRate?: number;
     amountExcludingTax?: number;

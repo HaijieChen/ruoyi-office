@@ -59,9 +59,6 @@ public class FinancePaymentApplicationCreateAndStartReqVO {
     @NotEmpty(message = "费用归属项目不能为空")
     private String costProject;
 
-    @Schema(description = "会计科目（发起可选）")
-    private String accountingSubject;
-
     @Schema(description = "付款依据文件 URL 列表")
     @NotEmpty(message = "付款依据附件不能为空")
     private List<String> evidenceFileUrls;

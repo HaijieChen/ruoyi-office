@@ -62,7 +62,6 @@ export namespace FinancePaymentApplicationApi {
     businessSettlementTerm: string;
     payMethod: string;
     costProject: string;
-    accountingSubject?: string;
     evidenceFileUrls: string[];
     specialNote?: string;
     applicantDeptId?: number;
@@ -162,7 +161,7 @@ export function recordPayPaymentApplication(
   );
 }
 
-/** 财务主管节点写入会计科目（F4） */
+/** 财务主管节点写入费用科目/性质（F4） */
 export function updatePaymentAccountingSubject(
   id: number,
   taskId: string,

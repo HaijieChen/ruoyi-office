@@ -59,7 +59,7 @@ function defaultFormData(): FormData {
   return { businessFund: true };
 }
 
-/** 款项类型备注：字典 finance_fund_type_remark（利息收入/往来款项，可扩展） */
+/** 款项类型备注：字典 finance_fund_type_remark（其他收益-政府补助/利息收入/其他应付款） */
 const fundTypeRemarkOptions = computed(() =>
   getDictOptions(DICT_TYPE.FINANCE_FUND_TYPE_REMARK),
 );

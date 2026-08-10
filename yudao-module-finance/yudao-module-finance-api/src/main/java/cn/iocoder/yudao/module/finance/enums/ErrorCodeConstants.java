@@ -102,6 +102,8 @@ public interface ErrorCodeConstants {
             "整单办票至少需要一个发票附件");
     ErrorCode INVOICE_APPLICATION_USE_COMPLETE_ISSUE = new ErrorCode(1_040_003_015,
             "请使用整单办票 complete-issue，不再支持一行一票办票");
+    ErrorCode INVOICE_APPLICATION_PRODUCT_TYPE_INVALID = new ErrorCode(1_040_003_016,
+            "产品类型不在启用字典中");
 
     // ========== 客户公司 / 客商 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");
@@ -149,6 +151,8 @@ public interface ErrorCodeConstants {
             "无权查看或操作该合同签约申请");
     ErrorCode CONTRACT_APPLICATION_TASK_INVALID = new ErrorCode(1_040_005_015,
             "BPM 任务无效、节点不匹配或当前用户无权执行");
+    ErrorCode CONTRACT_APPLICATION_PRODUCT_TYPE_INVALID = new ErrorCode(1_040_005_016,
+            "产品类型不在启用字典中");
 
     // ========== 付款申请 / 前置引用 1-040-006-000 ==========
     ErrorCode PAYMENT_PURCHASE_REF_INVALID = new ErrorCode(1_040_006_000,
@@ -177,13 +181,13 @@ public interface ErrorCodeConstants {
     ErrorCode PAYMENT_APPLICATION_REASON_INVALID = new ErrorCode(1_040_006_012, "付款事由无效");
     ErrorCode PAYMENT_APPLICATION_TIMING_INVALID = new ErrorCode(1_040_006_013, "支付时效无效");
     ErrorCode PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED = new ErrorCode(1_040_006_014,
-            "财务主管节点须填写费用会计科目");
+            "财务主管节点须填写费用科目/性质");
     ErrorCode PAYMENT_RELATED_CONTRACT_INVALID = new ErrorCode(1_040_006_015,
             "关联合同无效：须为已通过且未作废的合同签约申请");
     ErrorCode PAYMENT_RELATED_CONTRACT_REASON_INVALID = new ErrorCode(1_040_006_016,
             "仅业务付款允许关联合同；租赁请使用租赁前置合同");
     ErrorCode PAYMENT_APPLICATION_DICT_INVALID = new ErrorCode(1_040_006_017,
-            "费用项目、支付方式或会计科目不在启用字典中");
+            "费用项目、支付方式或费用科目/性质不在启用字典中");
     ErrorCode PAYMENT_APPLICATION_DEPT_REQUIRED = new ErrorCode(1_040_006_018,
             "申请人档案缺少部门，无法发起付款");
     ErrorCode PAYMENT_APPLICATION_EVIDENCE_URL_INVALID = new ErrorCode(1_040_006_019,

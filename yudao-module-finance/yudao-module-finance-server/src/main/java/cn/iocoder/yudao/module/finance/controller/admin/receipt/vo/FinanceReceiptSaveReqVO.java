@@ -55,7 +55,7 @@ public class FinanceReceiptSaveReqVO {
     @NotNull(message = "是否业务款不能为空")
     private Boolean businessFund;
 
-    @Schema(description = "款项类型备注（字典 finance_fund_type_remark，如利息收入/往来款项）")
+    @Schema(description = "款项类型备注（字典 finance_fund_type_remark，如其他收益-政府补助/利息收入/其他应付款）")
     @Size(max = 255, message = "款项类型备注长度不能超过 255")
     private String fundTypeRemark;
 

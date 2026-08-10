@@ -50,7 +50,7 @@ public class FinanceInvoiceApplicationRespVO {
     private Long customerCompanyId;
     @Schema(description = "特殊开票要求")
     private String specialInvoiceRequirement;
-    @Schema(description = "税收分类/开票内容")
+    @Schema(description = "产品类型/开票内容")
     private String taxContent;
     @Schema(description = "税率")
     private BigDecimal taxRate;

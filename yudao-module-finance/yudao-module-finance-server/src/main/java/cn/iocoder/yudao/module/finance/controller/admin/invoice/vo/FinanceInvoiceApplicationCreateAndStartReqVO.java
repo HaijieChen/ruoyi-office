@@ -47,7 +47,7 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Schema(description = "特殊开票要求")
     private String specialInvoiceRequirement;
 
-    @Schema(description = "税收分类/开票内容（提交快照）")
+    @Schema(description = "产品类型/开票内容（提交快照，可选）")
     private String taxContent;
 
     @Schema(description = "税率（提交快照）")

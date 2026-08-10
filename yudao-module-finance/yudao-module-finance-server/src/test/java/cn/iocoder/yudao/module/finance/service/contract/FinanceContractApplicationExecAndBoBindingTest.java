@@ -13,6 +13,7 @@ import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolv
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import org.flowable.engine.TaskService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,9 +49,10 @@ class FinanceContractApplicationExecAndBoBindingTest {
         BpmProcessInstanceApi bpm = mock(BpmProcessInstanceApi.class);
         FinanceCustomerCompanyService customer = mock(FinanceCustomerCompanyService.class);
         ObjectProvider<TaskService> taskProvider = mock(ObjectProvider.class);
+        DictDataApi dictDataApi = mock(DictDataApi.class);
         when(taskProvider.getIfAvailable()).thenReturn(null);
         contractService = new FinanceContractApplicationServiceImpl(
-                contractMapper, noDao, bpm, customer, taskProvider);
+                contractMapper, noDao, bpm, customer, taskProvider, dictDataApi);
 
         boMapper = mock(FinanceBusinessOrderMapper.class);
         FinanceBusinessOrderNoRedisDAO boNo = mock(FinanceBusinessOrderNoRedisDAO.class);

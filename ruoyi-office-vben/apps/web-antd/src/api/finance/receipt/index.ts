@@ -62,7 +62,7 @@ export namespace FinanceBankReceiptApi {
     bankSerialNo: string;
     /** 是否业务款，必填，默认 true */
     businessFund: boolean;
-    /** 款项类型备注，选填（字典 finance_fund_type_remark：利息收入/往来款项） */
+    /** 款项类型备注，选填（字典 finance_fund_type_remark：其他收益-政府补助/利息收入/其他应付款） */
     fundTypeRemark?: string;
   }
 

@@ -58,6 +58,8 @@ interface FormData {
   /** 公司名称快照 */
   invoiceCompany?: string;
   invoiceType?: string;
+  /** 产品类型（服务端字段 taxContent） */
+  taxContent?: string;
   /** 特别开票要求（单据级，不进客户档案） */
   specialInvoiceRequirement?: string;
   remark?: string;
@@ -103,6 +105,13 @@ const isResubmit = computed(() => formData.value.mode === 'resubmit');
 
 const invoiceTypeOptions = computed(() =>
   getDictOptions(DICT_TYPE.FINANCE_INVOICE_TYPE).map((d) => ({
+    label: d.label,
+    value: d.value as number | string,
+  })),
+);
+
+const productTypeOptions = computed(() =>
+  getDictOptions(DICT_TYPE.FINANCE_PRODUCT_TYPE).map((d) => ({
     label: d.label,
     value: d.value as number | string,
   })),
@@ -453,6 +462,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
       invoiceCompanyDeptId: detail.invoiceCompanyDeptId,
       invoiceCompany: detail.invoiceCompany,
       invoiceType: detail.invoiceType,
+      taxContent: detail.taxContent,
       specialInvoiceRequirement: detail.specialInvoiceRequirement,
       remark: detail.remark as any,
       lines: (detail.lines || []).map((l) => ({
@@ -553,6 +563,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       invoiceCompanyDeptId: formData.value.invoiceCompanyDeptId,
       invoiceCompany: formData.value.invoiceCompany,
       invoiceType: formData.value.invoiceType,
+      taxContent: formData.value.taxContent,
       specialInvoiceRequirement: formData.value.specialInvoiceRequirement,
       remark: formData.value.remark,
       lines: formData.value.lines.map((l) => ({
@@ -669,6 +680,15 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
           :options="invoiceTypeOptions"
           placeholder="请选择发票类型"
+        />
+      </Form.Item>
+      <Form.Item label="产品类型" name="taxContent">
+        <Select
+          v-model:value="formData.taxContent"
+          class="w-full"
+          allow-clear
+          :options="productTypeOptions"
+          placeholder="请选择产品类型"
         />
       </Form.Item>
       <Form.Item label="备注" name="remark">

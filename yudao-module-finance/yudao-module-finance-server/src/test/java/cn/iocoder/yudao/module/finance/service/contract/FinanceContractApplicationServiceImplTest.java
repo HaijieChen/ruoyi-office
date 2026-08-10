@@ -13,6 +13,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplica
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import org.flowable.engine.TaskService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class FinanceContractApplicationServiceImplTest {
     private BpmProcessInstanceApi processInstanceApi;
     private FinanceCustomerCompanyService customerCompanyService;
     private ObjectProvider<TaskService> taskServiceProvider;
+    private DictDataApi dictDataApi;
     private FinanceContractApplicationServiceImpl service;
 
     @BeforeEach
@@ -50,10 +52,12 @@ class FinanceContractApplicationServiceImplTest {
         processInstanceApi = mock(BpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
         taskServiceProvider = mock(ObjectProvider.class);
+        dictDataApi = mock(DictDataApi.class);
+        when(dictDataApi.validateDictDataList(anyString(), anyCollection())).thenReturn(CommonResult.success(true));
         when(taskServiceProvider.getIfAvailable()).thenReturn(null);
         service = new FinanceContractApplicationServiceImpl(
                 applicationMapper, applicationNoRedisDAO, processInstanceApi, customerCompanyService,
-                taskServiceProvider);
+                taskServiceProvider, dictDataApi);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("CT-20260731-1");
         when(customerCompanyService.getEnabledCustomerCompany(50L)).thenReturn(
@@ -93,6 +97,17 @@ class FinanceContractApplicationServiceImplTest {
                 () -> service.createAndStart(req, 200L));
         assertEquals(CONTRACT_APPLICATION_PRE_PROCESS_REQUIRED.getCode(), ex.getCode());
         verifyNoInteractions(processInstanceApi);
+    }
+
+    @Test
+    void createAndStartShouldRejectUnknownProductType() {
+        when(dictDataApi.validateDictDataList(anyString(), anyCollection()))
+                .thenThrow(new IllegalArgumentException("unknown dictionary value"));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(validReq(), 200L));
+        assertEquals(CONTRACT_APPLICATION_PRODUCT_TYPE_INVALID.getCode(), ex.getCode());
+        verify(applicationMapper, never()).insert(any(FinanceContractApplicationDO.class));
     }
 
     @Test
@@ -478,6 +493,7 @@ class FinanceContractApplicationServiceImplTest {
         req.setSignCompany("A公司");
         req.setFileName("销售合同-测试");
         req.setFileType("销售合同");
+        req.setProductType("软件");
         req.setRebateRatio("10%");
         req.setSettlementMethod("月结");
         req.setCopyCount(2);
@@ -495,6 +511,7 @@ class FinanceContractApplicationServiceImplTest {
         req.setSignCompany(src.getSignCompany());
         req.setFileName(src.getFileName());
         req.setFileType(src.getFileType());
+        req.setProductType(src.getProductType());
         req.setRebateRatio(src.getRebateRatio());
         req.setSettlementMethod(src.getSettlementMethod());
         req.setCopyCount(src.getCopyCount());

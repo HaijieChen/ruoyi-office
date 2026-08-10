@@ -6,6 +6,9 @@ import type { FinanceCustomerCompanyApi } from '#/api/finance/customer-company';
 
 import { computed, ref } from 'vue';
 
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
+
 import {
   DatePicker,
   Form,
@@ -47,6 +50,13 @@ const SETTLEMENT_OPTIONS = [
   { label: '月结', value: '月结' },
   { label: '其他', value: '其他' },
 ];
+
+const productTypeOptions = computed(() =>
+  getDictOptions(DICT_TYPE.FINANCE_PRODUCT_TYPE).map((d) => ({
+    label: d.label,
+    value: d.value as number | string,
+  })),
+);
 
 interface FormData {
   id?: number;
@@ -354,7 +364,13 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
       />
     </Form.Item>
     <Form.Item label="产品类型" name="productType">
-      <Input v-model:value="formData.productType" placeholder="如红书、百度" />
+      <Select
+        v-model:value="formData.productType"
+        class="w-full"
+        allow-clear
+        :options="productTypeOptions"
+        placeholder="请选择产品类型"
+      />
     </Form.Item>
     <Form.Item label="返点比例" name="rebateRatio">
       <Input v-model:value="formData.rebateRatio" placeholder="文本" />

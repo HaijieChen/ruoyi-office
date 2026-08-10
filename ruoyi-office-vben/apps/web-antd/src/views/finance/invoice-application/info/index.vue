@@ -173,6 +173,9 @@ watch(
           <DescriptionsItem label="发票类型">
             {{ detail.invoiceType || '-' }}
           </DescriptionsItem>
+          <DescriptionsItem label="产品类型">
+            {{ detail.taxContent || '-' }}
+          </DescriptionsItem>
           <DescriptionsItem label="特别开票要求" :span="2">
             {{ detail.specialInvoiceRequirement || '-' }}
           </DescriptionsItem>
