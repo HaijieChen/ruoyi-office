@@ -17,7 +17,20 @@ const hrmMenuIds = [
   ...Array.from({ length: 36 }, (_, index) => 5161 + index),
   5256, 5257, 5258,
 ];
-const expectedMenuIds = [...bpmMenuIds, 5200, 5255, ...hrmMenuIds].sort((left, right) => left - right);
+const organizationMenuIds = [5148, 5149, 5150];
+// 系统管理侧按钮（父链 103→1，get-permission-info 会被 filterDisableMenus 丢掉）
+const systemDeptPermissionMenuIds = [1017, 1018, 1019, 1020];
+// 人力 → 组织管理 下挂的同权按钮（父链完整，前端 auth 可见）
+const hrmDeptPermissionMenuIds = [5259, 5260, 5261, 5262];
+const deptPermissionMenuIds = [...systemDeptPermissionMenuIds, ...hrmDeptPermissionMenuIds];
+const expectedMenuIds = [
+  ...bpmMenuIds,
+  5200,
+  5255,
+  ...hrmMenuIds,
+  ...organizationMenuIds,
+  ...deptPermissionMenuIds,
+].sort((left, right) => left - right);
 
 const bpmPermissions = [
   'bpm:process-instance:query',
@@ -64,7 +77,14 @@ const hrmPermissions = [
   'hrm:employee-transfer-bill:withdraw',
 ];
 
-const expectedPermissions = [...bpmPermissions, ...hrmPermissions].sort();
+const organizationPermissions = [
+  'system:dept:query',
+  'system:dept:create',
+  'system:dept:update',
+  'system:dept:delete',
+];
+
+const expectedPermissions = [...bpmPermissions, ...hrmPermissions, ...organizationPermissions].sort();
 
 let mysqlPassword;
 let sourceDatabase;
@@ -271,6 +291,9 @@ test('isolated role seed converges to the exact menu and permission contract', (
   const accountSql = readRepositoryFile('sql/mysql/hrm_test_user_hr_admin.sql');
   assert.doesNotMatch(roleSql, /UPDATE\s+`system_menu`/i, 'role seed must not mutate the global menu tree');
   assert.match(roleSql, /SIGNAL\s+SQLSTATE\s+'45000'/i, 'selector failures must use SIGNAL');
+  for (const permission of organizationPermissions) {
+    assert.match(roleSql, new RegExp(permission.replaceAll(':', '\\:')));
+  }
   assert.match(accountSql, /SIGNAL\s+SQLSTATE\s+'45000'/i, 'account selector failures must use SIGNAL');
   assert.doesNotMatch(accountSql, /ORDER BY\s+`id`\s+LIMIT\s+1/i, 'account selectors must not silently choose the first duplicate');
 
@@ -284,6 +307,23 @@ test('isolated role seed converges to the exact menu and permission contract', (
     ORDER BY m.id;
   `).map(Number);
   assert.deepEqual(menuIds, expectedMenuIds);
+
+  const hrmRootId = Number(queryScalar(isolatedDatabase, `
+    SELECT id
+    FROM system_menu
+    WHERE deleted = b'0' AND parent_id = 0 AND path = '/hrm';
+  `));
+  const organizationParents = queryRows(isolatedDatabase, `
+    SELECT id, parent_id
+    FROM system_menu
+    WHERE id IN (${organizationMenuIds.join(',')})
+    ORDER BY id;
+  `).map(([id, parentId]) => [Number(id), Number(parentId)]);
+  assert.deepEqual(organizationParents, [
+    [organizationMenuIds[0], hrmRootId],
+    [organizationMenuIds[1], organizationMenuIds[0]],
+    [organizationMenuIds[2], organizationMenuIds[0]],
+  ]);
 
   const permissions = queryColumn(isolatedDatabase, `
     SELECT DISTINCT m.permission
@@ -310,10 +350,10 @@ test('isolated role seed converges to the exact menu and permission contract', (
   assert.deepEqual(roleCodes, ['hr_admin']);
 
   const forbiddenSelectors = {
-    system: "m.path LIKE '/system%' OR m.component LIKE 'system/%' OR m.permission LIKE 'system:%'",
+    system: `(m.path LIKE '/system%' OR m.component LIKE 'system/%' OR m.permission LIKE 'system:%') AND NOT (m.permission LIKE 'system:dept:%' OR (m.name = '组织管理' AND m.component = 'system/dept/index' AND m.parent_id = ${organizationMenuIds[0]}) OR (m.name = '组织架构图' AND m.component = 'system/dept/org-chart' AND m.parent_id = ${organizationMenuIds[0]}))`,
     model: "m.path = 'model' OR m.component LIKE 'bpm/model/%' OR m.permission LIKE 'bpm:model:%'",
     form: "m.path IN ('form', 'form-data-source') OR m.component LIKE 'bpm/form/%' OR m.permission LIKE 'bpm:form:%'",
-    organization: "m.path IN ('dept', 'user', 'role', 'post', 'tenant') OR m.component LIKE 'system/dept/%' OR m.component LIKE 'system/user/%'",
+    organization: `m.path = 'dept' OR (m.component = 'system/dept/index' AND m.parent_id <> ${organizationMenuIds[0]}) OR m.name = '组织架构管理'`,
     attendance: "m.path LIKE '%attend%' OR m.path LIKE '%leave%' OR m.component LIKE '%attend%' OR m.component LIKE '%leave%' OR m.permission LIKE 'bpm:oa-leave:%' OR m.name LIKE '%考勤%' OR m.name LIKE '%请假%'",
   };
   for (const [category, selector] of Object.entries(forbiddenSelectors)) {
@@ -353,8 +393,10 @@ test('role SQL fails before mutation when the dashboard home prerequisite is abs
 test('local API exposes only the process handling path and denies forbidden modules', async () => {
   const deniedEndpoints = [
     ['GET', '/system/menu/list', undefined, 'system menu'],
-    ['GET', '/system/dept/list', undefined, 'organization'],
     ['GET', '/system/user/page?pageNo=1&pageSize=1', undefined, 'system users'],
+    ['GET', '/system/role/page?pageNo=1&pageSize=1', undefined, 'system roles'],
+    ['GET', '/system/post/page?pageNo=1&pageSize=1', undefined, 'system posts'],
+    ['GET', '/system/tenant/page?pageNo=1&pageSize=1', undefined, 'system tenants'],
     ['GET', '/bpm/model/list', undefined, 'process models'],
     ['PUT', '/bpm/model/update-sort-batch?ids=1', undefined, 'process model sort'],
     ['GET', '/bpm/form/page?pageNo=1&pageSize=1', undefined, 'process forms'],
@@ -363,6 +405,13 @@ test('local API exposes only the process handling path and denies forbidden modu
   for (const [method, requestPath, body, label] of deniedEndpoints) {
     const result = await apiRequest(method, requestPath, body);
     assert.equal(result.payload.code, 403, `${label} must return logical code 403: ${JSON.stringify(result.payload)}`);
+  }
+  const organizationEndpoints = [
+    ['GET', '/system/dept/list', 'organization list'],
+  ];
+  for (const [method, requestPath, label] of organizationEndpoints) {
+    const result = await apiRequest(method, requestPath);
+    assert.equal(result.payload.code, 0, `${label} must remain available: ${JSON.stringify(result.payload)}`);
   }
 
   const allowedEndpoints = [

@@ -49,6 +49,90 @@ SET `deleted` = b'1', `updater` = 'admin', `update_time` = NOW()
 WHERE `deleted` = b'0' AND `parent_id` = 0 AND `name` = '人力资源管理'
   AND `id` <> @hrm_menu_id;
 
+-- 组织架构：将既有「组织架构 → 组织管理/组织架构图」子树挂回活动「人力」根。
+-- 旧版菜单曾挂在已软删的「人力资源管理」根下；这里只修正菜单树归属，
+-- 具体角色是否可见由角色白名单决定。
+SET @organization_menu_id = (
+    SELECT `id`
+    FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `name` = '组织架构'
+      AND `path` = 'org'
+    ORDER BY `id`
+    LIMIT 1
+);
+UPDATE `system_menu`
+SET `parent_id` = @hrm_menu_id, `updater` = 'admin', `update_time` = NOW()
+WHERE `deleted` = b'0'
+  AND `id` = @organization_menu_id;
+
+UPDATE `system_menu`
+SET `parent_id` = @organization_menu_id, `updater` = 'admin', `update_time` = NOW()
+WHERE `deleted` = b'0'
+  AND @organization_menu_id IS NOT NULL
+  AND (
+      (`parent_id` = @organization_menu_id AND `name` = '组织管理' AND `component` = 'system/dept/index')
+      OR (`parent_id` = @organization_menu_id AND `name` = '组织架构图' AND `component` = 'system/dept/org-chart')
+  );
+
+-- 组织管理页下挂 system:dept 按钮，保证父链落在「人力 → 组织架构」内。
+-- 系统管理侧 103/1017–1020 仍保留；角色若只绑人力子树，filterDisableMenus
+-- 会丢掉父链断裂的按钮，导致 get-permission-info 不含 system:dept:*、前端按钮隐藏。
+SET @organization_page_menu_id = (
+    SELECT `id`
+    FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `parent_id` = @organization_menu_id
+      AND `name` = '组织管理'
+      AND `component` = 'system/dept/index'
+    ORDER BY `id`
+    LIMIT 1
+);
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '组织查询', 'system:dept:query', 3, 1, @organization_page_menu_id, '', '', NULL, NULL,
+       0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
+WHERE @organization_page_menu_id IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM `system_menu`
+      WHERE `deleted` = b'0' AND `parent_id` = @organization_page_menu_id
+        AND `permission` = 'system:dept:query'
+  );
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '组织新增', 'system:dept:create', 3, 2, @organization_page_menu_id, '', '', NULL, NULL,
+       0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
+WHERE @organization_page_menu_id IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM `system_menu`
+      WHERE `deleted` = b'0' AND `parent_id` = @organization_page_menu_id
+        AND `permission` = 'system:dept:create'
+  );
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '组织修改', 'system:dept:update', 3, 3, @organization_page_menu_id, '', '', NULL, NULL,
+       0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
+WHERE @organization_page_menu_id IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM `system_menu`
+      WHERE `deleted` = b'0' AND `parent_id` = @organization_page_menu_id
+        AND `permission` = 'system:dept:update'
+  );
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '组织删除', 'system:dept:delete', 3, 4, @organization_page_menu_id, '', '', NULL, NULL,
+       0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
+WHERE @organization_page_menu_id IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM `system_menu`
+      WHERE `deleted` = b'0' AND `parent_id` = @organization_page_menu_id
+        AND `permission` = 'system:dept:delete'
+  );
+
 -- 复用「人力」下已有二级目录：人事档案 / 人事管理
 SET @personnel_archive_menu_id = (
     SELECT `id` FROM `system_menu`

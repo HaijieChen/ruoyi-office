@@ -9,8 +9,8 @@
 -- 菜单白名单：
 --   工作台：/dashboard + /home（dashboard/home/index）。首页归属只依赖前置迁移，本脚本不修改 system_menu。
 --   基础流程：/bpm、任务目录、我的流程、待办、已办、抄送、发起及下方 bpm:* 办理按钮。
---   人力：/hrm、人事档案/员工档案、人事管理下的入职/转正/离职/调动及 hrm:* 按钮。
---   不包含系统管理、流程模型/表单配置、组织架构维护、考勤及其他未列出的业务菜单。
+--   人力：/hrm、人事档案/员工档案、人事管理下的入职/转正/离职/调动、组织架构下的组织管理/架构图及对应按钮。
+--   组织架构只开放 system:dept:*；不包含系统管理根、用户/角色/岗位/租户、流程模型/表单配置、考勤及其他未列出的业务菜单。
 --
 -- data_scope=1（全部数据）沿用当前业务假设，仍待业务负责人确认；本脚本不因流程发起而授予模型管理权限。
 -- 角色菜单链接采用先删后插：有效权限状态可重复收敛，但链接自增 id 可能变化，不承诺物理行 id 不变。
@@ -145,6 +145,55 @@ SET @hrm_management_dir_menu_id = (
 );
 CALL `__tmp_hr_admin_assert_single`('hrm personnel management directory', @hrm_management_dir_menu_count);
 
+-- 组织架构：依赖 hrm_menu_open.sql 将既有子树挂到活动 /hrm 根下
+SET @hrm_organization_dir_menu_count = (
+    SELECT COUNT(*) FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `parent_id` = @hrm_root_menu_id
+      AND `name` = '组织架构'
+      AND `path` = 'org'
+);
+SET @hrm_organization_dir_menu_id = (
+    SELECT MIN(`id`) FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `parent_id` = @hrm_root_menu_id
+      AND `name` = '组织架构'
+      AND `path` = 'org'
+);
+CALL `__tmp_hr_admin_assert_single`('hrm organization directory', @hrm_organization_dir_menu_count);
+
+SET @hrm_organization_page_menu_count = (
+    SELECT COUNT(*) FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `parent_id` = @hrm_organization_dir_menu_id
+      AND `name` = '组织管理'
+      AND `component` = 'system/dept/index'
+);
+SET @hrm_organization_page_menu_id = (
+    SELECT MIN(`id`) FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `parent_id` = @hrm_organization_dir_menu_id
+      AND `name` = '组织管理'
+      AND `component` = 'system/dept/index'
+);
+CALL `__tmp_hr_admin_assert_single`('hrm organization management page', @hrm_organization_page_menu_count);
+
+SET @hrm_organization_chart_menu_count = (
+    SELECT COUNT(*) FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `parent_id` = @hrm_organization_dir_menu_id
+      AND `name` = '组织架构图'
+      AND `component` = 'system/dept/org-chart'
+);
+SET @hrm_organization_chart_menu_id = (
+    SELECT MIN(`id`) FROM `system_menu`
+    WHERE `deleted` = b'0'
+      AND `parent_id` = @hrm_organization_dir_menu_id
+      AND `name` = '组织架构图'
+      AND `component` = 'system/dept/org-chart'
+);
+CALL `__tmp_hr_admin_assert_single`('hrm organization chart page', @hrm_organization_chart_menu_count);
+
 SET @hrm_entry_menu_count = (SELECT COUNT(*) FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'hrm/employee-relation/entry/list/index');
 SET @hrm_entry_menu_id = (SELECT MIN(`id`) FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'hrm/employee-relation/entry/list/index');
 CALL `__tmp_hr_admin_assert_single`('hrm entry list page', @hrm_entry_menu_count);
@@ -181,7 +230,7 @@ SET `name` = '人事管理员',
     `data_scope_dept_ids` = '',
     `status` = 0,
     `type` = 2,
-    `remark` = '人事管理员：工作台、基础流程办理及员工全生命周期人力菜单；不含系统管理与流程配置权限。',
+    `remark` = '人事管理员：工作台、基础流程办理、员工全生命周期及组织架构维护；不含系统管理与流程配置权限。',
     `updater` = 'admin',
     `update_time` = NOW(),
     `deleted` = b'0'
@@ -191,7 +240,7 @@ INSERT INTO `system_role`
     (`name`, `code`, `sort`, `data_scope`, `data_scope_dept_ids`, `status`, `type`, `remark`,
      `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
 SELECT '人事管理员', 'hr_admin', 40, 1, '', 0, 2,
-       '人事管理员：工作台、基础流程办理及员工全生命周期人力菜单；不含系统管理与流程配置权限。',
+       '人事管理员：工作台、基础流程办理、员工全生命周期及组织架构维护；不含系统管理与流程配置权限。',
        'admin', NOW(), 'admin', NOW(), b'0', @tenant_id
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_role`
@@ -231,10 +280,19 @@ WHERE r.`id` = @hr_admin_role_id
             -- 人力页面/目录
             @hrm_root_menu_id, @hrm_archive_dir_menu_id, @hrm_employee_menu_id,
             @hrm_employee_info_menu_id, @hrm_management_dir_menu_id,
+            @hrm_organization_dir_menu_id, @hrm_organization_page_menu_id,
+            @hrm_organization_chart_menu_id,
             @hrm_entry_menu_id, @hrm_entry_info_menu_id,
             @hrm_regular_menu_id, @hrm_regular_info_menu_id,
             @hrm_resignation_menu_id, @hrm_resignation_info_menu_id,
             @hrm_transfer_menu_id, @hrm_transfer_info_menu_id
+        )
+        -- 组织架构维护按钮（不授予系统管理根/用户/角色/岗位/租户菜单）
+     OR m.`permission` IN (
+            'system:dept:query',
+            'system:dept:create',
+            'system:dept:update',
+            'system:dept:delete'
         )
         -- 流程办理按钮
      OR m.`permission` IN (
