@@ -61,6 +61,7 @@ public class BpmModelController {
     @GetMapping("/list")
     @Operation(summary = "获得模型分页")
     @Parameter(name = "name", description = "模型名称", example = "芋艿")
+    @PreAuthorize("@ss.hasPermission('bpm:model:query')")
     public CommonResult<List<BpmModelRespVO>> getModelList(@RequestParam(value = "name", required = false) String name) {
         List<Model> list = modelService.getModelList(name);
         if (CollUtil.isEmpty(list)) {
@@ -130,6 +131,7 @@ public class BpmModelController {
     @PutMapping("/update-sort-batch")
     @Operation(summary = "批量修改模型排序")
     @Parameter(name = "ids", description = "编号数组", required = true, example = "1,2,3")
+    @PreAuthorize("@ss.hasPermission('bpm:model:update')")
     public CommonResult<Boolean> updateModelSortBatch(@RequestParam("ids") List<String> ids) {
         modelService.updateModelSortBatch(getLoginUserId(), ids);
         return success(true);
