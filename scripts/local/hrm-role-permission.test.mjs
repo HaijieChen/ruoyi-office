@@ -251,6 +251,21 @@ test('model list and sort endpoints enforce their distinct permissions', () => {
   assert.match(sortMethod, /@PreAuthorize\("@ss\.hasPermission\('bpm:model:update'\)"\)/);
 });
 
+test('legacy workspace landing route redirects to the canonical home route', () => {
+  const coreRoutes = readRepositoryFile('ruoyi-office-vben/apps/web-antd/src/router/routes/core.ts');
+  const preferences = readRepositoryFile('ruoyi-office-vben/apps/web-antd/src/preferences.ts');
+
+  assert.match(preferences, /defaultHomePath:\s*'\/home'/);
+  assert.match(
+    coreRoutes,
+    /name:\s*'WorkspaceCompatibility'[\s\S]*?path:\s*'\/workspace'[\s\S]*?redirect:\s*preferences\.app\.defaultHomePath/,
+  );
+  assert.match(
+    coreRoutes,
+    /name:\s*'WorkspaceCompatibility'[\s\S]*?hideInMenu:\s*true/,
+  );
+});
+
 test('isolated role seed converges to the exact menu and permission contract', () => {
   const roleSql = readRepositoryFile('sql/mysql/hrm_roles_hr_admin.sql');
   const accountSql = readRepositoryFile('sql/mysql/hrm_test_user_hr_admin.sql');

@@ -38,6 +38,21 @@ const coreRoutes: RouteRecordRaw[] = [
     redirect: preferences.app.defaultHomePath,
     children: [],
   },
+  /**
+   * 兼容旧版工作台入口。后端菜单的 canonical path 是 /home，
+   * 但旧部署和浏览器中可能仍保留 /workspace。
+   */
+  {
+    meta: {
+      hideInBreadcrumb: true,
+      hideInMenu: true,
+      hideInTab: true,
+      title: 'Workspace',
+    },
+    name: 'WorkspaceCompatibility',
+    path: '/workspace',
+    redirect: preferences.app.defaultHomePath,
+  },
   {
     component: AuthPageLayout,
     meta: {
