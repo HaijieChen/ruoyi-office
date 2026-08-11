@@ -318,7 +318,7 @@ class EmployeeServiceImplTest {
         legacy.setFileId(null);
         legacy.setFilePath("legacy/path/TEST.pdf");
         legacy.setFileName("TEST.pdf");
-        when(attachmentService.getAttachment(2L)).thenReturn(legacy);
+        when(attachmentService.getAttachmentInternal(2L)).thenReturn(legacy);
         FileRespDTO unique = privatePdf(77L);
         unique.setPath("legacy/path/TEST.pdf");
         when(fileAccessApi.getUniqueFileByPath("legacy/path/TEST.pdf")).thenReturn(unique);
@@ -346,7 +346,7 @@ class EmployeeServiceImplTest {
         legacy.setBusinessId(1L);
         legacy.setFileId(null);
         legacy.setFilePath("dup/path.pdf");
-        when(attachmentService.getAttachment(2L)).thenReturn(legacy);
+        when(attachmentService.getAttachmentInternal(2L)).thenReturn(legacy);
         when(fileAccessApi.getUniqueFileByPath("dup/path.pdf")).thenReturn(null);
 
         assertThrows(ServiceException.class, () ->
@@ -417,7 +417,7 @@ class EmployeeServiceImplTest {
         when(employeeWorkExperienceMapper.selectListByEmployeeId(42L)).thenReturn(List.of());
         when(employeeEducationMapper.selectListByEmployeeId(42L)).thenReturn(List.of());
         when(employeeFamilyMapper.selectListByEmployeeId(42L)).thenReturn(List.of());
-        when(attachmentService.getAttachmentListByBusiness(anyString(), eq(42L))).thenReturn(List.of());
+        when(attachmentService.getAttachmentListByBusinessInternal(anyString(), eq(42L))).thenReturn(List.of());
 
         EmployeeContractDO c1 = EmployeeContractDO.builder()
                 .id(1L).employeeId(42L).sequenceNo(1)
@@ -617,7 +617,7 @@ class EmployeeServiceImplTest {
         foreign.setId(2L);
         foreign.setBusinessType(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
         foreign.setBusinessId(999L);
-        when(attachmentService.getAttachment(2L)).thenReturn(foreign);
+        when(attachmentService.getAttachmentInternal(2L)).thenReturn(foreign);
 
         assertThrows(ServiceException.class, () ->
                 employeeService.downloadOnboardingAttachment(1L, 2L, mock(jakarta.servlet.http.HttpServletResponse.class)));

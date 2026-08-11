@@ -1,22 +1,27 @@
 package cn.iocoder.yudao.module.hrm;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
 /**
- * HRM 独立启动入口（微服务形态）。
+ * HRM 独立启动入口 — <b>已禁止</b>（EXP-75 可执行部署约束）。
  * <p>
- * <b>EXP-75 部署约束：</b>入职资料依赖 {@code FileAccessApi} 本地 Bean（实现位于 infra-server），
- * <b>仅支持 yudao-server 单体</b>（infra + hrm 同进程）。独立启动本类无法注入 FileAccessApi，
- * 不属于 EXP-75 支持的部署形态。生产/测试请使用 {@code YudaoServerApplication}。
+ * 入职资料依赖 {@code FileAccessApi} 本地 Bean（实现位于 infra-server）。
+ * 支持形态：仅 {@code YudaoServerApplication} 单体（infra + hrm 同进程）。
+ * <p>
+ * 独立启动本类会立即失败，避免产出“可打包但缺 Bean”的假微服务。
+ * 打包：本模块 spring-boot-maven-plugin 固定 {@code skip=true}，不生成独立可执行 jar。
  *
  * @author 宇擎源码
  */
-@SpringBootApplication
 public class HrmServerApplication {
 
+    /**
+     * 禁止 standalone 启动。
+     *
+     * @throws UnsupportedOperationException 始终抛出
+     */
     public static void main(String[] args) {
-        SpringApplication.run(HrmServerApplication.class, args);
+        throw new UnsupportedOperationException(
+                "EXP-75: Standalone HrmServerApplication is forbidden. "
+                        + "Deploy via yudao-server monolith only (FileAccessApi co-located).");
     }
 
 }

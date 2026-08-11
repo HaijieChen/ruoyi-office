@@ -23,4 +23,16 @@ public interface FileMapper extends BaseMapperX<FileDO> {
                 .orderByDesc(FileDO::getId));
     }
 
+    /**
+     * 通用分页：排除入职资料私有目录。
+     */
+    default PageResult<FileDO> selectPagePublic(FilePageReqVO reqVO) {
+        return selectPage(reqVO, new LambdaQueryWrapperX<FileDO>()
+                .likeIfPresent(FileDO::getPath, reqVO.getPath())
+                .likeIfPresent(FileDO::getType, reqVO.getType())
+                .betweenIfPresent(FileDO::getCreateTime, reqVO.getCreateTime())
+                .notLike(FileDO::getPath, "hrm-onboarding-private")
+                .orderByDesc(FileDO::getId));
+    }
+
 }

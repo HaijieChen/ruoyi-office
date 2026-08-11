@@ -134,4 +134,45 @@ class AttachmentServiceImplTest {
         assertNull(captor.getValue().get(1).getId());
     }
 
+    @Test
+    void genericGetRejectsOnboardingBusinessType() {
+        AttachmentDO onboarding = new AttachmentDO();
+        onboarding.setId(9L);
+        onboarding.setBusinessType(AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE);
+        when(attachmentMapper.selectById(9L)).thenReturn(onboarding);
+        assertThrows(ServiceException.class, () -> attachmentService.getAttachment(9L));
+    }
+
+    @Test
+    void genericDeleteRejectsOnboardingBusinessType() {
+        AttachmentDO onboarding = new AttachmentDO();
+        onboarding.setId(9L);
+        onboarding.setBusinessType(AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE);
+        when(attachmentMapper.selectById(9L)).thenReturn(onboarding);
+        assertThrows(ServiceException.class, () -> attachmentService.deleteAttachment(9L));
+        verify(attachmentMapper, never()).deleteById(9L);
+    }
+
+    @Test
+    void genericListByBusinessRejectsOnboardingType() {
+        assertThrows(ServiceException.class, () ->
+                attachmentService.getAttachmentListByBusiness(
+                        AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 1L));
+    }
+
+    @Test
+    void internalGetAndListAllowOnboarding() {
+        AttachmentDO onboarding = new AttachmentDO();
+        onboarding.setId(9L);
+        onboarding.setBusinessType(AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE);
+        when(attachmentMapper.selectById(9L)).thenReturn(onboarding);
+        when(attachmentMapper.selectListByBusiness(
+                AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 1L))
+                .thenReturn(List.of(onboarding));
+
+        assertEquals(9L, attachmentService.getAttachmentInternal(9L).getId());
+        assertEquals(1, attachmentService.getAttachmentListByBusinessInternal(
+                AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 1L).size());
+    }
+
 }

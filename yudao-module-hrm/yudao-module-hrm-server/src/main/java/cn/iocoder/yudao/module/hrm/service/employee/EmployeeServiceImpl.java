@@ -311,8 +311,8 @@ public class EmployeeServiceImpl implements EmployeeService {
         respVO.setContractList(BeanUtils.toBean(contracts, EmployeeContractVO.class));
         fillCurrentContract(respVO, contracts);
 
-        // 入职资料（不暴露公开 URL；下载走鉴权接口）
-        List<AttachmentDO> attachments = attachmentService.getAttachmentListByBusiness(
+        // 入职资料（内部列表；不暴露公开 URL；下载走鉴权接口）
+        List<AttachmentDO> attachments = attachmentService.getAttachmentListByBusinessInternal(
                 ONBOARDING_ATTACHMENT_BUSINESS_TYPE, id);
         respVO.setOnboardingAttachments(toOnboardingRespList(id, attachments));
 
@@ -733,7 +733,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (employeeArchiveMapper.selectById(employeeId) == null) {
             throw exception(EMPLOYEE_ARCHIVE_NOT_EXISTS);
         }
-        AttachmentDO att = attachmentService.getAttachment(attachmentId);
+        AttachmentDO att = attachmentService.getAttachmentInternal(attachmentId);
         if (att == null
                 || !ONBOARDING_ATTACHMENT_BUSINESS_TYPE.equals(att.getBusinessType())
                 || !employeeId.equals(att.getBusinessId())) {

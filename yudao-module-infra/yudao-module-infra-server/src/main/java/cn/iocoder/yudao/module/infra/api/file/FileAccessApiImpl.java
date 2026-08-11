@@ -26,7 +26,8 @@ public class FileAccessApiImpl implements FileAccessApi {
 
     @Override
     public FileRespDTO createFile(byte[] content, String name, String directory, String type) {
-        FileDO file = fileService.createFileReturn(content, name, directory, type);
+        // 允许私有目录：仅本本地 Bean 入口（HRM claim）
+        FileDO file = fileService.createFileReturnAllowPrivate(content, name, directory, type);
         return BeanUtils.toBean(file, FileRespDTO.class);
     }
 
@@ -69,9 +70,9 @@ public class FileAccessApiImpl implements FileAccessApi {
         if (file == null || file.getConfigId() == null || StrUtil.isBlank(file.getPath())) {
             return null;
         }
-        // 禁止无 configId 的裸 path 读取，避免路径穿越 fallback
+        // 禁止无 configId 的裸 path 读取；私有 path 走 AllowPrivate
         try {
-            return fileService.getFileContent(file.getConfigId(), file.getPath());
+            return fileService.getFileContentAllowPrivate(file.getConfigId(), file.getPath());
         } catch (Exception e) {
             throw new RuntimeException("读取文件失败: " + id, e);
         }

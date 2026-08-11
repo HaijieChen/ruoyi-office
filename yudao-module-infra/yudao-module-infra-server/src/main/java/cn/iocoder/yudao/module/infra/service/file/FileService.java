@@ -37,10 +37,17 @@ public interface FileService {
                       String name, String directory, String type);
 
     /**
-     * 保存文件并返回完整文件记录（含权威 id/size/path/url）
+     * 保存文件并返回完整文件记录（含权威 id/size/path/url）。
+     * 通用入口：拒绝最终 path 含私有目录。
      */
     FileDO createFileReturn(@NotEmpty(message = "文件内容不能为空") byte[] content,
                             String name, String directory, String type);
+
+    /**
+     * 私有目录写入（仅 FileAccessApi / 入职资料 claim 链路）。
+     */
+    FileDO createFileReturnAllowPrivate(@NotEmpty(message = "文件内容不能为空") byte[] content,
+                                        String name, String directory, String type);
 
     /**
      * 生成文件预签名地址信息，用于上传
@@ -84,12 +91,17 @@ public interface FileService {
     void deleteFileList(List<Long> ids) throws Exception;
 
     /**
-     * 获得文件内容
+     * 获得文件内容（通用：拒绝私有 path）
      *
      * @param configId 配置编号
      * @param path     文件路径
      * @return 文件内容
      */
     byte[] getFileContent(Long configId, String path) throws Exception;
+
+    /**
+     * 获得文件内容（允许私有 path，仅 FileAccessApi）
+     */
+    byte[] getFileContentAllowPrivate(Long configId, String path) throws Exception;
 
 }

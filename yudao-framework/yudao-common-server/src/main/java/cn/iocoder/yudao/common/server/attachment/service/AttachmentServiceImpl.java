@@ -69,6 +69,16 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     @Override
     public void deleteAttachment(Long id) {
+        AttachmentDO existing = attachmentMapper.selectById(id);
+        if (existing == null) {
+            throw invalidParamException("附件不存在");
+        }
+        rejectReservedBusinessType(existing.getBusinessType());
+        attachmentMapper.deleteById(id);
+    }
+
+    @Override
+    public void deleteAttachmentInternal(Long id) {
         validateAttachmentExists(id);
         attachmentMapper.deleteById(id);
     }
@@ -81,16 +91,32 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     @Override
     public AttachmentDO getAttachment(Long id) {
+        AttachmentDO att = attachmentMapper.selectById(id);
+        if (att != null) {
+            rejectReservedBusinessType(att.getBusinessType());
+        }
+        return att;
+    }
+
+    @Override
+    public AttachmentDO getAttachmentInternal(Long id) {
         return attachmentMapper.selectById(id);
     }
 
     @Override
     public List<AttachmentDO> getAttachmentListByBusiness(String businessType, Long businessId) {
+        rejectReservedBusinessType(businessType);
+        return attachmentMapper.selectListByBusiness(businessType, businessId);
+    }
+
+    @Override
+    public List<AttachmentDO> getAttachmentListByBusinessInternal(String businessType, Long businessId) {
         return attachmentMapper.selectListByBusiness(businessType, businessId);
     }
 
     @Override
     public List<AttachmentDO> getAttachmentListByBusinessIds(String businessType, Collection<Long> businessIds) {
+        // 批量接口供 HRM 导出等内部调用；controller 不暴露
         return attachmentMapper.selectListByBusinessIds(businessType, businessIds);
     }
 
@@ -111,7 +137,8 @@ public class AttachmentServiceImpl implements AttachmentService {
     private void doSaveAttachmentList(String businessType, Long businessId, List<AttachmentSaveReqVO> attachments) {
         // null 表示调用方未提供集合 → 由业务服务决定是否调用本方法
         // 空列表表示清空
-        Set<Long> existingIds = getAttachmentListByBusiness(businessType, businessId)
+        // 直接查 mapper，避免通用 getAttachmentListByBusiness 对保留类型拒绝
+        Set<Long> existingIds = attachmentMapper.selectListByBusiness(businessType, businessId)
                 .stream()
                 .map(AttachmentDO::getId)
                 .collect(Collectors.toSet());

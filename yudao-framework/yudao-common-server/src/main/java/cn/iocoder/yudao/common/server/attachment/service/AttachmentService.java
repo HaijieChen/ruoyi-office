@@ -29,14 +29,19 @@ public interface AttachmentService {
     void updateAttachment(@Valid AttachmentSaveReqVO updateReqVO);
 
     /**
-     * 删除附件信息
+     * 删除附件信息（通用：禁止入职资料保留类型）
      *
      * @param id 编号
      */
     void deleteAttachment(Long id);
 
     /**
-     * 获得附件信息
+     * 内部删除：允许入职资料（仅 HRM）
+     */
+    void deleteAttachmentInternal(Long id);
+
+    /**
+     * 获得附件信息（通用：禁止返回入职资料）
      *
      * @param id 编号
      * @return 附件信息
@@ -44,13 +49,23 @@ public interface AttachmentService {
     AttachmentDO getAttachment(Long id);
 
     /**
-     * 根据业务类型和业务ID获取附件列表
+     * 内部读取：允许入职资料（仅 HRM 鉴权下载）
+     */
+    AttachmentDO getAttachmentInternal(Long id);
+
+    /**
+     * 根据业务类型和业务ID获取附件列表（通用：禁止入职资料类型）
      *
      * @param businessType 业务类型
      * @param businessId 业务ID
      * @return 附件列表
      */
     List<AttachmentDO> getAttachmentListByBusiness(String businessType, Long businessId);
+
+    /**
+     * 内部列表：允许入职资料（仅 HRM）
+     */
+    List<AttachmentDO> getAttachmentListByBusinessInternal(String businessType, Long businessId);
 
     /**
      * 根据业务类型和业务ID集合批量获取附件列表
