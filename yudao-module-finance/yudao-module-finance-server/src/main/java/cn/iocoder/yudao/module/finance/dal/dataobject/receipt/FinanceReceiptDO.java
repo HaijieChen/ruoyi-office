@@ -34,6 +34,8 @@ public class FinanceReceiptDO extends BaseDO {
     private String payerName;
     private String payerAccount;
     private BigDecimal transactionAmount;
+    /** 到款币种 CNY/USD/HKD（历史可空） */
+    private String currency;
     private String summary;
     private String bankSerialNo;
     /** 是否业务款（仅展示，不联动认领） */

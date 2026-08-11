@@ -22,6 +22,8 @@ import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicati
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
@@ -73,6 +75,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     private final FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private final BpmProcessInstanceApi processInstanceApi;
     private final FinanceCustomerCompanyService customerCompanyService;
+    private final FinanceEntityCompanyResolver entityCompanyResolver;
     private final DictDataApi dictDataApi;
 
     public FinanceInvoiceApplicationServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
@@ -82,6 +85,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                                                 FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO,
                                                 BpmProcessInstanceApi processInstanceApi,
                                                 FinanceCustomerCompanyService customerCompanyService,
+                                                FinanceEntityCompanyResolver entityCompanyResolver,
                                                 DictDataApi dictDataApi) {
         this.applicationMapper = applicationMapper;
         this.lineMapper = lineMapper;
@@ -90,6 +94,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
         this.customerCompanyService = customerCompanyService;
+        this.entityCompanyResolver = entityCompanyResolver;
         this.dictDataApi = dictDataApi;
     }
 
@@ -116,6 +121,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             occupyByBo.merge(line.getBusinessOrderId(), line.getAmount(), BigDecimal::add);
         }
 
+        String currency = FinanceCurrencySupport.requireSupported(reqVO.getCurrency());
         Map<Long, FinanceBusinessOrderDO> orderMap = loadBusinessOrders(occupyByBo.keySet());
         for (Map.Entry<Long, BigDecimal> entry : occupyByBo.entrySet()) {
             FinanceBusinessOrderDO order = orderMap.get(entry.getKey());
@@ -127,10 +133,15 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             if (settlement.subtract(occupied).compareTo(entry.getValue()) < 0) {
                 throw exception(INVOICE_APPLICATION_OCCUPY_EXCEED);
             }
+            // EXP-73 P2：与商务单同币种
+            FinanceCurrencySupport.assertSameIfBothPresent(order.getCurrency(), currency);
         }
 
         // 1b. 客户公司：服务端权威快照
         BuyerSnapshot buyerSnapshot = resolveBuyerSnapshot(reqVO.getCustomerCompanyId());
+        // 1c. 开票公司：名称快照仅服务端
+        FinanceEntityCompanyResolver.ResolvedCompany invoiceCo =
+                entityCompanyResolver.requireByDeptId(reqVO.getInvoiceCompanyDeptId());
 
         // 2. 写主表
         String applicationNo = applicationNoRedisDAO.generate(LocalDate.now());
@@ -139,12 +150,13 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .approvalStatus(FinanceInvoiceApprovalStatusEnum.PENDING.getStatus())
                 .issueStatus(FinanceInvoiceIssueStatusEnum.NONE.getStatus())
                 .totalAmount(totalAmount)
+                .currency(currency)
                 .confirmedClaimedAmount(ZERO)
                 .pendingClaimedAmount(ZERO)
                 .applicantUserId(applicantUserId)
                 .expectedInvoiceDate(reqVO.getExpectedInvoiceDate())
-                .invoiceCompany(reqVO.getInvoiceCompany())
-                .invoiceCompanyDeptId(reqVO.getInvoiceCompanyDeptId())
+                .invoiceCompany(invoiceCo.name())
+                .invoiceCompanyDeptId(invoiceCo.deptId())
                 .invoiceType(reqVO.getInvoiceType())
                 .buyerName(buyerSnapshot.buyerName())
                 .buyerTaxNo(buyerSnapshot.buyerTaxNo())
@@ -170,7 +182,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                     .applicationId(application.getId())
                     .businessOrderId(line.getBusinessOrderId())
                     .amount(line.getAmount())
-                    .invoiceCompany(line.getInvoiceCompany() != null ? line.getInvoiceCompany() : reqVO.getInvoiceCompany())
+                    .invoiceCompany(invoiceCo.name())
                     .invoiceType(line.getInvoiceType() != null ? line.getInvoiceType() : reqVO.getInvoiceType())
                     .billingPeriod(line.getBillingPeriod())
                     .issueStatus(FinanceInvoiceIssueStatusEnum.NONE.getStatus())
@@ -291,6 +303,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         releaseAllOccupyForApplicationIfAny(appId);
 
         // 2. 校验新占用
+        String currency = FinanceCurrencySupport.requireSupported(reqVO.getCurrency());
         Map<Long, FinanceBusinessOrderDO> orderMap = loadBusinessOrders(newOccupyByBo.keySet());
         for (Map.Entry<Long, BigDecimal> entry : newOccupyByBo.entrySet()) {
             FinanceBusinessOrderDO order = orderMap.get(entry.getKey());
@@ -304,7 +317,11 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             if (settlement.subtract(occupied).compareTo(entry.getValue()) < 0) {
                 throw exception(INVOICE_APPLICATION_OCCUPY_EXCEED);
             }
+            FinanceCurrencySupport.assertSameIfBothPresent(order.getCurrency(), currency);
         }
+
+        FinanceEntityCompanyResolver.ResolvedCompany invoiceCo =
+                entityCompanyResolver.requireByDeptId(reqVO.getInvoiceCompanyDeptId());
 
         // 3. 替换明细
         lineMapper.deleteByApplicationId(appId);
@@ -315,7 +332,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                     .applicationId(appId)
                     .businessOrderId(line.getBusinessOrderId())
                     .amount(line.getAmount())
-                    .invoiceCompany(line.getInvoiceCompany() != null ? line.getInvoiceCompany() : reqVO.getInvoiceCompany())
+                    .invoiceCompany(invoiceCo.name())
                     .invoiceType(line.getInvoiceType() != null ? line.getInvoiceType() : reqVO.getInvoiceType())
                     .billingPeriod(line.getBillingPeriod())
                     .issueStatus(FinanceInvoiceIssueStatusEnum.NONE.getStatus())
@@ -332,9 +349,10 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .set("approval_status", FinanceInvoiceApprovalStatusEnum.PENDING.getStatus())
                 .set("issue_status", FinanceInvoiceIssueStatusEnum.NONE.getStatus())
                 .set("total_amount", totalAmount)
+                .set("currency", currency)
                 .set("expected_invoice_date", reqVO.getExpectedInvoiceDate())
-                .set("invoice_company", reqVO.getInvoiceCompany())
-                .set("invoice_company_dept_id", reqVO.getInvoiceCompanyDeptId())
+                .set("invoice_company", invoiceCo.name())
+                .set("invoice_company_dept_id", invoiceCo.deptId())
                 .set("invoice_type", reqVO.getInvoiceType())
                 .set("buyer_name", buyerSnapshot.buyerName())
                 .set("buyer_tax_no", buyerSnapshot.buyerTaxNo())
@@ -557,6 +575,15 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         variables.put("expectedInvoiceDate", application.getExpectedInvoiceDate());
         variables.put("invoiceCompany", application.getInvoiceCompany());
         variables.put("invoiceCompanyDeptId", application.getInvoiceCompanyDeptId());
+        if (application.getInvoiceCompanyDeptId() != null) {
+            variables.put("companyId", application.getInvoiceCompanyDeptId());
+        }
+        if (StrUtil.isNotBlank(application.getInvoiceCompany())) {
+            variables.put("companyName", application.getInvoiceCompany());
+        }
+        if (StrUtil.isNotBlank(application.getCurrency())) {
+            variables.put("currency", application.getCurrency());
+        }
         variables.put("invoiceType", application.getInvoiceType());
         variables.put("taxContent", application.getTaxContent());
         variables.put("taxRate", application.getTaxRate());

@@ -55,6 +55,7 @@ interface FormData {
   payerName?: string;
   signedExecutionAmount?: number;
   discountRate?: number;
+  currency?: string;
   remark?: string;
   // read-only server fields (displayed only, never sent)
   settlementAmount?: number;
@@ -104,6 +105,7 @@ const rules: Record<string, Rule[]> = {
       trigger: 'change',
     },
   ],
+  currency: [{ required: true, message: '请选择币种', trigger: 'change' }],
   discountRate: [
     {
       validator: (_: Rule, v: number | undefined) => {
@@ -219,6 +221,7 @@ const [Modal, modalApi] = useVbenModal({
       executionEndDate: formData.value.executionEndDate!,
       payerName: formData.value.payerName,
       signedExecutionAmount: formData.value.signedExecutionAmount!,
+      currency: (formData.value.currency || 'CNY').toUpperCase(),
       discountRate: formData.value.discountRate,
       remark: formData.value.remark,
     };

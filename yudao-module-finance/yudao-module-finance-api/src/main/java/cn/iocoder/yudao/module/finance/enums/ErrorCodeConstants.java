@@ -196,4 +196,11 @@ public interface ErrorCodeConstants {
     ErrorCode PAYMENT_APPLICATION_CURRENCY_INVALID = new ErrorCode(1_040_006_020,
             "币种仅支持 CNY/USD/HKD");
 
+    // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
+    /** 交易币种仅允许 CNY/USD/HKD */
+    ErrorCode CURRENCY_INVALID = new ErrorCode(1_040_000_030, "币种仅支持 CNY/USD/HKD");
+    /** 关联单据币种必须一致（本期不做折算） */
+    ErrorCode CURRENCY_MISMATCH = new ErrorCode(1_040_000_031,
+            "关联单据币种不一致，本期不支持跨币种折算");
+
 }

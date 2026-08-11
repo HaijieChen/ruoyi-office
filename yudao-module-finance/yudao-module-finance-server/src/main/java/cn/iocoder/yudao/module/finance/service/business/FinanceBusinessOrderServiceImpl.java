@@ -13,6 +13,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMa
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -65,10 +66,13 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         FinanceEntityCompanyResolver.ResolvedCompany company =
                 entityCompanyResolver.requireByDeptId(createReqVO.getEntityCompanyDeptId());
         // 新数据硬强制：必须关联已通过且本人申请的合同（C4/C18）
-        Long contractAppId = requireSelectableContract(createReqVO.getContractApplicationId(), importerId);
+        FinanceContractApplicationDO contract =
+                requireSelectableContractEntity(createReqVO.getContractApplicationId(), importerId);
+        String currency = FinanceCurrencySupport.requireSupported(createReqVO.getCurrency());
+        FinanceCurrencySupport.assertSameIfBothPresent(contract.getCurrency(), currency);
         LocalDate importDate = LocalDate.now();
-        FinanceBusinessOrderDO businessOrder = buildBusinessOrder(createReqVO, amounts, company);
-        businessOrder.setContractApplicationId(contractAppId);
+        FinanceBusinessOrderDO businessOrder = buildBusinessOrder(createReqVO, amounts, company, currency);
+        businessOrder.setContractApplicationId(contract.getId());
         businessOrder.setOrderNo(businessOrderNoRedisDAO.generate(importDate));
         businessOrder.setImportDate(importDate);
         businessOrder.setImporterId(importerId);
@@ -93,6 +97,13 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         }
         Long currentContractId = currentOrder.getContractApplicationId();
         Long resolvedContractId = resolveContractOnUpdate(currentOrder, updateReqVO, currentOrder.getImporterId());
+        String currency = FinanceCurrencySupport.requireSupported(updateReqVO.getCurrency());
+        if (resolvedContractId != null) {
+            FinanceContractApplicationDO contract = contractApplicationMapper.selectById(resolvedContractId);
+            if (contract != null) {
+                FinanceCurrencySupport.assertSameIfBothPresent(contract.getCurrency(), currency);
+            }
+        }
         // CS-F5/F8/F11：合同列仅经 CAS；任何 updateById 路径都不写 contract_application_id
         if (currentContractId != null && resolvedContractId != null
                 && !java.util.Objects.equals(currentContractId, resolvedContractId)) {
@@ -108,7 +119,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 throw exception(BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN);
             }
         }
-        FinanceBusinessOrderDO updateObj = buildBusinessOrder(updateReqVO, amounts, company);
+        FinanceBusinessOrderDO updateObj = buildBusinessOrder(updateReqVO, amounts, company, currency);
         updateObj.setId(currentOrder.getId());
         updateObj.setOrderNo(currentOrder.getOrderNo());
         updateObj.setImportDate(currentOrder.getImportDate());
@@ -208,6 +219,10 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
      * 新建/导入：合同必须 APPROVED 且申请人=当前用户。
      */
     private Long requireSelectableContract(Long contractApplicationId, Long userId) {
+        return requireSelectableContractEntity(contractApplicationId, userId).getId();
+    }
+
+    private FinanceContractApplicationDO requireSelectableContractEntity(Long contractApplicationId, Long userId) {
         if (contractApplicationId == null) {
             throw exception(BUSINESS_ORDER_CONTRACT_REQUIRED);
         }
@@ -218,7 +233,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 || !Objects.equals(contract.getApplicantUserId(), userId)) {
             throw exception(BUSINESS_ORDER_CONTRACT_INVALID);
         }
-        return contract.getId();
+        return contract;
     }
 
     private Long resolveContractByApplicationNo(String applicationNo, Long userId) {
@@ -300,7 +315,8 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
 
     private static FinanceBusinessOrderDO buildBusinessOrder(FinanceBusinessOrderSaveReqVO reqVO,
                                                                FinanceBusinessOrderImportSupport.NormalizedAmounts amounts,
-                                                               FinanceEntityCompanyResolver.ResolvedCompany company) {
+                                                               FinanceEntityCompanyResolver.ResolvedCompany company,
+                                                               String currency) {
         return FinanceBusinessOrderDO.builder()
                 .entityCompanyDeptId(company.deptId())
                 .entityCompanyName(company.name())
@@ -310,7 +326,9 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 .contactPerson(reqVO.getContactPerson().trim()).executionStartDate(reqVO.getExecutionStartDate())
                 .executionEndDate(reqVO.getExecutionEndDate()).payerName(trimToNull(reqVO.getPayerName()))
                 .signedExecutionAmount(amounts.signedExecutionAmount()).discountRate(amounts.discountRate())
-                .settlementAmount(amounts.settlementAmount()).remark(trimToNull(reqVO.getRemark())).build();
+                .settlementAmount(amounts.settlementAmount())
+                .currency(currency)
+                .remark(trimToNull(reqVO.getRemark())).build();
     }
 
     private static String trimToNull(String value) {

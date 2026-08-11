@@ -24,6 +24,8 @@ public class FinanceInvoiceApplicationRespVO {
     private Integer issueStatus;
     @Schema(description = "价税合计")
     private BigDecimal totalAmount;
+    @Schema(description = "开票币种 CNY/USD/HKD")
+    private String currency;
     @Schema(description = "已确认认领金额")
     private BigDecimal confirmedClaimedAmount;
     @Schema(description = "待确认认领金额")

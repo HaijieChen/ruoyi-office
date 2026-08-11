@@ -47,6 +47,7 @@ interface FormData {
   payerName?: string;
   payerAccount?: string;
   transactionAmount?: number;
+  currency?: string;
   summary?: string;
   bankSerialNo?: string;
   /** 是否业务款，新增默认 true */
@@ -125,6 +126,7 @@ const rules = computed<Record<string, Rule[]>>(() => ({
       trigger: 'blur',
     },
   ],
+  currency: [{ required: true, message: '请选择币种', trigger: 'change' }],
   transactionAmount: [
     { required: true, message: '交易金额不能为空' },
     {
@@ -187,6 +189,7 @@ const [Modal, modalApi] = useVbenModal({
         payerName: detail.payerName,
         payerAccount: detail.payerAccount,
         transactionAmount: detail.transactionAmount,
+        currency: detail.currency || 'CNY',
         summary: detail.summary,
         bankSerialNo: detail.bankSerialNo,
         businessFund: detail.businessFund ?? true,
@@ -229,6 +232,7 @@ const [Modal, modalApi] = useVbenModal({
         payerName: formData.value.payerName?.trim() || undefined,
         payerAccount: formData.value.payerAccount,
         transactionAmount: formData.value.transactionAmount!,
+        currency: (formData.value.currency || 'CNY').toUpperCase(),
         summary: formData.value.summary,
         bankSerialNo: formData.value.bankSerialNo!,
         businessFund: formData.value.businessFund ?? true,
@@ -315,6 +319,16 @@ const [Modal, modalApi] = useVbenModal({
           v-model:value="formData.payerAccount"
           placeholder="可选"
           allow-clear
+        />
+      </Form.Item>
+      <Form.Item label="币种" name="currency" required>
+        <Select
+          v-model:value="formData.currency"
+          :options="[
+            { label: '人民币 CNY', value: 'CNY' },
+            { label: '美元 USD', value: 'USD' },
+            { label: '港币 HKD', value: 'HKD' },
+          ]"
         />
       </Form.Item>
       <Form.Item label="交易金额" name="transactionAmount">

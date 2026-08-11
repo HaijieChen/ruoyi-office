@@ -19,6 +19,7 @@ export namespace FinanceBusinessOrderApi {
     entityCompanyDeptId: number;
     /** 主体公司名称快照 */
     entityCompanyName?: string;
+    currency?: string;
     /** 可选：流程合同ID（legacy，列表不再主展示） */
     contractProcessId?: string;
     /** 合同签约申请编号（正式关联） */
@@ -43,6 +44,8 @@ export namespace FinanceBusinessOrderApi {
     discountRate?: number;
     /** 结算金额，后端 HALF_UP 计算，只读 */
     settlementAmount: number;
+    /** 交易币种 CNY/USD/HKD */
+    currency?: string;
     /** 已确认到款，只读 */
     confirmedClaimedAmount: number;
     /** 剩余可认领余额 = 结算 - 已确认认领，只读 */
@@ -85,6 +88,7 @@ export namespace FinanceBusinessOrderApi {
     contractApplicationId?: number;
     payerName?: string;
     discountRate?: number;
+    currency: string;
     remark?: string;
   };
 

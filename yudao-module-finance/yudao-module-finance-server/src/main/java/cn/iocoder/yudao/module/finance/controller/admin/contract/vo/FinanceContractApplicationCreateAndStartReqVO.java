@@ -24,8 +24,14 @@ public class FinanceContractApplicationCreateAndStartReqVO {
     @Schema(description = "合同金额")
     private BigDecimal contractAmount;
 
-    @Schema(description = "签约主体公司", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "签约主体不能为空")
+    @Schema(description = "交易币种 CNY/USD/HKD；金额不适用时可空，否则必填")
+    private String currency;
+
+    @Schema(description = "签约主体组织部门 ID（启用公司）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "签约主体不能为空")
+    private Long entityCompanyDeptId;
+
+    @Schema(description = "签约主体名称（兼容旧客户端；服务端忽略，以组织快照为准）")
     private String signCompany;
 
     @Schema(description = "用印文件名称", requiredMode = Schema.RequiredMode.REQUIRED)

@@ -360,7 +360,30 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
         }
         validateReceiptsPending(receiptAmounts);
         validateInvoiceApps(invoiceAmounts, claimantId);
+        // EXP-73 P2：到款与开票同币种（双方均有值时强制；历史空放行）
+        assertClaimSameCurrency(receiptAmounts.keySet(), invoiceAmounts.keySet());
         return new ValidatedAllocations(totalAmount, receiptAmounts, invoiceAmounts);
+    }
+
+    private void assertClaimSameCurrency(Set<Long> receiptIds, Set<Long> invoiceIds) {
+        Map<Long, FinanceReceiptDO> receipts = new HashMap<>();
+        if (CollUtil.isNotEmpty(receiptIds)) {
+            receiptMapper.selectListByIds(receiptIds).forEach(r -> receipts.put(r.getId(), r));
+        }
+        Map<Long, FinanceInvoiceApplicationDO> invoices = new HashMap<>();
+        if (CollUtil.isNotEmpty(invoiceIds)) {
+            invoiceApplicationMapper.selectListByIds(invoiceIds).forEach(a -> invoices.put(a.getId(), a));
+        }
+        for (Long receiptId : receiptIds) {
+            FinanceReceiptDO receipt = receipts.get(receiptId);
+            for (Long invoiceId : invoiceIds) {
+                FinanceInvoiceApplicationDO inv = invoices.get(invoiceId);
+                if (receipt != null && inv != null) {
+                    cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport
+                            .assertSameIfBothPresent(receipt.getCurrency(), inv.getCurrency());
+                }
+            }
+        }
     }
 
     private void validateReceiptsPending(Map<Long, BigDecimal> amounts) {

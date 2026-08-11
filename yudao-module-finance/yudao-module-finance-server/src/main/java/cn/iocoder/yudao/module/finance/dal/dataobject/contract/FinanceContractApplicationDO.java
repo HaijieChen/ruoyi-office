@@ -39,7 +39,16 @@ public class FinanceContractApplicationDO extends TenantBaseDO {
     private String counterpartyName;
     private Boolean amountNa;
     private BigDecimal contractAmount;
+    /** 交易币种 CNY/USD/HKD（历史可空） */
+    private String currency;
+    /**
+     * 签约主体名称（历史字段；新单与 {@link #entityCompanyName} 同步写入以兼容旧读路径）
+     */
     private String signCompany;
+    /** 签约主体组织部门编号（启用公司） */
+    private Long entityCompanyDeptId;
+    /** 签约主体名称快照（仅服务端生成） */
+    private String entityCompanyName;
     private String fileName;
     private String fileType;
     private String productType;

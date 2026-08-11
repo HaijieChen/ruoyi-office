@@ -23,7 +23,10 @@ public class FinanceContractApplicationRespVO {
     private String counterpartyName;
     private Boolean amountNa;
     private BigDecimal contractAmount;
+    private String currency;
     private String signCompany;
+    private Long entityCompanyDeptId;
+    private String entityCompanyName;
     private String fileName;
     private String fileType;
     private String productType;

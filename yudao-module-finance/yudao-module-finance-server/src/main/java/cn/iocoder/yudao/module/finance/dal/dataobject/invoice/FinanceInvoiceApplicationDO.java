@@ -40,6 +40,8 @@ public class FinanceInvoiceApplicationDO extends BaseDO {
      */
     private Integer issueStatus;
     private BigDecimal totalAmount;
+    /** 开票币种 CNY/USD/HKD（历史可空） */
+    private String currency;
     private BigDecimal confirmedClaimedAmount;
     private BigDecimal pendingClaimedAmount;
     private Long applicantUserId;

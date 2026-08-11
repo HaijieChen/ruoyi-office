@@ -48,6 +48,7 @@ export namespace FinanceInvoiceApplicationApi {
     invoiceCompany?: string;
     /** 开票公司组织部门 id */
     invoiceCompanyDeptId?: number;
+    currency?: string;
     invoiceType?: string;
     voided?: boolean;
     createTime?: string;
@@ -59,6 +60,7 @@ export namespace FinanceInvoiceApplicationApi {
     expectedInvoiceDate?: string;
     invoiceCompany?: string;
     invoiceCompanyDeptId?: number;
+    currency?: string;
     invoiceType?: string;
     /** 必选启用客户公司；服务端写 buyer 快照 */
     customerCompanyId: number;

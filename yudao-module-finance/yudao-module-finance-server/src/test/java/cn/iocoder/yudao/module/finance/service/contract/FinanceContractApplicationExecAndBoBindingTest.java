@@ -51,8 +51,11 @@ class FinanceContractApplicationExecAndBoBindingTest {
         ObjectProvider<TaskService> taskProvider = mock(ObjectProvider.class);
         DictDataApi dictDataApi = mock(DictDataApi.class);
         when(taskProvider.getIfAvailable()).thenReturn(null);
+        FinanceEntityCompanyResolver entityResolver = mock(FinanceEntityCompanyResolver.class);
+        when(entityResolver.requireByDeptId(anyLong()))
+                .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(COMPANY_DEPT_ID, "示例主体公司", "CNY"));
         contractService = new FinanceContractApplicationServiceImpl(
-                contractMapper, noDao, bpm, customer, taskProvider, dictDataApi);
+                contractMapper, noDao, bpm, customer, entityResolver, taskProvider, dictDataApi);
 
         boMapper = mock(FinanceBusinessOrderMapper.class);
         FinanceBusinessOrderNoRedisDAO boNo = mock(FinanceBusinessOrderNoRedisDAO.class);
@@ -298,6 +301,7 @@ class FinanceContractApplicationExecAndBoBindingTest {
         req.setExecutionEndDate(LocalDate.of(2026, 7, 31));
         req.setSignedExecutionAmount(new BigDecimal("1000.00"));
         req.setDiscountRate(BigDecimal.ZERO);
+        req.setCurrency("CNY");
         return req;
     }
 }

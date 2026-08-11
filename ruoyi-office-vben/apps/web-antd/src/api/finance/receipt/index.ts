@@ -18,6 +18,7 @@ export namespace FinanceBankReceiptApi {
     payerName?: string;
     payerAccount?: string;
     transactionAmount: number;
+    currency?: string;
     summary?: string;
     bankSerialNo: string;
     /** 是否业务款（非业务款 payer 可空；认领仅业务款） */
@@ -58,6 +59,7 @@ export namespace FinanceBankReceiptApi {
     payerName?: string;
     payerAccount?: string;
     transactionAmount: number;
+    currency: string;
     summary?: string;
     bankSerialNo: string;
     /** 是否业务款，必填，默认 true */

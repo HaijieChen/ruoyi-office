@@ -434,7 +434,7 @@ watch(
             {{ detail.counterpartyName || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="签约主体">
-            {{ detail.signCompany || '-' }}
+            {{ detail.entityCompanyName || detail.signCompany || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="文件名称" :span="2">
             {{ detail.fileName || '-' }}

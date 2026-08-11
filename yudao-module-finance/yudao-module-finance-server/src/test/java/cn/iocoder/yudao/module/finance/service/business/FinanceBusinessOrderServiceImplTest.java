@@ -56,6 +56,7 @@ class FinanceBusinessOrderServiceImplTest {
                 .applicationNo("CT-1")
                 .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                 .applicantUserId(IMPORTER_ID)
+                .currency("CNY")
                 .voided(false)
                 .build());
         when(entityCompanyResolver.requireByDeptId(ENTITY_COMPANY_DEPT_ID))
@@ -211,6 +212,7 @@ class FinanceBusinessOrderServiceImplTest {
         reqVO.setPayerName("付款公司");
         reqVO.setSignedExecutionAmount(new BigDecimal("1000.00"));
         reqVO.setDiscountRate(new BigDecimal("0.10"));
+        reqVO.setCurrency("CNY");
         reqVO.setRemark("备注内容");
         return reqVO;
     }

@@ -42,6 +42,8 @@ public class FinanceBusinessOrderDO extends BaseDO {
     private BigDecimal signedExecutionAmount;
     private BigDecimal discountRate;
     private BigDecimal settlementAmount;
+    /** 交易币种 CNY/USD/HKD（历史可空） */
+    private String currency;
     private String remark;
     private BigDecimal confirmedClaimedAmount;
     /**
