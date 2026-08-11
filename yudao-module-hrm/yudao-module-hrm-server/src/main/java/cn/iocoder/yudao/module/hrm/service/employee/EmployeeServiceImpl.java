@@ -9,6 +9,7 @@ import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.dict.core.DictFrameworkUtils;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.*;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.*;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.*;
@@ -18,6 +19,7 @@ import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserUpdateReqDTO;
+import cn.iocoder.yudao.module.system.enums.DictTypeConstants;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,17 @@ public class EmployeeServiceImpl implements EmployeeService {
     public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
 
     private static final DateTimeFormatter YEAR_MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
+
+    /** 字典类型（导出标签） */
+    private static final String DICT_NATION = "hrm_nation";
+    private static final String DICT_MARITAL = "hrm_marital_status";
+    private static final String DICT_FERTILITY = "hrm_fertility_status";
+    private static final String DICT_HOUSEHOLD = "hrm_household_type";
+    private static final String DICT_EDUCATION = "hrm_education";
+    private static final String DICT_EDUCATION_TYPE = "hrm_education_type";
+    private static final String DICT_EMPLOYEE_STATUS = "hrm_employee_status";
+    private static final String DICT_EMPLOYMENT_FORM = "hrm_employment_form";
+    private static final String DICT_CONTRACT_TYPE = "hrm_contract_type";
 
     @Resource
     private EmployeeMapper employeeArchiveMapper;
@@ -91,14 +104,16 @@ public class EmployeeServiceImpl implements EmployeeService {
         applyEducationSummary(archive, createReqVO.getEducationList());
         employeeArchiveMapper.insert(archive);
 
-        // 插入关联明细
+        // 插入关联明细（create 时 null 与 empty 均表示无明细）
         saveWorkExperiences(archive.getId(), createReqVO.getWorkExperienceList());
         saveEducations(archive.getId(), createReqVO.getEducationList());
         saveFamilies(archive.getId(), createReqVO.getFamilyList());
         saveContracts(archive.getId(), createReqVO.getContractList());
 
-        attachmentService.saveAttachmentList(
-                ONBOARDING_ATTACHMENT_BUSINESS_TYPE, archive.getId(), createReqVO.getOnboardingAttachments());
+        if (createReqVO.getOnboardingAttachments() != null) {
+            attachmentService.saveAttachmentList(
+                    ONBOARDING_ATTACHMENT_BUSINESS_TYPE, archive.getId(), createReqVO.getOnboardingAttachments());
+        }
 
         return archive.getId();
     }
@@ -114,7 +129,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw exception(EMPLOYEE_ARCHIVE_NOT_EXISTS);
         }
 
-        // 更新主表
+        // 更新主表（可空花名册字段使用 FieldStrategy.ALWAYS，显式 null 会写 SQL NULL）
         EmployeeDO updateObj = BeanUtils.toBean(updateReqVO, EmployeeDO.class);
         applyEducationSummary(updateObj, updateReqVO.getEducationList());
         // 社保为否时清空参保年月
@@ -123,20 +138,27 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
         employeeArchiveMapper.updateById(updateObj);
 
-        // 删除旧的关联记录
-        employeeWorkExperienceMapper.deleteByEmployeeId(updateReqVO.getId());
-        employeeEducationMapper.deleteByEmployeeId(updateReqVO.getId());
-        employeeFamilyMapper.deleteByEmployeeId(updateReqVO.getId());
-        employeeContractMapper.deleteByEmployeeId(updateReqVO.getId());
-
-        // 插入新的关联记录
-        saveWorkExperiences(updateReqVO.getId(), updateReqVO.getWorkExperienceList());
-        saveEducations(updateReqVO.getId(), updateReqVO.getEducationList());
-        saveFamilies(updateReqVO.getId(), updateReqVO.getFamilyList());
-        saveContracts(updateReqVO.getId(), updateReqVO.getContractList());
-
-        attachmentService.saveAttachmentList(
-                ONBOARDING_ATTACHMENT_BUSINESS_TYPE, updateReqVO.getId(), updateReqVO.getOnboardingAttachments());
+        // 集合契约：null/未提供 = 保留；非 null（含空数组）= 整表替换
+        if (updateReqVO.getWorkExperienceList() != null) {
+            employeeWorkExperienceMapper.deleteByEmployeeId(updateReqVO.getId());
+            saveWorkExperiences(updateReqVO.getId(), updateReqVO.getWorkExperienceList());
+        }
+        if (updateReqVO.getEducationList() != null) {
+            employeeEducationMapper.deleteByEmployeeId(updateReqVO.getId());
+            saveEducations(updateReqVO.getId(), updateReqVO.getEducationList());
+        }
+        if (updateReqVO.getFamilyList() != null) {
+            employeeFamilyMapper.deleteByEmployeeId(updateReqVO.getId());
+            saveFamilies(updateReqVO.getId(), updateReqVO.getFamilyList());
+        }
+        if (updateReqVO.getContractList() != null) {
+            employeeContractMapper.deleteByEmployeeId(updateReqVO.getId());
+            saveContracts(updateReqVO.getId(), updateReqVO.getContractList());
+        }
+        if (updateReqVO.getOnboardingAttachments() != null) {
+            attachmentService.saveAttachmentList(
+                    ONBOARDING_ATTACHMENT_BUSINESS_TYPE, updateReqVO.getId(), updateReqVO.getOnboardingAttachments());
+        }
 
         // 如果已生成用户，同步更新用户信息
         if (oldEmployee.getUserGenerated() != null && oldEmployee.getUserGenerated() && oldEmployee.getUserId() != null) {
@@ -336,7 +358,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw exception(EMPLOYEE_ROSTER_SALARY_NEGATIVE);
         }
 
-        // 教育：第一/最高各至多一条
+        // 教育：第一/最高各至多一条（仅当集合非 null 时校验）
         if (CollUtil.isNotEmpty(req.getEducationList())) {
             long firstCount = req.getEducationList().stream()
                     .filter(e -> Boolean.TRUE.equals(e.getFirstEducation())).count();
@@ -347,15 +369,17 @@ public class EmployeeServiceImpl implements EmployeeService {
             }
         }
 
-        // 合同
+        // 合同：null = 不校验（保留）；非 null 则校验（含空数组清空）
         List<EmployeeContractVO> contracts = req.getContractList();
-        if (CollUtil.isEmpty(contracts)) {
+        if (contracts == null) {
+            return;
+        }
+        if (contracts.isEmpty()) {
             return;
         }
         if (contracts.size() > 4) {
             throw exception(EMPLOYEE_ROSTER_CONTRACT_LIMIT);
         }
-        // 按序号排序后校验连续
         List<EmployeeContractVO> sorted = contracts.stream()
                 .sorted(Comparator.comparing(EmployeeContractVO::getSequenceNo,
                         Comparator.nullsLast(Integer::compareTo)))
@@ -366,7 +390,11 @@ public class EmployeeServiceImpl implements EmployeeService {
             if (c.getSequenceNo() == null || c.getSequenceNo() != i + 1 || !seen.add(c.getSequenceNo())) {
                 throw exception(EMPLOYEE_ROSTER_CONTRACT_SEQUENCE);
             }
-            if (c.getEndDate() != null && c.getStartDate() != null && c.getEndDate().isBefore(c.getStartDate())) {
+            // F8：开始日期必填，避免落到 DB NOT NULL 500
+            if (c.getStartDate() == null) {
+                throw exception(EMPLOYEE_ROSTER_CONTRACT_START_REQUIRED);
+            }
+            if (c.getEndDate() != null && c.getEndDate().isBefore(c.getStartDate())) {
                 throw exception(EMPLOYEE_ROSTER_CONTRACT_DATE);
             }
         }
@@ -511,11 +539,12 @@ public class EmployeeServiceImpl implements EmployeeService {
         row.setSocialSecurityStartMonth(employee.getSocialSecurityStartMonth());
         row.setIdCard(employee.getIdCard());
         row.setMobile(employee.getMobile());
-        row.setSex(employee.getSex() == null ? null : String.valueOf(employee.getSex()));
-        row.setNation(employee.getNation());
+        row.setSex(dictLabel(DictTypeConstants.USER_SEX, employee.getSex()));
+        row.setNation(dictLabel(DICT_NATION, employee.getNation()));
         row.setMarriageChildbearingSummary(buildMarriageChildbearingSummary(
-                employee.getMaritalStatus(), employee.getFertilityStatus()));
-        row.setHouseholdType(employee.getHouseholdType());
+                dictLabel(DICT_MARITAL, employee.getMaritalStatus()),
+                dictLabel(DICT_FERTILITY, employee.getFertilityStatus())));
+        row.setHouseholdType(dictLabel(DICT_HOUSEHOLD, employee.getHouseholdType()));
         row.setNativePlace(employee.getNativePlace());
         row.setBirthdayMonth(employee.getBirthday() == null ? null : employee.getBirthday().format(YEAR_MONTH));
         if (employee.getBirthday() != null) {
@@ -532,17 +561,17 @@ public class EmployeeServiceImpl implements EmployeeService {
         EmployeeEducationDO first = educations.stream()
                 .filter(e -> Boolean.TRUE.equals(e.getFirstEducation())).findFirst().orElse(null);
         if (highest != null) {
-            row.setHighestEducation(highest.getEducationLevel());
-            row.setEducationType(highest.getEducationType());
+            row.setHighestEducation(dictLabel(DICT_EDUCATION, highest.getEducationLevel()));
+            row.setEducationType(dictLabel(DICT_EDUCATION_TYPE, highest.getEducationType()));
             row.setHighestDegree(highest.getDegree());
             row.setHighestSchoolName(highest.getSchoolName());
             row.setHighestMajor(highest.getMajor());
             row.setHighestGraduateDate(formatDate(highest.getEndTime()));
         } else if (StrUtil.isNotBlank(employee.getEducation())) {
-            row.setHighestEducation(employee.getEducation());
+            row.setHighestEducation(dictLabel(DICT_EDUCATION, employee.getEducation()));
         }
         if (first != null) {
-            row.setFirstEducation(first.getEducationLevel());
+            row.setFirstEducation(dictLabel(DICT_EDUCATION, first.getEducationLevel()));
             row.setFirstDegree(first.getDegree());
             row.setFirstSchoolName(first.getSchoolName());
             row.setFirstMajor(first.getMajor());
@@ -551,14 +580,14 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         row.setHouseholdAddress(employee.getHouseholdAddress());
         row.setCurrentAddress(employee.getCurrentAddress());
-        row.setEmployeeType(employee.getEmployeeStatus() == null ? null : String.valueOf(employee.getEmployeeStatus()));
-        row.setEmploymentForm(employee.getEmploymentForm());
+        row.setEmployeeType(dictLabel(DICT_EMPLOYEE_STATUS, employee.getEmployeeStatus()));
+        row.setEmploymentForm(dictLabel(DICT_EMPLOYMENT_FORM, employee.getEmploymentForm()));
 
         row.setContractSignCount(contracts.size());
         EmployeeContractDO current = contracts.stream()
                 .max(Comparator.comparing(EmployeeContractDO::getSequenceNo)).orElse(null);
         if (current != null) {
-            row.setCurrentContractType(current.getContractType());
+            row.setCurrentContractType(dictLabel(DICT_CONTRACT_TYPE, current.getContractType()));
             row.setCurrentContractStartDate(formatDate(current.getStartDate()));
             row.setCurrentContractEndDate(formatDate(current.getEndDate()));
         }
@@ -603,6 +632,27 @@ public class EmployeeServiceImpl implements EmployeeService {
             return null;
         }
         return value ? "是" : "否";
+    }
+
+    /**
+     * 导出字典标签；解析失败时回退原值，避免整列空白。
+     */
+    static String dictLabel(String dictType, Object value) {
+        if (value == null) {
+            return null;
+        }
+        String raw = String.valueOf(value);
+        if (StrUtil.isBlank(raw)) {
+            return null;
+        }
+        try {
+            String label = value instanceof Integer
+                    ? DictFrameworkUtils.parseDictDataLabel(dictType, (Integer) value)
+                    : DictFrameworkUtils.parseDictDataLabel(dictType, raw);
+            return StrUtil.isNotBlank(label) ? label : raw;
+        } catch (Exception ex) {
+            return raw;
+        }
     }
 
     private static String formatTenure(int months) {

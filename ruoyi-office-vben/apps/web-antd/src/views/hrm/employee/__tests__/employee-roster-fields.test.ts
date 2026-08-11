@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createAttachmentFromUpload } from '../../../../components/attachment-list/data';
 import {
   normalizeContractList,
   validateContractList,
@@ -54,5 +55,17 @@ describe('employee roster field rules', () => {
         { sequenceNo: 1, startDate: '2024-01-01', endDate: '2023-01-01' },
       ]),
     ).toBe('合同结束日期不能早于开始日期');
+  });
+
+  it('builds attachment metadata only from server upload result', () => {
+    const file = new File(['%PDF'], 'scan.pdf', { type: 'application/pdf' });
+    const att = createAttachmentFromUpload(file, 1, {
+      url: 'https://cdn.example.com/scan.pdf',
+      path: '/hrm/scan.pdf',
+    });
+    expect(att.fileUrl).toBe('https://cdn.example.com/scan.pdf');
+    expect(att.filePath).toBe('/hrm/scan.pdf');
+    expect(att.fileUrl.startsWith('blob:')).toBe(false);
+    expect(att.fileExtension).toBe('pdf');
   });
 });

@@ -8,8 +8,10 @@ import { message } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 
+import { uploadFile } from '#/api/infra/file';
+
 import {
-  createAttachment,
+  createAttachmentFromUpload,
   useAttachmentActions,
   useAttachmentColumns,
 } from './data';
@@ -44,10 +46,31 @@ const emit = defineEmits<{
 
 /** 表格内部数据 */
 const tableData = ref<AttachmentApi.AttachmentSaveReq[]>([]);
+/** 上传中 */
+const uploading = ref(false);
 
-/** 添加附件 */
-function handleAdd(file: File) {
-  const attachment = createAttachment(file, tableData.value.length + 1);
+/**
+ * 实际上传文件到 /infra/file/upload，成功后再写入列表。
+ * 返回服务端持久化 URL，刷新后仍可下载。
+ */
+async function handleAdd(file: File) {
+  const uploadedUrl = await uploadFile({
+    file,
+    directory: 'common-attachment',
+  });
+  // requestClient.upload 解包后通常为 string URL；兼容 { url } 形态
+  const url =
+    typeof uploadedUrl === 'string'
+      ? uploadedUrl
+      : (uploadedUrl as any)?.url || (uploadedUrl as any)?.data;
+  if (!url || typeof url !== 'string' || url.startsWith('blob:')) {
+    throw new Error('文件上传失败：未获得服务端文件地址');
+  }
+  const attachment = createAttachmentFromUpload(
+    file,
+    tableData.value.length + 1,
+    { url },
+  );
   tableData.value.push(attachment);
   handleUpdateValue();
   message.success('文件上传成功');
@@ -94,38 +117,69 @@ function handleRemarkEdit() {
   handleUpdateValue();
 }
 
-// 文件验证和处理函数
-function handleFileUpload(file: File) {
-  // 检查文件大小
-  const isLtMaxSize = file.size / 1024 / 1024 < props.maxSize;
-  if (!isLtMaxSize) {
-    message.error(`文件大小不能超过 ${props.maxSize}MB`);
-    return false;
+function validateFileClient(file: File): string | undefined {
+  if (file.size / 1024 / 1024 > props.maxSize) {
+    return `文件大小不能超过 ${props.maxSize}MB`;
   }
-
-  // 检查文件数量
   if (tableData.value.length >= props.maxCount) {
-    message.error(`最多只能上传 ${props.maxCount} 个文件`);
+    return `最多只能上传 ${props.maxCount} 个文件`;
+  }
+  if (props.accept && props.accept !== '*') {
+    const allowed = props.accept
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const ext = file.name.includes('.')
+      ? `.${file.name.split('.').pop()!.toLowerCase()}`
+      : '';
+    const mime = (file.type || '').toLowerCase();
+    const ok = allowed.some(
+      (a) => a === ext || a === mime || (a.endsWith('/*') && mime.startsWith(a.replace('/*', '/'))),
+    );
+    if (!ok) {
+      return `仅支持文件类型：${props.accept}`;
+    }
+  }
+  return undefined;
+}
+
+/** 校验并上传单个文件 */
+async function handleFileUpload(file: File) {
+  const err = validateFileClient(file);
+  if (err) {
+    message.error(err);
     return false;
   }
-
-  // 添加文件到列表
-  handleAdd(file);
-  return true;
+  try {
+    uploading.value = true;
+    await handleAdd(file);
+    return true;
+  } catch (e: any) {
+    console.error(e);
+    message.error(e?.message || '文件上传失败');
+    return false;
+  } finally {
+    uploading.value = false;
+  }
 }
 
 /** 触发文件选择（供外部调用） */
 function handleTriggerUpload() {
+  if (uploading.value) {
+    message.warning('文件上传中，请稍候');
+    return;
+  }
   const input = document.createElement('input');
   input.type = 'file';
   input.multiple = true;
   input.accept = props.accept === '*' ? '' : props.accept;
-  input.addEventListener('change', (e) => {
+  input.addEventListener('change', async (e) => {
     const files = (e.target as HTMLInputElement).files;
-    if (files) {
-      [...files].forEach((file) => {
-        handleFileUpload(file);
-      });
+    if (!files) return;
+    for (const file of [...files]) {
+      // 串行上传，避免并发超限
+      // eslint-disable-next-line no-await-in-loop
+      await handleFileUpload(file);
     }
   });
   input.click();

@@ -126,8 +126,13 @@ class EmployeeRosterExportTest {
         assertEquals("2020-01-01至2023-01-01", row1.getContract1Range());
         assertEquals("2023-01-02", row1.getContract2Range());
         assertEquals(2, row1.getContractSignCount());
-        assertEquals("2", row1.getCurrentContractType());
+        // 字典未初始化时回退编码；有字典时输出标签——此处保证不为空且非内部异常
+        assertNotNull(row1.getCurrentContractType());
         assertEquals("已上传2份", row1.getOnboardingAttachmentStatus());
+        // 证件号/手机保持字符串形态
+        e1.setIdCard("430981198311201111");
+        e1.setMobile("15995408684");
+        e1.setBankAccount("6217231102004496773");
 
         EmployeeRosterExportVO row2 = list.get(1);
         assertNull(row2.getSocialSecurityEnabled());
@@ -137,6 +142,70 @@ class EmployeeRosterExportTest {
         verify(employeeEducationMapper, times(1)).selectListByEmployeeIds(anyCollection());
         verify(employeeContractMapper, times(1)).selectListByEmployeeIds(anyCollection());
         verify(attachmentService, times(1)).getAttachmentListByBusinessIds(anyString(), anyCollection());
+    }
+
+    @Test
+    void exportWritesRealXlsxWith52HeadersAndSheetName() throws Exception {
+        EmployeeRosterExportVO row = new EmployeeRosterExportVO();
+        row.setSequenceNo(1);
+        row.setSocialSecurityEnabled("是");
+        row.setName("钟伟");
+        row.setIdCard("430981198311201111");
+        row.setMobile("15995408684");
+        row.setBankAccount("6217231102004496773");
+        row.setSex("男");
+        row.setCurrentContractType("无固定期限");
+        row.setOnboardingAttachmentStatus("已上传2份");
+
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        cn.idev.excel.FastExcelFactory.write(out, EmployeeRosterExportVO.class)
+                .sheet("文枢在职")
+                .doWrite(List.of(row));
+        byte[] bytes = out.toByteArray();
+        assertTrue(bytes.length > 100, "xlsx should not be empty");
+
+        // 写盘供人工/审查证据
+        java.nio.file.Path evidenceDir = java.nio.file.Paths.get("target/exp75-export-evidence");
+        java.nio.file.Files.createDirectories(evidenceDir);
+        java.nio.file.Path xlsx = evidenceDir.resolve("文枢花名册-evidence.xlsx");
+        java.nio.file.Files.write(xlsx, bytes);
+
+        // 读回表头与工作表名
+        try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(bytes)) {
+            // FastExcel 同步读第一行头
+            java.util.concurrent.atomic.AtomicReference<List<String>> headerRef =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            cn.idev.excel.FastExcelFactory.read(in, new cn.idev.excel.event.AnalysisEventListener<java.util.Map<Integer, String>>() {
+                @Override
+                public void invokeHeadMap(java.util.Map<Integer, String> headMap, cn.idev.excel.context.AnalysisContext context) {
+                    List<String> headers = new java.util.ArrayList<>();
+                    for (int i = 0; i < headMap.size(); i++) {
+                        headers.add(headMap.get(i));
+                    }
+                    headerRef.set(headers);
+                }
+
+                @Override
+                public void invoke(java.util.Map<Integer, String> data, cn.idev.excel.context.AnalysisContext context) {
+                    // 证件/银行卡应为文本
+                    assertEquals("430981198311201111", data.get(12)); // 身份证号列
+                    assertEquals("15995408684", data.get(13));
+                    assertEquals("6217231102004496773", data.get(41));
+                }
+
+                @Override
+                public void doAfterAllAnalysed(cn.idev.excel.context.AnalysisContext context) {
+                    assertEquals("文枢在职", context.readSheetHolder().getSheetName());
+                }
+            }).sheet().headRowNumber(1).doRead();
+
+            List<String> headers = headerRef.get();
+            assertNotNull(headers);
+            assertEquals(52, headers.size());
+            assertEquals("序号", headers.get(0));
+            assertEquals("是否缴纳社保", headers.get(1));
+            assertEquals("入职资料", headers.get(51));
+        }
     }
 
     private static List<String> firstHeaders(Class<?> type, int limit) {

@@ -18,6 +18,9 @@ public interface ErrorCodeConstants {
     ErrorCode EMPLOYEE_ROSTER_SOCIAL_SECURITY_MONTH = new ErrorCode(1_050_001_006, "缴纳社保时必须填写参保年月");
     ErrorCode EMPLOYEE_ROSTER_SOCIAL_SECURITY_MONTH_FORMAT = new ErrorCode(1_050_001_007, "参保年月格式必须为yyyy-MM");
     ErrorCode EMPLOYEE_ROSTER_SALARY_NEGATIVE = new ErrorCode(1_050_001_008, "薪资不能为负数");
+    ErrorCode EMPLOYEE_ROSTER_CONTRACT_START_REQUIRED = new ErrorCode(1_050_001_009, "合同开始日期不能为空");
+    ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_LIMIT = new ErrorCode(1_050_001_010, "入职资料最多 10 份");
+    ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_INVALID = new ErrorCode(1_050_001_011, "入职资料附件不合法");
 
     // ========== 员工入职申请单 1-050-002-000 ==========
     ErrorCode EMPLOYEE_ENTRY_BILL_NOT_EXISTS = new ErrorCode(1_050_002_001, "员工入职申请单不存在");

@@ -229,4 +229,77 @@ class EmployeeServiceImplTest {
         verify(employeeArchiveMapper).deleteById(9L);
     }
 
+    @Test
+    void updateRejectsContractMissingStartDate() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        EmployeeContractVO c = new EmployeeContractVO();
+        c.setSequenceNo(1);
+        c.setStartDate(null);
+        req.setContractList(List.of(c));
+        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+    }
+
+    @Test
+    void updateOmittingContractListPreservesContracts() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        req.setContractList(null); // 旧客户端省略
+        req.setOnboardingAttachments(null);
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+
+        employeeService.updateEmployeeArchive(req);
+
+        verify(employeeContractMapper, never()).deleteByEmployeeId(anyLong());
+        verify(employeeContractMapper, never()).insert(any(EmployeeContractDO.class));
+        verify(attachmentService, never()).saveAttachmentList(anyString(), anyLong(), any());
+    }
+
+    @Test
+    void updateEmptyContractListClearsContracts() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        req.setContractList(List.of()); // 显式空数组
+        req.setOnboardingAttachments(List.of());
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+
+        employeeService.updateEmployeeArchive(req);
+
+        verify(employeeContractMapper).deleteByEmployeeId(1L);
+        verify(employeeContractMapper, never()).insert(any(EmployeeContractDO.class));
+        verify(attachmentService).saveAttachmentList(
+                eq(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE), eq(1L), eq(List.of()));
+    }
+
+    @Test
+    void updateSocialSecurityFalseWritesNullStartMonth() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        req.setSocialSecurityEnabled(false);
+        req.setSocialSecurityStartMonth("2024-01"); // 服务端应清空
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+
+        employeeService.updateEmployeeArchive(req);
+
+        ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
+        verify(employeeArchiveMapper).updateById(captor.capture());
+        assertNull(captor.getValue().getSocialSecurityStartMonth());
+        assertEquals(Boolean.FALSE, captor.getValue().getSocialSecurityEnabled());
+    }
+
+    @Test
+    void rosterNullableFieldsUseAlwaysUpdateStrategy() throws Exception {
+        // F3：FieldStrategy.ALWAYS 保证显式 null 写库
+        var field = EmployeeDO.class.getDeclaredField("socialSecurityStartMonth");
+        var annotation = field.getAnnotation(com.baomidou.mybatisplus.annotation.TableField.class);
+        assertNotNull(annotation);
+        assertEquals(com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS, annotation.updateStrategy());
+    }
+
 }

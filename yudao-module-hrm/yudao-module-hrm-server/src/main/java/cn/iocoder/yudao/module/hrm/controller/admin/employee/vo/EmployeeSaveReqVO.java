@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
+import jakarta.validation.Valid;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -179,15 +180,17 @@ public class EmployeeSaveReqVO {
     private List<EmployeeFamilyVO> familyList;
 
     /**
-     * 合同明细列表（最多 4 条）
+     * 合同明细列表（最多 4 条）。null=不修改；[]=清空。
      */
-    @Schema(description = "合同明细列表")
+    @Schema(description = "合同明细列表；null 表示不修改，空数组表示清空")
+    @Valid
     private List<EmployeeContractVO> contractList;
 
     /**
-     * 入职资料附件
+     * 入职资料附件。null=不修改；[]=清空。
      */
-    @Schema(description = "入职资料附件")
+    @Schema(description = "入职资料附件；null 表示不修改，空数组表示清空")
+    @Valid
     private List<AttachmentSaveReqVO> onboardingAttachments;
 
 }

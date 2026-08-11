@@ -1,29 +1,130 @@
 -- ----------------------------
--- EXP-75 文枢员工花名册字段补齐
+-- EXP-75 文枢员工花名册字段补齐（幂等 / 可中断续跑）
+-- 每步先判定当前状态；重复执行不会因“列已存在”中断后续步骤
 -- 历史数据新增列保持 NULL；不默认社保/公积金为「否」
 -- ----------------------------
 
--- 1. 员工主档新增可空列
-ALTER TABLE `hrm_employee`
-  ADD COLUMN `social_security_enabled` bit(1) NULL DEFAULT NULL COMMENT '是否缴纳社保' AFTER `formal_date`,
-  ADD COLUMN `housing_fund_enabled` bit(1) NULL DEFAULT NULL COMMENT '是否缴纳公积金' AFTER `social_security_enabled`,
-  ADD COLUMN `social_security_start_month` char(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '参保年月 yyyy-MM' AFTER `housing_fund_enabled`,
-  ADD COLUMN `probation_salary` decimal(12,2) NULL DEFAULT NULL COMMENT '试用期薪资' AFTER `social_security_start_month`,
-  ADD COLUMN `regular_salary` decimal(12,2) NULL DEFAULT NULL COMMENT '转正薪资' AFTER `probation_salary`,
-  ADD COLUMN `fertility_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '生育状况' AFTER `regular_salary`,
-  ADD COLUMN `household_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '户籍性质' AFTER `fertility_status`,
-  ADD COLUMN `employment_form` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '用工形式' AFTER `household_type`,
-  ADD COLUMN `emergency_relationship` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '紧急联系人关系' AFTER `emergency_phone`,
-  ADD COLUMN `recruitment_channel` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '招聘渠道' AFTER `emergency_relationship`,
-  ADD COLUMN `interviewer_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '面试人' AFTER `recruitment_channel`;
+SET NAMES utf8mb4;
+
+-- 通用：按表/列是否存在执行 DDL
+-- 用法：CALL 不可用时用 information_schema + PREPARE
+
+-- 1. 员工主档新增可空列（逐列检查）
+SET @db := DATABASE();
+
+-- social_security_enabled
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'social_security_enabled');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `social_security_enabled` bit(1) NULL DEFAULT NULL COMMENT ''是否缴纳社保'' AFTER `formal_date`',
+  'SELECT ''skip social_security_enabled'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'housing_fund_enabled');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `housing_fund_enabled` bit(1) NULL DEFAULT NULL COMMENT ''是否缴纳公积金'' AFTER `social_security_enabled`',
+  'SELECT ''skip housing_fund_enabled'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'social_security_start_month');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `social_security_start_month` char(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''参保年月 yyyy-MM'' AFTER `housing_fund_enabled`',
+  'SELECT ''skip social_security_start_month'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'probation_salary');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `probation_salary` decimal(12,2) NULL DEFAULT NULL COMMENT ''试用期薪资'' AFTER `social_security_start_month`',
+  'SELECT ''skip probation_salary'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'regular_salary');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `regular_salary` decimal(12,2) NULL DEFAULT NULL COMMENT ''转正薪资'' AFTER `probation_salary`',
+  'SELECT ''skip regular_salary'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'fertility_status');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `fertility_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''生育状况'' AFTER `regular_salary`',
+  'SELECT ''skip fertility_status'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'household_type');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `household_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''户籍性质'' AFTER `fertility_status`',
+  'SELECT ''skip household_type'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'employment_form');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `employment_form` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''用工形式'' AFTER `household_type`',
+  'SELECT ''skip employment_form'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'emergency_relationship');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `emergency_relationship` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''紧急联系人关系'' AFTER `emergency_phone`',
+  'SELECT ''skip emergency_relationship'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'recruitment_channel');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `recruitment_channel` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''招聘渠道'' AFTER `emergency_relationship`',
+  'SELECT ''skip recruitment_channel'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee' AND COLUMN_NAME = 'interviewer_name');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee` ADD COLUMN `interviewer_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''面试人'' AFTER `recruitment_channel`',
+  'SELECT ''skip interviewer_name'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- 2. 教育明细扩展
-ALTER TABLE `hrm_employee_education`
-  ADD COLUMN `education_level` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学历' AFTER `end_time`,
-  ADD COLUMN `education_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学历类别' AFTER `education_level`,
-  ADD COLUMN `degree` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学位' AFTER `education_type`,
-  ADD COLUMN `first_education` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否第一学历' AFTER `degree`,
-  ADD COLUMN `highest_education` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否最高学历' AFTER `first_education`;
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee_education' AND COLUMN_NAME = 'education_level');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee_education` ADD COLUMN `education_level` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''学历'' AFTER `end_time`',
+  'SELECT ''skip education_level'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee_education' AND COLUMN_NAME = 'education_type');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee_education` ADD COLUMN `education_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''学历类别'' AFTER `education_level`',
+  'SELECT ''skip education_type'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee_education' AND COLUMN_NAME = 'degree');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee_education` ADD COLUMN `degree` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT ''学位'' AFTER `education_type`',
+  'SELECT ''skip degree'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee_education' AND COLUMN_NAME = 'first_education');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee_education` ADD COLUMN `first_education` bit(1) NOT NULL DEFAULT b''0'' COMMENT ''是否第一学历'' AFTER `degree`',
+  'SELECT ''skip first_education'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'hrm_employee_education' AND COLUMN_NAME = 'highest_education');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `hrm_employee_education` ADD COLUMN `highest_education` bit(1) NOT NULL DEFAULT b''0'' COMMENT ''是否最高学历'' AFTER `first_education`',
+  'SELECT ''skip highest_education'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- 3. 合同明细表
 CREATE TABLE IF NOT EXISTS `hrm_employee_contract` (
@@ -44,7 +145,7 @@ CREATE TABLE IF NOT EXISTS `hrm_employee_contract` (
   KEY `idx_employee_sequence` (`employee_id`, `sequence_no`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='员工合同明细表';
 
--- 4. 字典：生育状况
+-- 4-8. 字典（类型 + 数据，均幂等）
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
 SELECT '生育状况', 'hrm_fertility_status', 0, '员工生育状况', '1', NOW(), '1', NOW(), false, NULL
 WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_fertility_status' AND deleted = 0);
@@ -60,7 +161,6 @@ WHERE NOT EXISTS (
   SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_fertility_status' AND x.value = d.value AND x.deleted = 0
 );
 
--- 5. 字典：户籍性质
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
 SELECT '户籍性质', 'hrm_household_type', 0, '员工户籍性质', '1', NOW(), '1', NOW(), false, NULL
 WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_household_type' AND deleted = 0);
@@ -77,7 +177,6 @@ WHERE NOT EXISTS (
   SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_household_type' AND x.value = d.value AND x.deleted = 0
 );
 
--- 6. 字典：学历类别
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
 SELECT '学历类别', 'hrm_education_type', 0, '学历类别', '1', NOW(), '1', NOW(), false, NULL
 WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_education_type' AND deleted = 0);
@@ -93,7 +192,6 @@ WHERE NOT EXISTS (
   SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_education_type' AND x.value = d.value AND x.deleted = 0
 );
 
--- 7. 字典：用工形式
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
 SELECT '用工形式', 'hrm_employment_form', 0, '用工形式', '1', NOW(), '1', NOW(), false, NULL
 WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_employment_form' AND deleted = 0);
@@ -112,7 +210,6 @@ WHERE NOT EXISTS (
   SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_employment_form' AND x.value = d.value AND x.deleted = 0
 );
 
--- 8. 字典：合同类型
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
 SELECT '合同类型', 'hrm_contract_type', 0, '劳动合同类型', '1', NOW(), '1', NOW(), false, NULL
 WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_contract_type' AND deleted = 0);

@@ -49,7 +49,10 @@ export function validateContractList(
     if (item.sequenceNo !== i + 1) {
       return '合同序号必须从1连续递增';
     }
-    if (item.startDate && item.endDate && item.endDate < item.startDate) {
+    if (!item.startDate) {
+      return '合同开始日期不能为空';
+    }
+    if (item.endDate && item.endDate < item.startDate) {
       return '合同结束日期不能早于开始日期';
     }
   }

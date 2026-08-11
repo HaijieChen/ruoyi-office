@@ -127,24 +127,53 @@ export function useAttachmentActions(
 }
 
 /**
- * 创建新附件对象
+ * 根据已成功上传到文件服务的结果创建附件元数据。
+ * fileUrl 必须是服务端返回的持久化访问地址，禁止使用 blob: 本地 URL。
  */
-export function createAttachment(
+export function createAttachmentFromUpload(
   file: File,
   sortOrder: number,
+  uploaded: { url: string; path?: string },
 ): AttachmentApi.AttachmentSaveReq {
+  const url = uploaded.url;
+  // path：优先服务端 path；否则从 URL 路径段推导（去掉 query）
+  let path = uploaded.path;
+  if (!path) {
+    try {
+      const u = new URL(url, 'http://local.invalid');
+      path = u.pathname || url;
+    } catch {
+      path = url;
+    }
+  }
   return {
-    id: undefined, // 新文件没有ID，后端会自动生成
+    id: undefined,
     businessType: '',
     businessId: 0,
     fileName: file.name,
-    filePath: `/uploads/${file.name}`, // 实际应该是上传后返回的路径
-    fileUrl: URL.createObjectURL(file), // 实际应该是上传后返回的URL
+    filePath: path,
+    fileUrl: url,
     fileSize: file.size,
     fileType: file.type,
-    fileExtension: file.name.split('.').pop() || '',
+    fileExtension: file.name.includes('.')
+      ? file.name.split('.').pop()!.toLowerCase()
+      : '',
     uploadTime: new Date(),
     sortOrder,
     remark: '',
   };
+}
+
+/**
+ * @deprecated 使用 createAttachmentFromUpload；保留别名避免外部引用断裂
+ */
+export function createAttachment(
+  file: File,
+  sortOrder: number,
+  uploaded?: { url: string; path?: string },
+): AttachmentApi.AttachmentSaveReq {
+  if (!uploaded?.url) {
+    throw new Error('必须先完成文件上传再创建附件元数据');
+  }
+  return createAttachmentFromUpload(file, sortOrder, uploaded);
 }
