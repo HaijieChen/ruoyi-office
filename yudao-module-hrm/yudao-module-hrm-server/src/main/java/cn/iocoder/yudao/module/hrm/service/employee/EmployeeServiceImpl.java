@@ -54,8 +54,9 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
 
-    /** 私有存储目录（与 FileController 公开下载拦截前缀一致） */
-    public static final String ONBOARDING_PRIVATE_DIR = "hrm-onboarding-private";
+    /** 私有存储目录（与 FilePrivateDirs / 公开下载拦截前缀一致） */
+    public static final String ONBOARDING_PRIVATE_DIR =
+            cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs.HRM_ONBOARDING_PRIVATE;
 
     /** claim 有效期 */
     public static final int CLAIM_TTL_MINUTES = 120;
@@ -657,32 +658,28 @@ public class EmployeeServiceImpl implements EmployeeService {
             att.setRemark(req.getRemark());
             resolved.add(att);
         }
-        attachmentService.saveAttachmentList(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, employeeId, resolved);
+        // 内部链路：保留业务类型仅允许此路径写入
+        attachmentService.saveAttachmentListInternal(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, employeeId, resolved);
     }
 
     /**
-     * 消费 claim：校验租户(行级)、上传者、用途、过期、未消费；成功后标记 consumed。
+     * 原子消费 claim：条件 UPDATE（token + uploader + purpose + 未过期 + consumed_at IS NULL），
+     * 影响行数必须为 1，防止并发双消费。
      */
     OnboardingFileClaimDO consumeClaim(String claimToken, Long userId, Long employeeId) {
+        if (StrUtil.isBlank(claimToken) || userId == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        int rows = onboardingFileClaimMapper.consumeIfOpen(
+                claimToken, userId, OnboardingFileClaimDO.PURPOSE, employeeId, now);
+        if (rows != 1) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID); // 他人/过期/已消费/不存在/并发失败
+        }
         OnboardingFileClaimDO claim = onboardingFileClaimMapper.selectByClaimToken(claimToken);
         if (claim == null) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
-        if (!OnboardingFileClaimDO.PURPOSE.equals(claim.getPurpose())) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
-        }
-        if (claim.getConsumedAt() != null) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID); // 重复消费
-        }
-        if (claim.getExpireTime() != null && claim.getExpireTime().isBefore(LocalDateTime.now())) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
-        }
-        if (userId == null || !userId.equals(claim.getUploaderUserId())) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID); // 同租户他人/未登录
-        }
-        claim.setConsumedAt(LocalDateTime.now());
-        claim.setConsumedEmployeeId(employeeId);
-        onboardingFileClaimMapper.updateById(claim);
         return claim;
     }
 
@@ -742,37 +739,45 @@ public class EmployeeServiceImpl implements EmployeeService {
                 || !employeeId.equals(att.getBusinessId())) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
-        byte[] content = null;
-        String fileName = att.getFileName();
-        if (att.getFileId() != null) {
-            content = fileAccessApi.getFileContent(att.getFileId());
-            FileRespDTO meta = fileAccessApi.getFile(att.getFileId());
-            if (meta != null && StrUtil.isNotBlank(meta.getName())) {
-                fileName = meta.getName();
-            }
-        } else {
-            // #3-new：历史无 fileId — 按 path/url 兼容鉴权读取
-            FileRespDTO meta = null;
-            if (StrUtil.isNotBlank(att.getFilePath())) {
-                meta = fileAccessApi.getFileByPath(att.getFilePath());
-            }
-            if (meta == null && StrUtil.isNotBlank(att.getFileUrl())) {
-                meta = fileAccessApi.getFileByUrl(att.getFileUrl());
-            }
-            if (meta != null && meta.getId() != null) {
-                content = fileAccessApi.getFileContent(meta.getId());
-                if (StrUtil.isNotBlank(meta.getName())) {
-                    fileName = meta.getName();
-                }
-            } else if (StrUtil.isNotBlank(att.getFilePath())) {
-                // 仍可读 path 内容（鉴权端点内），不依赖公开 get 路由
-                content = fileAccessApi.getFileContent(null, att.getFilePath());
-            }
+        // 仅通过权威 fileId 或唯一 URL/(path) 解析；禁止裸 path fallback（路径穿越）
+        Long fileId = resolveAuthoritativeFileId(att);
+        if (fileId == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
+        byte[] content = fileAccessApi.getFileContent(fileId);
         if (content == null) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
+        String fileName = att.getFileName();
+        FileRespDTO meta = fileAccessApi.getFile(fileId);
+        if (meta != null && StrUtil.isNotBlank(meta.getName())) {
+            fileName = meta.getName();
+        }
         writeDownload(response, fileName, content);
+    }
+
+    /**
+     * 历史附件身份：优先已有 fileId；否则唯一精确 URL；再否则唯一 path。
+     * 歧义（0 或多条）返回 null，不猜测。
+     */
+    Long resolveAuthoritativeFileId(AttachmentDO att) {
+        if (att.getFileId() != null) {
+            FileRespDTO byId = fileAccessApi.getFile(att.getFileId());
+            return byId != null ? byId.getId() : null;
+        }
+        if (StrUtil.isNotBlank(att.getFileUrl())) {
+            FileRespDTO byUrl = fileAccessApi.getUniqueFileByUrl(att.getFileUrl());
+            if (byUrl != null) {
+                return byUrl.getId();
+            }
+        }
+        if (StrUtil.isNotBlank(att.getFilePath())) {
+            FileRespDTO byPath = fileAccessApi.getUniqueFileByPath(att.getFilePath());
+            if (byPath != null) {
+                return byPath.getId();
+            }
+        }
+        return null;
     }
 
     private static void writeDownload(HttpServletResponse response, String fileName, byte[] content)

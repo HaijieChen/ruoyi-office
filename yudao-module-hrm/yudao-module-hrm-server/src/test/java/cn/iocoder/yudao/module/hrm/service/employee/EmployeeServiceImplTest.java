@@ -151,6 +151,9 @@ class EmployeeServiceImplTest {
         att.setClaimToken("tok-owner");
         req.setOnboardingAttachments(List.of(att));
 
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-owner"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(100L), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(onboardingFileClaimMapper.selectByClaimToken("tok-owner"))
                 .thenReturn(openClaim("tok-owner", 55L, 7L));
         when(fileAccessApi.getFile(55L)).thenReturn(privatePdf(55L));
@@ -172,7 +175,7 @@ class EmployeeServiceImplTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<AttachmentSaveReqVO>> attCaptor = ArgumentCaptor.forClass(List.class);
-        verify(attachmentService).saveAttachmentList(
+        verify(attachmentService).saveAttachmentListInternal(
                 eq(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE),
                 eq(100L),
                 attCaptor.capture());
@@ -180,7 +183,8 @@ class EmployeeServiceImplTest {
         assertEquals("TEST_scan.pdf", attCaptor.getValue().get(0).getFileName());
         assertEquals(1024L, attCaptor.getValue().get(0).getFileSize());
         assertEquals("", attCaptor.getValue().get(0).getFileUrl()); // 不落公开 URL
-        verify(onboardingFileClaimMapper).updateById(argThat((OnboardingFileClaimDO c) -> c.getConsumedAt() != null));
+        verify(onboardingFileClaimMapper).consumeIfOpen(eq("tok-owner"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(100L), any(LocalDateTime.class));
     }
 
     @Test
@@ -197,32 +201,35 @@ class EmployeeServiceImplTest {
 
     @Test
     void consumeClaimRejectsOtherUploaderSameTenant() {
-        when(onboardingFileClaimMapper.selectByClaimToken("tok-x"))
-                .thenReturn(openClaim("tok-x", 1L, 100L));
+        // 条件 UPDATE 影响行=0（上传者不匹配）
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-x"), eq(200L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(1L), any(LocalDateTime.class)))
+                .thenReturn(0);
         assertThrows(ServiceException.class,
                 () -> employeeService.consumeClaim("tok-x", 200L, 1L));
     }
 
     @Test
     void consumeClaimRejectsExpiredAndDoubleConsume() {
-        OnboardingFileClaimDO expired = openClaim("tok-e", 1L, 7L);
-        expired.setExpireTime(LocalDateTime.now().minusMinutes(1));
-        when(onboardingFileClaimMapper.selectByClaimToken("tok-e")).thenReturn(expired);
+        // 过期/已消费：条件 UPDATE 均返回 0
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-e"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(1L), any(LocalDateTime.class)))
+                .thenReturn(0);
         assertThrows(ServiceException.class,
                 () -> employeeService.consumeClaim("tok-e", 7L, 1L));
 
-        OnboardingFileClaimDO used = openClaim("tok-u", 1L, 7L);
-        used.setConsumedAt(LocalDateTime.now());
-        when(onboardingFileClaimMapper.selectByClaimToken("tok-u")).thenReturn(used);
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-u"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(1L), any(LocalDateTime.class)))
+                .thenReturn(0);
         assertThrows(ServiceException.class,
                 () -> employeeService.consumeClaim("tok-u", 7L, 1L));
     }
 
     @Test
     void consumeClaimRejectsWrongPurpose() {
-        OnboardingFileClaimDO wrong = openClaim("tok-p", 1L, 7L);
-        wrong.setPurpose("other-biz");
-        when(onboardingFileClaimMapper.selectByClaimToken("tok-p")).thenReturn(wrong);
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-p"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(1L), any(LocalDateTime.class)))
+                .thenReturn(0);
         assertThrows(ServiceException.class,
                 () -> employeeService.consumeClaim("tok-p", 7L, 1L));
     }
@@ -236,6 +243,9 @@ class EmployeeServiceImplTest {
         req.setOnboardingAttachments(List.of(att));
         FileRespDTO huge = privatePdf(9L);
         huge.setSize(21L * 1024 * 1024);
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-big"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(1L), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(onboardingFileClaimMapper.selectByClaimToken("tok-big"))
                 .thenReturn(openClaim("tok-big", 9L, 7L));
         when(fileAccessApi.getFile(9L)).thenReturn(huge);
@@ -257,6 +267,9 @@ class EmployeeServiceImplTest {
         req.setOnboardingAttachments(List.of(att));
         FileRespDTO exe = privatePdf(8L);
         exe.setName("malware.exe");
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-exe"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(1L), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(onboardingFileClaimMapper.selectByClaimToken("tok-exe"))
                 .thenReturn(openClaim("tok-exe", 8L, 7L));
         when(fileAccessApi.getFile(8L)).thenReturn(exe);
@@ -278,6 +291,9 @@ class EmployeeServiceImplTest {
         req.setOnboardingAttachments(List.of(att));
         FileRespDTO pub = privatePdf(3L);
         pub.setPath("/public/other/scan.pdf");
+        when(onboardingFileClaimMapper.consumeIfOpen(eq("tok-pub"), eq(7L),
+                eq(OnboardingFileClaimDO.PURPOSE), eq(1L), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(onboardingFileClaimMapper.selectByClaimToken("tok-pub"))
                 .thenReturn(openClaim("tok-pub", 3L, 7L));
         when(fileAccessApi.getFile(3L)).thenReturn(pub);
@@ -291,7 +307,7 @@ class EmployeeServiceImplTest {
     }
 
     @Test
-    void downloadLegacyNullFileIdByPath() throws Exception {
+    void downloadLegacyNullFileIdByUniquePath() throws Exception {
         EmployeeDO emp = new EmployeeDO();
         emp.setId(1L);
         when(employeeArchiveMapper.selectById(1L)).thenReturn(emp);
@@ -303,8 +319,11 @@ class EmployeeServiceImplTest {
         legacy.setFilePath("legacy/path/TEST.pdf");
         legacy.setFileName("TEST.pdf");
         when(attachmentService.getAttachment(2L)).thenReturn(legacy);
-        when(fileAccessApi.getFileByPath("legacy/path/TEST.pdf")).thenReturn(null);
-        when(fileAccessApi.getFileContent(null, "legacy/path/TEST.pdf")).thenReturn(new byte[]{1, 2, 3});
+        FileRespDTO unique = privatePdf(77L);
+        unique.setPath("legacy/path/TEST.pdf");
+        when(fileAccessApi.getUniqueFileByPath("legacy/path/TEST.pdf")).thenReturn(unique);
+        when(fileAccessApi.getFileContent(77L)).thenReturn(new byte[]{1, 2, 3});
+        when(fileAccessApi.getFile(77L)).thenReturn(unique);
 
         jakarta.servlet.http.HttpServletResponse response = mock(jakarta.servlet.http.HttpServletResponse.class);
         jakarta.servlet.ServletOutputStream out = mock(jakarta.servlet.ServletOutputStream.class);
@@ -312,6 +331,27 @@ class EmployeeServiceImplTest {
 
         employeeService.downloadOnboardingAttachment(1L, 2L, response);
         verify(out).write(new byte[]{1, 2, 3});
+        // 仅按权威 fileId 读内容（无裸 path fallback 方法）
+        verify(fileAccessApi).getFileContent(77L);
+    }
+
+    @Test
+    void downloadRejectsAmbiguousPathWithoutFileId() {
+        EmployeeDO emp = new EmployeeDO();
+        emp.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(emp);
+        AttachmentDO legacy = new AttachmentDO();
+        legacy.setId(2L);
+        legacy.setBusinessType(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
+        legacy.setBusinessId(1L);
+        legacy.setFileId(null);
+        legacy.setFilePath("dup/path.pdf");
+        when(attachmentService.getAttachment(2L)).thenReturn(legacy);
+        when(fileAccessApi.getUniqueFileByPath("dup/path.pdf")).thenReturn(null);
+
+        assertThrows(ServiceException.class, () ->
+                employeeService.downloadOnboardingAttachment(1L, 2L,
+                        mock(jakarta.servlet.http.HttpServletResponse.class)));
     }
 
     @Test
@@ -446,7 +486,7 @@ class EmployeeServiceImplTest {
 
         verify(employeeContractMapper).deleteByEmployeeId(1L);
         verify(employeeContractMapper, never()).insert(any(EmployeeContractDO.class));
-        verify(attachmentService).saveAttachmentList(
+        verify(attachmentService).saveAttachmentListInternal(
                 eq(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE), eq(1L), eq(List.of()));
     }
 
@@ -584,12 +624,15 @@ class EmployeeServiceImplTest {
     }
 
     @Test
-    void fileApiNoLongerExposesGetFileContentRpc() throws Exception {
-        // 静态契约：FileApi 不得再声明 getFile / getFileContent（/rpc-api permitAll）
+    void fileApiNoLongerExposesGetFileContentOrReadPresignRpc() throws Exception {
+        // 静态契约：FileApi 不得再声明 getFile / getFileContent / presignGetUrl（/rpc-api permitAll）
         assertTrue(java.util.Arrays.stream(
                         cn.iocoder.yudao.module.infra.api.file.FileApi.class.getDeclaredMethods())
-                .noneMatch(m -> m.getName().equals("getFile") || m.getName().equals("getFileContent")));
+                .noneMatch(m -> m.getName().equals("getFile")
+                        || m.getName().equals("getFileContent")
+                        || m.getName().equals("presignGetUrl")));
         assertNotNull(FileAccessApi.class.getMethod("getFileContent", Long.class));
+        assertNotNull(FileAccessApi.class.getMethod("getUniqueFileByPath", String.class));
         assertFalse(FileAccessApi.class.isAnnotationPresent(org.springframework.web.bind.annotation.RestController.class));
     }
 

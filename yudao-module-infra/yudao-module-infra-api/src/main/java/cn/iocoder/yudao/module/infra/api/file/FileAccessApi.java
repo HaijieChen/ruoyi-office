@@ -6,6 +6,9 @@ import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
  * 文件访问 API（Spring 本地 Bean，非 HTTP/RPC 暴露）。
  * <p>
  * 敏感业务请通过此接口读取内容，避免走 permitAll 的 /rpc-api 或公开下载路由。
+ * <p>
+ * <b>部署约束（EXP-75）：</b>仅支持 {@code yudao-server} 单体（infra-server 与 hrm-server 同进程）。
+ * 独立启动 HrmServerApplication 无法注入本 Bean，不在支持范围。
  */
 public interface FileAccessApi {
 
@@ -20,23 +23,18 @@ public interface FileAccessApi {
     FileRespDTO getFile(Long id);
 
     /**
-     * 按 path 查找（历史附件回填/兼容读）
+     * 按 path 唯一查找；0 或 &gt;1 条均返回 null（歧义不取第一条）
      */
-    FileRespDTO getFileByPath(String path);
+    FileRespDTO getUniqueFileByPath(String path);
 
     /**
-     * 按 url 查找
+     * 按 url 唯一查找；0 或 &gt;1 条均返回 null
      */
-    FileRespDTO getFileByUrl(String url);
+    FileRespDTO getUniqueFileByUrl(String url);
 
     /**
-     * 按编号读取内容
+     * 按编号读取内容（configId+path 来自权威 file 行）
      */
     byte[] getFileContent(Long id);
-
-    /**
-     * 按 configId+path 读取内容（兼容无 file 行时的本地存储）
-     */
-    byte[] getFileContent(Long configId, String path);
 
 }

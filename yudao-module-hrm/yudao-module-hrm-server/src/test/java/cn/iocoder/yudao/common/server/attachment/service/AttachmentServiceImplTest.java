@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 /**
- * 通用附件服务：仅归属校验；类型/大小限制由业务方负责（#4）。
+ * 通用附件：归属校验 + 保留业务类型禁止通用写（#2）。
  */
 @ExtendWith(MockitoExtension.class)
 class AttachmentServiceImplTest {
@@ -43,7 +43,7 @@ class AttachmentServiceImplTest {
 
     @Test
     void rejectsCrossBusinessAttachmentIdHijack() {
-        when(attachmentMapper.selectListByBusiness("hrm_employee_archive_onboarding", 100L))
+        when(attachmentMapper.selectListByBusiness("seal_apply_bill", 100L))
                 .thenReturn(List.of());
 
         AttachmentDO foreign = new AttachmentDO();
@@ -59,13 +59,12 @@ class AttachmentServiceImplTest {
         hijack.setId(99L);
 
         assertThrows(ServiceException.class, () ->
-                attachmentService.saveAttachmentList("hrm_employee_archive_onboarding", 100L, List.of(hijack)));
+                attachmentService.saveAttachmentList("seal_apply_bill", 100L, List.of(hijack)));
         verify(attachmentMapper, never()).insertOrUpdate(anyList());
     }
 
     @Test
     void allowsDocxForNonOnboardingBusiness() {
-        // #4：通用附件不得被入职资料策略误伤
         when(attachmentMapper.selectListByBusiness("seal_apply_bill", 1L)).thenReturn(List.of());
         AttachmentSaveReqVO docx = base("合同.docx");
         docx.setFileExtension("docx");
@@ -81,24 +80,51 @@ class AttachmentServiceImplTest {
     }
 
     @Test
-    void acceptsOwnedIdAndInsertsNew() {
-        when(attachmentMapper.selectListByBusiness("hrm_employee_archive_onboarding", 100L))
+    void genericSaveListRejectsOnboardingBusinessType() {
+        AttachmentSaveReqVO neu = base("new.pdf");
+        assertThrows(ServiceException.class, () ->
+                attachmentService.saveAttachmentList(
+                        AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 100L, List.of(neu)));
+        verify(attachmentMapper, never()).insertOrUpdate(anyList());
+    }
+
+    @Test
+    void genericCreateRejectsOnboardingBusinessType() {
+        AttachmentSaveReqVO vo = base("x.pdf");
+        vo.setBusinessType(AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE);
+        assertThrows(ServiceException.class, () -> attachmentService.createAttachment(vo));
+        verify(attachmentMapper, never()).insert(any(AttachmentDO.class));
+    }
+
+    @Test
+    void genericUpdateRejectsOnboardingBusinessType() {
+        AttachmentSaveReqVO vo = base("x.pdf");
+        vo.setId(1L);
+        vo.setBusinessType(AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE);
+        when(attachmentMapper.selectById(1L)).thenReturn(new AttachmentDO());
+        assertThrows(ServiceException.class, () -> attachmentService.updateAttachment(vo));
+        verify(attachmentMapper, never()).updateById(any(AttachmentDO.class));
+    }
+
+    @Test
+    void internalSaveListAllowsOnboardingBusinessType() {
+        when(attachmentMapper.selectListByBusiness(
+                AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 100L))
                 .thenReturn(List.of());
 
         AttachmentDO owned = new AttachmentDO();
         owned.setId(5L);
-        owned.setBusinessType("hrm_employee_archive_onboarding");
+        owned.setBusinessType(AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE);
         owned.setBusinessId(100L);
         owned.setFileName("old.pdf");
-        owned.setFilePath("/old.pdf");
-        owned.setFileUrl("https://x/old.pdf");
         when(attachmentMapper.selectById(5L)).thenReturn(owned);
 
         AttachmentSaveReqVO keep = base("old.pdf");
         keep.setId(5L);
         AttachmentSaveReqVO neu = base("new.pdf");
 
-        attachmentService.saveAttachmentList("hrm_employee_archive_onboarding", 100L, List.of(keep, neu));
+        attachmentService.saveAttachmentListInternal(
+                AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 100L, List.of(keep, neu));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<AttachmentDO>> captor = ArgumentCaptor.forClass(List.class);

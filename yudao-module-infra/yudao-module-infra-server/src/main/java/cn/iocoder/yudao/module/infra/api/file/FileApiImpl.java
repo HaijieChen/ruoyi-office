@@ -19,13 +19,11 @@ public class FileApiImpl implements FileApi {
 
     @Override
     public CommonResult<String> createFile(FileCreateReqDTO createReqDTO) {
+        if (FilePrivateDirs.isPrivateDirectory(createReqDTO.getDirectory())) {
+            throw new IllegalArgumentException("私有目录禁止经 FileApi RPC 写入，请使用业务侧 FileAccessApi");
+        }
         return success(fileService.createFile(createReqDTO.getContent(), createReqDTO.getName(),
                 createReqDTO.getDirectory(), createReqDTO.getType()));
-    }
-
-    @Override
-    public CommonResult<String> presignGetUrl(String url, Integer expirationSeconds) {
-        return success(fileService.presignGetUrl(url, expirationSeconds));
     }
 
 }

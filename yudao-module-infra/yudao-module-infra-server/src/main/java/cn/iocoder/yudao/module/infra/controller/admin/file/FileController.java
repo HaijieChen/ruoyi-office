@@ -7,6 +7,7 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.*;
 import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileDO;
 import cn.iocoder.yudao.module.infra.service.file.FileService;
@@ -40,9 +41,6 @@ import static cn.iocoder.yudao.module.infra.framework.file.core.utils.FileTypeUt
 @Validated
 @Slf4j
 public class FileController {
-
-    /** 入职资料私有目录前缀：禁止通用上传与匿名公开下载（#1） */
-    public static final String HRM_ONBOARDING_PRIVATE_DIR = "hrm-onboarding-private";
 
     @Resource
     private FileService fileService;
@@ -81,9 +79,9 @@ public class FileController {
         return success(resp);
     }
 
-    private void rejectPrivateOnboardingDirectory(String directory) {
-        if (directory != null && directory.contains(HRM_ONBOARDING_PRIVATE_DIR)) {
-            throw new IllegalArgumentException("入职资料私有目录禁止经通用上传接口写入，请使用 HRM onboarding-file/upload");
+    private void rejectPrivateOnboardingDirectory(String directoryOrPath) {
+        if (FilePrivateDirs.isPrivateDirectory(directoryOrPath)) {
+            throw new IllegalArgumentException("入职资料私有目录禁止经通用上传/预签名接口写入，请使用 HRM onboarding-file/upload");
         }
     }
 
@@ -96,12 +94,14 @@ public class FileController {
     public CommonResult<FilePresignedUrlRespVO> getFilePresignedUrl(
             @RequestParam("name") String name,
             @RequestParam(value = "directory", required = false) String directory) {
+        rejectPrivateOnboardingDirectory(directory);
         return success(fileService.presignPutUrl(name, directory));
     }
 
     @PostMapping("/create")
     @Operation(summary = "创建文件", description = "模式二：前端上传文件：配合 presigned-url 接口，记录上传了上传的文件")
     public CommonResult<Long> createFile(@Valid @RequestBody FileCreateReqVO createReqVO) {
+        rejectPrivateOnboardingDirectory(createReqVO.getPath());
         return success(fileService.createFile(createReqVO));
     }
 
@@ -148,7 +148,7 @@ public class FileController {
         path = URLUtil.decode(path, StandardCharsets.UTF_8, false);
 
         // 入职资料私有目录禁止匿名直链（目录名可能出现在 path 任意段）
-        if (path != null && path.contains(HRM_ONBOARDING_PRIVATE_DIR)) {
+        if (FilePrivateDirs.isPrivateDirectory(path)) {
             log.warn("[getFileContent][拒绝匿名访问入职资料 path={}]", path);
             response.setStatus(HttpStatus.FORBIDDEN.value());
             return;

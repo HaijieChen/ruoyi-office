@@ -258,17 +258,56 @@ CREATE TABLE IF NOT EXISTS `hrm_onboarding_file_claim` (
   KEY `idx_uploader` (`uploader_user_id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='入职资料文件 claim';
 
--- 11. 按 path/url 回填历史 onboarding 附件 file_id（#3-new）
--- 入职单历史行也可能缺 file_id：先回填源业务 201，再复制元数据
+-- 11. 历史 file_id 唯一身份回填（#1）
+-- 规则：优先唯一精确 URL；其次唯一 path；歧义保持 NULL（见步骤 14 修复清单）
+-- 可重跑纠错：若存在唯一 URL 候选且当前 file_id 不是该候选，先清空再回填
+
+-- 11a. 纠错清空：当前绑定与「唯一精确 URL」候选不一致
 UPDATE `common_attachment` a
-INNER JOIN `infra_file` f ON (
-    (a.file_path IS NOT NULL AND a.file_path <> '' AND f.path = a.file_path)
-    OR (a.file_url IS NOT NULL AND a.file_url <> '' AND f.url = a.file_url)
-  )
-SET a.file_id = f.id
+INNER JOIN (
+  SELECT f.url AS u, MIN(f.id) AS fid
+  FROM `infra_file` f
+  WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
+  GROUP BY f.url
+  HAVING COUNT(*) = 1
+) cand ON cand.u = a.file_url
+SET a.file_id = NULL
 WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+  AND a.deleted = b'0'
+  AND a.file_id IS NOT NULL
+  AND a.file_id <> cand.fid;
+
+-- 11b. 唯一精确 URL 回填
+UPDATE `common_attachment` a
+INNER JOIN (
+  SELECT f.url AS u, MIN(f.id) AS fid
+  FROM `infra_file` f
+  WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
+  GROUP BY f.url
+  HAVING COUNT(*) = 1
+) cand ON cand.u = a.file_url
+SET a.file_id = cand.fid
+WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+  AND a.deleted = b'0'
   AND a.file_id IS NULL
-  AND a.deleted = b'0';
+  AND a.file_url IS NOT NULL
+  AND a.file_url <> '';
+
+-- 11c. 唯一 path 回填（仅无 file_id 且 URL 未匹配时；path 全局唯一）
+UPDATE `common_attachment` a
+INNER JOIN (
+  SELECT f.path AS p, MIN(f.id) AS fid
+  FROM `infra_file` f
+  WHERE f.deleted = b'0' AND f.path IS NOT NULL AND f.path <> ''
+  GROUP BY f.path
+  HAVING COUNT(*) = 1
+) cand ON cand.p = a.file_path
+SET a.file_id = cand.fid
+WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+  AND a.deleted = b'0'
+  AND a.file_id IS NULL
+  AND a.file_path IS NOT NULL
+  AND a.file_path <> '';
 
 -- 12. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
 -- 去重：包含已软删目标行，避免软删后全量重跑复活活动附件（#3）
@@ -310,13 +349,41 @@ WHERE a.business_type = '201'
       -- 不加 deleted=0：软删后重跑不得复活
   );
 
--- 13. 转档后再回填一次 onboarding file_id（覆盖刚复制且源仍缺匹配的行）
+-- 13. 转档后再按唯一身份回填一次 onboarding file_id
 UPDATE `common_attachment` a
-INNER JOIN `infra_file` f ON (
-    (a.file_path IS NOT NULL AND a.file_path <> '' AND f.path = a.file_path)
-    OR (a.file_url IS NOT NULL AND a.file_url <> '' AND f.url = a.file_url)
-  )
-SET a.file_id = f.id
+INNER JOIN (
+  SELECT f.url AS u, MIN(f.id) AS fid
+  FROM `infra_file` f
+  WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
+  GROUP BY f.url
+  HAVING COUNT(*) = 1
+) cand ON cand.u = a.file_url
+SET a.file_id = cand.fid
 WHERE a.business_type = 'hrm_employee_archive_onboarding'
+  AND a.deleted = b'0'
   AND a.file_id IS NULL
-  AND a.deleted = b'0';
+  AND a.file_url IS NOT NULL
+  AND a.file_url <> '';
+
+UPDATE `common_attachment` a
+INNER JOIN (
+  SELECT f.path AS p, MIN(f.id) AS fid
+  FROM `infra_file` f
+  WHERE f.deleted = b'0' AND f.path IS NOT NULL AND f.path <> ''
+  GROUP BY f.path
+  HAVING COUNT(*) = 1
+) cand ON cand.p = a.file_path
+SET a.file_id = cand.fid
+WHERE a.business_type = 'hrm_employee_archive_onboarding'
+  AND a.deleted = b'0'
+  AND a.file_id IS NULL
+  AND a.file_path IS NOT NULL
+  AND a.file_path <> '';
+
+-- 14. 修复清单（只读）：歧义 path / 冲突 URL / 仍无 file_id 的活动行
+-- SELECT a.id, a.business_type, a.business_id, a.file_path, a.file_url, a.file_id,
+--   (SELECT COUNT(*) FROM infra_file f WHERE f.deleted=0 AND f.path=a.file_path) AS path_cnt,
+--   (SELECT COUNT(*) FROM infra_file f WHERE f.deleted=0 AND f.url=a.file_url) AS url_cnt
+-- FROM common_attachment a
+-- WHERE a.business_type IN ('hrm_employee_archive_onboarding','201')
+--   AND a.deleted=0 AND a.file_id IS NULL;

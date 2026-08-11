@@ -25,6 +25,9 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
  * <p>
  * 注意：类型/大小/数量等业务边界由各业务方在调用前校验。
  * 本服务仅保证：非空附件 ID 必须已归属当前 businessType+businessId（防同租户跨业务 rebind）。
+ * <p>
+ * 保留业务类型 {@link #RESERVED_ONBOARDING_BUSINESS_TYPE} 禁止经通用 create/update/save-list 写入，
+ * 仅允许 {@link #saveAttachmentListInternal}（HRM claim 链路）。
  *
  * @author 宇擎源码
  */
@@ -32,11 +35,15 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 @Validated
 public class AttachmentServiceImpl implements AttachmentService {
 
+    /** 入职资料保留业务类型：禁止通用写入口 */
+    public static final String RESERVED_ONBOARDING_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
+
     @Resource
     private AttachmentMapper attachmentMapper;
 
     @Override
     public Long createAttachment(@Valid AttachmentSaveReqVO createReqVO) {
+        rejectReservedBusinessType(createReqVO.getBusinessType());
         AttachmentDO attachment = BeanUtils.toBean(createReqVO, AttachmentDO.class);
         if (attachment.getUploadTime() == null) {
             attachment.setUploadTime(LocalDateTime.now());
@@ -51,6 +58,11 @@ public class AttachmentServiceImpl implements AttachmentService {
     @Override
     public void updateAttachment(@Valid AttachmentSaveReqVO updateReqVO) {
         validateAttachmentExists(updateReqVO.getId());
+        rejectReservedBusinessType(updateReqVO.getBusinessType());
+        AttachmentDO existing = attachmentMapper.selectById(updateReqVO.getId());
+        if (existing != null) {
+            rejectReservedBusinessType(existing.getBusinessType());
+        }
         AttachmentDO updateObj = BeanUtils.toBean(updateReqVO, AttachmentDO.class);
         attachmentMapper.updateById(updateObj);
     }
@@ -85,6 +97,18 @@ public class AttachmentServiceImpl implements AttachmentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveAttachmentList(String businessType, Long businessId, List<AttachmentSaveReqVO> attachments) {
+        rejectReservedBusinessType(businessType);
+        doSaveAttachmentList(businessType, businessId, attachments);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void saveAttachmentListInternal(String businessType, Long businessId, List<AttachmentSaveReqVO> attachments) {
+        // 允许保留类型：仅 HRM claim 消费后调用
+        doSaveAttachmentList(businessType, businessId, attachments);
+    }
+
+    private void doSaveAttachmentList(String businessType, Long businessId, List<AttachmentSaveReqVO> attachments) {
         // null 表示调用方未提供集合 → 由业务服务决定是否调用本方法
         // 空列表表示清空
         Set<Long> existingIds = getAttachmentListByBusiness(businessType, businessId)
@@ -119,6 +143,14 @@ public class AttachmentServiceImpl implements AttachmentService {
         existingIds.removeAll(processedIds);
         if (!existingIds.isEmpty()) {
             attachmentMapper.deleteBatchIds(existingIds);
+        }
+    }
+
+    private void rejectReservedBusinessType(String businessType) {
+        if (RESERVED_ONBOARDING_BUSINESS_TYPE.equals(businessType)) {
+            throw invalidParamException(
+                    "业务类型 {} 仅允许经 HRM 入职资料 claim 内部链路写入，禁止通用附件接口",
+                    businessType);
         }
     }
 

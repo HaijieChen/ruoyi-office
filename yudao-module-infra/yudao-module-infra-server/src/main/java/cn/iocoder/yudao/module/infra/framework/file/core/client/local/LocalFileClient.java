@@ -5,6 +5,7 @@ import cn.hutool.core.io.IORuntimeException;
 import cn.iocoder.yudao.module.infra.framework.file.core.client.AbstractFileClient;
 
 import java.io.File;
+import java.io.IOException;
 
 /**
  * 本地文件客户端
@@ -49,8 +50,25 @@ public class LocalFileClient extends AbstractFileClient<LocalFileClientConfig> {
         }
     }
 
-    private String getFilePath(String path) {
-        return config.getBasePath() + File.separator + path;
+    /**
+     * 规范化并校验 path 必须落在 basePath 根目录内，防止 ../ 路径穿越。
+     */
+    String getFilePath(String path) {
+        if (path == null || path.isEmpty()) {
+            throw new IllegalArgumentException("文件 path 不能为空");
+        }
+        try {
+            File base = new File(config.getBasePath()).getCanonicalFile();
+            File target = new File(base, path).getCanonicalFile();
+            String basePath = base.getPath();
+            String targetPath = target.getPath();
+            if (!targetPath.equals(basePath) && !targetPath.startsWith(basePath + File.separator)) {
+                throw new IllegalArgumentException("非法文件路径（越出存储根目录）: " + path);
+            }
+            return targetPath;
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("非法文件路径: " + path, ex);
+        }
     }
 
 }
