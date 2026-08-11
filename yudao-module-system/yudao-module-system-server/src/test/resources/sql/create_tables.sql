@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS "system_dept" (
     "phone" varchar(11) DEFAULT NULL,
     "email" varchar(50) DEFAULT NULL,
     "status" tinyint NOT NULL,
+    "org_type" varchar(32) DEFAULT NULL,
+    "functional_currency" varchar(32) DEFAULT NULL,
     "creator" varchar(64) DEFAULT '',
     "create_time" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updater" varchar(64) DEFAULT '',

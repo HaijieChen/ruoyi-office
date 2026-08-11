@@ -12,6 +12,8 @@ export namespace SystemDeptApi {
     phone: string;
     email: string;
     orgType: string;
+    /** 记账本位币（公司）：CNY/USD/HKD */
+    functionalCurrency?: string;
     createTime: Date;
     children?: Dept[];
   }

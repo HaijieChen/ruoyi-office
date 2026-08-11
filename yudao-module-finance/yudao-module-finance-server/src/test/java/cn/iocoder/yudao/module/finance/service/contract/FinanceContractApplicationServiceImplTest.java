@@ -12,6 +12,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCo
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import org.flowable.engine.TaskService;
@@ -41,6 +42,7 @@ class FinanceContractApplicationServiceImplTest {
     private FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
     private BpmProcessInstanceApi processInstanceApi;
     private FinanceCustomerCompanyService customerCompanyService;
+    private FinanceEntityCompanyResolver entityCompanyResolver;
     private ObjectProvider<TaskService> taskServiceProvider;
     private DictDataApi dictDataApi;
     private FinanceContractApplicationServiceImpl service;
@@ -51,13 +53,16 @@ class FinanceContractApplicationServiceImplTest {
         applicationNoRedisDAO = mock(FinanceContractApplicationNoRedisDAO.class);
         processInstanceApi = mock(BpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
+        entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         taskServiceProvider = mock(ObjectProvider.class);
         dictDataApi = mock(DictDataApi.class);
         when(dictDataApi.validateDictDataList(anyString(), anyCollection())).thenReturn(CommonResult.success(true));
         when(taskServiceProvider.getIfAvailable()).thenReturn(null);
+        when(entityCompanyResolver.requireByDeptId(20L))
+                .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(20L, "A公司", "CNY"));
         service = new FinanceContractApplicationServiceImpl(
                 applicationMapper, applicationNoRedisDAO, processInstanceApi, customerCompanyService,
-                taskServiceProvider, dictDataApi);
+                entityCompanyResolver, taskServiceProvider, dictDataApi);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("CT-20260731-1");
         when(customerCompanyService.getEnabledCustomerCompany(50L)).thenReturn(
@@ -501,7 +506,8 @@ class FinanceContractApplicationServiceImplTest {
         req.setCounterpartyCompanyId(50L);
         req.setAmountNa(false);
         req.setContractAmount(new BigDecimal("1000.00"));
-        req.setSignCompany("A公司");
+        req.setCurrency("CNY");
+        req.setEntityCompanyDeptId(20L);
         req.setFileName("销售合同-测试");
         req.setFileType("销售合同");
         req.setProductType("软件");
@@ -519,7 +525,8 @@ class FinanceContractApplicationServiceImplTest {
         req.setCounterpartyCompanyId(src.getCounterpartyCompanyId());
         req.setAmountNa(src.getAmountNa());
         req.setContractAmount(src.getContractAmount());
-        req.setSignCompany(src.getSignCompany());
+        req.setCurrency(src.getCurrency());
+        req.setEntityCompanyDeptId(src.getEntityCompanyDeptId());
         req.setFileName(src.getFileName());
         req.setFileType(src.getFileType());
         req.setProductType(src.getProductType());
@@ -530,5 +537,33 @@ class FinanceContractApplicationServiceImplTest {
         req.setNeedMail(src.getNeedMail());
         req.setDraftFileUrl(src.getDraftFileUrl());
         return req;
+    }
+
+    @Test
+    void createPersistsEntityCompanyAndCurrency() {
+        mockProcessCreate();
+        Long id = service.createAndStart(validReq(), 200L);
+        assertEquals(100L, id);
+        ArgumentCaptor<FinanceContractApplicationDO> cap = ArgumentCaptor.forClass(FinanceContractApplicationDO.class);
+        verify(applicationMapper).insert(cap.capture());
+        assertEquals(20L, cap.getValue().getEntityCompanyDeptId());
+        assertEquals("A公司", cap.getValue().getEntityCompanyName());
+        assertEquals("A公司", cap.getValue().getSignCompany());
+        assertEquals("CNY", cap.getValue().getCurrency());
+    }
+
+    @Test
+    void createRejectsInvalidCurrency() {
+        FinanceContractApplicationCreateAndStartReqVO req = validReq();
+        req.setCurrency("EUR");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 200L));
+        assertEquals(CURRENCY_INVALID.getCode(), ex.getCode());
+    }
+
+    private void mockProcessCreate() {
+        @SuppressWarnings("unchecked")
+        CommonResult<String> pi = mock(CommonResult.class);
+        when(pi.getCheckedData()).thenReturn("proc-1");
+        when(processInstanceApi.createProcessInstance(anyLong(), any())).thenReturn(pi);
     }
 }

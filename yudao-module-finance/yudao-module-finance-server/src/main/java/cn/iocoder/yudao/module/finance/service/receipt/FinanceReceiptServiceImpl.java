@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceReceiptLifecycle
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceReceiptNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptClaimStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceReceiptLifecycleActionEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -221,6 +222,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     private static FinanceReceiptDO buildReceiptFromSave(FinanceReceiptSaveReqVO reqVO, Long importerId,
                                                          String receiptNo,
                                                          FinanceEntityCompanyResolver.ResolvedCompany company) {
+        String currency = FinanceCurrencySupport.requireSupported(reqVO.getCurrency());
         return FinanceReceiptDO.builder()
                 .receiptNo(receiptNo)
                 .importDate(LocalDate.now())
@@ -232,6 +234,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
                 .payerName(trimToNull(reqVO.getPayerName()))
                 .payerAccount(trimToNull(reqVO.getPayerAccount()))
                 .transactionAmount(reqVO.getTransactionAmount())
+                .currency(currency)
                 .summary(trimToNull(reqVO.getSummary()))
                 .bankSerialNo(reqVO.getBankSerialNo().trim())
                 .businessFund(reqVO.getBusinessFund())

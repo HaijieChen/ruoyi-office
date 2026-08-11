@@ -64,9 +64,14 @@ class FinanceInvoiceApplicationServiceImplTest {
         processInstanceApi = mock(BpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
         dictDataApi = mock(DictDataApi.class);
+        cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver entityCompanyResolver =
+                mock(cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver.class);
+        when(entityCompanyResolver.requireByDeptId(anyLong())).thenReturn(
+                new cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver.ResolvedCompany(
+                        20L, "开票公司", "CNY"));
         when(dictDataApi.validateDictDataList(anyString(), anyCollection())).thenReturn(CommonResult.success(true));
         service = new FinanceInvoiceApplicationServiceImpl(applicationMapper, lineMapper, fileMapper, businessOrderMapper,
-                applicationNoRedisDAO, processInstanceApi, customerCompanyService, dictDataApi);
+                applicationNoRedisDAO, processInstanceApi, customerCompanyService, entityCompanyResolver, dictDataApi);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("INV-20260729-1");
         when(customerCompanyService.getEnabledCustomerCompany(anyLong())).thenReturn(
@@ -288,6 +293,9 @@ class FinanceInvoiceApplicationServiceImplTest {
         FinanceInvoiceApplicationResubmitReqVO resubmitReq = new FinanceInvoiceApplicationResubmitReqVO();
         resubmitReq.setId(100L);
         resubmitReq.setCustomerCompanyId(50L);
+        resubmitReq.setInvoiceCompanyDeptId(20L);
+        resubmitReq.setCurrency("CNY");
+        resubmitReq.setTaxContent("软件");
         resubmitReq.setLines(List.of(line(10L, "10.00")));
 
         ServiceException ex = assertThrows(ServiceException.class,
@@ -369,7 +377,9 @@ class FinanceInvoiceApplicationServiceImplTest {
         resubmitReq.setCustomerCompanyId(50L);
         resubmitReq.setBuyerName("客户端伪造");
         resubmitReq.setBuyerTaxNo("FAKE");
+        resubmitReq.setInvoiceCompanyDeptId(20L);
         resubmitReq.setInvoiceCompany("开票公司");
+        resubmitReq.setCurrency("CNY");
         resubmitReq.setInvoiceType("普票");
         resubmitReq.setTaxContent("软件");
         resubmitReq.setLines(List.of(line(10L, "30.00")));
@@ -395,6 +405,8 @@ class FinanceInvoiceApplicationServiceImplTest {
         FinanceInvoiceApplicationResubmitReqVO resubmitReq = new FinanceInvoiceApplicationResubmitReqVO();
         resubmitReq.setId(100L);
         resubmitReq.setCustomerCompanyId(88L);
+        resubmitReq.setInvoiceCompanyDeptId(20L);
+        resubmitReq.setCurrency("CNY");
         resubmitReq.setTaxContent("软件");
         resubmitReq.setLines(List.of(line(10L, "10.00")));
 
@@ -411,7 +423,9 @@ class FinanceInvoiceApplicationServiceImplTest {
         // 客户端伪造税项：服务端应以档案覆盖
         reqVO.setBuyerName("伪造购方");
         reqVO.setBuyerTaxNo("FAKE");
+        reqVO.setInvoiceCompanyDeptId(20L);
         reqVO.setInvoiceCompany("开票公司");
+        reqVO.setCurrency("CNY");
         reqVO.setInvoiceType("专票");
         reqVO.setTaxContent("软件");
         reqVO.setLines(List.of(lines));
@@ -436,6 +450,7 @@ class FinanceInvoiceApplicationServiceImplTest {
                 .id(id)
                 .settlementAmount(new BigDecimal(settlement))
                 .invoicedOccupiedAmount(new BigDecimal(occupied))
+                .currency("CNY")
                 .contractApplicationId(contractId)
                 .productTypeSnapshot(productTypeSnapshot)
                 .build();

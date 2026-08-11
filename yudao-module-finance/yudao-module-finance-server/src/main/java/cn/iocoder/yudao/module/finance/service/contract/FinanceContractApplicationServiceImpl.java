@@ -13,6 +13,8 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCo
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
@@ -65,6 +67,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private final FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
     private final BpmProcessInstanceApi processInstanceApi;
     private final FinanceCustomerCompanyService customerCompanyService;
+    private final FinanceEntityCompanyResolver entityCompanyResolver;
     private final ObjectProvider<TaskService> taskServiceProvider;
     private final DictDataApi dictDataApi;
 
@@ -72,12 +75,14 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                                                  FinanceContractApplicationNoRedisDAO applicationNoRedisDAO,
                                                  BpmProcessInstanceApi processInstanceApi,
                                                  FinanceCustomerCompanyService customerCompanyService,
+                                                 FinanceEntityCompanyResolver entityCompanyResolver,
                                                  ObjectProvider<TaskService> taskServiceProvider,
                                                  DictDataApi dictDataApi) {
         this.applicationMapper = applicationMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
         this.customerCompanyService = customerCompanyService;
+        this.entityCompanyResolver = entityCompanyResolver;
         this.taskServiceProvider = taskServiceProvider;
         this.dictDataApi = dictDataApi;
     }
@@ -115,6 +120,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         }
         validateBusinessFields(reqVO);
         FinanceCustomerCompanyDO counterparty = resolveCounterparty(reqVO.getCounterpartyCompanyId());
+        FinanceEntityCompanyResolver.ResolvedCompany entity = resolveEntityCompany(reqVO);
+        String currency = resolveCurrency(reqVO);
 
         // CS-R3：REJECTED→PENDING 条件更新（单胜者）；0 行则不 startProcess，避免双实例
         int claimed = applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
@@ -130,7 +137,10 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 .set("counterparty_name", counterparty.getName())
                 .set("amount_na", Boolean.TRUE.equals(reqVO.getAmountNa()))
                 .set("contract_amount", Boolean.TRUE.equals(reqVO.getAmountNa()) ? null : reqVO.getContractAmount())
-                .set("sign_company", reqVO.getSignCompany())
+                .set("currency", currency)
+                .set("entity_company_dept_id", entity.deptId())
+                .set("entity_company_name", entity.name())
+                .set("sign_company", entity.name())
                 .set("file_name", reqVO.getFileName())
                 .set("file_type", reqVO.getFileType())
                 .set("product_type", reqVO.getProductType())
@@ -568,6 +578,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
             Long applicantUserId,
             FinanceCustomerCompanyDO counterparty) {
         boolean amountNa = Boolean.TRUE.equals(reqVO.getAmountNa());
+        FinanceEntityCompanyResolver.ResolvedCompany entity = resolveEntityCompany(reqVO);
+        String currency = resolveCurrency(reqVO);
         return FinanceContractApplicationDO.builder()
                 .applicantUserId(applicantUserId)
                 .applicantDeptId(reqVO.getApplicantDeptId())
@@ -575,7 +587,11 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 .counterpartyName(counterparty.getName())
                 .amountNa(amountNa)
                 .contractAmount(amountNa ? null : reqVO.getContractAmount())
-                .signCompany(reqVO.getSignCompany())
+                .currency(currency)
+                .entityCompanyDeptId(entity.deptId())
+                .entityCompanyName(entity.name())
+                // 兼容旧读路径：signCompany 与名称快照双写
+                .signCompany(entity.name())
                 .fileName(reqVO.getFileName())
                 .fileType(reqVO.getFileType())
                 .productType(reqVO.getProductType())
@@ -590,6 +606,21 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 .endDate(reqVO.getEndDate())
                 .draftFileUrl(reqVO.getDraftFileUrl())
                 .remark(reqVO.getRemark());
+    }
+
+    private FinanceEntityCompanyResolver.ResolvedCompany resolveEntityCompany(
+            FinanceContractApplicationCreateAndStartReqVO reqVO) {
+        return entityCompanyResolver.requireByDeptId(reqVO.getEntityCompanyDeptId());
+    }
+
+    /**
+     * 有金额时币种必填；金额不适用时允许空币种。
+     */
+    private static String resolveCurrency(FinanceContractApplicationCreateAndStartReqVO reqVO) {
+        if (Boolean.TRUE.equals(reqVO.getAmountNa())) {
+            return FinanceCurrencySupport.normalizeOptional(reqVO.getCurrency());
+        }
+        return FinanceCurrencySupport.requireSupported(reqVO.getCurrency());
     }
 
     private String startProcess(Long userId, Long appId, FinanceContractApplicationDO application,
@@ -610,6 +641,17 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         variables.put("applicationNo", application.getApplicationNo());
         variables.put("applicantUserId", application.getApplicantUserId());
         variables.put("signCompany", application.getSignCompany());
+        if (application.getEntityCompanyDeptId() != null) {
+            variables.put("companyId", application.getEntityCompanyDeptId());
+            variables.put("entityCompanyDeptId", application.getEntityCompanyDeptId());
+        }
+        if (StrUtil.isNotBlank(application.getEntityCompanyName())) {
+            variables.put("companyName", application.getEntityCompanyName());
+            variables.put("entityCompanyName", application.getEntityCompanyName());
+        }
+        if (StrUtil.isNotBlank(application.getCurrency())) {
+            variables.put("currency", application.getCurrency());
+        }
         variables.put("fileName", application.getFileName());
         variables.put("fileType", application.getFileType());
         variables.put("counterpartyName", application.getCounterpartyName());

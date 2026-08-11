@@ -39,6 +39,9 @@ public class DeptRespVO {
     @DictFormat(DictTypeConstants.DEPT_ORG_TYPE)
     private String orgType;
 
+    @Schema(description = "记账本位币（公司）：CNY/USD/HKD", example = "CNY")
+    private String functionalCurrency;
+
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED, example = "时间戳格式")
     private LocalDateTime createTime;
 

@@ -23,6 +23,7 @@ public interface FinancePaymentApplicationMapper extends BaseMapperX<FinancePaym
                 .eqIfPresent(FinancePaymentApplicationDO::getPaymentReason, reqVO.getPaymentReason())
                 .eqIfPresent(FinancePaymentApplicationDO::getPayeeCompanyId, reqVO.getPayeeCompanyId())
                 .likeIfPresent(FinancePaymentApplicationDO::getPayeeName, reqVO.getPayeeName())
+                .eqIfPresent(FinancePaymentApplicationDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
                 .eq(applicantUserIdOrNull != null, FinancePaymentApplicationDO::getApplicantUserId,
                         applicantUserIdOrNull)
                 .orderByDesc(FinancePaymentApplicationDO::getId));

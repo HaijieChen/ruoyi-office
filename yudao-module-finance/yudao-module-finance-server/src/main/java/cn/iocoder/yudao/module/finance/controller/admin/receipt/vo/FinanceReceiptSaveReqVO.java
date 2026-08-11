@@ -44,6 +44,10 @@ public class FinanceReceiptSaveReqVO {
     @DecimalMin(value = "0.01", message = "交易金额必须大于 0")
     private BigDecimal transactionAmount;
 
+    @Schema(description = "到款币种 CNY/USD/HKD", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "币种不能为空")
+    private String currency;
+
     @Schema(description = "摘要/附言")
     private String summary;
 

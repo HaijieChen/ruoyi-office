@@ -28,6 +28,15 @@ export function useGridFormSchema(): VbenFormSchema[] {
       label: '收款方',
       component: 'Input',
     },
+    {
+      fieldName: 'entityCompanyDeptId',
+      label: '主体公司',
+      component: 'InputNumber',
+      componentProps: {
+        class: 'w-full',
+        placeholder: '主体公司 deptId',
+      },
+    },
   ];
 }
 
@@ -43,8 +52,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { field: 'applicationNo', title: '单号', minWidth: 150 },
     { field: 'processTitle', title: '标题', minWidth: 180 },
+    {
+      field: 'entityCompanyName',
+      title: '主体公司',
+      minWidth: 140,
+      formatter: ({ cellValue }) => cellValue || '历史未记录',
+    },
     { field: 'payeeName', title: '收款方', minWidth: 140 },
     { field: 'applyAmount', title: '金额', minWidth: 100 },
+    { field: 'currency', title: '币种', width: 80 },
     { field: 'paymentReason', title: '事由', minWidth: 100 },
     {
       field: 'status',

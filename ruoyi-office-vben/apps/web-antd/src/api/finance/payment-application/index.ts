@@ -31,6 +31,10 @@ export namespace FinancePaymentApplicationApi {
     payeeName: string;
     payeeBankName: string;
     payeeBankAccount: string;
+    /** 主体公司组织 ID */
+    entityCompanyDeptId?: number;
+    /** 主体公司名称快照；历史空值前端展示「历史未记录」 */
+    entityCompanyName?: string;
     applyAmount: number;
     currency?: string;
     businessSettlementTerm: string;
@@ -57,8 +61,11 @@ export namespace FinancePaymentApplicationApi {
     payeeCompanyId: number;
     payeeBankName?: string;
     payeeBankAccount?: string;
+    /** 主体公司（启用公司下拉） */
+    entityCompanyDeptId: number;
     applyAmount: number;
-    currency?: string;
+    /** 交易币种 CNY/USD/HKD */
+    currency: string;
     businessSettlementTerm: string;
     payMethod: string;
     costProject: string;
@@ -77,6 +84,7 @@ export namespace FinancePaymentApplicationApi {
     paymentReason?: string;
     payeeCompanyId?: number;
     payeeName?: string;
+    entityCompanyDeptId?: number;
   }
 
   export interface PurchaseInstance {

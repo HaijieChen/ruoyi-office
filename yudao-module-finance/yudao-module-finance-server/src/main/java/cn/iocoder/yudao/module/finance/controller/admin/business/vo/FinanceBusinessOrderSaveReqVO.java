@@ -59,6 +59,10 @@ public class FinanceBusinessOrderSaveReqVO {
     @DecimalMax(value = "1", message = "折扣率不能大于 1")
     private BigDecimal discountRate;
 
+    @Schema(description = "交易币种 CNY/USD/HKD", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "币种不能为空")
+    private String currency;
+
     @Schema(description = "备注")
     private String remark;
 

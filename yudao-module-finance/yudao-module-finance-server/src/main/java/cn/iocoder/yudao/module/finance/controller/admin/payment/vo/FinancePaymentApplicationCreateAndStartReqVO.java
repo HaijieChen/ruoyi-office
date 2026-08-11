@@ -40,11 +40,16 @@ public class FinancePaymentApplicationCreateAndStartReqVO {
     @Schema(description = "本次账号快照（空则用档案）")
     private String payeeBankAccount;
 
+    @Schema(description = "主体公司组织部门 ID（启用公司）")
+    @NotNull(message = "主体公司不能为空")
+    private Long entityCompanyDeptId;
+
     @Schema(description = "申请金额")
     @NotNull(message = "申请金额不能为空")
     private BigDecimal applyAmount;
 
-    @Schema(description = "币种，默认 CNY")
+    @Schema(description = "交易币种 CNY/USD/HKD（切换主体后可改）")
+    @NotEmpty(message = "币种不能为空")
     private String currency;
 
     @Schema(description = "业务结算账期")

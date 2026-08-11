@@ -131,6 +131,7 @@ class FinanceReceiptServiceImplTest {
         req.setTransactionDate(LocalDateTime.of(2026, 7, 22, 10, 0));
         req.setPayerName(null);
         req.setTransactionAmount(new BigDecimal("50.00"));
+        req.setCurrency("CNY");
         req.setBankSerialNo("BSN-NB-1");
         req.setBusinessFund(Boolean.FALSE);
 
@@ -150,6 +151,7 @@ class FinanceReceiptServiceImplTest {
         req.setTransactionDate(LocalDateTime.of(2026, 7, 22, 10, 0));
         req.setPayerName("  ");
         req.setTransactionAmount(new BigDecimal("50.00"));
+        req.setCurrency("CNY");
         req.setBankSerialNo("BSN-B-EMPTY");
         req.setBusinessFund(Boolean.TRUE);
 

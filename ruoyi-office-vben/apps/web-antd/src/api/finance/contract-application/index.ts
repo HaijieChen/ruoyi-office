@@ -22,6 +22,9 @@ export namespace FinanceContractApplicationApi {
     counterpartyName?: string;
     amountNa?: boolean;
     contractAmount?: number;
+    entityCompanyDeptId?: number;
+    entityCompanyName?: string;
+    currency?: string;
     signCompany?: string;
     fileName?: string;
     fileType?: string;
@@ -49,7 +52,9 @@ export namespace FinanceContractApplicationApi {
     counterpartyCompanyId: number;
     amountNa?: boolean;
     contractAmount?: number;
-    signCompany: string;
+    entityCompanyDeptId: number;
+    currency?: string;
+    signCompany?: string;
     fileName: string;
     fileType: string;
     /** EXP-70 必填 */

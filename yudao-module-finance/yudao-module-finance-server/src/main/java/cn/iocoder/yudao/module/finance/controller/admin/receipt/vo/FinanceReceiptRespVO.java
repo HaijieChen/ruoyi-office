@@ -33,6 +33,8 @@ public class FinanceReceiptRespVO {
     private String payerAccount;
     @Schema(description = "交易金额")
     private BigDecimal transactionAmount;
+    @Schema(description = "到款币种 CNY/USD/HKD")
+    private String currency;
     @Schema(description = "摘要/附言")
     private String summary;
     @Schema(description = "银行流水号")

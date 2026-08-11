@@ -20,6 +20,8 @@ public class FinancePaymentApplicationRespVO {
     private String processTitle;
     private Long applicantUserId;
     private Long applicantDeptId;
+    private Long entityCompanyDeptId;
+    private String entityCompanyName;
     private LocalDate applyDate;
     private String paymentTiming;
     private String paymentReason;

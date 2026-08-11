@@ -105,7 +105,7 @@ const [Modal, modalApi] = useVbenModal({
           {{ detail.counterpartyName }}
         </Descriptions.Item>
         <Descriptions.Item label="签约主体">
-          {{ detail.signCompany }}
+          {{ detail.entityCompanyName || detail.signCompany || '历史未记录' }}
         </Descriptions.Item>
         <Descriptions.Item label="文件名称" :span="2">
           {{ detail.fileName }}

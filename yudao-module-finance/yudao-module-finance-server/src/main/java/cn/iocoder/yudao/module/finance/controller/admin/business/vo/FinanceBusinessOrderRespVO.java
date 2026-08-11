@@ -17,6 +17,7 @@ public class FinanceBusinessOrderRespVO {
     private String orderNo;
     @Schema(description = "主体公司组织部门编号")
     private Long entityCompanyDeptId;
+    private String currency;
     @Schema(description = "主体公司名称")
     private String entityCompanyName;
     @Schema(description = "导入日期")

@@ -42,6 +42,9 @@ public class DeptServiceImplTest extends BaseDbUnitTest {
             o.setId(null); // 防止 id 被设置
             o.setParentId(DeptDO.PARENT_ID_ROOT);
             o.setStatus(randomCommonStatus());
+            // 默认按部门：本位币应被清空
+            o.setOrgType("0");
+            o.setFunctionalCurrency("CNY");
         });
 
         // 调用
@@ -50,13 +53,57 @@ public class DeptServiceImplTest extends BaseDbUnitTest {
         assertNotNull(deptId);
         // 校验记录的属性是否正确
         DeptDO deptDO = deptMapper.selectById(deptId);
-        assertPojoEquals(reqVO, deptDO, "id");
+        assertNull(deptDO.getFunctionalCurrency());
+        assertEquals("0", deptDO.getOrgType());
+        assertEquals(reqVO.getName(), deptDO.getName());
+    }
+
+    @Test
+    public void testCreateCompanyRequiresFunctionalCurrency() {
+        DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
+            o.setId(null);
+            o.setParentId(DeptDO.PARENT_ID_ROOT);
+            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
+            o.setOrgType("1");
+            o.setFunctionalCurrency(null);
+        });
+        assertServiceException(() -> deptService.createDept(reqVO), DEPT_FUNCTIONAL_CURRENCY_REQUIRED);
+    }
+
+    @Test
+    public void testCreateCompanyWithValidCurrency() {
+        DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
+            o.setId(null);
+            o.setParentId(DeptDO.PARENT_ID_ROOT);
+            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
+            o.setOrgType("1");
+            o.setFunctionalCurrency("usd");
+        });
+        Long deptId = deptService.createDept(reqVO);
+        DeptDO deptDO = deptMapper.selectById(deptId);
+        assertEquals("USD", deptDO.getFunctionalCurrency());
+    }
+
+    @Test
+    public void testCreateCompanyRejectsInvalidCurrency() {
+        DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
+            o.setId(null);
+            o.setParentId(DeptDO.PARENT_ID_ROOT);
+            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
+            o.setOrgType("1");
+            o.setFunctionalCurrency("EUR");
+        });
+        assertServiceException(() -> deptService.createDept(reqVO), DEPT_FUNCTIONAL_CURRENCY_INVALID);
     }
 
     @Test
     public void testUpdateDept() {
         // mock 数据
-        DeptDO dbDeptDO = randomPojo(DeptDO.class, o -> o.setStatus(randomCommonStatus()));
+        DeptDO dbDeptDO = randomPojo(DeptDO.class, o -> {
+            o.setStatus(randomCommonStatus());
+            o.setOrgType("0");
+            o.setFunctionalCurrency(null);
+        });
         deptMapper.insert(dbDeptDO);// @Sql: 先插入出一条存在的数据
         // 准备参数
         DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
@@ -64,13 +111,15 @@ public class DeptServiceImplTest extends BaseDbUnitTest {
             o.setParentId(DeptDO.PARENT_ID_ROOT);
             o.setId(dbDeptDO.getId());
             o.setStatus(randomCommonStatus());
+            o.setOrgType("0");
+            o.setFunctionalCurrency(null);
         });
 
         // 调用
         deptService.updateDept(reqVO);
         // 校验是否更新正确
         DeptDO deptDO = deptMapper.selectById(reqVO.getId()); // 获取最新的
-        assertPojoEquals(reqVO, deptDO);
+        assertPojoEquals(reqVO, deptDO, "functionalCurrency");
     }
 
     @Test

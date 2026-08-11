@@ -39,6 +39,9 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="标题">{{ detail.processTitle }}</Descriptions.Item>
         <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
         <Descriptions.Item label="节点">{{ detail.currentNodeName }}</Descriptions.Item>
+        <Descriptions.Item label="主体公司">
+          {{ detail.entityCompanyName || '历史未记录' }}
+        </Descriptions.Item>
         <Descriptions.Item label="收款方">{{ detail.payeeName }}</Descriptions.Item>
         <Descriptions.Item label="账户">
           {{ detail.payeeBankName }} / {{ detail.payeeBankAccount }}

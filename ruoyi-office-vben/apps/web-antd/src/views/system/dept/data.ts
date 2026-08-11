@@ -68,6 +68,27 @@ export function useFormSchema(): VbenFormSchema[] {
       rules: 'required',
     },
     {
+      fieldName: 'functionalCurrency',
+      label: '记账本位币',
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: [
+          { label: '人民币 CNY', value: 'CNY' },
+          { label: '美元 USD', value: 'USD' },
+          { label: '港币 HKD', value: 'HKD' },
+        ],
+        placeholder: '公司必填，部门勿填',
+      },
+      dependencies: {
+        triggerFields: ['orgType'],
+        // 仅公司节点展示
+        show: (values) => values.orgType === '1',
+        rules: (values) =>
+          values.orgType === '1' ? 'selectRequired' : z.any().optional(),
+      },
+    },
+    {
       fieldName: 'sort',
       label: '显示顺序',
       component: 'InputNumber',
@@ -142,6 +163,12 @@ export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['colum
         name: 'CellDict',
         props: { type: DICT_TYPE.SYSTEM_DEPT_ORG_TYPE },
       },
+    },
+    {
+      field: 'functionalCurrency',
+      title: '记账本位币',
+      minWidth: 100,
+      formatter: ({ cellValue }) => cellValue || '-',
     },
     {
       field: 'leaderUserId',

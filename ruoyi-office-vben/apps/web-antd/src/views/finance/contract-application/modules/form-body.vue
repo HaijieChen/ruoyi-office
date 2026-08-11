@@ -64,6 +64,8 @@ interface FormData {
   counterpartyCompanyId?: number;
   amountNa?: boolean;
   contractAmount?: number;
+  entityCompanyDeptId?: number;
+  currency?: string;
   signCompany?: string;
   fileName?: string;
   fileType?: string;
@@ -109,8 +111,20 @@ const rules = computed<Record<string, Rule[]>>(() => ({
   counterpartyCompanyId: [
     { required: true, message: '请选择对方客商', trigger: 'change' },
   ],
-  signCompany: [
+  entityCompanyDeptId: [
     { required: true, message: '请选择签约主体', trigger: 'change' },
+  ],
+  currency: [
+    {
+      validator: async () => {
+        if (formData.value.amountNa) return;
+        const c = (formData.value.currency || '').toUpperCase();
+        if (!['CNY', 'USD', 'HKD'].includes(c)) {
+          throw new Error('请选择币种 CNY/USD/HKD');
+        }
+      },
+      trigger: 'change',
+    },
   ],
   fileName: [
     { required: true, message: '请输入用印文件名称', trigger: 'blur' },
@@ -194,10 +208,11 @@ async function loadCompanies() {
   try {
     const list = (await getSimpleCompanyList()) || [];
     companyOptions.value = list
-      .filter((c) => c.name)
+      .filter((c) => c.id != null && c.name)
       .map((c) => ({
-        value: c.name as string,
+        value: c.id as number,
         label: c.name as string,
+        functionalCurrency: (c as any).functionalCurrency || 'CNY',
       }));
   } finally {
     loadingCompany.value = false;
@@ -211,7 +226,10 @@ function buildPayload(): FinanceContractApplicationApi.CreateAndStartRequest {
     contractAmount: formData.value.amountNa
       ? undefined
       : formData.value.contractAmount,
-    signCompany: formData.value.signCompany!,
+    currency: formData.value.amountNa
+      ? formData.value.currency
+      : (formData.value.currency || 'CNY').toUpperCase(),
+    entityCompanyDeptId: formData.value.entityCompanyDeptId!,
     fileName: formData.value.fileName!,
     fileType: formData.value.fileType!,
     productType: formData.value.productType!,
@@ -255,7 +273,8 @@ async function reset(opts?: { id?: number; mode?: string }) {
       counterpartyCompanyId: detail.counterpartyCompanyId,
       amountNa: !!detail.amountNa,
       contractAmount: detail.contractAmount,
-      signCompany: detail.signCompany,
+      currency: detail.currency || 'CNY',
+      entityCompanyDeptId: detail.entityCompanyDeptId,
       fileName: detail.fileName,
       fileType: detail.fileType,
       productType: detail.productType,
@@ -334,15 +353,33 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         @change="emit(predictChange, getPredictVariables())"
       />
     </Form.Item>
-    <Form.Item label="签约主体" name="signCompany">
+    <Form.Item v-if="!formData.amountNa" label="币种" name="currency">
       <Select
-        v-model:value="formData.signCompany"
+        v-model:value="formData.currency"
+        class="w-full"
+        :options="[
+          { label: '人民币 CNY', value: 'CNY' },
+          { label: '美元 USD', value: 'USD' },
+          { label: '港币 HKD', value: 'HKD' },
+        ]"
+        placeholder="CNY/USD/HKD"
+      />
+    </Form.Item>
+    <Form.Item label="签约主体" name="entityCompanyDeptId">
+      <Select
+        v-model:value="formData.entityCompanyDeptId"
         class="w-full"
         show-search
         option-filter-prop="label"
         :loading="loadingCompany"
         :options="companyOptions"
         placeholder="请选择签约主体公司"
+        @change="(v: any) => {
+          const opt = companyOptions.find((o) => o.value === v) as any;
+          if (opt?.functionalCurrency && !formData.amountNa) {
+            formData.currency = opt.functionalCurrency;
+          }
+        }"
       />
     </Form.Item>
     <Form.Item label="用印文件名称" name="fileName">

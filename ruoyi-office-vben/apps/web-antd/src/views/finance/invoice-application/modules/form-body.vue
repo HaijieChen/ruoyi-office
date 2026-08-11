@@ -56,6 +56,7 @@ interface FormData {
   buyerBankAccount?: string;
   /** 组织公司 deptId */
   invoiceCompanyDeptId?: number;
+  currency?: string;
   /** 公司名称快照 */
   invoiceCompany?: string;
   invoiceType?: string;
@@ -183,6 +184,7 @@ const rules: Record<string, Rule[]> = {
   customerCompanyId: [
     { required: true, message: '请选择客户公司', trigger: 'change' },
   ],
+  currency: [{ required: true, message: '请选择币种' }],
   invoiceCompanyDeptId: [
     { required: true, message: '请选择开票公司', trigger: 'change' },
   ],
@@ -575,6 +577,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
       buyerAddressPhone: detail.buyerAddressPhone,
       buyerBankAccount: detail.buyerBankAccount,
       invoiceCompanyDeptId: detail.invoiceCompanyDeptId,
+      currency: detail.currency || 'CNY',
       invoiceCompany: detail.invoiceCompany,
       invoiceType: detail.invoiceType,
       productType: detail.taxContent,
@@ -682,6 +685,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       buyerAddressPhone: formData.value.buyerAddressPhone,
       buyerBankAccount: formData.value.buyerBankAccount,
       invoiceCompanyDeptId: formData.value.invoiceCompanyDeptId,
+      currency: (formData.value.currency || 'CNY').toUpperCase(),
       invoiceCompany: formData.value.invoiceCompany,
       invoiceType: formData.value.invoiceType,
       specialInvoiceRequirement: formData.value.specialInvoiceRequirement,
@@ -773,6 +777,16 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           :rows="2"
           placeholder="客户当次要求（可选，不进客户档案）"
           allow-clear
+        />
+      </Form.Item>
+      <Form.Item label="币种" name="currency" required>
+        <Select
+          v-model:value="formData.currency"
+          :options="[
+            { label: '人民币 CNY', value: 'CNY' },
+            { label: '美元 USD', value: 'USD' },
+            { label: '港币 HKD', value: 'HKD' },
+          ]"
         />
       </Form.Item>
       <Form.Item label="开票公司" name="invoiceCompanyDeptId" required>

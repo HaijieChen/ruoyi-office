@@ -26,11 +26,14 @@ public class FinanceEntityCompanyResolver {
     @Resource
     private DeptApi deptApi;
 
-    public record ResolvedCompany(Long deptId, String name) {
+    public record ResolvedCompany(Long deptId, String name, String functionalCurrency) {
+        public ResolvedCompany(Long deptId, String name) {
+            this(deptId, name, null);
+        }
     }
 
     /**
-     * 按 deptId 校验为启用公司，返回服务端名称快照。
+     * 按 deptId 校验为启用公司，返回服务端名称快照（及公司记账本位币，可空）。
      */
     public ResolvedCompany requireByDeptId(Long deptId) {
         if (deptId == null) {
@@ -42,7 +45,7 @@ public class FinanceEntityCompanyResolver {
                 || !isCompany(dept)) {
             throw exception(ENTITY_COMPANY_INVALID);
         }
-        return new ResolvedCompany(dept.getId(), dept.getName());
+        return new ResolvedCompany(dept.getId(), dept.getName(), dept.getFunctionalCurrency());
     }
 
     /**
@@ -83,7 +86,7 @@ public class FinanceEntityCompanyResolver {
             return "主体公司名称重复，请改用唯一名称";
         }
         DeptRespDTO hit = hits.get(0);
-        out[0] = new ResolvedCompany(hit.getId(), hit.getName());
+        out[0] = new ResolvedCompany(hit.getId(), hit.getName(), hit.getFunctionalCurrency());
         return null;
     }
 
