@@ -84,4 +84,19 @@ class FileReservedGuardTest {
         verify(fileMapper, never()).countReservedAttachmentByPath(anyString());
     }
 
+    @Test
+    void crossTenantBoundFileIdStillRejected_providerZero() throws Exception {
+        // 租户 B 上下文下，mapper 跨租户返回计数 1 → 拒绝，provider 0 次
+        FileDO global = new FileDO();
+        global.setId(105L);
+        global.setPath("public/report.pdf");
+        global.setConfigId(10L);
+        when(fileMapper.selectById(105L)).thenReturn(global);
+        when(fileMapper.countReservedAttachmentByFileId(105L)).thenReturn(1L);
+
+        assertThrows(IllegalArgumentException.class, () -> fileService.deleteFile(105L));
+        assertThrows(IllegalArgumentException.class, () -> fileService.getFile(105L));
+        verify(fileConfigService, never()).getFileClient(any());
+    }
+
 }

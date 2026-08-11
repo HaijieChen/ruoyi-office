@@ -8,6 +8,7 @@ import cn.hutool.crypto.digest.DigestUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FilePageReqVO;
@@ -57,8 +58,8 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public PageResult<FileDO> getFilePage(FilePageReqVO pageReqVO) {
-        // 通用分页：排除私有目录（service 层隔离，不依赖前端过滤）
-        return fileMapper.selectPagePublic(pageReqVO);
+        // 跨租户判定入职绑定（infra_file 全局，common_attachment 有 tenant）
+        return TenantUtils.executeIgnore(() -> fileMapper.selectPagePublic(pageReqVO));
     }
 
     @Override
@@ -252,26 +253,34 @@ public class FileServiceImpl implements FileService {
     }
 
     /**
-     * 入职绑定守卫：含软删附件；mapper/SQL 异常 fail-closed（不得放行 provider）。
+     * 入职绑定守卫：含软删、跨租户；mapper/SQL 异常 fail-closed。
      */
     void rejectReservedAttachmentBound(Long fileId, String path) {
         try {
-            if (fileId != null) {
-                Long byId = fileMapper.countReservedAttachmentByFileId(fileId);
-                if (byId != null && byId > 0) {
-                    throw new IllegalArgumentException("fileId 绑定入职资料/入职单附件，禁止通用操作: " + fileId);
+            TenantUtils.executeIgnore(() -> {
+                if (fileId != null) {
+                    Long byId = fileMapper.countReservedAttachmentByFileId(fileId);
+                    if (byId != null && byId > 0) {
+                        throw new IllegalArgumentException(
+                                "fileId 绑定入职资料/入职单附件，禁止通用操作: " + fileId);
+                    }
                 }
-            }
-            if (StrUtil.isNotBlank(path)) {
-                Long byPath = fileMapper.countReservedAttachmentByPath(path);
-                if (byPath != null && byPath > 0) {
-                    throw new IllegalArgumentException("path 绑定入职资料/入职单附件，禁止通用操作: " + path);
+                if (StrUtil.isNotBlank(path)) {
+                    Long byPath = fileMapper.countReservedAttachmentByPath(path);
+                    if (byPath != null && byPath > 0) {
+                        throw new IllegalArgumentException(
+                                "path 绑定入职资料/入职单附件，禁止通用操作: " + path);
+                    }
                 }
-            }
+            });
         } catch (IllegalArgumentException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            // fail-closed：查询失败不得继续读/删 provider
+            // TenantUtils 可能包装 cause；还原 IllegalArgumentException
+            Throwable c = ex.getCause();
+            if (c instanceof IllegalArgumentException) {
+                throw (IllegalArgumentException) c;
+            }
             throw new IllegalStateException("入职附件保密校验失败（fail-closed）", ex);
         }
     }
