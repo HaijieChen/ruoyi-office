@@ -122,6 +122,9 @@ class AttachmentServiceImplTest {
         AttachmentSaveReqVO keep = base("old.pdf");
         keep.setId(5L);
         AttachmentSaveReqVO neu = base("new.pdf");
+        neu.setFileId(55L);
+        neu.setFilePath("hrm-onboarding-private/new.pdf");
+        neu.setFileUrl("");
 
         attachmentService.saveAttachmentListInternal(
                 AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 100L, List.of(keep, neu));
@@ -132,6 +135,38 @@ class AttachmentServiceImplTest {
         assertEquals(2, captor.getValue().size());
         assertEquals(5L, captor.getValue().get(0).getId());
         assertNull(captor.getValue().get(1).getId());
+        assertEquals(55L, captor.getValue().get(1).getFileId());
+        assertEquals("", captor.getValue().get(1).getFileUrl());
+    }
+
+    @Test
+    void internalSaveListRejectsForgedReservedWithoutClaimIdentity() {
+        when(attachmentMapper.selectListByBusiness(
+                AttachmentServiceImpl.RESERVED_ENTRY_BILL_BUSINESS_TYPE, 1L))
+                .thenReturn(List.of());
+        // 伪造：任意 public fileId/path，无私有目录
+        AttachmentSaveReqVO forged = base("public.pdf");
+        forged.setFileId(777L);
+        forged.setFilePath("public/report.pdf");
+        forged.setFileUrl("https://evil/report.pdf");
+
+        assertThrows(ServiceException.class, () ->
+                attachmentService.saveAttachmentListInternal(
+                        AttachmentServiceImpl.RESERVED_ENTRY_BILL_BUSINESS_TYPE, 1L, List.of(forged)));
+        verify(attachmentMapper, never()).insertOrUpdate(anyList());
+    }
+
+    @Test
+    void internalSaveListRejectsReservedNewMissingFileId() {
+        when(attachmentMapper.selectListByBusiness(
+                AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 1L))
+                .thenReturn(List.of());
+        AttachmentSaveReqVO noId = base("x.pdf");
+        noId.setFilePath("hrm-onboarding-private/x.pdf");
+        noId.setFileUrl("");
+        assertThrows(ServiceException.class, () ->
+                attachmentService.saveAttachmentListInternal(
+                        AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 1L, List.of(noId)));
     }
 
     @Test

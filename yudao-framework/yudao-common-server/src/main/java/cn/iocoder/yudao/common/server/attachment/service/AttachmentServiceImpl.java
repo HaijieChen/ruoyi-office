@@ -210,6 +210,9 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     /**
      * 将请求转为归属当前业务的 DO；非空 ID 必须已属于同一 businessType+businessId。
+     * <p>
+     * 保留类型新附件：必须已由 HRM claim 消费链路派生身份（fileId + 私有 path + 空 url），
+     * 禁止客户端伪造任意 fileId/path 抬升为全局 reserved。
      */
     private AttachmentDO toOwnedAttachment(AttachmentSaveReqVO reqVO, String businessType, Long businessId) {
         if (reqVO.getId() != null) {
@@ -230,14 +233,40 @@ public class AttachmentServiceImpl implements AttachmentService {
             return existing;
         }
 
+        if (isReservedBusinessType(businessType)) {
+            validateReservedNewAttachmentIdentity(reqVO);
+        }
+
         AttachmentDO attachmentDO = BeanUtils.toBean(reqVO, AttachmentDO.class);
         attachmentDO.setId(null);
         attachmentDO.setBusinessType(businessType);
         attachmentDO.setBusinessId(businessId);
+        if (isReservedBusinessType(businessType)) {
+            // 权威派生后强制不落公开 URL
+            attachmentDO.setFileUrl("");
+        }
         if (attachmentDO.getUploadTime() == null) {
             attachmentDO.setUploadTime(LocalDateTime.now());
         }
         return attachmentDO;
+    }
+
+    /**
+     * 保留业务新行：fileId 必填；path 必须落私有目录；禁止以公开 URL 作为身份。
+     * 身份须由 claim 消费后从 FileDO 派生，本方法做防御性门禁。
+     */
+    private void validateReservedNewAttachmentIdentity(AttachmentSaveReqVO reqVO) {
+        if (reqVO.getFileId() == null) {
+            throw invalidParamException("保留业务附件必须经 claim 派生 fileId，禁止无 claim 写入");
+        }
+        if (StrUtil.isBlank(reqVO.getFilePath())
+                || !reqVO.getFilePath().contains("hrm-onboarding-private")) {
+            throw invalidParamException("保留业务附件 path 必须来自私有目录权威记录");
+        }
+        // 允许调用方传空串；非空公开 URL 一律拒绝（防止 URL 污染）
+        if (StrUtil.isNotBlank(reqVO.getFileUrl())) {
+            throw invalidParamException("保留业务附件禁止写入公开 fileUrl");
+        }
     }
 
     @Override

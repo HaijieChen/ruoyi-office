@@ -1,10 +1,19 @@
 import type { PageParam, PageResult } from '@vben/request';
 
-import type { AttachmentApi } from '#/api/common/attachment';
-
 import { requestClient } from '#/api/request';
 
 export namespace EmployeeEntryBillApi {
+  /**
+   * 入职单附件（保留类型 201）：已有记录传 id；新附件必须 claimToken。
+   * 禁止自报 fileId/path/url（与档案入职资料 claim 同级权威）。
+   */
+  export interface EntryBillAttachmentSaveReq {
+    id?: number;
+    claimToken?: string;
+    sortOrder?: number;
+    remark?: string;
+  }
+
   /** 员工入职申请单信息 */
   export interface EmployeeEntryBill {
     id?: number;
@@ -52,7 +61,7 @@ export namespace EmployeeEntryBillApi {
     creatorName?: string;
     remark?: string;
     createTime?: Date;
-    attachments?: AttachmentApi.AttachmentSaveReq[];
+    attachments?: EntryBillAttachmentSaveReq[];
     // 明细列表
     workExperienceList?: EmployeeWorkExperience[];
     educationList?: EmployeeEducation[];
