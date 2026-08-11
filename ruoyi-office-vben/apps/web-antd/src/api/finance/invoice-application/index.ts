@@ -12,6 +12,20 @@ export namespace FinanceInvoiceApplicationApi {
   export interface Line {
     id?: number;
     businessOrderId: number;
+    /** 商务单号（标识） */
+    businessOrderNo?: string;
+    /** 来源合同签约申请 id（行级历史快照，空=未证实） */
+    sourceContractApplicationId?: number;
+    /** 来源合同业务单号（仅由行级 source 解析） */
+    contractApplicationNo?: string;
+    /** 产品类型快照（行级历史，空=未证实） */
+    productType?: string;
+    historyProductUnproven?: boolean;
+    historySourceContractUnproven?: boolean;
+    /** 当前态（非历史） */
+    currentContractApplicationId?: number;
+    currentContractApplicationNo?: string;
+    currentProductType?: string;
     amount: number;
     invoiceCompany?: string;
     invoiceType?: string;
@@ -70,7 +84,10 @@ export namespace FinanceInvoiceApplicationApi {
     buyerBankAccount?: string;
     /** 特别开票要求（单据级） */
     specialInvoiceRequirement?: string;
-    /** 产品类型（服务端字段 taxContent，可选） */
+    /**
+     * 产品类型（兼容期可选；EXP-70 服务端忽略并从商务单派生）
+     * @deprecated 前端勿再作为用户输入提交
+     */
     taxContent?: string;
     taxRate?: number;
     amountExcludingTax?: number;

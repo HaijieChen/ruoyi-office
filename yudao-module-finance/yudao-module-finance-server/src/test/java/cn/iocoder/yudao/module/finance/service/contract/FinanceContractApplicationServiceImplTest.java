@@ -116,6 +116,17 @@ class FinanceContractApplicationServiceImplTest {
     }
 
     @Test
+    void createAndStartShouldRejectBlankProductType() {
+        // EXP-70 #9：新合同产品必填
+        FinanceContractApplicationCreateAndStartReqVO req = validReq();
+        req.setProductType(null);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(req, 200L));
+        assertEquals(CONTRACT_APPLICATION_FIELD_REQUIRED.getCode(), ex.getCode());
+        verify(applicationMapper, never()).insert(any(FinanceContractApplicationDO.class));
+    }
+
+    @Test
     void createAndStartShouldOccupyAndWriteProcessInstanceId() {
         when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn(CommonResult.success("proc-1"));

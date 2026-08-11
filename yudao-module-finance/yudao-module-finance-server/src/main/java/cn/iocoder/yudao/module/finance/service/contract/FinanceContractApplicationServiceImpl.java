@@ -436,11 +436,15 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     @Override
     public List<FinanceContractApplicationDO> listSelectableForBo(Long applicantUserId) {
+        // EXP-70：可选合同须产品类型非空，否则无法派生商务单快照
         return applicationMapper.selectList(new LambdaQueryWrapperX<FinanceContractApplicationDO>()
                 .eq(FinanceContractApplicationDO::getApprovalStatus,
                         FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                 .eq(FinanceContractApplicationDO::getApplicantUserId, applicantUserId)
                 .eq(FinanceContractApplicationDO::getVoided, Boolean.FALSE)
+                .isNotNull(FinanceContractApplicationDO::getProductType)
+                .ne(FinanceContractApplicationDO::getProductType, "")
+                .apply("TRIM(product_type) <> ''")
                 .orderByDesc(FinanceContractApplicationDO::getId));
     }
 
@@ -529,9 +533,11 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         if (!ALLOWED_FILE_TYPES.contains(reqVO.getFileType())) {
             throw exception(CONTRACT_APPLICATION_FILE_TYPE_INVALID);
         }
-        if (StrUtil.isNotBlank(reqVO.getProductType())) {
-            validateProductType(reqVO.getProductType().trim());
+        // EXP-70 #9：新合同产品必填且字典合法
+        if (StrUtil.isBlank(reqVO.getProductType())) {
+            throw exception(CONTRACT_APPLICATION_FIELD_REQUIRED);
         }
+        validateProductType(reqVO.getProductType().trim());
         if (PRE_PROCESS_REQUIRED_TYPES.contains(reqVO.getFileType()) && StrUtil.isBlank(reqVO.getPreProcessRef())) {
             throw exception(CONTRACT_APPLICATION_PRE_PROCESS_REQUIRED);
         }

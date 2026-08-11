@@ -100,6 +100,27 @@ public class FinanceInvoiceApplicationRespVO {
         private Long applicationId;
         @Schema(description = "商务单编号")
         private Long businessOrderId;
+        @Schema(description = "商务单号（标识，非产品历史）")
+        private String businessOrderNo;
+        /** 提交时来源合同（仅行级快照，空表示历史未证实） */
+        @Schema(description = "来源合同签约申请编号（行级历史快照，仅读库）")
+        private Long sourceContractApplicationId;
+        @Schema(description = "来源合同业务单号（由行级 source 解析，不回退当前 BO）")
+        private String contractApplicationNo;
+        /** 提交时产品（仅行级快照） */
+        @Schema(description = "产品类型快照（行级历史，仅读库）")
+        private String productType;
+        @Schema(description = "历史产品未证实（行 snapshot 空）")
+        private Boolean historyProductUnproven;
+        @Schema(description = "历史来源合同未证实（行 source 空）")
+        private Boolean historySourceContractUnproven;
+        /** 以下为当前态展示，不得当作提交时事实 */
+        @Schema(description = "当前商务单合同 id（现值，非历史）")
+        private Long currentContractApplicationId;
+        @Schema(description = "当前商务单合同业务单号（现值）")
+        private String currentContractApplicationNo;
+        @Schema(description = "当前商务单产品类型（现值，优先 snapshot）")
+        private String currentProductType;
         @Schema(description = "本行金额")
         private BigDecimal amount;
         @Schema(description = "开票公司")

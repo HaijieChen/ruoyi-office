@@ -61,7 +61,14 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'entityCompanyName', title: '主体公司', minWidth: 160 },
     { field: 'contractApplicationNo', title: '合同业务单号', minWidth: 160 },
     { field: 'orderDate', title: '签单日期', width: 120, formatter: 'formatDate' },
-    { field: 'productName', title: '产品/服务', minWidth: 150 },
+    {
+      field: 'productType',
+      title: '产品/服务',
+      minWidth: 150,
+      // EXP-70：优先规范 productType，回退 legacy productName
+      formatter: ({ row }: { row: { productName?: string; productType?: string } }) =>
+        row.productType || row.productName || '-',
+    },
     { field: 'contactPerson', title: '联系人', width: 100 },
     { field: 'executionStartDate', title: '执行开始', width: 120, formatter: 'formatDate' },
     { field: 'executionEndDate', title: '执行结束', width: 120, formatter: 'formatDate' },

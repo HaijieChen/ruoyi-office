@@ -57,7 +57,8 @@ export namespace FinanceContractApplicationApi {
     signCompany?: string;
     fileName: string;
     fileType: string;
-    productType?: string;
+    /** EXP-70 必填 */
+    productType: string;
     rebateRatio: string;
     settlementMethod: string;
     copyCount: number;

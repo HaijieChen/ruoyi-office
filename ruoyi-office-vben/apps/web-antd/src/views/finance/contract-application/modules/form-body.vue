@@ -130,6 +130,9 @@ const rules = computed<Record<string, Rule[]>>(() => ({
     { required: true, message: '请输入用印文件名称', trigger: 'blur' },
   ],
   fileType: [{ required: true, message: '请选择文件类型', trigger: 'change' }],
+  productType: [
+    { required: true, message: '请选择产品类型', trigger: 'change' },
+  ],
   rebateRatio: [{ required: true, message: '请输入返点比例', trigger: 'blur' }],
   settlementMethod: [
     { required: true, message: '请选择结算方式', trigger: 'change' },
@@ -229,7 +232,7 @@ function buildPayload(): FinanceContractApplicationApi.CreateAndStartRequest {
     entityCompanyDeptId: formData.value.entityCompanyDeptId!,
     fileName: formData.value.fileName!,
     fileType: formData.value.fileType!,
-    productType: formData.value.productType,
+    productType: formData.value.productType!,
     rebateRatio: formData.value.rebateRatio!,
     settlementMethod: formData.value.settlementMethod!,
     copyCount: formData.value.copyCount!,
@@ -400,11 +403,10 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         placeholder="采购/租赁须关联前置流程"
       />
     </Form.Item>
-    <Form.Item label="产品类型" name="productType">
+    <Form.Item label="产品类型" name="productType" required>
       <Select
         v-model:value="formData.productType"
         class="w-full"
-        allow-clear
         :options="productTypeOptions"
         placeholder="请选择产品类型"
       />

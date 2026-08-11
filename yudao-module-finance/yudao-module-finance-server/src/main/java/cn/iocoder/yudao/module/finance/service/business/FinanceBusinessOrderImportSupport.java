@@ -37,9 +37,7 @@ final class FinanceBusinessOrderImportSupport {
         if (row.getOrderDate() == null) {
             return "下单日期不能为空";
         }
-        if (StrUtil.isBlank(row.getProductName())) {
-            return "产品名称不能为空";
-        }
+        // 产品列兼容期可选；服务端从合同派生，有值仅作一致性校验
         if (StrUtil.isBlank(row.getContactPerson())) {
             return "对接人不能为空";
         }
@@ -68,13 +66,15 @@ final class FinanceBusinessOrderImportSupport {
     }
 
     /**
-     * 幂等键：不含 bank_account；含主体公司 deptId（C2）；含合同申请业务单号（区分换合同再导）。
+     * 幂等键：不含 bank_account；含主体公司 deptId（C2）；含合同业务单号。
+     * <p>EXP-70 #10：产品取合同派生值，不再纳入客户端产品列，避免新旧模板哈希漂移重复建单。
      */
     static String calculateSourceRowHash(FinanceBusinessOrderImportExcelVO row, NormalizedAmounts amounts,
-                                         Long entityCompanyDeptId) {
+                                         Long entityCompanyDeptId, String productTypeFromContract) {
         String canonicalRow = String.join("\u001f",
                 normalize(row.getContractApplicationNo()),
-                row.getOrderDate().toString(), normalize(row.getProductName()),
+                row.getOrderDate().toString(),
+                normalize(productTypeFromContract),
                 normalize(row.getContactPerson()), row.getExecutionStartDate().toString(),
                 row.getExecutionEndDate().toString(), normalize(row.getPayerName()),
                 normalize(amounts.signedExecutionAmount()), normalize(amounts.discountRate()),
@@ -86,7 +86,9 @@ final class FinanceBusinessOrderImportSupport {
     static FinanceBusinessOrderDO buildOrder(FinanceBusinessOrderImportExcelVO row, Long importerId,
                                              Long entityCompanyDeptId, String entityCompanyName,
                                              NormalizedAmounts amounts,
-                                             String sourceRowHash, String orderNo, Long contractApplicationId) {
+                                             String sourceRowHash, String orderNo, Long contractApplicationId,
+                                             String productTypeFromContract) {
+        String productType = productTypeFromContract == null ? null : productTypeFromContract.trim();
         return FinanceBusinessOrderDO.builder()
                 .orderNo(orderNo).importDate(LocalDate.now()).importerId(importerId)
                 .entityCompanyDeptId(entityCompanyDeptId)
@@ -95,7 +97,10 @@ final class FinanceBusinessOrderImportSupport {
                 .contractApplicationId(contractApplicationId)
                 .remark(trimToNull(row.getSummary()))
                 .confirmedClaimedAmount(ZERO)
-                .orderDate(row.getOrderDate()).productName(row.getProductName().trim())
+                .orderDate(row.getOrderDate())
+                // 服务端从合同派生，忽略 Excel 产品列写入值
+                .productName(productType)
+                .productTypeSnapshot(productType)
                 .contactPerson(row.getContactPerson().trim()).executionStartDate(row.getExecutionStartDate())
                 .executionEndDate(row.getExecutionEndDate()).payerName(trimToNull(row.getPayerName()))
                 .signedExecutionAmount(amounts.signedExecutionAmount()).discountRate(amounts.discountRate())

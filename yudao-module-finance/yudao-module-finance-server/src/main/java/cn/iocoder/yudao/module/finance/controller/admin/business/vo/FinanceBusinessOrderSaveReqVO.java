@@ -31,8 +31,7 @@ public class FinanceBusinessOrderSaveReqVO {
     @NotNull(message = "下单日期不能为空")
     private LocalDate orderDate;
 
-    @Schema(description = "产品名称", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "产品名称不能为空")
+    @Schema(description = "产品名称（兼容期可选；服务端忽略，从合同派生）")
     private String productName;
 
     @Schema(description = "对接人", requiredMode = Schema.RequiredMode.REQUIRED)

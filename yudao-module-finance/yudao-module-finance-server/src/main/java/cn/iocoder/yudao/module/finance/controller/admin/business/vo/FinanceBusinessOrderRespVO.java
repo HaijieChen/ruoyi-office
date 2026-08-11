@@ -34,8 +34,12 @@ public class FinanceBusinessOrderRespVO {
     private String contractApplicationNo;
     @Schema(description = "下单日期")
     private LocalDate orderDate;
-    @Schema(description = "产品名称")
+    @Schema(description = "产品名称（legacy 兼容读取）")
     private String productName;
+    @Schema(description = "产品类型快照（权威；开票 invoice-selectable 仅认此字段非空）")
+    private String productTypeSnapshot;
+    @Schema(description = "产品类型（规范展示字段，优先快照 dual-read）")
+    private String productType;
     @Schema(description = "对接人")
     private String contactPerson;
     @Schema(description = "执行开始日")

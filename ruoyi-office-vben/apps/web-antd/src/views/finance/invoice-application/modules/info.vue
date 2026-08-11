@@ -43,10 +43,54 @@ const issueLabel: Record<number, string> = {
 
 const lineColumns = [
   {
-    title: '商务单 ID',
-    dataIndex: 'businessOrderId',
-    key: 'businessOrderId',
-    width: 110,
+    title: '商务单号',
+    dataIndex: 'businessOrderNo',
+    key: 'businessOrderNo',
+    width: 160,
+    customRender: ({
+      record,
+    }: {
+      record: FinanceInvoiceApplicationApi.Line;
+    }) => record.businessOrderNo || (record.businessOrderId != null ? `#${record.businessOrderId}` : '-'),
+  },
+  {
+    title: '合同业务单号（历史）',
+    dataIndex: 'contractApplicationNo',
+    key: 'contractApplicationNo',
+    width: 160,
+    customRender: ({
+      record,
+    }: {
+      record: FinanceInvoiceApplicationApi.Line;
+    }) => {
+      if (record.historySourceContractUnproven || !record.sourceContractApplicationId) {
+        return '历史未证实';
+      }
+      return record.contractApplicationNo || `#${record.sourceContractApplicationId}`;
+    },
+  },
+  {
+    title: '产品类型（历史）',
+    dataIndex: 'productType',
+    key: 'productType',
+    width: 130,
+    customRender: ({
+      record,
+    }: {
+      record: FinanceInvoiceApplicationApi.Line;
+    }) => {
+      if (record.historyProductUnproven || !record.productType) {
+        return '历史未证实';
+      }
+      return record.productType;
+    },
+  },
+  {
+    title: '当前产品',
+    dataIndex: 'currentProductType',
+    key: 'currentProductType',
+    width: 100,
+    customRender: ({ text }: { text?: string }) => text || '-',
   },
   {
     title: '开票金额',
@@ -156,6 +200,9 @@ const [Modal, modalApi] = useVbenModal({
           </DescriptionsItem>
           <DescriptionsItem label="发票类型">
             {{ detail.invoiceType || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="产品类型">
+            {{ detail.taxContent || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="特别开票要求" :span="2">
             {{ detail.specialInvoiceRequirement || '-' }}
