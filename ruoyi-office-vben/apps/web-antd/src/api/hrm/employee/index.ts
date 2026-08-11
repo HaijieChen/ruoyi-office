@@ -1,5 +1,7 @@
 import type { PageParam, PageResult } from '@vben/request';
 
+import type { AttachmentApi } from '#/api/common/attachment';
+
 import { requestClient } from '#/api/request';
 
 export namespace EmployeeArchiveApi {
@@ -24,11 +26,30 @@ export namespace EmployeeArchiveApi {
     currentAddress?: string; // 现居住地址
     emergencyContact?: string; // 紧急联系人
     emergencyPhone?: string; // 联系电话
+    emergencyRelationship?: string; // 紧急联系人关系
+    socialSecurityEnabled?: boolean | null; // 是否缴纳社保
+    housingFundEnabled?: boolean | null; // 是否缴纳公积金
+    socialSecurityStartMonth?: string; // 参保年月 yyyy-MM
+    probationSalary?: number; // 试用期薪资
+    regularSalary?: number; // 转正薪资
+    fertilityStatus?: string; // 生育状况
+    householdType?: string; // 户籍性质
+    employmentForm?: string; // 用工形式
+    recruitmentChannel?: string; // 招聘渠道
+    interviewerName?: string; // 面试人
+    age?: number; // 年龄
+    companyTenureMonths?: number; // 司龄月数
+    marriageChildbearingSummary?: string;
+    contractSignCount?: number;
+    currentContractType?: string;
+    currentContractStartDate?: string;
+    currentContractEndDate?: string;
     avatar?: string; // 照片
     bankName?: string; // 工资开户行
     bankAccount?: string; // 工资卡账户
+    jobPost?: string; // 职位
     jobPosition?: string; // 职务
-    employeeStatus?: number; // 人员状态（1:正式 2:试用期 3:实习生 4:兼职 5:零时工）
+    employeeStatus?: number; // 人员状态（员工类型）
     deptId?: number; // 所属部门
     deptName?: string; // 所属部门名称
     companyId?: number; // 所属公司ID
@@ -42,6 +63,16 @@ export namespace EmployeeArchiveApi {
     workExperienceList?: EmployeeWorkExperience[]; // 工作经历列表
     educationList?: EmployeeEducation[]; // 教育经历列表
     familyList?: EmployeeFamily[]; // 家属信息列表
+    contractList?: EmployeeContract[]; // 合同明细
+    onboardingAttachments?: AttachmentApi.AttachmentSaveReq[]; // 入职资料
+  }
+
+  export interface EmployeeContract {
+    id?: number;
+    sequenceNo: 1 | 2 | 3 | 4;
+    contractType?: string;
+    startDate: string;
+    endDate?: string;
   }
 
   /** 员工工作经历 */
@@ -58,6 +89,11 @@ export namespace EmployeeArchiveApi {
     id?: number; // 编号
     startTime?: string; // 开始时间 (YYYY-MM-DD)
     endTime?: string; // 截止时间 (YYYY-MM-DD)
+    educationLevel?: string; // 学历
+    educationType?: string; // 学历类别
+    degree?: string; // 学位
+    firstEducation?: boolean; // 第一学历
+    highestEducation?: boolean; // 最高学历
     major?: string; // 专业
     schoolName?: string; // 学校名称
   }

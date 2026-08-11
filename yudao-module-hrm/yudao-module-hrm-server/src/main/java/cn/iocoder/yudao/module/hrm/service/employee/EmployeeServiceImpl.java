@@ -1,6 +1,11 @@
 package cn.iocoder.yudao.module.hrm.service.employee;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
+import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
+import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
+import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
@@ -18,12 +23,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
-import java.util.List;
-import java.util.Map;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.Period;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ARCHIVE_NOT_EXISTS;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.*;
 
 /**
  * 员工档案 Service 实现类
@@ -33,6 +42,10 @@ import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ARCH
 @Service
 @Validated
 public class EmployeeServiceImpl implements EmployeeService {
+
+    public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
+
+    private static final DateTimeFormatter YEAR_MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
 
     @Resource
     private EmployeeMapper employeeArchiveMapper;
@@ -47,6 +60,12 @@ public class EmployeeServiceImpl implements EmployeeService {
     private EmployeeFamilyMapper employeeFamilyMapper;
 
     @Resource
+    private EmployeeContractMapper employeeContractMapper;
+
+    @Resource
+    private AttachmentService attachmentService;
+
+    @Resource
     private DeptApi deptApi;
 
     @Resource
@@ -58,26 +77,28 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEmployeeArchive(EmployeeSaveReqVO createReqVO) {
+        validateRoster(createReqVO);
+
         // 自动生成员工工号（如果未提供）
         if (createReqVO.getEmployeeNo() == null || createReqVO.getEmployeeNo().trim().isEmpty()) {
             Long maxEmployeeNo = employeeArchiveMapper.selectMaxEmployeeNo();
             Long nextEmployeeNo = maxEmployeeNo + 1;
-
             createReqVO.setEmployeeNo(String.format("%08d", nextEmployeeNo));
         }
-        
+
         // 插入主表
         EmployeeDO archive = BeanUtils.toBean(createReqVO, EmployeeDO.class);
+        applyEducationSummary(archive, createReqVO.getEducationList());
         employeeArchiveMapper.insert(archive);
 
-        // 插入工作经历
+        // 插入关联明细
         saveWorkExperiences(archive.getId(), createReqVO.getWorkExperienceList());
-
-        // 插入教育经历
         saveEducations(archive.getId(), createReqVO.getEducationList());
-
-        // 插入家属信息
         saveFamilies(archive.getId(), createReqVO.getFamilyList());
+        saveContracts(archive.getId(), createReqVO.getContractList());
+
+        attachmentService.saveAttachmentList(
+                ONBOARDING_ATTACHMENT_BUSINESS_TYPE, archive.getId(), createReqVO.getOnboardingAttachments());
 
         return archive.getId();
     }
@@ -85,6 +106,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEmployeeArchive(EmployeeSaveReqVO updateReqVO) {
+        validateRoster(updateReqVO);
+
         // 校验存在
         EmployeeDO oldEmployee = employeeArchiveMapper.selectById(updateReqVO.getId());
         if (oldEmployee == null) {
@@ -93,17 +116,27 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         // 更新主表
         EmployeeDO updateObj = BeanUtils.toBean(updateReqVO, EmployeeDO.class);
+        applyEducationSummary(updateObj, updateReqVO.getEducationList());
+        // 社保为否时清空参保年月
+        if (Boolean.FALSE.equals(updateObj.getSocialSecurityEnabled())) {
+            updateObj.setSocialSecurityStartMonth(null);
+        }
         employeeArchiveMapper.updateById(updateObj);
 
         // 删除旧的关联记录
         employeeWorkExperienceMapper.deleteByEmployeeId(updateReqVO.getId());
         employeeEducationMapper.deleteByEmployeeId(updateReqVO.getId());
         employeeFamilyMapper.deleteByEmployeeId(updateReqVO.getId());
+        employeeContractMapper.deleteByEmployeeId(updateReqVO.getId());
 
         // 插入新的关联记录
         saveWorkExperiences(updateReqVO.getId(), updateReqVO.getWorkExperienceList());
         saveEducations(updateReqVO.getId(), updateReqVO.getEducationList());
         saveFamilies(updateReqVO.getId(), updateReqVO.getFamilyList());
+        saveContracts(updateReqVO.getId(), updateReqVO.getContractList());
+
+        attachmentService.saveAttachmentList(
+                ONBOARDING_ATTACHMENT_BUSINESS_TYPE, updateReqVO.getId(), updateReqVO.getOnboardingAttachments());
 
         // 如果已生成用户，同步更新用户信息
         if (oldEmployee.getUserGenerated() != null && oldEmployee.getUserGenerated() && oldEmployee.getUserId() != null) {
@@ -132,6 +165,8 @@ public class EmployeeServiceImpl implements EmployeeService {
         employeeWorkExperienceMapper.deleteByEmployeeId(id);
         employeeEducationMapper.deleteByEmployeeId(id);
         employeeFamilyMapper.deleteByEmployeeId(id);
+        employeeContractMapper.deleteByEmployeeId(id);
+        attachmentService.deleteAttachmentByBusiness(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, id);
     }
 
     @Override
@@ -160,7 +195,9 @@ public class EmployeeServiceImpl implements EmployeeService {
             employeeWorkExperienceMapper.deleteByEmployeeId(id);
             employeeEducationMapper.deleteByEmployeeId(id);
             employeeFamilyMapper.deleteByEmployeeId(id);
+            employeeContractMapper.deleteByEmployeeId(id);
         }
+        attachmentService.deleteAttachmentByBusinessIds(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, ids);
     }
 
     private void validateEmployeeArchiveExists(Long id) {
@@ -190,15 +227,13 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         // 获取部门名称（如果数据库中没有保存，则通过部门查找）
         if (archive.getDeptId() != null) {
-            // 如果数据库中没有保存部门名称，则从部门信息中获取
             if (archive.getDeptName() == null) {
                 CommonResult<DeptRespDTO> dept = deptApi.getDept(archive.getDeptId());
                 if (dept != null && dept.isSuccess() && dept.getData() != null) {
                     respVO.setDeptName(dept.getData().getName());
                 }
             }
-            
-            // 如果数据库中没有保存公司ID，则通过部门向上查找公司
+
             if (archive.getCompanyId() == null) {
                 Long companyId = findCompanyIdByDeptId(archive.getDeptId());
                 if (companyId != null) {
@@ -219,6 +254,17 @@ public class EmployeeServiceImpl implements EmployeeService {
         List<EmployeeFamilyDO> families = employeeFamilyMapper.selectListByEmployeeId(id);
         respVO.setFamilyList(BeanUtils.toBean(families, EmployeeFamilyVO.class));
 
+        // 合同明细
+        List<EmployeeContractDO> contracts = employeeContractMapper.selectListByEmployeeId(id);
+        respVO.setContractList(BeanUtils.toBean(contracts, EmployeeContractVO.class));
+        fillCurrentContract(respVO, contracts);
+
+        // 入职资料
+        List<AttachmentDO> attachments = attachmentService.getAttachmentListByBusiness(
+                ONBOARDING_ATTACHMENT_BUSINESS_TYPE, id);
+        respVO.setOnboardingAttachments(BeanUtils.toBean(attachments, AttachmentRespVO.class));
+
+        fillDerivedFields(respVO, LocalDate.now());
         return respVO;
     }
 
@@ -234,9 +280,110 @@ public class EmployeeServiceImpl implements EmployeeService {
         return buildEmployeeRespPage(pageResult);
     }
 
+    @Override
+    public List<EmployeeRosterExportVO> getEmployeeRosterExportList(EmployeePageReqVO pageReqVO) {
+        pageReqVO.setPageSize(cn.iocoder.yudao.framework.common.pojo.PageParam.PAGE_SIZE_NONE);
+        List<EmployeeDO> employees = employeeArchiveMapper.selectPage(pageReqVO).getList();
+        if (CollUtil.isEmpty(employees)) {
+            return Collections.emptyList();
+        }
+
+        List<Long> employeeIds = employees.stream().map(EmployeeDO::getId).collect(Collectors.toList());
+
+        Map<Long, List<EmployeeEducationDO>> educationMap = employeeEducationMapper.selectListByEmployeeIds(employeeIds)
+                .stream().collect(Collectors.groupingBy(EmployeeEducationDO::getEmployeeId));
+        Map<Long, List<EmployeeContractDO>> contractMap = employeeContractMapper.selectListByEmployeeIds(employeeIds)
+                .stream().collect(Collectors.groupingBy(EmployeeContractDO::getEmployeeId));
+        Map<Long, List<AttachmentDO>> attachmentMap = attachmentService
+                .getAttachmentListByBusinessIds(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, employeeIds)
+                .stream().collect(Collectors.groupingBy(AttachmentDO::getBusinessId));
+
+        LocalDate today = LocalDate.now();
+        List<EmployeeRosterExportVO> result = new ArrayList<>(employees.size());
+        int sequence = 1;
+        for (EmployeeDO employee : employees) {
+            List<EmployeeEducationDO> educations = educationMap.getOrDefault(employee.getId(), Collections.emptyList());
+            List<EmployeeContractDO> contracts = contractMap.getOrDefault(employee.getId(), Collections.emptyList());
+            List<AttachmentDO> attachments = attachmentMap.getOrDefault(employee.getId(), Collections.emptyList());
+            result.add(buildRosterExportRow(sequence++, employee, educations, contracts, attachments, today));
+        }
+        return result;
+    }
+
     /**
-     * 保存工作经历列表
+     * 花名册校验
      */
+    void validateRoster(EmployeeSaveReqVO req) {
+        if (Boolean.TRUE.equals(req.getSocialSecurityEnabled())) {
+            if (StrUtil.isBlank(req.getSocialSecurityStartMonth())) {
+                throw exception(EMPLOYEE_ROSTER_SOCIAL_SECURITY_MONTH);
+            }
+        }
+        if (StrUtil.isNotBlank(req.getSocialSecurityStartMonth())) {
+            try {
+                YEAR_MONTH.parse(req.getSocialSecurityStartMonth());
+            } catch (DateTimeParseException ex) {
+                throw exception(EMPLOYEE_ROSTER_SOCIAL_SECURITY_MONTH_FORMAT);
+            }
+        }
+        if (Boolean.FALSE.equals(req.getSocialSecurityEnabled())) {
+            req.setSocialSecurityStartMonth(null);
+        }
+        if (req.getProbationSalary() != null && req.getProbationSalary().compareTo(BigDecimal.ZERO) < 0) {
+            throw exception(EMPLOYEE_ROSTER_SALARY_NEGATIVE);
+        }
+        if (req.getRegularSalary() != null && req.getRegularSalary().compareTo(BigDecimal.ZERO) < 0) {
+            throw exception(EMPLOYEE_ROSTER_SALARY_NEGATIVE);
+        }
+
+        // 教育：第一/最高各至多一条
+        if (CollUtil.isNotEmpty(req.getEducationList())) {
+            long firstCount = req.getEducationList().stream()
+                    .filter(e -> Boolean.TRUE.equals(e.getFirstEducation())).count();
+            long highestCount = req.getEducationList().stream()
+                    .filter(e -> Boolean.TRUE.equals(e.getHighestEducation())).count();
+            if (firstCount > 1 || highestCount > 1) {
+                throw exception(EMPLOYEE_ROSTER_EDUCATION_ROLE);
+            }
+        }
+
+        // 合同
+        List<EmployeeContractVO> contracts = req.getContractList();
+        if (CollUtil.isEmpty(contracts)) {
+            return;
+        }
+        if (contracts.size() > 4) {
+            throw exception(EMPLOYEE_ROSTER_CONTRACT_LIMIT);
+        }
+        // 按序号排序后校验连续
+        List<EmployeeContractVO> sorted = contracts.stream()
+                .sorted(Comparator.comparing(EmployeeContractVO::getSequenceNo,
+                        Comparator.nullsLast(Integer::compareTo)))
+                .collect(Collectors.toList());
+        Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < sorted.size(); i++) {
+            EmployeeContractVO c = sorted.get(i);
+            if (c.getSequenceNo() == null || c.getSequenceNo() != i + 1 || !seen.add(c.getSequenceNo())) {
+                throw exception(EMPLOYEE_ROSTER_CONTRACT_SEQUENCE);
+            }
+            if (c.getEndDate() != null && c.getStartDate() != null && c.getEndDate().isBefore(c.getStartDate())) {
+                throw exception(EMPLOYEE_ROSTER_CONTRACT_DATE);
+            }
+        }
+    }
+
+    private void applyEducationSummary(EmployeeDO employee, List<EmployeeEducationVO> educationList) {
+        if (CollUtil.isEmpty(educationList)) {
+            return;
+        }
+        educationList.stream()
+                .filter(e -> Boolean.TRUE.equals(e.getHighestEducation()))
+                .map(EmployeeEducationVO::getEducationLevel)
+                .filter(StrUtil::isNotBlank)
+                .findFirst()
+                .ifPresent(employee::setEducation);
+    }
+
     private void saveWorkExperiences(Long employeeId, List<EmployeeWorkExperienceVO> workExperienceList) {
         if (CollUtil.isEmpty(workExperienceList)) {
             return;
@@ -249,9 +396,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         });
     }
 
-    /**
-     * 保存教育经历列表
-     */
     private void saveEducations(Long employeeId, List<EmployeeEducationVO> educationList) {
         if (CollUtil.isEmpty(educationList)) {
             return;
@@ -260,13 +404,16 @@ public class EmployeeServiceImpl implements EmployeeService {
         educations.forEach(item -> {
             item.setId(null);
             item.setEmployeeId(employeeId);
+            if (item.getFirstEducation() == null) {
+                item.setFirstEducation(false);
+            }
+            if (item.getHighestEducation() == null) {
+                item.setHighestEducation(false);
+            }
             employeeEducationMapper.insert(item);
         });
     }
 
-    /**
-     * 保存家属信息列表
-     */
     private void saveFamilies(Long employeeId, List<EmployeeFamilyVO> familyList) {
         if (CollUtil.isEmpty(familyList)) {
             return;
@@ -279,16 +426,54 @@ public class EmployeeServiceImpl implements EmployeeService {
         });
     }
 
-    /**
-     * 构建带部门名称的分页结果
-     */
+    void saveContracts(Long employeeId, List<EmployeeContractVO> contracts) {
+        if (CollUtil.isEmpty(contracts)) {
+            return;
+        }
+        List<EmployeeContractDO> list = BeanUtils.toBean(contracts, EmployeeContractDO.class);
+        list.forEach(item -> {
+            item.setId(null);
+            item.setEmployeeId(employeeId);
+            employeeContractMapper.insert(item);
+        });
+    }
+
+    void fillDerivedFields(EmployeeRespVO resp, LocalDate today) {
+        if (resp.getBirthday() != null) {
+            resp.setAge(Period.between(resp.getBirthday(), today).getYears());
+        }
+        if (resp.getEntryDate() != null) {
+            Period p = Period.between(resp.getEntryDate(), today);
+            resp.setCompanyTenureMonths(p.getYears() * 12 + p.getMonths());
+        }
+        resp.setMarriageChildbearingSummary(buildMarriageChildbearingSummary(
+                resp.getMaritalStatus(), resp.getFertilityStatus()));
+    }
+
+    void fillCurrentContract(EmployeeRespVO resp, List<EmployeeContractDO> contracts) {
+        if (CollUtil.isEmpty(contracts)) {
+            resp.setContractSignCount(0);
+            return;
+        }
+        resp.setContractSignCount(contracts.size());
+        EmployeeContractDO current = contracts.stream()
+                .max(Comparator.comparing(EmployeeContractDO::getSequenceNo))
+                .orElse(null);
+        if (current != null) {
+            resp.setCurrentContractType(current.getContractType());
+            resp.setCurrentContractStartDate(current.getStartDate());
+            resp.setCurrentContractEndDate(current.getEndDate());
+        }
+    }
+
     private PageResult<EmployeeRespVO> buildEmployeeRespPage(PageResult<EmployeeDO> pageResult) {
         PageResult<EmployeeRespVO> respPageResult = BeanUtils.toBean(pageResult, EmployeeRespVO.class);
+        LocalDate today = LocalDate.now();
 
         // 批量获取部门名称
         List<Long> deptIds = respPageResult.getList().stream()
                 .map(EmployeeRespVO::getDeptId)
-                .filter(deptId -> deptId != null)
+                .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
         if (CollUtil.isNotEmpty(deptIds)) {
@@ -300,7 +485,156 @@ public class EmployeeServiceImpl implements EmployeeService {
             });
         }
 
+        // 列表仅填充可从主档计算的年龄/司龄
+        respPageResult.getList().forEach(respVO -> fillDerivedFields(respVO, today));
         return respPageResult;
+    }
+
+    private EmployeeRosterExportVO buildRosterExportRow(int sequenceNo,
+                                                        EmployeeDO employee,
+                                                        List<EmployeeEducationDO> educations,
+                                                        List<EmployeeContractDO> contracts,
+                                                        List<AttachmentDO> attachments,
+                                                        LocalDate today) {
+        EmployeeRosterExportVO row = new EmployeeRosterExportVO();
+        row.setSequenceNo(sequenceNo);
+        row.setSocialSecurityEnabled(formatYesNo(employee.getSocialSecurityEnabled()));
+        row.setHousingFundEnabled(formatYesNo(employee.getHousingFundEnabled()));
+        row.setCompanyName(employee.getCompanyName());
+        row.setDeptName(employee.getDeptName());
+        row.setJobPost(employee.getJobPost());
+        row.setName(employee.getName());
+        row.setEntryDate(formatDate(employee.getEntryDate()));
+        row.setFormalDate(formatDate(employee.getFormalDate()));
+        row.setProbationSalary(employee.getProbationSalary());
+        row.setRegularSalary(employee.getRegularSalary());
+        row.setSocialSecurityStartMonth(employee.getSocialSecurityStartMonth());
+        row.setIdCard(employee.getIdCard());
+        row.setMobile(employee.getMobile());
+        row.setSex(employee.getSex() == null ? null : String.valueOf(employee.getSex()));
+        row.setNation(employee.getNation());
+        row.setMarriageChildbearingSummary(buildMarriageChildbearingSummary(
+                employee.getMaritalStatus(), employee.getFertilityStatus()));
+        row.setHouseholdType(employee.getHouseholdType());
+        row.setNativePlace(employee.getNativePlace());
+        row.setBirthdayMonth(employee.getBirthday() == null ? null : employee.getBirthday().format(YEAR_MONTH));
+        if (employee.getBirthday() != null) {
+            row.setAge(Period.between(employee.getBirthday(), today).getYears());
+        }
+        if (employee.getEntryDate() != null) {
+            Period p = Period.between(employee.getEntryDate(), today);
+            int months = p.getYears() * 12 + p.getMonths();
+            row.setCompanyTenure(formatTenure(months));
+        }
+
+        EmployeeEducationDO highest = educations.stream()
+                .filter(e -> Boolean.TRUE.equals(e.getHighestEducation())).findFirst().orElse(null);
+        EmployeeEducationDO first = educations.stream()
+                .filter(e -> Boolean.TRUE.equals(e.getFirstEducation())).findFirst().orElse(null);
+        if (highest != null) {
+            row.setHighestEducation(highest.getEducationLevel());
+            row.setEducationType(highest.getEducationType());
+            row.setHighestDegree(highest.getDegree());
+            row.setHighestSchoolName(highest.getSchoolName());
+            row.setHighestMajor(highest.getMajor());
+            row.setHighestGraduateDate(formatDate(highest.getEndTime()));
+        } else if (StrUtil.isNotBlank(employee.getEducation())) {
+            row.setHighestEducation(employee.getEducation());
+        }
+        if (first != null) {
+            row.setFirstEducation(first.getEducationLevel());
+            row.setFirstDegree(first.getDegree());
+            row.setFirstSchoolName(first.getSchoolName());
+            row.setFirstMajor(first.getMajor());
+            row.setFirstGraduateDate(formatDate(first.getEndTime()));
+        }
+
+        row.setHouseholdAddress(employee.getHouseholdAddress());
+        row.setCurrentAddress(employee.getCurrentAddress());
+        row.setEmployeeType(employee.getEmployeeStatus() == null ? null : String.valueOf(employee.getEmployeeStatus()));
+        row.setEmploymentForm(employee.getEmploymentForm());
+
+        row.setContractSignCount(contracts.size());
+        EmployeeContractDO current = contracts.stream()
+                .max(Comparator.comparing(EmployeeContractDO::getSequenceNo)).orElse(null);
+        if (current != null) {
+            row.setCurrentContractType(current.getContractType());
+            row.setCurrentContractStartDate(formatDate(current.getStartDate()));
+            row.setCurrentContractEndDate(formatDate(current.getEndDate()));
+        }
+        row.setContract1Range(formatContractRange(findContract(contracts, 1)));
+        row.setContract2Range(formatContractRange(findContract(contracts, 2)));
+        row.setContract3Range(formatContractRange(findContract(contracts, 3)));
+        row.setContract4Range(formatContractRange(findContract(contracts, 4)));
+
+        row.setBankAccount(employee.getBankAccount());
+        row.setBankName(employee.getBankName());
+        row.setEmergencyContactRelation(formatEmergency(employee.getEmergencyContact(), employee.getEmergencyRelationship()));
+        row.setEmergencyPhone(employee.getEmergencyPhone());
+        row.setRecruitmentChannel(employee.getRecruitmentChannel());
+        row.setInterviewerName(employee.getInterviewerName());
+        row.setOnboardingAttachmentStatus(attachments.isEmpty()
+                ? "未上传"
+                : "已上传" + attachments.size() + "份");
+        return row;
+    }
+
+    private static EmployeeContractDO findContract(List<EmployeeContractDO> contracts, int sequenceNo) {
+        return contracts.stream().filter(c -> Objects.equals(c.getSequenceNo(), sequenceNo)).findFirst().orElse(null);
+    }
+
+    private static String formatContractRange(EmployeeContractDO contract) {
+        if (contract == null || contract.getStartDate() == null) {
+            return null;
+        }
+        String start = formatDate(contract.getStartDate());
+        if (contract.getEndDate() == null) {
+            return start;
+        }
+        return start + "至" + formatDate(contract.getEndDate());
+    }
+
+    private static String formatDate(LocalDate date) {
+        return date == null ? null : date.toString();
+    }
+
+    private static String formatYesNo(Boolean value) {
+        if (value == null) {
+            return null;
+        }
+        return value ? "是" : "否";
+    }
+
+    private static String formatTenure(int months) {
+        int years = months / 12;
+        int remain = months % 12;
+        return years + "年" + remain + "个月";
+    }
+
+    private static String buildMarriageChildbearingSummary(String maritalStatus, String fertilityStatus) {
+        if (StrUtil.isBlank(maritalStatus) && StrUtil.isBlank(fertilityStatus)) {
+            return null;
+        }
+        if (StrUtil.isBlank(maritalStatus)) {
+            return fertilityStatus;
+        }
+        if (StrUtil.isBlank(fertilityStatus)) {
+            return maritalStatus;
+        }
+        return maritalStatus + "/" + fertilityStatus;
+    }
+
+    private static String formatEmergency(String contact, String relationship) {
+        if (StrUtil.isBlank(contact) && StrUtil.isBlank(relationship)) {
+            return null;
+        }
+        if (StrUtil.isBlank(relationship)) {
+            return contact;
+        }
+        if (StrUtil.isBlank(contact)) {
+            return relationship;
+        }
+        return contact + "/" + relationship;
     }
 
     @Override
@@ -319,17 +653,16 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         // 3. 创建用户
         AdminUserCreateReqDTO userCreateReqDTO = new AdminUserCreateReqDTO();
-        userCreateReqDTO.setUsername(employee.getEmployeeNo()); // 用户名为员工工号
-        userCreateReqDTO.setNickname(employee.getName()); // 用户昵称为员工姓名
-        userCreateReqDTO.setMobile(employee.getMobile()); // 手机号
-        userCreateReqDTO.setEmail(employee.getEmail()); // 邮箱
-        userCreateReqDTO.setSex(employee.getSex()); // 性别
-        userCreateReqDTO.setAvatar(employee.getAvatar()); // 头像
-        userCreateReqDTO.setDeptId(employee.getDeptId()); // 部门ID
-        userCreateReqDTO.setRemark(employee.getRemark()); // 备注
+        userCreateReqDTO.setUsername(employee.getEmployeeNo());
+        userCreateReqDTO.setNickname(employee.getName());
+        userCreateReqDTO.setMobile(employee.getMobile());
+        userCreateReqDTO.setEmail(employee.getEmail());
+        userCreateReqDTO.setSex(employee.getSex());
+        userCreateReqDTO.setAvatar(employee.getAvatar());
+        userCreateReqDTO.setDeptId(employee.getDeptId());
+        userCreateReqDTO.setRemark(employee.getRemark());
 
-        // 获取初始密码配置
-        String initPassword = "123456"; // 默认密码
+        String initPassword = "123456";
         CommonResult<String> configResult = configApi.getConfigValueByKey("system.user.init-password");
         if (configResult != null && configResult.isSuccess() && configResult.getData() != null) {
             initPassword = configResult.getData();
@@ -338,7 +671,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Long userId = adminUserApi.createUser(userCreateReqDTO).getCheckedData();
 
-        // 4. 更新员工关联信息
         EmployeeDO updateObj = new EmployeeDO();
         updateObj.setId(employeeId);
         updateObj.setUserId(userId);
@@ -354,73 +686,48 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (CollUtil.isEmpty(employeeIds)) {
             return;
         }
-
         for (Long employeeId : employeeIds) {
             try {
                 generateUserForEmployee(employeeId);
             } catch (Exception e) {
                 // 记录错误，继续处理下一个
-                // 可以根据需要记录日志
             }
         }
     }
 
-    /**
-     * 同步员工信息到用户
-     */
     private void syncEmployeeToUser(EmployeeSaveReqVO employee, Long userId) {
         AdminUserUpdateReqDTO userUpdateReqDTO = new AdminUserUpdateReqDTO();
         userUpdateReqDTO.setId(userId);
-        userUpdateReqDTO.setUsername(employee.getEmployeeNo()); // 用户名为员工工号
-        userUpdateReqDTO.setNickname(employee.getName()); // 用户昵称为员工姓名
-        userUpdateReqDTO.setMobile(employee.getMobile()); // 手机号
-        userUpdateReqDTO.setEmail(employee.getEmail()); // 邮箱
-        userUpdateReqDTO.setSex(employee.getSex()); // 性别
-        userUpdateReqDTO.setAvatar(employee.getAvatar()); // 头像
-        userUpdateReqDTO.setDeptId(employee.getDeptId()); // 部门ID
-        userUpdateReqDTO.setRemark(employee.getRemark()); // 备注
-
+        userUpdateReqDTO.setUsername(employee.getEmployeeNo());
+        userUpdateReqDTO.setNickname(employee.getName());
+        userUpdateReqDTO.setMobile(employee.getMobile());
+        userUpdateReqDTO.setEmail(employee.getEmail());
+        userUpdateReqDTO.setSex(employee.getSex());
+        userUpdateReqDTO.setAvatar(employee.getAvatar());
+        userUpdateReqDTO.setDeptId(employee.getDeptId());
+        userUpdateReqDTO.setRemark(employee.getRemark());
         adminUserApi.updateUser(userUpdateReqDTO);
     }
 
-    /**
-     * 通过部门ID查找公司ID
-     * 从当前部门开始，向上查找第一个组织类型为1（公司）的部门
-     *
-     * @param deptId 部门ID
-     * @return 公司ID，如果找不到则返回null
-     */
     private Long findCompanyIdByDeptId(Long deptId) {
         if (deptId == null) {
             return null;
         }
-
-        // 最多查找100层，避免死循环
         for (int i = 0; i < 100; i++) {
             CommonResult<DeptRespDTO> deptResult = deptApi.getDept(deptId);
             if (deptResult == null || !deptResult.isSuccess() || deptResult.getData() == null) {
                 break;
             }
-
             DeptRespDTO dept = deptResult.getData();
-            
-            // 如果当前部门就是公司（orgType为"1"），返回其ID
             if ("1".equals(dept.getOrgType())) {
                 return dept.getId();
             }
-
-            // 如果父部门ID为空或为0，说明已经到根节点，停止查找
             if (dept.getParentId() == null || dept.getParentId() == 0) {
                 break;
             }
-
-            // 继续向上查找父部门
             deptId = dept.getParentId();
         }
-
-        // 没有找到公司类型的部门
         return null;
     }
 
 }
-

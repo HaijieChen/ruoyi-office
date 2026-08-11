@@ -53,6 +53,15 @@ public interface AttachmentService {
     List<AttachmentDO> getAttachmentListByBusiness(String businessType, Long businessId);
 
     /**
+     * 根据业务类型和业务ID集合批量获取附件列表
+     *
+     * @param businessType 业务类型
+     * @param businessIds 业务ID集合
+     * @return 附件列表
+     */
+    List<AttachmentDO> getAttachmentListByBusinessIds(String businessType, java.util.Collection<Long> businessIds);
+
+    /**
      * 批量保存附件信息
      *
      * @param businessType 业务类型

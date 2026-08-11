@@ -94,6 +94,36 @@ export function useBasicFormSchema(_isEdit?: boolean): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'fertilityStatus',
+      label: '生育状况',
+      component: 'Select',
+      componentProps: {
+        placeholder: '请选择生育状况',
+        options: getDictOptions(DICT_TYPE.HRM_FERTILITY_STATUS),
+        allowClear: true,
+      },
+    },
+    {
+      fieldName: 'householdType',
+      label: '户籍性质',
+      component: 'Select',
+      componentProps: {
+        placeholder: '请选择户籍性质',
+        options: getDictOptions(DICT_TYPE.HRM_HOUSEHOLD_TYPE),
+        allowClear: true,
+      },
+    },
+    {
+      fieldName: 'age',
+      label: '年龄',
+      component: 'Input',
+      componentProps: {
+        placeholder: '自动计算',
+        readonly: true,
+        disabled: true,
+      },
+    },
+    {
       fieldName: 'jobTitle',
       label: '职称',
       component: 'Input',
@@ -199,6 +229,14 @@ export function useBasicFormSchema(_isEdit?: boolean): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'emergencyRelationship',
+      label: '紧急联系人关系',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入关系，如配偶/父母',
+      },
+    },
+    {
       fieldName: 'emergencyPhone',
       label: '联系电话',
       component: 'Input',
@@ -270,13 +308,23 @@ export function useWorkFormSchema(
     },
     {
       fieldName: 'employeeStatus',
-      label: '人员状态',
+      label: '员工类型',
       component: 'Select',
       componentProps: {
-        placeholder: '请选择人员状态',
+        placeholder: '请选择员工类型',
         options: getDictOptions(DICT_TYPE.HRM_EMPLOYEE_STATUS, 'number'),
       },
       rules: 'required',
+    },
+    {
+      fieldName: 'employmentForm',
+      label: '用工形式',
+      component: 'Select',
+      componentProps: {
+        placeholder: '请选择用工形式',
+        options: getDictOptions(DICT_TYPE.HRM_EMPLOYMENT_FORM),
+        allowClear: true,
+      },
     },
     {
       fieldName: 'deptName',
@@ -345,6 +393,91 @@ export function useWorkFormSchema(
         placeholder: '请选择转正日期',
         format: 'YYYY-MM-DD',
         valueFormat: 'YYYY-MM-DD',
+      },
+    },
+    {
+      fieldName: 'companyTenureMonths',
+      label: '司龄（月）',
+      component: 'Input',
+      componentProps: {
+        placeholder: '自动计算',
+        readonly: true,
+        disabled: true,
+      },
+    },
+    {
+      fieldName: 'socialSecurityEnabled',
+      label: '是否缴纳社保',
+      component: 'Select',
+      componentProps: {
+        placeholder: '请选择（可留空）',
+        allowClear: true,
+        options: [
+          { label: '是', value: true },
+          { label: '否', value: false },
+        ],
+      },
+    },
+    {
+      fieldName: 'housingFundEnabled',
+      label: '是否缴纳公积金',
+      component: 'Select',
+      componentProps: {
+        placeholder: '请选择（可留空）',
+        allowClear: true,
+        options: [
+          { label: '是', value: true },
+          { label: '否', value: false },
+        ],
+      },
+    },
+    {
+      fieldName: 'socialSecurityStartMonth',
+      label: '参保年月',
+      component: 'DatePicker',
+      componentProps: {
+        placeholder: '请选择参保年月',
+        picker: 'month',
+        format: 'YYYY-MM',
+        valueFormat: 'YYYY-MM',
+      },
+    },
+    {
+      fieldName: 'probationSalary',
+      label: '试用期薪资',
+      component: 'InputNumber',
+      componentProps: {
+        placeholder: '请输入试用期薪资',
+        min: 0,
+        precision: 2,
+        style: { width: '100%' },
+      },
+    },
+    {
+      fieldName: 'regularSalary',
+      label: '转正薪资',
+      component: 'InputNumber',
+      componentProps: {
+        placeholder: '请输入转正薪资',
+        min: 0,
+        precision: 2,
+        style: { width: '100%' },
+      },
+    },
+    {
+      fieldName: 'recruitmentChannel',
+      label: '招聘渠道',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入招聘渠道',
+      },
+    },
+    {
+      fieldName: 'interviewerName',
+      label: '面试人',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入面试人',
       },
     },
     {

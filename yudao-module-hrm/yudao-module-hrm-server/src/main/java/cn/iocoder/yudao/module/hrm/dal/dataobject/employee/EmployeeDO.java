@@ -129,6 +129,61 @@ public class EmployeeDO extends BaseDO {
     private String emergencyPhone;
 
     /**
+     * 紧急联系人关系
+     */
+    private String emergencyRelationship;
+
+    /**
+     * 是否缴纳社保（可空，未知不为否）
+     */
+    private Boolean socialSecurityEnabled;
+
+    /**
+     * 是否缴纳公积金（可空，未知不为否）
+     */
+    private Boolean housingFundEnabled;
+
+    /**
+     * 参保年月 yyyy-MM
+     */
+    private String socialSecurityStartMonth;
+
+    /**
+     * 试用期薪资
+     */
+    private BigDecimal probationSalary;
+
+    /**
+     * 转正薪资
+     */
+    private BigDecimal regularSalary;
+
+    /**
+     * 生育状况
+     */
+    private String fertilityStatus;
+
+    /**
+     * 户籍性质
+     */
+    private String householdType;
+
+    /**
+     * 用工形式
+     */
+    private String employmentForm;
+
+    /**
+     * 招聘渠道
+     */
+    private String recruitmentChannel;
+
+    /**
+     * 面试人
+     */
+    private String interviewerName;
+
+    /**
      * 照片
      */
     private String avatar;

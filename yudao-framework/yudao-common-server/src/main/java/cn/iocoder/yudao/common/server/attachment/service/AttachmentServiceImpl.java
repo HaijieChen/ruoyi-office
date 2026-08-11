@@ -78,6 +78,11 @@ public class AttachmentServiceImpl implements AttachmentService {
     }
 
     @Override
+    public List<AttachmentDO> getAttachmentListByBusinessIds(String businessType, java.util.Collection<Long> businessIds) {
+        return attachmentMapper.selectListByBusinessIds(businessType, businessIds);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveAttachmentList(String businessType, Long businessId, List<AttachmentSaveReqVO> attachments) {
         // 1. 获取现有附件ID集合

@@ -7,6 +7,8 @@ import cn.iocoder.yudao.framework.excel.core.convert.DictConvert;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -108,6 +110,62 @@ public class EmployeeRespVO {
     @ExcelProperty("联系电话")
     private String emergencyPhone;
 
+    @Schema(description = "紧急联系人关系", example = "配偶")
+    private String emergencyRelationship;
+
+    @Schema(description = "是否缴纳社保", example = "true")
+    private Boolean socialSecurityEnabled;
+
+    @Schema(description = "是否缴纳公积金", example = "true")
+    private Boolean housingFundEnabled;
+
+    @Schema(description = "参保年月 yyyy-MM", example = "2024-01")
+    private String socialSecurityStartMonth;
+
+    @Schema(description = "试用期薪资", example = "8000.00")
+    private BigDecimal probationSalary;
+
+    @Schema(description = "转正薪资", example = "10000.00")
+    private BigDecimal regularSalary;
+
+    @Schema(description = "生育状况", example = "1")
+    private String fertilityStatus;
+
+    @Schema(description = "户籍性质", example = "1")
+    private String householdType;
+
+    @Schema(description = "用工形式", example = "1")
+    private String employmentForm;
+
+    @Schema(description = "招聘渠道", example = "内推")
+    private String recruitmentChannel;
+
+    @Schema(description = "面试人", example = "王五")
+    private String interviewerName;
+
+    @Schema(description = "年龄（周岁）", example = "35")
+    private Integer age;
+
+    @Schema(description = "司龄（完整月数）", example = "73")
+    private Integer companyTenureMonths;
+
+    @Schema(description = "婚育情况摘要", example = "已婚/已育")
+    private String marriageChildbearingSummary;
+
+    @Schema(description = "合同签订次数", example = "2")
+    private Integer contractSignCount;
+
+    @Schema(description = "当前合同类型", example = "1")
+    private String currentContractType;
+
+    @Schema(description = "当前合同开始日期", example = "2024-01-01")
+    @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY)
+    private LocalDate currentContractStartDate;
+
+    @Schema(description = "当前合同结束日期", example = "2027-01-01")
+    @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY)
+    private LocalDate currentContractEndDate;
+
     @Schema(description = "照片", example = "http://127.0.0.1:48080/admin-api/infra/file/4/get/xxx.jpg")
     @ExcelProperty("照片")
     private String avatar;
@@ -191,6 +249,18 @@ public class EmployeeRespVO {
      */
     @Schema(description = "家属信息列表")
     private List<EmployeeFamilyVO> familyList;
+
+    /**
+     * 合同明细列表
+     */
+    @Schema(description = "合同明细列表")
+    private List<EmployeeContractVO> contractList;
+
+    /**
+     * 入职资料附件
+     */
+    @Schema(description = "入职资料附件")
+    private List<AttachmentRespVO> onboardingAttachments;
 
 }
 

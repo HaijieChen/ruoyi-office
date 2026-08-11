@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeePageReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRosterExportVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSelectPageReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSaveReqVO;
 import jakarta.validation.Valid;
@@ -84,6 +85,14 @@ public interface EmployeeService {
      * @return 生成结果（成功数量、失败数量）
      */
     void batchGenerateUserForEmployee(List<Long> employeeIds);
+
+    /**
+     * 获得文枢花名册导出列表（52 列）
+     *
+     * @param pageReqVO 查询条件
+     * @return 导出列表
+     */
+    List<EmployeeRosterExportVO> getEmployeeRosterExportList(EmployeePageReqVO pageReqVO);
 
 }
 

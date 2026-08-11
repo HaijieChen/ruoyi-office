@@ -1,0 +1,170 @@
+-- ----------------------------
+-- EXP-75 文枢员工花名册字段补齐
+-- 历史数据新增列保持 NULL；不默认社保/公积金为「否」
+-- ----------------------------
+
+-- 1. 员工主档新增可空列
+ALTER TABLE `hrm_employee`
+  ADD COLUMN `social_security_enabled` bit(1) NULL DEFAULT NULL COMMENT '是否缴纳社保' AFTER `formal_date`,
+  ADD COLUMN `housing_fund_enabled` bit(1) NULL DEFAULT NULL COMMENT '是否缴纳公积金' AFTER `social_security_enabled`,
+  ADD COLUMN `social_security_start_month` char(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '参保年月 yyyy-MM' AFTER `housing_fund_enabled`,
+  ADD COLUMN `probation_salary` decimal(12,2) NULL DEFAULT NULL COMMENT '试用期薪资' AFTER `social_security_start_month`,
+  ADD COLUMN `regular_salary` decimal(12,2) NULL DEFAULT NULL COMMENT '转正薪资' AFTER `probation_salary`,
+  ADD COLUMN `fertility_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '生育状况' AFTER `regular_salary`,
+  ADD COLUMN `household_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '户籍性质' AFTER `fertility_status`,
+  ADD COLUMN `employment_form` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '用工形式' AFTER `household_type`,
+  ADD COLUMN `emergency_relationship` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '紧急联系人关系' AFTER `emergency_phone`,
+  ADD COLUMN `recruitment_channel` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '招聘渠道' AFTER `emergency_relationship`,
+  ADD COLUMN `interviewer_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '面试人' AFTER `recruitment_channel`;
+
+-- 2. 教育明细扩展
+ALTER TABLE `hrm_employee_education`
+  ADD COLUMN `education_level` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学历' AFTER `end_time`,
+  ADD COLUMN `education_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学历类别' AFTER `education_level`,
+  ADD COLUMN `degree` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学位' AFTER `education_type`,
+  ADD COLUMN `first_education` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否第一学历' AFTER `degree`,
+  ADD COLUMN `highest_education` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否最高学历' AFTER `first_education`;
+
+-- 3. 合同明细表
+CREATE TABLE IF NOT EXISTS `hrm_employee_contract` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `employee_id` bigint NOT NULL COMMENT '员工ID',
+  `sequence_no` tinyint NOT NULL COMMENT '合同序号 1-4',
+  `contract_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '合同类型',
+  `start_date` date NOT NULL COMMENT '合同开始日期',
+  `end_date` date NULL DEFAULT NULL COMMENT '合同结束日期',
+  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`) USING BTREE,
+  KEY `idx_employee_id` (`employee_id`) USING BTREE,
+  KEY `idx_employee_sequence` (`employee_id`, `sequence_no`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='员工合同明细表';
+
+-- 4. 字典：生育状况
+INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
+SELECT '生育状况', 'hrm_fertility_status', 0, '员工生育状况', '1', NOW(), '1', NOW(), false, NULL
+WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_fertility_status' AND deleted = 0);
+
+INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted)
+SELECT 'hrm_fertility_status', d.label, d.value, d.sort, 0, 'default', '', '', '1', NOW(), '1', NOW(), false
+FROM (
+  SELECT '未育' AS label, '1' AS value, 1 AS sort
+  UNION ALL SELECT '已育', '2', 2
+  UNION ALL SELECT '不详', '3', 3
+) d
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_fertility_status' AND x.value = d.value AND x.deleted = 0
+);
+
+-- 5. 字典：户籍性质
+INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
+SELECT '户籍性质', 'hrm_household_type', 0, '员工户籍性质', '1', NOW(), '1', NOW(), false, NULL
+WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_household_type' AND deleted = 0);
+
+INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted)
+SELECT 'hrm_household_type', d.label, d.value, d.sort, 0, 'default', '', '', '1', NOW(), '1', NOW(), false
+FROM (
+  SELECT '农业户口' AS label, '1' AS value, 1 AS sort
+  UNION ALL SELECT '非农业户口', '2', 2
+  UNION ALL SELECT '居民户口', '3', 3
+  UNION ALL SELECT '其他', '4', 4
+) d
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_household_type' AND x.value = d.value AND x.deleted = 0
+);
+
+-- 6. 字典：学历类别
+INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
+SELECT '学历类别', 'hrm_education_type', 0, '学历类别', '1', NOW(), '1', NOW(), false, NULL
+WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_education_type' AND deleted = 0);
+
+INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted)
+SELECT 'hrm_education_type', d.label, d.value, d.sort, 0, 'default', '', '', '1', NOW(), '1', NOW(), false
+FROM (
+  SELECT '全日制' AS label, '1' AS value, 1 AS sort
+  UNION ALL SELECT '非全日制', '2', 2
+  UNION ALL SELECT '其他', '3', 3
+) d
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_education_type' AND x.value = d.value AND x.deleted = 0
+);
+
+-- 7. 字典：用工形式
+INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
+SELECT '用工形式', 'hrm_employment_form', 0, '用工形式', '1', NOW(), '1', NOW(), false, NULL
+WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_employment_form' AND deleted = 0);
+
+INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted)
+SELECT 'hrm_employment_form', d.label, d.value, d.sort, 0, 'default', '', '', '1', NOW(), '1', NOW(), false
+FROM (
+  SELECT '全日制' AS label, '1' AS value, 1 AS sort
+  UNION ALL SELECT '非全日制', '2', 2
+  UNION ALL SELECT '劳务派遣', '3', 3
+  UNION ALL SELECT '退休返聘', '4', 4
+  UNION ALL SELECT '实习', '5', 5
+  UNION ALL SELECT '其他', '6', 6
+) d
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_employment_form' AND x.value = d.value AND x.deleted = 0
+);
+
+-- 8. 字典：合同类型
+INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
+SELECT '合同类型', 'hrm_contract_type', 0, '劳动合同类型', '1', NOW(), '1', NOW(), false, NULL
+WHERE NOT EXISTS (SELECT 1 FROM system_dict_type WHERE type = 'hrm_contract_type' AND deleted = 0);
+
+INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted)
+SELECT 'hrm_contract_type', d.label, d.value, d.sort, 0, 'default', '', '', '1', NOW(), '1', NOW(), false
+FROM (
+  SELECT '固定期限' AS label, '1' AS value, 1 AS sort
+  UNION ALL SELECT '无固定期限', '2', 2
+  UNION ALL SELECT '以完成一定工作任务为期限', '3', 3
+  UNION ALL SELECT '劳务协议', '4', 4
+  UNION ALL SELECT '实习协议', '5', 5
+  UNION ALL SELECT '其他', '6', 6
+) d
+WHERE NOT EXISTS (
+  SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_contract_type' AND x.value = d.value AND x.deleted = 0
+);
+
+-- 9. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
+INSERT INTO `common_attachment` (
+  `business_type`, `business_id`, `file_name`, `file_path`, `file_url`,
+  `file_size`, `file_type`, `file_extension`, `upload_time`, `sort_order`,
+  `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`
+)
+SELECT
+  'hrm_employee_archive_onboarding',
+  e.employee_id,
+  a.file_name,
+  a.file_path,
+  a.file_url,
+  a.file_size,
+  a.file_type,
+  a.file_extension,
+  a.upload_time,
+  a.sort_order,
+  a.remark,
+  a.creator,
+  NOW(),
+  a.updater,
+  NOW(),
+  b'0',
+  a.tenant_id
+FROM `common_attachment` a
+INNER JOIN `hrm_employee_entry_bill` e ON e.id = a.business_id AND e.deleted = b'0'
+WHERE a.business_type = '201'
+  AND a.deleted = b'0'
+  AND e.employee_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM `common_attachment` t
+    WHERE t.business_type = 'hrm_employee_archive_onboarding'
+      AND t.business_id = e.employee_id
+      AND t.file_path = a.file_path
+      AND t.deleted = b'0'
+      AND t.tenant_id = a.tenant_id
+  );

@@ -91,15 +91,13 @@ public class EmployeeController {
     }
 
     @GetMapping("/export-excel")
-    @Operation(summary = "导出员工档案 Excel")
+    @Operation(summary = "导出文枢花名册 Excel")
     @PreAuthorize("@ss.hasPermission('hrm:employee-archive:export')")
     @ApiAccessLog(operateType = EXPORT)
     public void exportEmployeeArchiveExcel(@Valid EmployeePageReqVO pageReqVO,
                                            HttpServletResponse response) throws IOException {
-        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
-        List<EmployeeRespVO> list = employeeArchiveService.getEmployeeArchivePage(pageReqVO).getList();
-        // 导出 Excel
-        ExcelUtils.write(response, "员工档案.xls", "数据", EmployeeRespVO.class, list);
+        List<EmployeeRosterExportVO> list = employeeArchiveService.getEmployeeRosterExportList(pageReqVO);
+        ExcelUtils.write(response, "文枢花名册.xlsx", "文枢在职", EmployeeRosterExportVO.class, list);
     }
 
     @PostMapping("/generate-user")

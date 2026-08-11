@@ -24,6 +24,21 @@ public class EmployeeEducationVO {
     @JsonFormat(pattern = FORMAT_YEAR_MONTH_DAY)
     private LocalDate endTime;
 
+    @Schema(description = "学历", example = "6")
+    private String educationLevel;
+
+    @Schema(description = "学历类别", example = "1")
+    private String educationType;
+
+    @Schema(description = "学位", example = "学士")
+    private String degree;
+
+    @Schema(description = "是否第一学历", example = "true")
+    private Boolean firstEducation;
+
+    @Schema(description = "是否最高学历", example = "true")
+    private Boolean highestEducation;
+
     @Schema(description = "专业", example = "计算机科学与技术")
     private String major;
 
