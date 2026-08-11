@@ -62,7 +62,7 @@ export namespace EmployeeArchiveApi {
     educationList?: EmployeeEducation[]; // 教育经历列表
     familyList?: EmployeeFamily[]; // 家属信息列表
     contractList?: EmployeeContract[]; // 合同明细
-    /** 入职资料：新附件只传 fileId；已有附件传 id */
+    /** 入职资料：新附件只传 claimToken；已有附件传 id */
     onboardingAttachments?: OnboardingAttachment[];
   }
 
@@ -74,10 +74,11 @@ export namespace EmployeeArchiveApi {
     endDate?: string;
   }
 
-  /** 入职资料附件（专用 VO，不自报 businessType/size） */
+  /** 入职资料附件（专用 VO，不自报 businessType/size/url） */
   export interface OnboardingAttachment {
     id?: number;
-    fileId?: number;
+    /** 一次性 claim（新上传） */
+    claimToken?: string;
     fileName?: string;
     fileSize?: number;
     fileExtension?: string;
@@ -87,6 +88,15 @@ export namespace EmployeeArchiveApi {
     uploadTime?: string | Date;
     /** 鉴权下载相对路径 */
     downloadPath?: string;
+  }
+
+  /** 入职资料上传 claim 响应（无公开 URL/path/configId） */
+  export interface OnboardingFileClaim {
+    claimToken: string;
+    fileName?: string;
+    fileSize?: number;
+    fileExtension?: string;
+    expireTime?: number;
   }
 
   /** 员工工作经历 */
@@ -221,5 +231,18 @@ export function generateUserForEmployee(id: number) {
 export function batchGenerateUserForEmployee(ids: number[]) {
   return requestClient.post<boolean>(
     `/hrm/employee-archive/batch-generate-user?ids=${ids.join(',')}`,
+  );
+}
+
+/** 上传入职资料：返回一次性 claimToken（不返回公开直链） */
+export function uploadOnboardingFile(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return requestClient.post<EmployeeArchiveApi.OnboardingFileClaim>(
+    '/hrm/employee-archive/onboarding-file/upload',
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    },
   );
 }

@@ -64,7 +64,7 @@ const educationList = ref<EmployeeArchiveApi.EmployeeEducation[]>([]);
 const familyList = ref<EmployeeArchiveApi.EmployeeFamily[]>([]);
 // 合同明细
 const contractList = ref<EmployeeArchiveApi.EmployeeContract[]>([]);
-// 入职资料（专用 VO：fileId claim）
+// 入职资料（专用 VO：claimToken / 已有 id + downloadPath）
 const onboardingAttachments = ref<EmployeeArchiveApi.OnboardingAttachment[]>(
   [],
 );
@@ -677,11 +677,11 @@ async function loadData(newId?: string) {
       endDate: item.endDate ? dayjs(item.endDate).format('YYYY-MM-DD') : undefined,
     }));
 
-    // 入职资料（含鉴权 downloadPath）
+    // 入职资料（含鉴权 downloadPath；不暴露 fileId/url）
     onboardingAttachments.value = (data.onboardingAttachments || []).map(
       (item) => ({
         id: item.id,
-        fileId: item.fileId,
+        claimToken: item.claimToken,
         fileName: item.fileName,
         fileSize: item.fileSize,
         fileExtension: item.fileExtension,
@@ -783,10 +783,10 @@ async function handleSave() {
     values.educationList = educationList.value;
     values.familyList = familyList.value;
     values.contractList = normalizedContracts;
-    // 仅提交专用字段，避免 @Valid 命中通用 AttachmentSaveReqVO
+    // 仅提交专用字段：已有 id 或新 claimToken
     values.onboardingAttachments = onboardingAttachments.value.map((a) => ({
       id: a.id,
-      fileId: a.fileId,
+      claimToken: a.claimToken,
       sortOrder: a.sortOrder,
       remark: a.remark,
     }));

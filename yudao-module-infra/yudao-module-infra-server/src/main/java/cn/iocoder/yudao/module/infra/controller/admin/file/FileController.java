@@ -41,6 +41,9 @@ import static cn.iocoder.yudao.module.infra.framework.file.core.utils.FileTypeUt
 @Slf4j
 public class FileController {
 
+    /** 入职资料私有目录前缀：禁止通用上传与匿名公开下载（#1） */
+    public static final String HRM_ONBOARDING_PRIVATE_DIR = "hrm-onboarding-private";
+
     @Resource
     private FileService fileService;
 
@@ -49,6 +52,7 @@ public class FileController {
     @Parameter(name = "file", description = "文件附件", required = true,
             schema = @Schema(type = "string", format = "binary"))
     public CommonResult<String> uploadFile(@Valid FileUploadReqVO uploadReqVO) throws Exception {
+        rejectPrivateOnboardingDirectory(uploadReqVO.getDirectory());
         MultipartFile file = uploadReqVO.getFile();
         byte[] content = IoUtil.readBytes(file.getInputStream());
         return success(fileService.createFile(content, file.getOriginalFilename(),
@@ -56,11 +60,12 @@ public class FileController {
     }
 
     @PostMapping("/upload-detail")
-    @Operation(summary = "上传文件并返回权威文件 claim（id/path/size）",
-            description = "敏感业务（如入职资料）应使用本接口，仅用返回的 fileId 绑定附件元数据")
+    @Operation(summary = "上传文件并返回元数据（id/path/size）",
+            description = "通用上传；入职资料等敏感业务请走 HRM 专用 upload/claim，勿使用本接口")
     @Parameter(name = "file", description = "文件附件", required = true,
             schema = @Schema(type = "string", format = "binary"))
     public CommonResult<FileUploadRespVO> uploadFileDetail(@Valid FileUploadReqVO uploadReqVO) throws Exception {
+        rejectPrivateOnboardingDirectory(uploadReqVO.getDirectory());
         MultipartFile file = uploadReqVO.getFile();
         byte[] content = IoUtil.readBytes(file.getInputStream());
         FileDO created = fileService.createFileReturn(content, file.getOriginalFilename(),
@@ -74,6 +79,12 @@ public class FileController {
         resp.setSize(created.getSize());
         resp.setConfigId(created.getConfigId());
         return success(resp);
+    }
+
+    private void rejectPrivateOnboardingDirectory(String directory) {
+        if (directory != null && directory.contains(HRM_ONBOARDING_PRIVATE_DIR)) {
+            throw new IllegalArgumentException("入职资料私有目录禁止经通用上传接口写入，请使用 HRM onboarding-file/upload");
+        }
     }
 
     @GetMapping("/presigned-url")
@@ -134,9 +145,14 @@ public class FileController {
             throw new IllegalArgumentException("结尾的 path 路径必须传递");
         }
         // 解码，解决中文路径的问题
-        // https://gitee.com/zhijiantianya/ruoyi-vue-pro/pulls/807/
-        // https://gitee.com/zhijiantianya/ruoyi-vue-pro/pulls/1432/
         path = URLUtil.decode(path, StandardCharsets.UTF_8, false);
+
+        // 入职资料私有目录禁止匿名直链（目录名可能出现在 path 任意段）
+        if (path != null && path.contains(HRM_ONBOARDING_PRIVATE_DIR)) {
+            log.warn("[getFileContent][拒绝匿名访问入职资料 path={}]", path);
+            response.setStatus(HttpStatus.FORBIDDEN.value());
+            return;
+        }
 
         // 读取内容
         byte[] content = fileService.getFileContent(configId, path);

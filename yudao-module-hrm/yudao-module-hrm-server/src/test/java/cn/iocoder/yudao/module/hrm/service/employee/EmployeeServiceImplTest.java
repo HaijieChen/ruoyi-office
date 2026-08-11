@@ -4,7 +4,7 @@ import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReq
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
-import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeContractVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEducationVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
@@ -13,13 +13,15 @@ import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.OnboardingAttach
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeContractDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEducationDO;
+import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.OnboardingFileClaimDO;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeContractMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeEducationMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeFamilyMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeWorkExperienceMapper;
+import cn.iocoder.yudao.module.hrm.dal.mysql.employee.OnboardingFileClaimMapper;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
-import cn.iocoder.yudao.module.infra.api.file.FileApi;
+import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
 import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
@@ -29,10 +31,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -59,7 +63,9 @@ class EmployeeServiceImplTest {
     @Mock
     private AttachmentService attachmentService;
     @Mock
-    private FileApi fileApi;
+    private FileAccessApi fileAccessApi;
+    @Mock
+    private OnboardingFileClaimMapper onboardingFileClaimMapper;
     @Mock
     private DeptApi deptApi;
     @Mock
@@ -76,16 +82,27 @@ class EmployeeServiceImplTest {
         return req;
     }
 
-    private FileRespDTO pdfFile(long id) {
+    private FileRespDTO privatePdf(long id) {
         FileRespDTO f = new FileRespDTO();
         f.setId(id);
         f.setName("TEST_scan.pdf");
-        f.setPath("/hrm/onboarding/TEST_scan.pdf");
-        f.setUrl("https://files.example.test/hrm/onboarding/TEST_scan.pdf");
+        f.setPath("hrm-onboarding-private/TEST_scan.pdf");
+        f.setUrl("https://files.example.test/hrm-onboarding-private/TEST_scan.pdf");
         f.setType("application/pdf");
         f.setSize(1024L);
         f.setConfigId(1L);
         return f;
+    }
+
+    private OnboardingFileClaimDO openClaim(String token, long fileId, long uploader) {
+        return OnboardingFileClaimDO.builder()
+                .id(1L)
+                .claimToken(token)
+                .fileId(fileId)
+                .uploaderUserId(uploader)
+                .purpose(OnboardingFileClaimDO.PURPOSE)
+                .expireTime(LocalDateTime.now().plusHours(1))
+                .build();
     }
 
     @BeforeEach
@@ -99,7 +116,7 @@ class EmployeeServiceImplTest {
     }
 
     @Test
-    void createPersistsRosterFieldsContractsAndAttachments() {
+    void createPersistsRosterFieldsContractsAndAttachmentsViaClaim() {
         EmployeeSaveReqVO req = baseReq();
         req.setSocialSecurityEnabled(true);
         req.setSocialSecurityStartMonth("2024-01");
@@ -131,12 +148,18 @@ class EmployeeServiceImplTest {
         req.setEducationList(List.of(edu));
 
         OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
-        att.setFileId(55L);
+        att.setClaimToken("tok-owner");
         req.setOnboardingAttachments(List.of(att));
-        when(fileApi.getFile(55L)).thenReturn(CommonResult.success(pdfFile(55L)));
 
-        Long id = employeeService.createEmployeeArchive(req);
-        assertEquals(100L, id);
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-owner"))
+                .thenReturn(openClaim("tok-owner", 55L, 7L));
+        when(fileAccessApi.getFile(55L)).thenReturn(privatePdf(55L));
+
+        try (MockedStatic<SecurityFrameworkUtils> sec = mockStatic(SecurityFrameworkUtils.class)) {
+            sec.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(7L);
+            Long id = employeeService.createEmployeeArchive(req);
+            assertEquals(100L, id);
+        }
 
         ArgumentCaptor<EmployeeDO> empCaptor = ArgumentCaptor.forClass(EmployeeDO.class);
         verify(employeeArchiveMapper).insert(empCaptor.capture());
@@ -156,14 +179,15 @@ class EmployeeServiceImplTest {
         assertEquals(55L, attCaptor.getValue().get(0).getFileId());
         assertEquals("TEST_scan.pdf", attCaptor.getValue().get(0).getFileName());
         assertEquals(1024L, attCaptor.getValue().get(0).getFileSize());
+        assertEquals("", attCaptor.getValue().get(0).getFileUrl()); // 不落公开 URL
+        verify(onboardingFileClaimMapper).updateById(argThat((OnboardingFileClaimDO c) -> c.getConsumedAt() != null));
     }
 
     @Test
-    void rejectsForgedOnboardingMetadataWithoutFileId() {
+    void rejectsForgedOnboardingWithoutClaimOrId() {
         EmployeeSaveReqVO req = baseReq();
         req.setId(1L);
         OnboardingAttachmentSaveReqVO fake = new OnboardingAttachmentSaveReqVO();
-        // 无 fileId、无 id
         req.setOnboardingAttachments(List.of(fake));
         EmployeeDO existing = new EmployeeDO();
         existing.setId(1L);
@@ -172,35 +196,122 @@ class EmployeeServiceImplTest {
     }
 
     @Test
-    void rejectsOversizedAuthoritativeFile() {
-        EmployeeSaveReqVO req = baseReq();
-        req.setId(1L);
-        OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
-        att.setFileId(9L);
-        req.setOnboardingAttachments(List.of(att));
-        FileRespDTO huge = pdfFile(9L);
-        huge.setSize(21L * 1024 * 1024);
-        when(fileApi.getFile(9L)).thenReturn(CommonResult.success(huge));
-        EmployeeDO existing = new EmployeeDO();
-        existing.setId(1L);
-        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
-        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+    void consumeClaimRejectsOtherUploaderSameTenant() {
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-x"))
+                .thenReturn(openClaim("tok-x", 1L, 100L));
+        assertThrows(ServiceException.class,
+                () -> employeeService.consumeClaim("tok-x", 200L, 1L));
     }
 
     @Test
-    void rejectsExeExtensionFromAuthoritativeFile() {
+    void consumeClaimRejectsExpiredAndDoubleConsume() {
+        OnboardingFileClaimDO expired = openClaim("tok-e", 1L, 7L);
+        expired.setExpireTime(LocalDateTime.now().minusMinutes(1));
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-e")).thenReturn(expired);
+        assertThrows(ServiceException.class,
+                () -> employeeService.consumeClaim("tok-e", 7L, 1L));
+
+        OnboardingFileClaimDO used = openClaim("tok-u", 1L, 7L);
+        used.setConsumedAt(LocalDateTime.now());
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-u")).thenReturn(used);
+        assertThrows(ServiceException.class,
+                () -> employeeService.consumeClaim("tok-u", 7L, 1L));
+    }
+
+    @Test
+    void consumeClaimRejectsWrongPurpose() {
+        OnboardingFileClaimDO wrong = openClaim("tok-p", 1L, 7L);
+        wrong.setPurpose("other-biz");
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-p")).thenReturn(wrong);
+        assertThrows(ServiceException.class,
+                () -> employeeService.consumeClaim("tok-p", 7L, 1L));
+    }
+
+    @Test
+    void rejectsOversizedAuthoritativeFileViaClaim() {
         EmployeeSaveReqVO req = baseReq();
         req.setId(1L);
         OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
-        att.setFileId(8L);
+        att.setClaimToken("tok-big");
         req.setOnboardingAttachments(List.of(att));
-        FileRespDTO exe = pdfFile(8L);
-        exe.setName("malware.exe");
-        when(fileApi.getFile(8L)).thenReturn(CommonResult.success(exe));
+        FileRespDTO huge = privatePdf(9L);
+        huge.setSize(21L * 1024 * 1024);
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-big"))
+                .thenReturn(openClaim("tok-big", 9L, 7L));
+        when(fileAccessApi.getFile(9L)).thenReturn(huge);
         EmployeeDO existing = new EmployeeDO();
         existing.setId(1L);
         when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
-        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+        try (MockedStatic<SecurityFrameworkUtils> sec = mockStatic(SecurityFrameworkUtils.class)) {
+            sec.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(7L);
+            assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+        }
+    }
+
+    @Test
+    void rejectsExeExtensionFromAuthoritativeFileViaClaim() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
+        att.setClaimToken("tok-exe");
+        req.setOnboardingAttachments(List.of(att));
+        FileRespDTO exe = privatePdf(8L);
+        exe.setName("malware.exe");
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-exe"))
+                .thenReturn(openClaim("tok-exe", 8L, 7L));
+        when(fileAccessApi.getFile(8L)).thenReturn(exe);
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+        try (MockedStatic<SecurityFrameworkUtils> sec = mockStatic(SecurityFrameworkUtils.class)) {
+            sec.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(7L);
+            assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+        }
+    }
+
+    @Test
+    void rejectsNonPrivateDirectoryFileViaClaim() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
+        att.setClaimToken("tok-pub");
+        req.setOnboardingAttachments(List.of(att));
+        FileRespDTO pub = privatePdf(3L);
+        pub.setPath("/public/other/scan.pdf");
+        when(onboardingFileClaimMapper.selectByClaimToken("tok-pub"))
+                .thenReturn(openClaim("tok-pub", 3L, 7L));
+        when(fileAccessApi.getFile(3L)).thenReturn(pub);
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+        try (MockedStatic<SecurityFrameworkUtils> sec = mockStatic(SecurityFrameworkUtils.class)) {
+            sec.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(7L);
+            assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+        }
+    }
+
+    @Test
+    void downloadLegacyNullFileIdByPath() throws Exception {
+        EmployeeDO emp = new EmployeeDO();
+        emp.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(emp);
+        AttachmentDO legacy = new AttachmentDO();
+        legacy.setId(2L);
+        legacy.setBusinessType(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
+        legacy.setBusinessId(1L);
+        legacy.setFileId(null);
+        legacy.setFilePath("legacy/path/TEST.pdf");
+        legacy.setFileName("TEST.pdf");
+        when(attachmentService.getAttachment(2L)).thenReturn(legacy);
+        when(fileAccessApi.getFileByPath("legacy/path/TEST.pdf")).thenReturn(null);
+        when(fileAccessApi.getFileContent(null, "legacy/path/TEST.pdf")).thenReturn(new byte[]{1, 2, 3});
+
+        jakarta.servlet.http.HttpServletResponse response = mock(jakarta.servlet.http.HttpServletResponse.class);
+        jakarta.servlet.ServletOutputStream out = mock(jakarta.servlet.ServletOutputStream.class);
+        when(response.getOutputStream()).thenReturn(out);
+
+        employeeService.downloadOnboardingAttachment(1L, 2L, response);
+        verify(out).write(new byte[]{1, 2, 3});
     }
 
     @Test
@@ -341,7 +452,6 @@ class EmployeeServiceImplTest {
 
     @Test
     void sparseUpdateOmitsKeepExplicitNullClears() {
-        // #7 三态：省略保留、显式 null 清空
         EmployeeDO old = new EmployeeDO();
         old.setId(1L);
         old.setSocialSecurityEnabled(true);
@@ -352,10 +462,7 @@ class EmployeeServiceImplTest {
 
         EmployeeSaveReqVO req = baseReq();
         req.setId(1L);
-        // 省略 socialSecurityEnabled / socialSecurityStartMonth
-        // 显式清空 recruitmentChannel
         req.setRecruitmentChannel(null);
-        // 写入 probationSalary
         req.setProbationSalary(new BigDecimal("9000"));
 
         employeeService.updateEmployeeArchive(req);
@@ -363,10 +470,75 @@ class EmployeeServiceImplTest {
         ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
         verify(employeeArchiveMapper).updateById(captor.capture());
         EmployeeDO saved = captor.getValue();
-        assertEquals(Boolean.TRUE, saved.getSocialSecurityEnabled()); // 省略保留
-        assertEquals("2024-01", saved.getSocialSecurityStartMonth()); // 省略保留
-        assertNull(saved.getRecruitmentChannel()); // 显式 null 清空
-        assertEquals(new BigDecimal("9000"), saved.getProbationSalary()); // 写入
+        assertEquals(Boolean.TRUE, saved.getSocialSecurityEnabled());
+        assertEquals("2024-01", saved.getSocialSecurityStartMonth());
+        assertNull(saved.getRecruitmentChannel());
+        assertEquals(new BigDecimal("9000"), saved.getProbationSalary());
+    }
+
+    /**
+     * #7 反例1：旧值已参保有月份，仅提交 enabled=true（省略 month）→ 保留旧月份，不误拒
+     */
+    @Test
+    void socialSecurityOnlyEnabledTrueKeepsOldMonth() {
+        EmployeeDO old = new EmployeeDO();
+        old.setId(1L);
+        old.setSocialSecurityEnabled(true);
+        old.setSocialSecurityStartMonth("2024-01");
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(old);
+
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        req.setSocialSecurityEnabled(true); // month 省略
+
+        employeeService.updateEmployeeArchive(req);
+
+        ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
+        verify(employeeArchiveMapper).updateById(captor.capture());
+        assertEquals(Boolean.TRUE, captor.getValue().getSocialSecurityEnabled());
+        assertEquals("2024-01", captor.getValue().getSocialSecurityStartMonth());
+    }
+
+    /**
+     * #7 反例2：省略 enabled（old=true）、显式清空月份 → 有效已参保无月份，拒绝
+     */
+    @Test
+    void socialSecurityOmitEnabledClearMonthRejectedWhenOldEnabled() {
+        EmployeeDO old = new EmployeeDO();
+        old.setId(1L);
+        old.setSocialSecurityEnabled(true);
+        old.setSocialSecurityStartMonth("2024-01");
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(old);
+
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        req.setSocialSecurityStartMonth(null); // 显式清空
+
+        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+        verify(employeeArchiveMapper, never()).updateById(any(EmployeeDO.class));
+    }
+
+    /**
+     * #7 反例3：旧值未参保，仅提交月份 → 有效未参保强制 month=NULL 落库
+     */
+    @Test
+    void socialSecurityOnlyMonthWhenOldDisabledForcesNullMonth() {
+        EmployeeDO old = new EmployeeDO();
+        old.setId(1L);
+        old.setSocialSecurityEnabled(false);
+        old.setSocialSecurityStartMonth(null);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(old);
+
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        req.setSocialSecurityStartMonth("2024-06");
+
+        employeeService.updateEmployeeArchive(req);
+
+        ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
+        verify(employeeArchiveMapper).updateById(captor.capture());
+        assertEquals(Boolean.FALSE, captor.getValue().getSocialSecurityEnabled());
+        assertNull(captor.getValue().getSocialSecurityStartMonth());
     }
 
     @Test
@@ -404,11 +576,21 @@ class EmployeeServiceImplTest {
         AttachmentDO foreign = new AttachmentDO();
         foreign.setId(2L);
         foreign.setBusinessType(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
-        foreign.setBusinessId(999L); // 其他员工
+        foreign.setBusinessId(999L);
         when(attachmentService.getAttachment(2L)).thenReturn(foreign);
 
         assertThrows(ServiceException.class, () ->
                 employeeService.downloadOnboardingAttachment(1L, 2L, mock(jakarta.servlet.http.HttpServletResponse.class)));
+    }
+
+    @Test
+    void fileApiNoLongerExposesGetFileContentRpc() throws Exception {
+        // 静态契约：FileApi 不得再声明 getFile / getFileContent（/rpc-api permitAll）
+        assertTrue(java.util.Arrays.stream(
+                        cn.iocoder.yudao.module.infra.api.file.FileApi.class.getDeclaredMethods())
+                .noneMatch(m -> m.getName().equals("getFile") || m.getName().equals("getFileContent")));
+        assertNotNull(FileAccessApi.class.getMethod("getFileContent", Long.class));
+        assertFalse(FileAccessApi.class.isAnnotationPresent(org.springframework.web.bind.annotation.RestController.class));
     }
 
 }

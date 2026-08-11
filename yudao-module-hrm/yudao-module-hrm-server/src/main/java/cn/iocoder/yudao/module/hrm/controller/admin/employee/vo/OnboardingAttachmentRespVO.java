@@ -15,9 +15,6 @@ public class OnboardingAttachmentRespVO {
     @Schema(description = "附件记录 ID")
     private Long id;
 
-    @Schema(description = "绑定的 infra_file ID（若有）")
-    private Long fileId;
-
     @Schema(description = "文件名")
     private String fileName;
 

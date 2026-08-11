@@ -100,6 +100,14 @@ public class EmployeeController {
         ExcelUtils.write(response, "文枢花名册.xlsx", "文枢在职", EmployeeRosterExportVO.class, list);
     }
 
+    @PostMapping("/onboarding-file/upload")
+    @Operation(summary = "上传入职资料并签发一次性 claim（不返回公开 URL）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create') or @ss.hasPermission('hrm:employee-archive:update')")
+    public CommonResult<OnboardingFileClaimRespVO> uploadOnboardingFile(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws Exception {
+        return success(employeeArchiveService.uploadOnboardingFile(file));
+    }
+
     @GetMapping("/onboarding-attachment/download")
     @Operation(summary = "下载入职资料附件（需登录且具备员工档案查询权限）")
     @PreAuthorize("@ss.hasPermission('hrm:employee-archive:query')")

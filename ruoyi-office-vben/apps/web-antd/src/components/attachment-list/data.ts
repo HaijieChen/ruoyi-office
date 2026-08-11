@@ -3,6 +3,8 @@ import type { AttachmentApi } from '#/api/common/attachment';
 
 import { ACTION_ICON } from '#/adapter/vxe-table';
 
+import { createAttachmentFromOnboardingClaim } from './onboarding-claim';
+
 /**
  * 格式化文件大小
  * @param size 文件大小（字节）
@@ -126,51 +128,70 @@ export function useAttachmentActions(
   ];
 }
 
+export { createAttachmentFromOnboardingClaim } from './onboarding-claim';
+
 /**
- * 根据 /infra/file/upload-detail 权威 claim 创建附件元数据。
- * 必须携带 fileId；禁止 blob: URL。
+ * @deprecated 入职资料请用 createAttachmentFromOnboardingClaim
  */
 export function createAttachmentFromUpload(
   file: File,
   sortOrder: number,
-  uploaded: { id: number; url: string; path?: string; size?: number; type?: string },
-): AttachmentApi.AttachmentSaveReq & { fileId?: number; downloadPath?: string } {
-  if (!uploaded?.id) {
-    throw new Error('文件上传必须返回权威 fileId');
+  uploaded: {
+    id?: number;
+    claimToken?: string;
+    url?: string;
+    path?: string;
+    size?: number;
+    type?: string;
+    fileName?: string;
+    fileSize?: number;
+    fileExtension?: string;
+    expireTime?: number;
+  },
+): AttachmentApi.AttachmentSaveReq & {
+  claimToken?: string;
+  fileId?: number;
+  downloadPath?: string;
+} {
+  if (uploaded?.claimToken) {
+    return createAttachmentFromOnboardingClaim(file, sortOrder, {
+      claimToken: uploaded.claimToken,
+      fileName: uploaded.fileName,
+      fileSize: uploaded.fileSize ?? uploaded.size,
+      fileExtension: uploaded.fileExtension,
+      expireTime: uploaded.expireTime,
+    });
   }
-  if (!uploaded.url || uploaded.url.startsWith('blob:')) {
-    throw new Error('文件上传失败：未获得服务端文件地址');
-  }
-  const path = uploaded.path || uploaded.url;
-  return {
-    id: undefined,
-    fileId: uploaded.id,
-    businessType: '',
-    businessId: 0,
-    fileName: file.name,
-    filePath: path,
-    fileUrl: uploaded.url,
-    fileSize: uploaded.size ?? file.size,
-    fileType: uploaded.type ?? file.type,
-    fileExtension: file.name.includes('.')
-      ? file.name.split('.').pop()!.toLowerCase()
-      : '',
-    uploadTime: new Date(),
-    sortOrder,
-    remark: '',
-  };
+  throw new Error('入职资料必须使用 HRM claimToken，禁止 fileId/公开 URL');
 }
 
 /**
- * @deprecated 使用 createAttachmentFromUpload
+ * @deprecated 使用 createAttachmentFromOnboardingClaim
  */
 export function createAttachment(
   file: File,
   sortOrder: number,
-  uploaded?: { id: number; url: string; path?: string; size?: number; type?: string },
+  uploaded?: {
+    id?: number;
+    claimToken?: string;
+    url?: string;
+    path?: string;
+    size?: number;
+    type?: string;
+    fileName?: string;
+    fileSize?: number;
+    fileExtension?: string;
+    expireTime?: number;
+  },
 ): AttachmentApi.AttachmentSaveReq {
-  if (!uploaded?.id || !uploaded?.url) {
-    throw new Error('必须先完成文件上传（upload-detail）再创建附件元数据');
+  if (!uploaded?.claimToken) {
+    throw new Error('必须先完成入职资料上传（claim）再创建附件元数据');
   }
-  return createAttachmentFromUpload(file, sortOrder, uploaded);
+  return createAttachmentFromOnboardingClaim(file, sortOrder, {
+    claimToken: uploaded.claimToken,
+    fileName: uploaded.fileName,
+    fileSize: uploaded.fileSize ?? uploaded.size,
+    fileExtension: uploaded.fileExtension,
+    expireTime: uploaded.expireTime,
+  });
 }

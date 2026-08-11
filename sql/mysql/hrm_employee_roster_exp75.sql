@@ -236,7 +236,41 @@ SET @sql := IF(@col_exists = 0,
   'SELECT ''skip common_attachment.file_id'' AS msg');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 10. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
+-- 10. 入职资料 claim 表（一次性 token，绑定租户/上传者/用途）
+CREATE TABLE IF NOT EXISTS `hrm_onboarding_file_claim` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
+  `claim_token` varchar(64) NOT NULL COMMENT '客户端 claim token',
+  `file_id` bigint NOT NULL COMMENT 'infra_file 编号',
+  `uploader_user_id` bigint NOT NULL COMMENT '上传者用户编号',
+  `purpose` varchar(32) NOT NULL DEFAULT 'hrm-onboarding' COMMENT '用途',
+  `expire_time` datetime NOT NULL COMMENT '过期时间',
+  `consumed_at` datetime NULL DEFAULT NULL COMMENT '消费时间',
+  `consumed_employee_id` bigint NULL DEFAULT NULL COMMENT '绑定员工编号',
+  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '' COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE KEY `uk_claim_token` (`claim_token`) USING BTREE,
+  KEY `idx_file_id` (`file_id`) USING BTREE,
+  KEY `idx_uploader` (`uploader_user_id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='入职资料文件 claim';
+
+-- 11. 按 path/url 回填历史 onboarding 附件 file_id（#3-new）
+-- 入职单历史行也可能缺 file_id：先回填源业务 201，再复制元数据
+UPDATE `common_attachment` a
+INNER JOIN `infra_file` f ON (
+    (a.file_path IS NOT NULL AND a.file_path <> '' AND f.path = a.file_path)
+    OR (a.file_url IS NOT NULL AND a.file_url <> '' AND f.url = a.file_url)
+  )
+SET a.file_id = f.id
+WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+  AND a.file_id IS NULL
+  AND a.deleted = b'0';
+
+-- 12. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
 -- 去重：包含已软删目标行，避免软删后全量重跑复活活动附件（#3）
 INSERT INTO `common_attachment` (
   `business_type`, `business_id`, `file_id`, `file_name`, `file_path`, `file_url`,
@@ -275,3 +309,14 @@ WHERE a.business_type = '201'
       AND t.tenant_id = a.tenant_id
       -- 不加 deleted=0：软删后重跑不得复活
   );
+
+-- 13. 转档后再回填一次 onboarding file_id（覆盖刚复制且源仍缺匹配的行）
+UPDATE `common_attachment` a
+INNER JOIN `infra_file` f ON (
+    (a.file_path IS NOT NULL AND a.file_path <> '' AND f.path = a.file_path)
+    OR (a.file_url IS NOT NULL AND a.file_url <> '' AND f.url = a.file_url)
+  )
+SET a.file_id = f.id
+WHERE a.business_type = 'hrm_employee_archive_onboarding'
+  AND a.file_id IS NULL
+  AND a.deleted = b'0';

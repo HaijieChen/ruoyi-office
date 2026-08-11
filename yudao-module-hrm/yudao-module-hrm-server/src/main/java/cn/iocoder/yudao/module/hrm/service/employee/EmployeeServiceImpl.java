@@ -12,8 +12,10 @@ import cn.iocoder.yudao.framework.dict.core.DictFrameworkUtils;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.*;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.*;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.*;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
-import cn.iocoder.yudao.module.infra.api.file.FileApi;
+import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
 import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
@@ -26,9 +28,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -49,6 +53,12 @@ import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.*;
 public class EmployeeServiceImpl implements EmployeeService {
 
     public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
+
+    /** 私有存储目录（与 FileController 公开下载拦截前缀一致） */
+    public static final String ONBOARDING_PRIVATE_DIR = "hrm-onboarding-private";
+
+    /** claim 有效期 */
+    public static final int CLAIM_TTL_MINUTES = 120;
 
     /** 入职资料专用边界（不作用于其他业务附件） */
     public static final int ONBOARDING_MAX_COUNT = 10;
@@ -87,7 +97,10 @@ public class EmployeeServiceImpl implements EmployeeService {
     private AttachmentService attachmentService;
 
     @Resource
-    private FileApi fileApi;
+    private FileAccessApi fileAccessApi;
+
+    @Resource
+    private OnboardingFileClaimMapper onboardingFileClaimMapper;
 
     @Resource
     private DeptApi deptApi;
@@ -101,7 +114,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEmployeeArchive(EmployeeSaveReqVO createReqVO) {
-        validateRoster(createReqVO);
+        applySocialSecurityRules(createReqVO, null);
+        validateRoster(createReqVO, null);
 
         // 自动生成员工工号（如果未提供）
         if (createReqVO.getEmployeeNo() == null || createReqVO.getEmployeeNo().trim().isEmpty()) {
@@ -131,23 +145,27 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEmployeeArchive(EmployeeSaveReqVO updateReqVO) {
-        validateRoster(updateReqVO);
-
         // 校验存在
         EmployeeDO oldEmployee = employeeArchiveMapper.selectById(updateReqVO.getId());
         if (oldEmployee == null) {
             throw exception(EMPLOYEE_ARCHIVE_NOT_EXISTS);
         }
 
+        // #7：先按 present 合并有效状态，再校验并规范化社保
+        applySocialSecurityRules(updateReqVO, oldEmployee);
+        validateRoster(updateReqVO, oldEmployee);
+
         // 主表：先拷贝全量，再对「未出现」的 11 个花名册字段回填旧值（省略=保留）
         EmployeeDO updateObj = BeanUtils.toBean(updateReqVO, EmployeeDO.class);
         restoreOmittedRosterFields(updateObj, updateReqVO, oldEmployee);
-        applyEducationSummary(updateObj, updateReqVO.getEducationList());
-        // 社保为否且请求中出现该字段时，清空参保年月
-        if (updateReqVO.isSocialSecurityEnabledPresent()
-                && Boolean.FALSE.equals(updateObj.getSocialSecurityEnabled())) {
-            updateObj.setSocialSecurityStartMonth(null);
+        // 仅回写本次 present 的社保字段；apply 在有效 enabled=false 时会强制 set month=null（present）
+        if (updateReqVO.isSocialSecurityEnabledPresent()) {
+            updateObj.setSocialSecurityEnabled(updateReqVO.getSocialSecurityEnabled());
         }
+        if (updateReqVO.isSocialSecurityStartMonthPresent()) {
+            updateObj.setSocialSecurityStartMonth(updateReqVO.getSocialSecurityStartMonth());
+        }
+        applyEducationSummary(updateObj, updateReqVO.getEducationList());
         employeeArchiveMapper.updateById(updateObj);
 
         // 集合契约：null/未提供 = 保留；非 null（含空数组）= 整表替换
@@ -344,24 +362,52 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     /**
-     * 花名册校验
+     * #7：先合并有效社保状态，再规范化并写回 VO（以便落库）。
+     * <ul>
+     *   <li>有效 enabled=false ⇒ month 强制 NULL（set 以标记 present 写库）</li>
+     *   <li>有效 enabled=true  ⇒ month 必填（由 validateRoster 校验；省略 month 时用 old）</li>
+     * </ul>
      */
-    void validateRoster(EmployeeSaveReqVO req) {
-        if (Boolean.TRUE.equals(req.getSocialSecurityEnabled())) {
-            if (StrUtil.isBlank(req.getSocialSecurityStartMonth())) {
-                throw exception(EMPLOYEE_ROSTER_SOCIAL_SECURITY_MONTH);
-            }
+    void applySocialSecurityRules(EmployeeSaveReqVO req, EmployeeDO old) {
+        Boolean enabled = effectiveSocialSecurityEnabled(req, old);
+        if (Boolean.FALSE.equals(enabled)) {
+            // 有效未参保：无论请求是否带 month，强制清空并写库
+            req.setSocialSecurityStartMonth(null);
         }
-        if (StrUtil.isNotBlank(req.getSocialSecurityStartMonth())) {
+    }
+
+    Boolean effectiveSocialSecurityEnabled(EmployeeSaveReqVO req, EmployeeDO old) {
+        if (req.isSocialSecurityEnabledPresent()) {
+            return req.getSocialSecurityEnabled();
+        }
+        return old != null ? old.getSocialSecurityEnabled() : null;
+    }
+
+    String effectiveSocialSecurityStartMonth(EmployeeSaveReqVO req, EmployeeDO old) {
+        if (req.isSocialSecurityStartMonthPresent()) {
+            return req.getSocialSecurityStartMonth();
+        }
+        return old != null ? old.getSocialSecurityStartMonth() : null;
+    }
+
+    /**
+     * 花名册校验（社保用合并后的有效状态）
+     */
+    void validateRoster(EmployeeSaveReqVO req, EmployeeDO old) {
+        Boolean enabled = effectiveSocialSecurityEnabled(req, old);
+        String month = effectiveSocialSecurityStartMonth(req, old);
+
+        if (Boolean.TRUE.equals(enabled) && StrUtil.isBlank(month)) {
+            throw exception(EMPLOYEE_ROSTER_SOCIAL_SECURITY_MONTH);
+        }
+        if (StrUtil.isNotBlank(month)) {
             try {
-                YEAR_MONTH.parse(req.getSocialSecurityStartMonth());
+                YEAR_MONTH.parse(month);
             } catch (DateTimeParseException ex) {
                 throw exception(EMPLOYEE_ROSTER_SOCIAL_SECURITY_MONTH_FORMAT);
             }
         }
-        if (Boolean.FALSE.equals(req.getSocialSecurityEnabled())) {
-            req.setSocialSecurityStartMonth(null);
-        }
+
         if (req.getProbationSalary() != null && req.getProbationSalary().compareTo(BigDecimal.ZERO) < 0) {
             throw exception(EMPLOYEE_ROSTER_SALARY_NEGATIVE);
         }
@@ -369,7 +415,6 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw exception(EMPLOYEE_ROSTER_SALARY_NEGATIVE);
         }
 
-        // 教育：第一/最高各至多一条（仅当集合非 null 时校验）
         if (CollUtil.isNotEmpty(req.getEducationList())) {
             long firstCount = req.getEducationList().stream()
                     .filter(e -> Boolean.TRUE.equals(e.getFirstEducation())).count();
@@ -380,12 +425,8 @@ public class EmployeeServiceImpl implements EmployeeService {
             }
         }
 
-        // 合同：null = 不校验（保留）；非 null 则校验（含空数组清空）
         List<EmployeeContractVO> contracts = req.getContractList();
-        if (contracts == null) {
-            return;
-        }
-        if (contracts.isEmpty()) {
+        if (contracts == null || contracts.isEmpty()) {
             return;
         }
         if (contracts.size() > 4) {
@@ -401,7 +442,6 @@ public class EmployeeServiceImpl implements EmployeeService {
             if (c.getSequenceNo() == null || c.getSequenceNo() != i + 1 || !seen.add(c.getSequenceNo())) {
                 throw exception(EMPLOYEE_ROSTER_CONTRACT_SEQUENCE);
             }
-            // F8：开始日期必填，避免落到 DB NOT NULL 500
             if (c.getStartDate() == null) {
                 throw exception(EMPLOYEE_ROSTER_CONTRACT_START_REQUIRED);
             }
@@ -517,7 +557,52 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     /**
-     * 入职资料：仅接受 fileId claim / 已有附件 id；元数据以 infra_file 权威记录为准。
+     * 上传入职资料：私有目录 + 一次性 claim（不返回公开 URL/path/configId）。
+     */
+    public OnboardingFileClaimRespVO uploadOnboardingFile(MultipartFile file) throws Exception {
+        if (file == null || file.isEmpty()) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        if (file.getSize() > ONBOARDING_MAX_SIZE_BYTES) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
+        String ext = resolveExt(original);
+        if (StrUtil.isBlank(ext) || !ONBOARDING_ALLOWED_EXTENSIONS.contains(ext)) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        if (userId == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        byte[] content = file.getBytes();
+        FileRespDTO stored = fileAccessApi.createFile(content, original, ONBOARDING_PRIVATE_DIR, file.getContentType());
+        if (stored == null || stored.getId() == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+
+        String token = UUID.randomUUID().toString().replace("-", "");
+        LocalDateTime expire = LocalDateTime.now().plusMinutes(CLAIM_TTL_MINUTES);
+        OnboardingFileClaimDO claim = OnboardingFileClaimDO.builder()
+                .claimToken(token)
+                .fileId(stored.getId())
+                .uploaderUserId(userId)
+                .purpose(OnboardingFileClaimDO.PURPOSE)
+                .expireTime(expire)
+                .build();
+        onboardingFileClaimMapper.insert(claim);
+
+        OnboardingFileClaimRespVO resp = new OnboardingFileClaimRespVO();
+        resp.setClaimToken(token);
+        resp.setFileName(stored.getName() != null ? stored.getName() : original);
+        resp.setFileSize(stored.getSize());
+        resp.setFileExtension(ext);
+        resp.setExpireTime(expire.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+        return resp;
+    }
+
+    /**
+     * 入职资料：已有附件 id 或 claimToken；元数据以权威 file 记录为准。
      */
     void saveOnboardingAttachments(Long employeeId, List<OnboardingAttachmentSaveReqVO> reqs) {
         if (reqs == null) {
@@ -526,9 +611,10 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (reqs.size() > ONBOARDING_MAX_COUNT) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_LIMIT);
         }
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
         List<AttachmentSaveReqVO> resolved = new ArrayList<>();
         Set<Long> seenAttachmentIds = new HashSet<>();
-        Set<Long> seenFileIds = new HashSet<>();
+        Set<String> seenClaims = new HashSet<>();
         for (OnboardingAttachmentSaveReqVO req : reqs) {
             if (req.getId() != null) {
                 if (!seenAttachmentIds.add(req.getId())) {
@@ -538,7 +624,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                 keep.setId(req.getId());
                 keep.setBusinessType(ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
                 keep.setBusinessId(employeeId);
-                // 占位必填字段，toOwnedAttachment 会用库中原值
                 keep.setFileName(".");
                 keep.setFilePath(".");
                 keep.setFileUrl(".");
@@ -548,13 +633,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                 resolved.add(keep);
                 continue;
             }
-            if (req.getFileId() == null) {
+            if (StrUtil.isBlank(req.getClaimToken()) || !seenClaims.add(req.getClaimToken())) {
                 throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
             }
-            if (!seenFileIds.add(req.getFileId())) {
-                throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
-            }
-            FileRespDTO file = fileApi.getFile(req.getFileId()).getCheckedData();
+            OnboardingFileClaimDO claim = consumeClaim(req.getClaimToken(), userId, employeeId);
+            FileRespDTO file = fileAccessApi.getFile(claim.getFileId());
             if (file == null) {
                 throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
             }
@@ -564,8 +647,9 @@ public class EmployeeServiceImpl implements EmployeeService {
             att.setBusinessId(employeeId);
             att.setFileId(file.getId());
             att.setFileName(file.getName());
+            // 不把可公开直链交给客户端；库内保留 path 供鉴权下载/回填
             att.setFilePath(file.getPath());
-            att.setFileUrl(file.getUrl());
+            att.setFileUrl(""); // 不落公开 URL
             att.setFileSize(file.getSize());
             att.setFileType(file.getType());
             att.setFileExtension(resolveExt(file.getName()));
@@ -576,12 +660,42 @@ public class EmployeeServiceImpl implements EmployeeService {
         attachmentService.saveAttachmentList(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, employeeId, resolved);
     }
 
+    /**
+     * 消费 claim：校验租户(行级)、上传者、用途、过期、未消费；成功后标记 consumed。
+     */
+    OnboardingFileClaimDO consumeClaim(String claimToken, Long userId, Long employeeId) {
+        OnboardingFileClaimDO claim = onboardingFileClaimMapper.selectByClaimToken(claimToken);
+        if (claim == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        if (!OnboardingFileClaimDO.PURPOSE.equals(claim.getPurpose())) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        if (claim.getConsumedAt() != null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID); // 重复消费
+        }
+        if (claim.getExpireTime() != null && claim.getExpireTime().isBefore(LocalDateTime.now())) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        if (userId == null || !userId.equals(claim.getUploaderUserId())) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID); // 同租户他人/未登录
+        }
+        claim.setConsumedAt(LocalDateTime.now());
+        claim.setConsumedEmployeeId(employeeId);
+        onboardingFileClaimMapper.updateById(claim);
+        return claim;
+    }
+
     void validateOnboardingFile(FileRespDTO file) {
         if (file.getSize() != null && file.getSize() > ONBOARDING_MAX_SIZE_BYTES) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
         String ext = resolveExt(file.getName());
         if (StrUtil.isBlank(ext) || !ONBOARDING_ALLOWED_EXTENSIONS.contains(ext)) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        // 必须落在私有目录
+        if (file.getPath() == null || !file.getPath().contains(ONBOARDING_PRIVATE_DIR)) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
     }
@@ -600,7 +714,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         return attachments.stream().map(a -> {
             OnboardingAttachmentRespVO vo = new OnboardingAttachmentRespVO();
             vo.setId(a.getId());
-            vo.setFileId(a.getFileId());
             vo.setFileName(a.getFileName());
             vo.setFileSize(a.getFileSize());
             vo.setFileExtension(a.getFileExtension());
@@ -608,6 +721,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             vo.setSortOrder(a.getSortOrder());
             vo.setRemark(a.getRemark());
             vo.setUploadTime(a.getUploadTime());
+            // 仅返回鉴权下载路径，不暴露 fileId/path/url
             vo.setDownloadPath("/hrm/employee-archive/onboarding-attachment/download?employeeId="
                     + employeeId + "&attachmentId=" + a.getId());
             return vo;
@@ -615,7 +729,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     /**
-     * 鉴权下载入职资料：需登录 + hrm:employee-archive:query，且附件归属当前员工。
+     * 鉴权下载：登录 + query 权限 + 归属校验；内容经 FileAccessApi 本地 Bean，不走匿名 RPC。
      */
     public void downloadOnboardingAttachment(Long employeeId, Long attachmentId, HttpServletResponse response)
             throws Exception {
@@ -628,17 +742,32 @@ public class EmployeeServiceImpl implements EmployeeService {
                 || !employeeId.equals(att.getBusinessId())) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
-        byte[] content;
+        byte[] content = null;
         String fileName = att.getFileName();
         if (att.getFileId() != null) {
-            content = fileApi.getFileContent(att.getFileId()).getCheckedData();
-            FileRespDTO meta = fileApi.getFile(att.getFileId()).getCheckedData();
+            content = fileAccessApi.getFileContent(att.getFileId());
+            FileRespDTO meta = fileAccessApi.getFile(att.getFileId());
             if (meta != null && StrUtil.isNotBlank(meta.getName())) {
                 fileName = meta.getName();
             }
         } else {
-            // 历史无 fileId：拒绝匿名公开 URL，要求补绑 fileId
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            // #3-new：历史无 fileId — 按 path/url 兼容鉴权读取
+            FileRespDTO meta = null;
+            if (StrUtil.isNotBlank(att.getFilePath())) {
+                meta = fileAccessApi.getFileByPath(att.getFilePath());
+            }
+            if (meta == null && StrUtil.isNotBlank(att.getFileUrl())) {
+                meta = fileAccessApi.getFileByUrl(att.getFileUrl());
+            }
+            if (meta != null && meta.getId() != null) {
+                content = fileAccessApi.getFileContent(meta.getId());
+                if (StrUtil.isNotBlank(meta.getName())) {
+                    fileName = meta.getName();
+                }
+            } else if (StrUtil.isNotBlank(att.getFilePath())) {
+                // 仍可读 path 内容（鉴权端点内），不依赖公开 get 路由
+                content = fileAccessApi.getFileContent(null, att.getFilePath());
+            }
         }
         if (content == null) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);

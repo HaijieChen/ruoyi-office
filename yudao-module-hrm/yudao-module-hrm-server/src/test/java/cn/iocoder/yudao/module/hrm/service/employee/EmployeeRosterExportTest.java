@@ -129,10 +129,10 @@ class EmployeeRosterExportTest {
         // 字典未初始化时回退编码；有字典时输出标签——此处保证不为空且非内部异常
         assertNotNull(row1.getCurrentContractType());
         assertEquals("已上传2份", row1.getOnboardingAttachmentStatus());
-        // 证件号/手机保持字符串形态
-        e1.setIdCard("430981198311201111");
-        e1.setMobile("15995408684");
-        e1.setBankAccount("6217231102004496773");
+        // 证件号/手机保持字符串形态（合成夹具，禁止拟真三元组）
+        e1.setIdCard("TEST_ID_CARD_000000000000");
+        e1.setMobile("10000000000");
+        e1.setBankAccount("TEST_BANK_ACCT_0000");
 
         EmployeeRosterExportVO row2 = list.get(1);
         assertNull(row2.getSocialSecurityEnabled());

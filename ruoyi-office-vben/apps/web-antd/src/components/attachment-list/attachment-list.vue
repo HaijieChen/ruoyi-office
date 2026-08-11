@@ -8,15 +8,13 @@ import { message } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 
-import { uploadFile, uploadFileDetail } from '#/api/infra/file';
+import { uploadFile } from '#/api/infra/file';
+import { uploadOnboardingFile } from '#/api/hrm/employee';
 import { useAccessStore } from '@vben/stores';
 import { useAppConfig } from '@vben/hooks';
 
-import {
-  createAttachmentFromUpload,
-  useAttachmentActions,
-  useAttachmentColumns,
-} from './data';
+import { createAttachmentFromOnboardingClaim } from './onboarding-claim';
+import { useAttachmentActions, useAttachmentColumns } from './data';
 
 interface Props {
   /** 附件列表 */
@@ -32,7 +30,7 @@ interface Props {
   /** 隐藏上传按钮（当需要在外部自定义按钮位置时使用） */
   hideUploadButton?: boolean;
   /**
-   * 使用 upload-detail 返回 fileId claim（入职资料等敏感业务）
+   * 入职资料：走 HRM 专用 upload + 一次性 claimToken（不返回公开 URL）
    */
   useFileClaim?: boolean;
   /**
@@ -62,27 +60,18 @@ const tableData = ref<AttachmentApi.AttachmentSaveReq[]>([]);
 const uploading = ref(false);
 
 /**
- * 实际上传：useFileClaim 时走 /upload-detail 拿权威 fileId。
+ * 实际上传：useFileClaim 时走 HRM onboarding-file/upload 拿一次性 claimToken。
  */
 async function handleAdd(file: File) {
   if (props.useFileClaim) {
-    const detail = await uploadFileDetail({
-      file,
-      directory: 'hrm-onboarding',
-    });
-    if (!detail?.id || !detail?.url || String(detail.url).startsWith('blob:')) {
-      throw new Error('文件上传失败：未获得权威 fileId');
+    const claim = await uploadOnboardingFile(file);
+    if (!claim?.claimToken) {
+      throw new Error('文件上传失败：未获得作用域 claimToken');
     }
-    const attachment = createAttachmentFromUpload(
+    const attachment = createAttachmentFromOnboardingClaim(
       file,
       tableData.value.length + 1,
-      {
-        id: detail.id,
-        url: detail.url,
-        path: detail.path,
-        size: detail.size,
-        type: detail.type,
-      },
+      claim,
     );
     tableData.value.push(attachment as any);
   } else {

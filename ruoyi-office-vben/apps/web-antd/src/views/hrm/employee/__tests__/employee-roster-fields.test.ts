@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createAttachmentFromUpload } from '../../../../components/attachment-list/data';
+import { createAttachmentFromOnboardingClaim } from '../../../../components/attachment-list/onboarding-claim';
 import {
   normalizeContractList,
   validateContractList,
@@ -57,18 +57,18 @@ describe('employee roster field rules', () => {
     ).toBe('合同结束日期不能早于开始日期');
   });
 
-  it('builds attachment metadata only from server upload-detail claim', () => {
+  it('builds attachment metadata only from HRM scoped claimToken (no public URL)', () => {
     const file = new File(['%PDF'], 'scan.pdf', { type: 'application/pdf' });
-    const att = createAttachmentFromUpload(file, 1, {
-      id: 1024,
-      url: 'https://cdn.example.com/scan.pdf',
-      path: '/hrm/scan.pdf',
-      size: 4,
+    const att = createAttachmentFromOnboardingClaim(file, 1, {
+      claimToken: 'claim-token-abc',
+      fileName: 'scan.pdf',
+      fileSize: 4,
+      fileExtension: 'pdf',
     });
-    expect((att as any).fileId).toBe(1024);
-    expect(att.fileUrl).toBe('https://cdn.example.com/scan.pdf');
-    expect(att.filePath).toBe('/hrm/scan.pdf');
-    expect(att.fileUrl.startsWith('blob:')).toBe(false);
+    expect((att as any).claimToken).toBe('claim-token-abc');
+    expect((att as any).fileId).toBeUndefined();
+    expect(att.fileUrl).toBe('');
+    expect(att.filePath).toBe('');
     expect(att.fileExtension).toBe('pdf');
   });
 });
