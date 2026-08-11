@@ -105,7 +105,7 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
 
         // 保存附件信息
         if (saveReqVO.getAttachments() != null) {
-            attachmentService.saveAttachmentList(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), entryBill.getId(), saveReqVO.getAttachments());
+            attachmentService.saveAttachmentListInternal(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), entryBill.getId(), saveReqVO.getAttachments());
         }
 
         // 返回
@@ -144,7 +144,7 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         
         // 保存附件信息
         if (saveReqVO.getAttachments() != null) {
-            attachmentService.saveAttachmentList(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), entryBill.getId(), saveReqVO.getAttachments());
+            attachmentService.saveAttachmentListInternal(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), entryBill.getId(), saveReqVO.getAttachments());
         }
         
         // 返回
@@ -226,7 +226,7 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         
         // 获取附件信息
         respVO.setAttachments(BeanUtils.toBean(
-            attachmentService.getAttachmentListByBusiness(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), id),
+            attachmentService.getAttachmentListByBusinessInternal(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), id),
             AttachmentRespVO.class
         ));
         
@@ -396,7 +396,7 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
                     copy.setBusinessId(employeeId);
                     return copy;
                 }).collect(Collectors.toList());
-                attachmentService.saveAttachmentList(
+                attachmentService.saveAttachmentListInternal(
                         EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE, employeeId, copies);
             }
 

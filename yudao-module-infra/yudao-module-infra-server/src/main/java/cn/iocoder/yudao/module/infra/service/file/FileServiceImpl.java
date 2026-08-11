@@ -195,8 +195,9 @@ public class FileServiceImpl implements FileService {
     @Override
     public FileDO getFile(Long id) {
         FileDO file = validateFileExists(id);
-        // 通用 get：私有文件对 infra:file:query 不可见
+        // 通用 get：私有文件 / 入职绑定 path 对 infra:file:query 不可见
         rejectPrivateStoragePath(file.getPath(), false);
+        rejectReservedAttachmentBoundPath(file.getPath());
         return file;
     }
 
@@ -205,6 +206,7 @@ public class FileServiceImpl implements FileService {
         // 校验存在
         FileDO file = validateFileExists(id);
         rejectPrivateStoragePath(file.getPath(), false);
+        rejectReservedAttachmentBoundPath(file.getPath());
 
         // 从文件存储器中删除
         FileClient client = fileConfigService.getFileClient(file.getConfigId());
@@ -245,11 +247,31 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public byte[] getFileContent(Long configId, String path) throws Exception {
-        // 匿名下载路由另有控制器拦截；此处再防 service 层误用
+        // 匿名/通用下载：拒私有目录 + 拒绑定入职资料/入职单的历史 path
         rejectPrivateStoragePath(path, false);
+        rejectReservedAttachmentBoundPath(path);
         FileClient client = fileConfigService.getFileClient(configId);
         Assert.notNull(client, "客户端({}) 不能为空", configId);
         return client.getContent(path);
+    }
+
+    /**
+     * 历史入职对象即使 path 无私有前缀，也不允许经通用/匿名 File 路由读取。
+     */
+    private void rejectReservedAttachmentBoundPath(String path) {
+        if (StrUtil.isBlank(path)) {
+            return;
+        }
+        try {
+            Long cnt = fileMapper.countReservedAttachmentByPath(path);
+            if (cnt != null && cnt > 0) {
+                throw new IllegalArgumentException("path 绑定入职资料/入职单附件，禁止通用下载: " + path);
+            }
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ignored) {
+            // common_attachment 表在纯 infra 单测中可能不存在；生产单体同库可查询
+        }
     }
 
     /**

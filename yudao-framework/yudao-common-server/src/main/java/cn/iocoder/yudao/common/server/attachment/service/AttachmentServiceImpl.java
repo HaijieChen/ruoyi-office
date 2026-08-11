@@ -9,12 +9,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import cn.hutool.core.util.StrUtil;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -26,8 +28,8 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
  * 注意：类型/大小/数量等业务边界由各业务方在调用前校验。
  * 本服务仅保证：非空附件 ID 必须已归属当前 businessType+businessId（防同租户跨业务 rebind）。
  * <p>
- * 保留业务类型 {@link #RESERVED_ONBOARDING_BUSINESS_TYPE} 禁止经通用 create/update/save-list 写入，
- * 仅允许 {@link #saveAttachmentListInternal}（HRM claim 链路）。
+ * 保留业务类型（规范化后匹配：trim + 忽略大小写 + 遗留 {@code 201}）禁止经通用
+ * create/update/delete/get/list/save-list 入口；仅 {@code *Internal} 与 HRM claim 链路可访问。
  *
  * @author 宇擎源码
  */
@@ -35,8 +37,11 @@ import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionU
 @Validated
 public class AttachmentServiceImpl implements AttachmentService {
 
-    /** 入职资料保留业务类型：禁止通用写入口 */
+    /** 入职档案资料规范业务类型 */
     public static final String RESERVED_ONBOARDING_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
+
+    /** 入职申请单遗留类型码（与 HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL 一致） */
+    public static final String RESERVED_ENTRY_BILL_BUSINESS_TYPE = "201";
 
     @Resource
     private AttachmentMapper attachmentMapper;
@@ -173,10 +178,32 @@ public class AttachmentServiceImpl implements AttachmentService {
         }
     }
 
+    /**
+     * 规范化业务类型：trim + 小写，便于别名比对。
+     */
+    public static String normalizeBusinessType(String businessType) {
+        if (businessType == null) {
+            return null;
+        }
+        return StrUtil.trim(businessType).toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 是否保留业务类型（入职档案资料 / 入职单 201 及其大小写、空白别名）。
+     */
+    public static boolean isReservedBusinessType(String businessType) {
+        String n = normalizeBusinessType(businessType);
+        if (n == null || n.isEmpty()) {
+            return false;
+        }
+        return RESERVED_ONBOARDING_BUSINESS_TYPE.equals(n)
+                || RESERVED_ENTRY_BILL_BUSINESS_TYPE.equals(n);
+    }
+
     private void rejectReservedBusinessType(String businessType) {
-        if (RESERVED_ONBOARDING_BUSINESS_TYPE.equals(businessType)) {
+        if (isReservedBusinessType(businessType)) {
             throw invalidParamException(
-                    "业务类型 {} 仅允许经 HRM 入职资料 claim 内部链路写入，禁止通用附件接口",
+                    "业务类型 {} 仅允许经 HRM 内部链路访问，禁止通用附件接口",
                     businessType);
         }
     }

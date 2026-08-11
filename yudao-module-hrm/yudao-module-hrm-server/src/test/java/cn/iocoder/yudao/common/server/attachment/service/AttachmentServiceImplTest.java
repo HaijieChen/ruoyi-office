@@ -144,6 +144,25 @@ class AttachmentServiceImplTest {
     }
 
     @Test
+    void genericGetRejectsCaseAliasOnboardingBusinessType() {
+        AttachmentDO onboarding = new AttachmentDO();
+        onboarding.setId(9L);
+        onboarding.setBusinessType("HRM_EMPLOYEE_ARCHIVE_ONBOARDING");
+        when(attachmentMapper.selectById(9L)).thenReturn(onboarding);
+        assertThrows(ServiceException.class, () -> attachmentService.getAttachment(9L));
+    }
+
+    @Test
+    void genericListRejectsEntryBillType201() {
+        assertThrows(ServiceException.class, () ->
+                attachmentService.getAttachmentListByBusiness("201", 1L));
+        assertThrows(ServiceException.class, () ->
+                attachmentService.getAttachmentListByBusiness(" 201 ", 1L));
+        assertThrows(ServiceException.class, () ->
+                attachmentService.saveAttachmentList("HRM_EMPLOYEE_ARCHIVE_ONBOARDING", 1L, List.of()));
+    }
+
+    @Test
     void genericDeleteRejectsOnboardingBusinessType() {
         AttachmentDO onboarding = new AttachmentDO();
         onboarding.setId(9L);

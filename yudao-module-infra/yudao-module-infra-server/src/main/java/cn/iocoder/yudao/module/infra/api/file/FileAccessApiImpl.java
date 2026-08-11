@@ -45,9 +45,10 @@ public class FileAccessApiImpl implements FileAccessApi {
         if (StrUtil.isBlank(path)) {
             return null;
         }
-        List<FileDO> list = fileMapper.selectList(FileDO::getPath, path);
+        // BINARY 字节精确；0 或多条 → 歧义
+        List<FileDO> list = fileMapper.selectListByPathBinary(path);
         if (list == null || list.size() != 1) {
-            return null; // 0 或多条 → 歧义，不猜测
+            return null;
         }
         return BeanUtils.toBean(list.get(0), FileRespDTO.class);
     }
@@ -57,7 +58,7 @@ public class FileAccessApiImpl implements FileAccessApi {
         if (StrUtil.isBlank(url)) {
             return null;
         }
-        List<FileDO> list = fileMapper.selectList(FileDO::getUrl, url);
+        List<FileDO> list = fileMapper.selectListByUrlBinary(url);
         if (list == null || list.size() != 1) {
             return null;
         }

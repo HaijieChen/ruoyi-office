@@ -258,103 +258,101 @@ CREATE TABLE IF NOT EXISTS `hrm_onboarding_file_claim` (
   KEY `idx_uploader` (`uploader_user_id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='入职资料文件 claim';
 
--- 11. 历史 file_id 唯一身份（#3 本轮）
--- 权威候选：唯一精确 URL 优先，否则唯一 path；歧义/缺失/软删 → NULL
+-- 11. 历史 file_id 唯一身份（字节精确 BINARY）
+-- 权威候选：唯一 BINARY URL 优先，否则唯一 BINARY path；歧义/缺失/软删 → NULL
 -- 可重跑：先清空「非权威」非空绑定，再回填
 
 -- 11a. 清空 missing / deleted 目标
 UPDATE `common_attachment` a
 LEFT JOIN `infra_file` f ON f.id = a.file_id AND f.deleted = b'0'
 SET a.file_id = NULL
-WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
   AND a.deleted = b'0'
   AND a.file_id IS NOT NULL
   AND f.id IS NULL;
 
--- 11b. 清空所有「不是权威候选」的非空 file_id
--- 权威 = 唯一 URL 命中 或（无唯一 URL 时）唯一 path 命中
+-- 11b. 清空所有「不是权威候选」的非空 file_id（BINARY 精确）
 UPDATE `common_attachment` a
 SET a.file_id = NULL
-WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
   AND a.deleted = b'0'
   AND a.file_id IS NOT NULL
   AND NOT (
-    -- 唯一 URL 权威
     EXISTS (
       SELECT 1 FROM (
-        SELECT f.url AS u, MIN(f.id) AS fid
+        SELECT BINARY f.url AS u, MIN(f.id) AS fid
         FROM `infra_file` f
         WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-        GROUP BY f.url
+        GROUP BY BINARY f.url
         HAVING COUNT(*) = 1
-      ) cand WHERE cand.u = a.file_url AND cand.fid = a.file_id
+      ) cand WHERE cand.u = BINARY a.file_url AND cand.fid = a.file_id
     )
     OR (
-      -- 无唯一 URL 时，唯一 path 权威
       NOT EXISTS (
         SELECT 1 FROM (
-          SELECT f.url AS u
+          SELECT BINARY f.url AS u
           FROM `infra_file` f
           WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-          GROUP BY f.url
+          GROUP BY BINARY f.url
           HAVING COUNT(*) = 1
-        ) cand WHERE cand.u = a.file_url
+        ) cand WHERE cand.u = BINARY a.file_url
       )
       AND EXISTS (
         SELECT 1 FROM (
-          SELECT f.path AS p, MIN(f.id) AS fid
+          SELECT BINARY f.path AS p, MIN(f.id) AS fid
           FROM `infra_file` f
           WHERE f.deleted = b'0' AND f.path IS NOT NULL AND f.path <> ''
-          GROUP BY f.path
+          GROUP BY BINARY f.path
           HAVING COUNT(*) = 1
-        ) cand WHERE cand.p = a.file_path AND cand.fid = a.file_id
+        ) cand WHERE cand.p = BINARY a.file_path AND cand.fid = a.file_id
       )
     )
   );
 
--- 11c. 唯一精确 URL 回填（覆盖所有 NULL，含刚清空）
+-- 11c. 唯一 BINARY URL 回填
 UPDATE `common_attachment` a
 INNER JOIN (
-  SELECT f.url AS u, MIN(f.id) AS fid
+  SELECT BINARY f.url AS u, MIN(f.id) AS fid
   FROM `infra_file` f
   WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-  GROUP BY f.url
+  GROUP BY BINARY f.url
   HAVING COUNT(*) = 1
-) cand ON cand.u = a.file_url
+) cand ON cand.u = BINARY a.file_url
 SET a.file_id = cand.fid
-WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
   AND a.deleted = b'0'
   AND a.file_id IS NULL
   AND a.file_url IS NOT NULL
   AND a.file_url <> '';
 
--- 11d. 唯一 path 回填（仅无 file_id 且无唯一 URL 时）
+-- 11d. 唯一 BINARY path 回填（仅无 file_id 且无唯一 URL）
 UPDATE `common_attachment` a
 INNER JOIN (
-  SELECT f.path AS p, MIN(f.id) AS fid
+  SELECT BINARY f.path AS p, MIN(f.id) AS fid
   FROM `infra_file` f
   WHERE f.deleted = b'0' AND f.path IS NOT NULL AND f.path <> ''
-  GROUP BY f.path
+  GROUP BY BINARY f.path
   HAVING COUNT(*) = 1
-) cand ON cand.p = a.file_path
+) cand ON cand.p = BINARY a.file_path
 SET a.file_id = cand.fid
-WHERE a.business_type IN ('hrm_employee_archive_onboarding', '201')
+WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
   AND a.deleted = b'0'
   AND a.file_id IS NULL
   AND a.file_path IS NOT NULL
   AND a.file_path <> ''
   AND NOT EXISTS (
     SELECT 1 FROM (
-      SELECT f.url AS u
+      SELECT BINARY f.url AS u
       FROM `infra_file` f
       WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-      GROUP BY f.url
+      GROUP BY BINARY f.url
       HAVING COUNT(*) = 1
-    ) uc WHERE uc.u = a.file_url
+    ) uc WHERE uc.u = BINARY a.file_url
   );
 
 -- 12. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
 -- 去重：包含已软删目标行，避免软删后全量重跑复活活动附件（#3）
+-- 不复制公开 file_url（转档后清空，防匿名直链）
 INSERT INTO `common_attachment` (
   `business_type`, `business_id`, `file_id`, `file_name`, `file_path`, `file_url`,
   `file_size`, `file_type`, `file_extension`, `upload_time`, `sort_order`,
@@ -366,7 +364,7 @@ SELECT
   a.file_id,
   a.file_name,
   a.file_path,
-  a.file_url,
+  '',
   a.file_size,
   a.file_type,
   a.file_extension,
@@ -388,12 +386,12 @@ WHERE a.business_type = '201'
     SELECT 1 FROM `common_attachment` t
     WHERE t.business_type = 'hrm_employee_archive_onboarding'
       AND t.business_id = e.employee_id
-      AND t.file_path = a.file_path
+      AND BINARY t.file_path = BINARY a.file_path
       AND t.tenant_id = a.tenant_id
       -- 不加 deleted=0：软删后重跑不得复活
   );
 
--- 13. 转档后再按权威规则纠错+回填 onboarding（同 11a-11d，仅 onboarding 类型）
+-- 13. 转档后再按 BINARY 权威规则纠错+回填 onboarding
 UPDATE `common_attachment` a
 LEFT JOIN `infra_file` f ON f.id = a.file_id AND f.deleted = b'0'
 SET a.file_id = NULL
@@ -410,38 +408,38 @@ WHERE a.business_type = 'hrm_employee_archive_onboarding'
   AND NOT (
     EXISTS (
       SELECT 1 FROM (
-        SELECT f.url AS u, MIN(f.id) AS fid
+        SELECT BINARY f.url AS u, MIN(f.id) AS fid
         FROM `infra_file` f
         WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-        GROUP BY f.url HAVING COUNT(*) = 1
-      ) cand WHERE cand.u = a.file_url AND cand.fid = a.file_id
+        GROUP BY BINARY f.url HAVING COUNT(*) = 1
+      ) cand WHERE cand.u = BINARY a.file_url AND cand.fid = a.file_id
     )
     OR (
       NOT EXISTS (
         SELECT 1 FROM (
-          SELECT f.url AS u FROM `infra_file` f
+          SELECT BINARY f.url AS u FROM `infra_file` f
           WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-          GROUP BY f.url HAVING COUNT(*) = 1
-        ) cand WHERE cand.u = a.file_url
+          GROUP BY BINARY f.url HAVING COUNT(*) = 1
+        ) cand WHERE cand.u = BINARY a.file_url
       )
       AND EXISTS (
         SELECT 1 FROM (
-          SELECT f.path AS p, MIN(f.id) AS fid
+          SELECT BINARY f.path AS p, MIN(f.id) AS fid
           FROM `infra_file` f
           WHERE f.deleted = b'0' AND f.path IS NOT NULL AND f.path <> ''
-          GROUP BY f.path HAVING COUNT(*) = 1
-        ) cand WHERE cand.p = a.file_path AND cand.fid = a.file_id
+          GROUP BY BINARY f.path HAVING COUNT(*) = 1
+        ) cand WHERE cand.p = BINARY a.file_path AND cand.fid = a.file_id
       )
     )
   );
 
 UPDATE `common_attachment` a
 INNER JOIN (
-  SELECT f.url AS u, MIN(f.id) AS fid
+  SELECT BINARY f.url AS u, MIN(f.id) AS fid
   FROM `infra_file` f
   WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-  GROUP BY f.url HAVING COUNT(*) = 1
-) cand ON cand.u = a.file_url
+  GROUP BY BINARY f.url HAVING COUNT(*) = 1
+) cand ON cand.u = BINARY a.file_url
 SET a.file_id = cand.fid
 WHERE a.business_type = 'hrm_employee_archive_onboarding'
   AND a.deleted = b'0'
@@ -450,11 +448,11 @@ WHERE a.business_type = 'hrm_employee_archive_onboarding'
 
 UPDATE `common_attachment` a
 INNER JOIN (
-  SELECT f.path AS p, MIN(f.id) AS fid
+  SELECT BINARY f.path AS p, MIN(f.id) AS fid
   FROM `infra_file` f
   WHERE f.deleted = b'0' AND f.path IS NOT NULL AND f.path <> ''
-  GROUP BY f.path HAVING COUNT(*) = 1
-) cand ON cand.p = a.file_path
+  GROUP BY BINARY f.path HAVING COUNT(*) = 1
+) cand ON cand.p = BINARY a.file_path
 SET a.file_id = cand.fid
 WHERE a.business_type = 'hrm_employee_archive_onboarding'
   AND a.deleted = b'0'
@@ -462,16 +460,23 @@ WHERE a.business_type = 'hrm_employee_archive_onboarding'
   AND a.file_path IS NOT NULL AND a.file_path <> ''
   AND NOT EXISTS (
     SELECT 1 FROM (
-      SELECT f.url AS u FROM `infra_file` f
+      SELECT BINARY f.url AS u FROM `infra_file` f
       WHERE f.deleted = b'0' AND f.url IS NOT NULL AND f.url <> ''
-      GROUP BY f.url HAVING COUNT(*) = 1
-    ) uc WHERE uc.u = a.file_url
+      GROUP BY BINARY f.url HAVING COUNT(*) = 1
+    ) uc WHERE uc.u = BINARY a.file_url
   );
 
+-- 15. 清空入职资料/入职单公开 URL（防匿名 File 路由拼装直链）
+UPDATE `common_attachment`
+SET `file_url` = ''
+WHERE LOWER(TRIM(`business_type`)) IN ('hrm_employee_archive_onboarding', '201')
+  AND `deleted` = b'0'
+  AND `file_url` IS NOT NULL
+  AND `file_url` <> '';
+
 -- 14. 修复清单见 hrm_employee_roster_exp75_fileid_repair_check.sql
--- SELECT a.id, a.business_type, a.business_id, a.file_path, a.file_url, a.file_id,
---   (SELECT COUNT(*) FROM infra_file f WHERE f.deleted=0 AND f.path=a.file_path) AS path_cnt,
---   (SELECT COUNT(*) FROM infra_file f WHERE f.deleted=0 AND f.url=a.file_url) AS url_cnt
--- FROM common_attachment a
--- WHERE a.business_type IN ('hrm_employee_archive_onboarding','201')
---   AND a.deleted=0 AND a.file_id IS NULL;
+-- 迁移前快照/回滚要点：
+--   1) 执行前：mysqldump common_attachment infra_file（或至少 file_id/file_path/file_url 列）
+--   2) 回滚：从快照恢复 common_attachment.file_id / file_url；勿盲目 DROP 新列
+--   3) 二次执行本脚本应幂等（软删不复活、权威 BINARY 绑定稳定）
+
