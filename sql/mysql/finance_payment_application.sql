@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS `finance_payment_application` (
     `process_title`                 varchar(255) DEFAULT NULL COMMENT '流程标题',
     `applicant_user_id`             bigint NOT NULL COMMENT '申请人',
     `applicant_dept_id`             bigint DEFAULT NULL COMMENT '申请人部门',
+    `entity_company_dept_id`        bigint DEFAULT NULL COMMENT '主体公司组织部门编号',
+    `entity_company_name`           varchar(100) DEFAULT NULL COMMENT '主体公司名称快照',
     `apply_date`                    date DEFAULT NULL COMMENT '申请日',
     `payment_timing`                varchar(32)  NOT NULL COMMENT 'IMMEDIATE/MONTH_END/ON_NOTICE',
     `payment_reason`                varchar(32)  NOT NULL
@@ -51,6 +53,7 @@ CREATE TABLE IF NOT EXISTS `finance_payment_application` (
     KEY `idx_pay_status` (`status`),
     KEY `idx_pay_payee` (`payee_company_id`),
     KEY `idx_pay_applicant` (`applicant_user_id`),
+    KEY `idx_pay_entity_company` (`entity_company_dept_id`),
     KEY `idx_pay_process` (`process_instance_id`),
     KEY `idx_pay_purchase_pi` (`purchase_process_instance_id`),
     KEY `idx_pay_lease_contract` (`lease_contract_application_id`),

@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplica
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinancePaymentApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.finance.service.payment.FinancePaymentApplicationServiceImpl;
 import cn.iocoder.yudao.module.finance.service.payment.FinancePaymentPredocService;
@@ -61,9 +62,11 @@ class FinancePaymentTerminalMainPathEvidenceTest {
         ObjectProvider<cn.iocoder.yudao.module.system.api.dept.DeptApi> deptProvider = mock(ObjectProvider.class);
         when(deptProvider.getIfAvailable()).thenReturn(null);
 
+        FinanceEntityCompanyResolver entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
-                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi, deptProvider);
+                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
+                deptProvider, entityCompanyResolver);
         delegate = new FinancePaymentApprovalOutcomeDelegate();
         ReflectionTestUtils.setField(delegate, "paymentApplicationService", service);
 

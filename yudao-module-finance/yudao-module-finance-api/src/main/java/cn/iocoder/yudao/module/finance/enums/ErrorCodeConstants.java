@@ -192,5 +192,8 @@ public interface ErrorCodeConstants {
             "申请人档案缺少部门，无法发起付款");
     ErrorCode PAYMENT_APPLICATION_EVIDENCE_URL_INVALID = new ErrorCode(1_040_006_019,
             "付款依据或支付凭证须为可识别的文件 URL");
+    /** 交易币种仅允许 CNY/USD/HKD */
+    ErrorCode PAYMENT_APPLICATION_CURRENCY_INVALID = new ErrorCode(1_040_006_020,
+            "币种仅支持 CNY/USD/HKD");
 
 }

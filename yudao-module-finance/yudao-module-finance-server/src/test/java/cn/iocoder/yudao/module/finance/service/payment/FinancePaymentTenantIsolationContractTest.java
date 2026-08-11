@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicati
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinancePaymentApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
@@ -83,9 +84,13 @@ class FinancePaymentTenantIsolationContractTest {
         when(pi.getCheckedData()).thenReturn("proc-t");
         when(processInstanceApi.createProcessInstance(anyLong(), any())).thenReturn(pi);
 
+        FinanceEntityCompanyResolver entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
+        when(entityCompanyResolver.requireByDeptId(anyLong()))
+                .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(20L, "主体甲", "CNY"));
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
-                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi, deptProvider);
+                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
+                deptProvider, entityCompanyResolver);
     }
 
     @AfterEach
@@ -131,7 +136,9 @@ class FinancePaymentTenantIsolationContractTest {
         req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
         req.setPaymentReason(FinancePaymentReasonEnum.BUSINESS.getCode());
         req.setPayeeCompanyId(9L);
+        req.setEntityCompanyDeptId(20L);
         req.setApplyAmount(new BigDecimal("100.00"));
+        req.setCurrency("CNY");
         req.setBusinessSettlementTerm("月结");
         req.setPayMethod("wire");
         req.setCostProject("office_purchase");

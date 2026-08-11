@@ -20,9 +20,16 @@ import {
   listSelectablePurchaseInstances,
   resubmitPaymentApplication,
 } from '#/api/finance/payment-application';
+import { getSimpleCompanyList } from '#/api/system/dept';
 import { FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'FinancePaymentApplicationFormBody' });
+
+const CURRENCY_OPTIONS = [
+  { label: '人民币 CNY', value: 'CNY' },
+  { label: '美元 USD', value: 'USD' },
+  { label: '港币 HKD', value: 'HKD' },
+];
 
 const emit = defineEmits<{
   predictChange: [vars: Record<string, unknown>];
@@ -36,6 +43,7 @@ interface FormData {
   purchaseProcessInstanceId?: string;
   leaseContractApplicationId?: number;
   relatedContractApplicationId?: number;
+  entityCompanyDeptId?: number;
   payeeCompanyId?: number;
   payeeBankName?: string;
   payeeBankAccount?: string;
@@ -57,11 +65,16 @@ const mode = ref<'create' | 'resubmit'>('create');
 const supplierOptions = ref<
   { bankAccount?: string; bankName?: string; label: string; value: number }[]
 >([]);
+const companyOptions = ref<
+  { functionalCurrency?: string; label: string; value: number }[]
+>([]);
 const purchaseOptions = ref<{ label: string; value: string }[]>([]);
 const leaseOptions = ref<{ label: string; value: number }[]>([]);
 const relatedContractOptions = ref<{ label: string; value: number }[]>([]);
 const cumulativePaid = ref(0);
 const submitting = ref(false);
+/** 用户是否手动改过币种（切换主体时不再覆盖） */
+const currencyTouched = ref(false);
 
 const isPurchase = computed(() => formData.value.paymentReason === 'PURCHASE');
 const isLease = computed(() => formData.value.paymentReason === 'LEASE');
@@ -74,8 +87,10 @@ const cumulativeAfter = computed(() => {
 const rules: Record<string, Rule[]> = {
   paymentTiming: [{ required: true, message: '请选择支付时效' }],
   paymentReason: [{ required: true, message: '请选择付款事由' }],
+  entityCompanyDeptId: [{ required: true, message: '请选择主体公司' }],
   payeeCompanyId: [{ required: true, message: '请选择收款方' }],
   applyAmount: [{ required: true, message: '请输入金额' }],
+  currency: [{ required: true, message: '请选择币种' }],
   businessSettlementTerm: [{ required: true, message: '请填写账期' }],
   payMethod: [{ required: true, message: '请选择支付方式' }],
   costProject: [{ required: true, message: '请选择费用项目' }],
@@ -99,6 +114,37 @@ async function loadSuppliers() {
     bankName: c.bankName,
     bankAccount: c.bankAccount,
   }));
+}
+
+async function loadCompanies() {
+  const list = (await getSimpleCompanyList()) || [];
+  companyOptions.value = list.map((c) => ({
+    label: c.name,
+    value: c.id as number,
+    functionalCurrency: c.functionalCurrency || 'CNY',
+  }));
+}
+
+function onEntityCompanyChange(value: SelectValue) {
+  let id = Number.NaN;
+  if (typeof value === 'number') {
+    id = value;
+  } else if (value !== null && value !== undefined && value !== '') {
+    id = Number(value);
+  }
+  if (!Number.isFinite(id)) {
+    return;
+  }
+  const opt = companyOptions.value.find((o) => o.value === id);
+  // 切换主体：若用户未手改币种，默认带出公司本位币（可再改）
+  if (opt && !currencyTouched.value) {
+    const fc = (opt.functionalCurrency || 'CNY').toUpperCase();
+    formData.value.currency = ['CNY', 'USD', 'HKD'].includes(fc) ? fc : 'CNY';
+  }
+}
+
+function onCurrencyChange() {
+  currencyTouched.value = true;
 }
 
 async function loadPurchase() {
@@ -226,8 +272,9 @@ function parseEvidenceUrls(raw?: string): string[] {
 
 /** 初始化（壳内 mount 或 Modal open） */
 async function reset(opts?: { id?: number; mode?: string }) {
-  await loadSuppliers();
+  await Promise.all([loadSuppliers(), loadCompanies()]);
   mode.value = opts?.mode === 'resubmit' ? 'resubmit' : 'create';
+  currencyTouched.value = false;
   if (opts?.id) {
     const detail = await getPaymentApplication(opts.id);
     formData.value = {
@@ -237,6 +284,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
       purchaseProcessInstanceId: detail.purchaseProcessInstanceId,
       leaseContractApplicationId: detail.leaseContractApplicationId,
       relatedContractApplicationId: detail.relatedContractApplicationId,
+      entityCompanyDeptId: detail.entityCompanyDeptId,
       payeeCompanyId: detail.payeeCompanyId,
       payeeBankName: detail.payeeBankName,
       payeeBankAccount: detail.payeeBankAccount,
@@ -248,6 +296,24 @@ async function reset(opts?: { id?: number; mode?: string }) {
       evidenceFileUrls: parseEvidenceUrls(detail.evidenceFileUrls),
       specialNote: detail.specialNote,
     };
+    // 历史驳回重提：主体为空时须补选；币种若已有则视为已确认
+    if (detail.entityCompanyDeptId) {
+      currencyTouched.value = true;
+    }
+    // 历史主体不在启用列表时补一条选项
+    if (
+      detail.entityCompanyDeptId != null &&
+      !companyOptions.value.some((o) => o.value === detail.entityCompanyDeptId)
+    ) {
+      companyOptions.value = [
+        {
+          label: detail.entityCompanyName || `公司 #${detail.entityCompanyDeptId}`,
+          value: detail.entityCompanyDeptId,
+          functionalCurrency: detail.currency || 'CNY',
+        },
+        ...companyOptions.value,
+      ];
+    }
     await refreshCumulative(detail.payeeCompanyId);
     if (detail.paymentReason === 'PURCHASE') await loadPurchase();
     if (detail.paymentReason === 'LEASE') await loadLease();
@@ -282,6 +348,15 @@ async function submit(ctx?: SubmitContext): Promise<void> {
     const urls = (formData.value.evidenceFileUrls || [])
       .map((s) => String(s).trim())
       .filter(Boolean);
+    if (!formData.value.entityCompanyDeptId) {
+      message.error('请选择主体公司');
+      throw new Error('validation');
+    }
+    const currency = (formData.value.currency || '').toUpperCase();
+    if (!['CNY', 'USD', 'HKD'].includes(currency)) {
+      message.error('币种仅支持 CNY/USD/HKD');
+      throw new Error('validation');
+    }
     const payload: FinancePaymentApplicationApi.CreateAndStartRequest = {
       paymentTiming: formData.value.paymentTiming!,
       paymentReason: formData.value.paymentReason!,
@@ -294,11 +369,12 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       relatedContractApplicationId: isBusiness.value
         ? formData.value.relatedContractApplicationId
         : undefined,
+      entityCompanyDeptId: formData.value.entityCompanyDeptId,
       payeeCompanyId: formData.value.payeeCompanyId!,
       payeeBankName: formData.value.payeeBankName,
       payeeBankAccount: formData.value.payeeBankAccount,
       applyAmount: formData.value.applyAmount!,
-      currency: formData.value.currency || 'CNY',
+      currency,
       businessSettlementTerm: formData.value.businessSettlementTerm!,
       payMethod: formData.value.payMethod!,
       costProject: formData.value.costProject!,
@@ -330,7 +406,7 @@ defineExpose({
 <template>
   <div>
     <div class="mb-2 text-sm text-gray-500">
-      支付时效仅一处；收款账户带出后可改本次，不回写客商档案。累计 = 已支付
+      主体公司可选任意启用公司；币种默认公司本位币，提交前可改。累计 = 已支付
       {{ cumulativePaid }} + 本次 → {{ cumulativeAfter }}
     </div>
     <Form
@@ -340,6 +416,16 @@ defineExpose({
       :label-col="{ span: 6 }"
       :wrapper-col="{ span: 16 }"
     >
+      <Form.Item label="主体公司" name="entityCompanyDeptId" required>
+        <Select
+          v-model:value="formData.entityCompanyDeptId"
+          :options="companyOptions"
+          show-search
+          option-filter-prop="label"
+          placeholder="请选择业务主体公司"
+          @change="onEntityCompanyChange"
+        />
+      </Form.Item>
       <Form.Item label="支付时效" name="paymentTiming" required>
         <Select
           v-model:value="formData.paymentTiming"
@@ -398,6 +484,14 @@ defineExpose({
           v-model:value="formData.applyAmount"
           :min="0.01"
           class="w-full"
+        />
+      </Form.Item>
+      <Form.Item label="币种" name="currency" required>
+        <Select
+          v-model:value="formData.currency"
+          :options="CURRENCY_OPTIONS"
+          placeholder="CNY/USD/HKD"
+          @change="onCurrencyChange"
         />
       </Form.Item>
       <Form.Item label="账期" name="businessSettlementTerm" required>

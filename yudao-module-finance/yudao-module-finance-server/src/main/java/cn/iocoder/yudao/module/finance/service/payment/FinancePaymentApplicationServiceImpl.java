@@ -21,6 +21,8 @@ import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
+import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
@@ -60,6 +62,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private static final String DICT_COST_PROJECT = "finance_cost_project";
     private static final String DICT_PAY_METHOD = "finance_pay_method";
     private static final String DICT_ACCOUNTING_SUBJECT = "finance_accounting_subject";
+    /** EXP-73：交易币种白名单 */
+    public static final Set<String> SUPPORTED_CURRENCIES = Set.of("CNY", "USD", "HKD");
 
     /**
      * PAY-R18：出纳节点 active 时禁止申请人撤回（TOCTOU 防线，对标合同 seal 禁止集）。
@@ -79,6 +83,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     /** PAY-R10：字典校验必需依赖，禁止缺失时 fail-open */
     private final DictDataApi dictDataApi;
     private final ObjectProvider<DeptApi> deptApiProvider;
+    private final FinanceEntityCompanyResolver entityCompanyResolver;
 
     public FinancePaymentApplicationServiceImpl(FinancePaymentApplicationMapper applicationMapper,
                                                 FinancePaymentApplicationNoRedisDAO applicationNoRedisDAO,
@@ -90,7 +95,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                                                 ObjectProvider<HistoryService> historyServiceProvider,
                                                 AdminUserApi adminUserApi,
                                                 DictDataApi dictDataApi,
-                                                ObjectProvider<DeptApi> deptApiProvider) {
+                                                ObjectProvider<DeptApi> deptApiProvider,
+                                                FinanceEntityCompanyResolver entityCompanyResolver) {
         this.applicationMapper = applicationMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
@@ -102,6 +108,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         this.adminUserApi = adminUserApi;
         this.dictDataApi = dictDataApi;
         this.deptApiProvider = deptApiProvider;
+        this.entityCompanyResolver = entityCompanyResolver;
     }
 
     @Override
@@ -162,6 +169,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .set("apply_amount", prepared.getApplyAmount())
                 .set("amount_in_words", prepared.getAmountInWords())
                 .set("currency", prepared.getCurrency())
+                .set("entity_company_dept_id", prepared.getEntityCompanyDeptId())
+                .set("entity_company_name", prepared.getEntityCompanyName())
                 .set("business_settlement_term", prepared.getBusinessSettlementTerm())
                 .set("contract_settlement_method", prepared.getContractSettlementMethod())
                 .set("pay_method", prepared.getPayMethod())
@@ -577,7 +586,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             }
         }
 
-        String currency = StrUtil.blankToDefault(trimToNull(reqVO.getCurrency()), "CNY");
+        // EXP-73：主体公司必填；名称快照仅服务端生成
+        FinanceEntityCompanyResolver.ResolvedCompany entityCompany =
+                entityCompanyResolver.requireByDeptId(reqVO.getEntityCompanyDeptId());
+        String currency = normalizeCurrency(reqVO.getCurrency());
         String evidenceJson = toEvidenceJson(reqVO.getEvidenceFileUrls());
         Long deptId = resolveApplicantDeptId(applicantUserId);
         String deptName = resolveDeptName(deptId);
@@ -598,6 +610,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .applyAmount(applyAmount)
                 .amountInWords(amountInWords)
                 .currency(currency)
+                .entityCompanyDeptId(entityCompany.deptId())
+                .entityCompanyName(entityCompany.name())
                 .businessSettlementTerm(reqVO.getBusinessSettlementTerm().trim())
                 .contractSettlementMethod(settlement)
                 .payMethod(payMethod)
@@ -620,6 +634,14 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         variables.put("paymentReason", application.getPaymentReason());
         variables.put("applicantUserId", application.getApplicantUserId());
         variables.put("paymentTiming", application.getPaymentTiming());
+        variables.put("currency", application.getCurrency());
+        // EXP-73 BPM-1：待办公司列展示业务主体，而非仅任职公司
+        if (application.getEntityCompanyDeptId() != null) {
+            variables.put(BpmProcessVariableConstants.COMPANY_ID, application.getEntityCompanyDeptId());
+        }
+        if (StrUtil.isNotBlank(application.getEntityCompanyName())) {
+            variables.put(BpmProcessVariableConstants.COMPANY_NAME, application.getEntityCompanyName());
+        }
         return processInstanceApi.createProcessInstance(userId,
                         new BpmProcessInstanceCreateReqDTO()
                                 .setProcessDefinitionKey(PROCESS_KEY)
@@ -627,6 +649,18 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                                 .setVariables(variables)
                                 .setStartUserSelectAssignees(reqVO.getStartUserSelectAssignees()))
                 .getCheckedData();
+    }
+
+    /** 交易币种强制 CNY/USD/HKD（无草稿：提交前可改，提交后不可改）。 */
+    static String normalizeCurrency(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            throw exception(PAYMENT_APPLICATION_CURRENCY_INVALID);
+        }
+        String currency = raw.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!SUPPORTED_CURRENCIES.contains(currency)) {
+            throw exception(PAYMENT_APPLICATION_CURRENCY_INVALID);
+        }
+        return currency;
     }
 
     private Task requireCashierTask(String taskId, FinancePaymentApplicationDO application, Long userId) {
@@ -804,6 +838,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         BigDecimal applyAmount;
         String amountInWords;
         String currency;
+        Long entityCompanyDeptId;
+        String entityCompanyName;
         String businessSettlementTerm;
         String contractSettlementMethod;
         String payMethod;
@@ -829,6 +865,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .applyAmount(applyAmount)
                     .amountInWords(amountInWords)
                     .currency(currency)
+                    .entityCompanyDeptId(entityCompanyDeptId)
+                    .entityCompanyName(entityCompanyName)
                     .businessSettlementTerm(businessSettlementTerm)
                     .contractSettlementMethod(contractSettlementMethod)
                     .payMethod(payMethod)

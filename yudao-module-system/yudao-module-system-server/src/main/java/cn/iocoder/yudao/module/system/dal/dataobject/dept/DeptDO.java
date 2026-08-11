@@ -69,4 +69,9 @@ public class DeptDO extends TenantBaseDO {
      * 0-部门 1-公司
      */
     private String orgType;
+
+    /**
+     * 记账本位币（仅公司节点）：CNY / USD / HKD
+     */
+    private String functionalCurrency;
 }

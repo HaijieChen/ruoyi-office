@@ -15,5 +15,7 @@ public class FinancePaymentApplicationPageReqVO extends PageParam {
     private String paymentReason;
     private Long payeeCompanyId;
     private String payeeName;
+    /** 主体公司筛选 */
+    private Long entityCompanyDeptId;
 
 }

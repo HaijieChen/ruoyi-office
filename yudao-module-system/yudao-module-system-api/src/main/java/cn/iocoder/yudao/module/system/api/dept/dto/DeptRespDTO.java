@@ -24,4 +24,7 @@ public class DeptRespDTO {
 
     @Schema(description = "组织类型", example = "0")
     private String orgType;
+
+    @Schema(description = "记账本位币（公司）：CNY/USD/HKD", example = "CNY")
+    private String functionalCurrency;
 }

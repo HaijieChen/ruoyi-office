@@ -15,6 +15,9 @@ import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
+import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
@@ -27,6 +30,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,6 +50,7 @@ class FinancePaymentApplicationServiceImplTest {
     private ObjectProvider<org.flowable.engine.TaskService> taskProvider;
     private ObjectProvider<org.flowable.engine.HistoryService> historyProvider;
     private ObjectProvider<cn.iocoder.yudao.module.system.api.dept.DeptApi> deptProvider;
+    private FinanceEntityCompanyResolver entityCompanyResolver;
     private FinancePaymentApplicationServiceImpl service;
 
     @BeforeEach
@@ -58,6 +63,7 @@ class FinancePaymentApplicationServiceImplTest {
         contractMapper = mock(FinanceContractApplicationMapper.class);
         adminUserApi = mock(AdminUserApi.class);
         dictDataApi = mock(DictDataApi.class);
+        entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         @SuppressWarnings("unchecked")
         ObjectProvider<org.flowable.engine.TaskService> tp = mock(ObjectProvider.class);
         taskProvider = tp;
@@ -78,10 +84,13 @@ class FinancePaymentApplicationServiceImplTest {
         // PAY-R10：默认字典合法
         when(dictDataApi.validateDictDataList(anyString(), anyCollection()))
                 .thenReturn(CommonResult.success(true));
+        when(entityCompanyResolver.requireByDeptId(20L))
+                .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(20L, "主体甲", "USD"));
 
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
-                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi, deptProvider);
+                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
+                deptProvider, entityCompanyResolver);
         when(noRedisDAO.generate(any(LocalDate.class))).thenReturn("PAY-20260806-1");
         doAnswer(inv -> {
             FinancePaymentApplicationDO a = inv.getArgument(0);
@@ -104,7 +113,9 @@ class FinancePaymentApplicationServiceImplTest {
         req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
         req.setPaymentReason(FinancePaymentReasonEnum.BUSINESS.getCode());
         req.setPayeeCompanyId(9L);
+        req.setEntityCompanyDeptId(20L);
         req.setApplyAmount(new BigDecimal("100.00"));
+        req.setCurrency("CNY");
         req.setBusinessSettlementTerm("月结30天");
         req.setPayMethod("wire");
         req.setCostProject("office_purchase");
@@ -232,7 +243,8 @@ class FinancePaymentApplicationServiceImplTest {
         when(taskProvider.getIfAvailable()).thenReturn(taskService);
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
-                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi, deptProvider);
+                predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
+                deptProvider, entityCompanyResolver);
 
         FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
         req.setId(4L);
@@ -241,6 +253,46 @@ class FinancePaymentApplicationServiceImplTest {
         req.setPayVoucherUrl("http://voucher");
         ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 99L));
         assertEquals(PAYMENT_APPLICATION_TASK_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void createPersistsEntityCompanyAndCurrencyAndBpmVars() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setCurrency("usd");
+        Long id = service.createAndStart(req, 1L);
+        assertEquals(100L, id);
+
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals(20L, cap.getValue().getEntityCompanyDeptId());
+        assertEquals("主体甲", cap.getValue().getEntityCompanyName());
+        assertEquals("USD", cap.getValue().getCurrency());
+
+        ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
+                ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
+        verify(processInstanceApi).createProcessInstance(eq(1L), bpmCap.capture());
+        Map<String, Object> vars = bpmCap.getValue().getVariables();
+        assertEquals(20L, vars.get(BpmProcessVariableConstants.COMPANY_ID));
+        assertEquals("主体甲", vars.get(BpmProcessVariableConstants.COMPANY_NAME));
+        assertEquals("USD", vars.get("currency"));
+    }
+
+    @Test
+    void createRejectsInvalidCurrency() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setCurrency("EUR");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_CURRENCY_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void createRejectsInvalidEntityCompany() {
+        when(entityCompanyResolver.requireByDeptId(99L))
+                .thenThrow(new ServiceException(ENTITY_COMPANY_INVALID));
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setEntityCompanyDeptId(99L);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(ENTITY_COMPANY_INVALID.getCode(), ex.getCode());
     }
 
     @Test

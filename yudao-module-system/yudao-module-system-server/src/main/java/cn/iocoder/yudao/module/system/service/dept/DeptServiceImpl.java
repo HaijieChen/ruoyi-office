@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.system.service.dept;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
@@ -35,6 +36,9 @@ import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.*;
 @Slf4j
 public class DeptServiceImpl implements DeptService {
 
+    /** 公司记账本位币白名单（EXP-73 ORG-1） */
+    public static final Set<String> FUNCTIONAL_CURRENCIES = Set.of("CNY", "USD", "HKD");
+
     @Resource
     private DeptMapper deptMapper;
 
@@ -49,6 +53,7 @@ public class DeptServiceImpl implements DeptService {
         validateParentDept(null, createReqVO.getParentId());
         // 校验部门名的唯一性
         validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
+        normalizeAndValidateFunctionalCurrency(createReqVO);
 
         // 插入部门
         DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
@@ -69,6 +74,7 @@ public class DeptServiceImpl implements DeptService {
         validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
         // 校验部门名的唯一性
         validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), updateReqVO.getName());
+        normalizeAndValidateFunctionalCurrency(updateReqVO);
 
         // 更新部门
         DeptDO updateObj = BeanUtils.toBean(updateReqVO, DeptDO.class);
@@ -163,6 +169,28 @@ public class DeptServiceImpl implements DeptService {
         if (ObjectUtil.notEqual(dept.getId(), id)) {
             throw exception(DEPT_NAME_DUPLICATE);
         }
+    }
+
+    /**
+     * 公司节点：记账本位币必填且仅 CNY/USD/HKD；部门节点清空本位币。
+     */
+    @VisibleForTesting
+    void normalizeAndValidateFunctionalCurrency(DeptSaveReqVO reqVO) {
+        boolean company = OrgTypeEnum.COMPANY.getValue().equals(String.valueOf(reqVO.getOrgType()));
+        String raw = reqVO.getFunctionalCurrency();
+        if (!company) {
+            // 部门不得挂本位币，避免脏数据
+            reqVO.setFunctionalCurrency(null);
+            return;
+        }
+        if (StrUtil.isBlank(raw)) {
+            throw exception(DEPT_FUNCTIONAL_CURRENCY_REQUIRED);
+        }
+        String currency = raw.trim().toUpperCase(Locale.ROOT);
+        if (!FUNCTIONAL_CURRENCIES.contains(currency)) {
+            throw exception(DEPT_FUNCTIONAL_CURRENCY_INVALID);
+        }
+        reqVO.setFunctionalCurrency(currency);
     }
 
     @Override

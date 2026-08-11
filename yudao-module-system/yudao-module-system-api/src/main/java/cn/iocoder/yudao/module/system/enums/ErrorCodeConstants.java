@@ -55,6 +55,10 @@ public interface ErrorCodeConstants {
     ErrorCode DEPT_PARENT_ERROR = new ErrorCode(1_002_004_004, "不能设置自己为父部门");
     ErrorCode DEPT_NOT_ENABLE = new ErrorCode(1_002_004_006, "部门({})不处于开启状态，不允许选择");
     ErrorCode DEPT_PARENT_IS_CHILD = new ErrorCode(1_002_004_007, "不能设置自己的子部门为父部门");
+    /** 公司节点必须配置记账本位币 */
+    ErrorCode DEPT_FUNCTIONAL_CURRENCY_REQUIRED = new ErrorCode(1_002_004_008, "公司节点必须填写记账本位币");
+    /** 记账本位币仅允许 CNY/USD/HKD */
+    ErrorCode DEPT_FUNCTIONAL_CURRENCY_INVALID = new ErrorCode(1_002_004_009, "记账本位币仅支持 CNY/USD/HKD");
 
     // ========== 岗位模块 1-002-005-000 ==========
     ErrorCode POST_NOT_FOUND = new ErrorCode(1_002_005_000, "当前岗位不存在");

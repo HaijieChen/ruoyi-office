@@ -331,6 +331,9 @@ watch(
         <Descriptions bordered :column="2" size="small">
           <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
           <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
+          <Descriptions.Item label="主体公司">
+            {{ detail.entityCompanyName || '历史未记录' }}
+          </Descriptions.Item>
           <Descriptions.Item label="收款方">{{ detail.payeeName }}</Descriptions.Item>
           <Descriptions.Item label="金额">
             {{ detail.applyAmount }} {{ detail.currency }}
