@@ -259,10 +259,16 @@ CREATE TABLE IF NOT EXISTS `hrm_onboarding_file_claim` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='入职资料文件 claim';
 
 -- 11. 历史 file_id 唯一身份（字节精确 BINARY）
--- 权威候选：唯一 BINARY URL 优先，否则唯一 BINARY path；歧义/缺失/软删 → NULL
--- 可重跑：先清空「非权威」非空绑定，再回填
+-- 权威候选：唯一 BINARY URL 优先，否则唯一 BINARY path；或 file_id 与 path 字节一致
+-- 可重跑：先纠错，再回填，再 path 规范化，最后清 URL
+--
+-- 【发布前快照 / 回滚】
+-- 1) before-image: mysqldump 至少 common_attachment(id,business_type,file_id,file_path,file_url,deleted)
+--                  与 infra_file(id,path,url,deleted)
+-- 2) 回滚: 按 id 恢复 file_id/file_path/file_url；勿 DROP 列
+-- 3) 完整脚本必须连跑两次，URL-only 与 path 歧义夹具结果应稳定正确
 
--- 11a. 清空 missing / deleted 目标
+-- 11a. 清空 missing / deleted 目标（活动行）
 UPDATE `common_attachment` a
 LEFT JOIN `infra_file` f ON f.id = a.file_id AND f.deleted = b'0'
 SET a.file_id = NULL
@@ -271,7 +277,7 @@ WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
   AND a.file_id IS NOT NULL
   AND f.id IS NULL;
 
--- 11b. 清空所有「不是权威候选」的非空 file_id（BINARY 精确）
+-- 11b. 清空非权威非空 file_id（BINARY；file_id+path 一致视为权威）
 UPDATE `common_attachment` a
 SET a.file_id = NULL
 WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
@@ -279,6 +285,11 @@ WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
   AND a.file_id IS NOT NULL
   AND NOT (
     EXISTS (
+      SELECT 1 FROM `infra_file` f
+      WHERE f.id = a.file_id AND f.deleted = b'0'
+        AND BINARY f.path = BINARY a.file_path
+    )
+    OR EXISTS (
       SELECT 1 FROM (
         SELECT BINARY f.url AS u, MIN(f.id) AS fid
         FROM `infra_file` f
@@ -325,7 +336,7 @@ WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
   AND a.file_url IS NOT NULL
   AND a.file_url <> '';
 
--- 11d. 唯一 BINARY path 回填（仅无 file_id 且无唯一 URL）
+-- 11d. 唯一 BINARY path 回填
 UPDATE `common_attachment` a
 INNER JOIN (
   SELECT BINARY f.path AS p, MIN(f.id) AS fid
@@ -350,9 +361,16 @@ WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
     ) uc WHERE uc.u = BINARY a.file_url
   );
 
--- 12. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
--- 去重：包含已软删目标行，避免软删后全量重跑复活活动附件（#3）
--- 不复制公开 file_url（转档后清空，防匿名直链）
+-- 11e. 有 file_id 时 path 规范为权威 infra_file.path（URL-only 绑定后可续跑验证）
+UPDATE `common_attachment` a
+INNER JOIN `infra_file` f ON f.id = a.file_id AND f.deleted = b'0'
+SET a.file_path = f.path
+WHERE LOWER(TRIM(a.business_type)) IN ('hrm_employee_archive_onboarding', '201')
+  AND a.deleted = b'0'
+  AND a.file_id IS NOT NULL;
+
+-- 12. 历史入职单附件 → 员工档案入职资料（含空白别名 ' 201 '）
+-- path 优先用权威 infra_file.path；file_url 置空
 INSERT INTO `common_attachment` (
   `business_type`, `business_id`, `file_id`, `file_name`, `file_path`, `file_url`,
   `file_size`, `file_type`, `file_extension`, `upload_time`, `sort_order`,
@@ -363,7 +381,7 @@ SELECT
   e.employee_id,
   a.file_id,
   a.file_name,
-  a.file_path,
+  COALESCE(f.path, a.file_path),
   '',
   a.file_size,
   a.file_type,
@@ -379,19 +397,19 @@ SELECT
   a.tenant_id
 FROM `common_attachment` a
 INNER JOIN `hrm_employee_entry_bill` e ON e.id = a.business_id AND e.deleted = b'0'
-WHERE a.business_type = '201'
+LEFT JOIN `infra_file` f ON f.id = a.file_id AND f.deleted = b'0'
+WHERE TRIM(a.business_type) = '201'
   AND a.deleted = b'0'
   AND e.employee_id IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM `common_attachment` t
     WHERE t.business_type = 'hrm_employee_archive_onboarding'
       AND t.business_id = e.employee_id
-      AND BINARY t.file_path = BINARY a.file_path
+      AND BINARY t.file_path = BINARY COALESCE(f.path, a.file_path)
       AND t.tenant_id = a.tenant_id
-      -- 不加 deleted=0：软删后重跑不得复活
   );
 
--- 13. 转档后再按 BINARY 权威规则纠错+回填 onboarding
+-- 13. 转档后再纠错+回填 onboarding（含 file_id+path 一致权威）
 UPDATE `common_attachment` a
 LEFT JOIN `infra_file` f ON f.id = a.file_id AND f.deleted = b'0'
 SET a.file_id = NULL
@@ -407,6 +425,11 @@ WHERE a.business_type = 'hrm_employee_archive_onboarding'
   AND a.file_id IS NOT NULL
   AND NOT (
     EXISTS (
+      SELECT 1 FROM `infra_file` f
+      WHERE f.id = a.file_id AND f.deleted = b'0'
+        AND BINARY f.path = BINARY a.file_path
+    )
+    OR EXISTS (
       SELECT 1 FROM (
         SELECT BINARY f.url AS u, MIN(f.id) AS fid
         FROM `infra_file` f
@@ -466,17 +489,20 @@ WHERE a.business_type = 'hrm_employee_archive_onboarding'
     ) uc WHERE uc.u = BINARY a.file_url
   );
 
--- 15. 清空入职资料/入职单公开 URL（防匿名 File 路由拼装直链）
+-- 13e. 再次 path 规范化（保证二次执行权威）
+UPDATE `common_attachment` a
+INNER JOIN `infra_file` f ON f.id = a.file_id AND f.deleted = b'0'
+SET a.file_path = f.path
+WHERE a.business_type = 'hrm_employee_archive_onboarding'
+  AND a.deleted = b'0'
+  AND a.file_id IS NOT NULL;
+
+-- 15. 清空入职资料/入职单公开 URL（含已软删行，防复活后仍可拼链）
 UPDATE `common_attachment`
 SET `file_url` = ''
 WHERE LOWER(TRIM(`business_type`)) IN ('hrm_employee_archive_onboarding', '201')
-  AND `deleted` = b'0'
   AND `file_url` IS NOT NULL
   AND `file_url` <> '';
 
 -- 14. 修复清单见 hrm_employee_roster_exp75_fileid_repair_check.sql
--- 迁移前快照/回滚要点：
---   1) 执行前：mysqldump common_attachment infra_file（或至少 file_id/file_path/file_url 列）
---   2) 回滚：从快照恢复 common_attachment.file_id / file_url；勿盲目 DROP 新列
---   3) 二次执行本脚本应幂等（软删不复活、权威 BINARY 绑定稳定）
 

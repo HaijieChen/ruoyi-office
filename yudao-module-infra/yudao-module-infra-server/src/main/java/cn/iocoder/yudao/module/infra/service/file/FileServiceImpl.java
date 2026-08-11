@@ -22,7 +22,6 @@ import lombok.SneakyThrows;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static cn.hutool.core.date.DatePattern.PURE_DATE_PATTERN;
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -195,9 +194,9 @@ public class FileServiceImpl implements FileService {
     @Override
     public FileDO getFile(Long id) {
         FileDO file = validateFileExists(id);
-        // 通用 get：私有文件 / 入职绑定 path 对 infra:file:query 不可见
+        // 通用 get：私有文件 / 入职绑定（含软删）不可见
         rejectPrivateStoragePath(file.getPath(), false);
-        rejectReservedAttachmentBoundPath(file.getPath());
+        rejectReservedAttachmentBound(file.getId(), file.getPath());
         return file;
     }
 
@@ -206,7 +205,7 @@ public class FileServiceImpl implements FileService {
         // 校验存在
         FileDO file = validateFileExists(id);
         rejectPrivateStoragePath(file.getPath(), false);
-        rejectReservedAttachmentBoundPath(file.getPath());
+        rejectReservedAttachmentBound(file.getId(), file.getPath());
 
         // 从文件存储器中删除
         FileClient client = fileConfigService.getFileClient(file.getConfigId());
@@ -220,14 +219,11 @@ public class FileServiceImpl implements FileService {
     @Override
     @SneakyThrows
     public void deleteFileList(List<Long> ids) {
-        // 删除文件（跳过/拒绝私有）
         List<FileDO> files = fileMapper.selectByIds(ids);
-        List<Long> publicIds = files.stream()
-                .filter(f -> !FilePrivateDirs.isPrivateDirectory(f.getPath()))
-                .map(FileDO::getId)
-                .collect(Collectors.toList());
-        if (publicIds.size() != files.size()) {
-            throw new IllegalArgumentException("批量删除包含入职资料私有文件，已拒绝");
+        // 预检整批：任一私有目录或入职绑定 → 整批拒绝，provider 0 次 delete
+        for (FileDO file : files) {
+            rejectPrivateStoragePath(file.getPath(), false);
+            rejectReservedAttachmentBound(file.getId(), file.getPath());
         }
         for (FileDO file : files) {
             FileClient client = fileConfigService.getFileClient(file.getConfigId());
@@ -247,30 +243,36 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public byte[] getFileContent(Long configId, String path) throws Exception {
-        // 匿名/通用下载：拒私有目录 + 拒绑定入职资料/入职单的历史 path
+        // 匿名/通用下载：拒私有目录 + 拒入职绑定（含软删）
         rejectPrivateStoragePath(path, false);
-        rejectReservedAttachmentBoundPath(path);
+        rejectReservedAttachmentBound(null, path);
         FileClient client = fileConfigService.getFileClient(configId);
         Assert.notNull(client, "客户端({}) 不能为空", configId);
         return client.getContent(path);
     }
 
     /**
-     * 历史入职对象即使 path 无私有前缀，也不允许经通用/匿名 File 路由读取。
+     * 入职绑定守卫：含软删附件；mapper/SQL 异常 fail-closed（不得放行 provider）。
      */
-    private void rejectReservedAttachmentBoundPath(String path) {
-        if (StrUtil.isBlank(path)) {
-            return;
-        }
+    void rejectReservedAttachmentBound(Long fileId, String path) {
         try {
-            Long cnt = fileMapper.countReservedAttachmentByPath(path);
-            if (cnt != null && cnt > 0) {
-                throw new IllegalArgumentException("path 绑定入职资料/入职单附件，禁止通用下载: " + path);
+            if (fileId != null) {
+                Long byId = fileMapper.countReservedAttachmentByFileId(fileId);
+                if (byId != null && byId > 0) {
+                    throw new IllegalArgumentException("fileId 绑定入职资料/入职单附件，禁止通用操作: " + fileId);
+                }
+            }
+            if (StrUtil.isNotBlank(path)) {
+                Long byPath = fileMapper.countReservedAttachmentByPath(path);
+                if (byPath != null && byPath > 0) {
+                    throw new IllegalArgumentException("path 绑定入职资料/入职单附件，禁止通用操作: " + path);
+                }
             }
         } catch (IllegalArgumentException ex) {
             throw ex;
-        } catch (Exception ignored) {
-            // common_attachment 表在纯 infra 单测中可能不存在；生产单体同库可查询
+        } catch (RuntimeException ex) {
+            // fail-closed：查询失败不得继续读/删 provider
+            throw new IllegalStateException("入职附件保密校验失败（fail-closed）", ex);
         }
     }
 
