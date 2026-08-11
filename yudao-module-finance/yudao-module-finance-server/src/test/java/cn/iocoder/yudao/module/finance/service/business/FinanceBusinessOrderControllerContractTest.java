@@ -92,8 +92,10 @@ class FinanceBusinessOrderControllerContractTest {
                 "receivableAmount", "payableAmount", "ownerId", "status", "currency", "bankAccount");
 
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).containsAll(requiredFields));
-        // RespVO 额外展示 contractApplicationNo（非 DO 列）
+        // RespVO 额外展示 contractApplicationNo（非 DO 列）与规范 productType
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("contractApplicationNo"));
+        assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("productType"));
+        assertTrue(declaredFields(FinanceBusinessOrderDO.class).contains("productTypeSnapshot"));
         assertTrue(declaredFields(FinanceBusinessOrderDO.class).containsAll(requiredFields));
         assertTrue(Stream.concat(declaredFields(FinanceBusinessOrderRespVO.class).stream(),
                         declaredFields(FinanceBusinessOrderDO.class).stream())
@@ -142,6 +144,19 @@ class FinanceBusinessOrderControllerContractTest {
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("remainingBalance"));
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("invoiceOpenableAmount"));
         assertTrue(declaredFields(FinanceBusinessOrderRespVO.class).contains("invoicedOccupiedAmount"));
+    }
+
+    @Test
+    void resolveEffectiveProductTypeShouldBeBlankAware() {
+        // P2 #3：空串 snapshot 回退 product_name，与 Mapper COALESCE(NULLIF(TRIM(...))) 一致
+        assertEquals("软件",
+                FinanceBusinessOrderController.resolveEffectiveProductType("软件", "旧名"));
+        assertEquals("旧名",
+                FinanceBusinessOrderController.resolveEffectiveProductType("  ", "旧名"));
+        assertEquals("旧名",
+                FinanceBusinessOrderController.resolveEffectiveProductType(null, "旧名"));
+        assertEquals("软件",
+                FinanceBusinessOrderController.resolveEffectiveProductType(" 软件 ", "旧名"));
     }
 
     @Test

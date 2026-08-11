@@ -34,7 +34,14 @@ public class FinanceBusinessOrderDO extends BaseDO {
      */
     private Long contractApplicationId;
     private LocalDate orderDate;
+    /**
+     * 产品名称（legacy 自由文本；新写由服务端用合同产品覆盖）
+     */
     private String productName;
+    /**
+     * 产品类型快照（权威冗余，来自合同 product_type）
+     */
+    private String productTypeSnapshot;
     private String contactPerson;
     private LocalDate executionStartDate;
     private LocalDate executionEndDate;

@@ -46,6 +46,12 @@ public interface ErrorCodeConstants {
             "禁止清空商务单已关联合同");
     ErrorCode BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN = new ErrorCode(1_040_001_012,
             "存在开票占用时禁止更换合同");
+    /** 合同产品类型为空，无法作为商务单产品权威源 */
+    ErrorCode BUSINESS_ORDER_CONTRACT_PRODUCT_MISSING = new ErrorCode(1_040_001_013,
+            "合同产品类型为空，无法关联到商务单");
+    /** 商务单存在 PENDING/APPROVED 有效开票明细时禁止换合同 */
+    ErrorCode BUSINESS_ORDER_ACTIVE_INVOICE_BLOCKS_CONTRACT_CHANGE = new ErrorCode(1_040_001_014,
+            "商务单存在审批中或已通过的开票明细，禁止更换合同");
 
     // ========== 到款认领 1-040-002-000 ==========
     ErrorCode RECEIPT_CLAIM_NOT_EXISTS = new ErrorCode(1_040_002_000, "到款认领单不存在");
@@ -104,6 +110,12 @@ public interface ErrorCodeConstants {
             "请使用整单办票 complete-issue，不再支持一行一票办票");
     ErrorCode INVOICE_APPLICATION_PRODUCT_TYPE_INVALID = new ErrorCode(1_040_003_016,
             "产品类型不在启用字典中");
+    /** 同一开票申请内商务单产品类型不一致 */
+    ErrorCode INVOICE_APPLICATION_PRODUCT_MIXED = new ErrorCode(1_040_003_017,
+            "同一开票申请内全部商务单必须属于同一产品类型");
+    /** 商务单产品未固化（快照与 legacy 名称均为空） */
+    ErrorCode INVOICE_APPLICATION_BUSINESS_ORDER_PRODUCT_MISSING = new ErrorCode(1_040_003_018,
+            "商务单产品类型未固化，无法开票");
 
     // ========== 客户公司 / 客商 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");

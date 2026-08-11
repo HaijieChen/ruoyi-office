@@ -18,6 +18,7 @@ import {
   Space,
   Textarea,
 } from 'ant-design-vue';
+// EXP-70：产品类型只读，由首行商务单带出
 
 import {
   getBusinessOrder,
@@ -58,8 +59,10 @@ interface FormData {
   /** 公司名称快照 */
   invoiceCompany?: string;
   invoiceType?: string;
-  /** 产品类型（服务端字段 taxContent） */
-  taxContent?: string;
+  /**
+   * 产品类型只读展示（首行商务单带出；不提交，服务端派生 taxContent）
+   */
+  productType?: string;
   /** 特别开票要求（单据级，不进客户档案） */
   specialInvoiceRequirement?: string;
   remark?: string;
@@ -86,6 +89,10 @@ interface BoOption {
   invoiceOpenableAmount?: number;
   settlementAmount?: number;
   orderNo?: string;
+  /** 产品类型（优先 productType 快照） */
+  productType?: string;
+  contractApplicationNo?: string;
+  contractApplicationId?: number;
 }
 
 const formRef = ref();
@@ -105,13 +112,6 @@ const isResubmit = computed(() => formData.value.mode === 'resubmit');
 
 const invoiceTypeOptions = computed(() =>
   getDictOptions(DICT_TYPE.FINANCE_INVOICE_TYPE).map((d) => ({
-    label: d.label,
-    value: d.value as number | string,
-  })),
-);
-
-const productTypeOptions = computed(() =>
-  getDictOptions(DICT_TYPE.FINANCE_PRODUCT_TYPE).map((d) => ({
     label: d.label,
     value: d.value as number | string,
   })),
@@ -243,27 +243,107 @@ const rules: Record<string, Rule[]> = {
   ],
 };
 
+/**
+ * EXP-70 #7：开票产品仅认 productTypeSnapshot（权威）；
+ * 无 snapshot 字段时用 productType（列表 onlyOpenable 已滤）；绝不回退 productName。
+ */
+function resolveBoProduct(bo: {
+  productName?: string;
+  productType?: string;
+  productTypeSnapshot?: string | null;
+}): string {
+  const snap = bo.productTypeSnapshot;
+  if (snap && String(snap).trim()) {
+    return String(snap).trim();
+  }
+  // 若 API 明确返回 snapshot 字段且为空，不得用 dual-read productType / productName 冒充
+  if (Object.prototype.hasOwnProperty.call(bo, 'productTypeSnapshot')) {
+    return '';
+  }
+  const p = bo.productType;
+  return p && String(p).trim() ? String(p).trim() : '';
+}
+
+/** 与后端 onlyOpenable/invoice-selectable 一致：须合同 + 非空权威 snapshot */
+function isInvoiceSelectableBo(bo: {
+  contractApplicationId?: number | null;
+  productName?: string;
+  productType?: string;
+  productTypeSnapshot?: string | null;
+}): boolean {
+  return !!bo.contractApplicationId && !!resolveBoProduct(bo);
+}
+
+/** 标签：商务单号｜合同单号｜产品｜可开金额 */
 function formatBoLabel(bo: {
+  contractApplicationNo?: string;
   id: number;
   invoiceOpenableAmount?: number;
   orderNo?: string;
-  payerName?: string;
   productName?: string;
+  productType?: string;
   settlementAmount?: number;
 }) {
   const openable = openableOf(bo);
-  return `${bo.orderNo || bo.id} | ${bo.productName || '-'} | ${bo.payerName || '-'} | 可开 ¥${openable.toFixed(2)}`;
+  const product = resolveBoProduct(bo) || '-';
+  const contractNo = bo.contractApplicationNo || '-';
+  return `${bo.orderNo || bo.id}｜${contractNo}｜${product}｜可开 ¥${openable.toFixed(2)}`;
 }
 
 function mapBoOption(bo: any): BoOption {
   const invoiceOpenableAmount = openableOf(bo);
+  const productType = resolveBoProduct(bo);
   return {
     value: bo.id as number,
     orderNo: bo.orderNo as string,
     invoiceOpenableAmount,
     settlementAmount: Number(bo.settlementAmount ?? 0),
+    productType: productType || undefined,
+    contractApplicationNo: bo.contractApplicationNo as string | undefined,
+    contractApplicationId: bo.contractApplicationId as number | undefined,
     label: formatBoLabel(bo),
   };
+}
+
+/** 首行商务单决定的产品（表头只读 + 后续行过滤） */
+function firstLineProductType(): string | undefined {
+  const first = formData.value.lines?.[0];
+  if (!first?.businessOrderId) return undefined;
+  const opt = boOptions.value.find((o) => o.value === first.businessOrderId);
+  return opt?.productType || undefined;
+}
+
+/** 按行过滤商务单选项：第 0 行全量；后续行同产品 */
+function boOptionsForLine(index: number): BoOption[] {
+  if (index <= 0) {
+    return boOptions.value;
+  }
+  const locked = firstLineProductType();
+  if (!locked) {
+    return boOptions.value;
+  }
+  const selectedId = formData.value.lines?.[index]?.businessOrderId;
+  return boOptions.value.filter(
+    (o) => o.productType === locked || o.value === selectedId,
+  );
+}
+
+function syncHeaderProductFromFirstLine() {
+  formData.value.productType = firstLineProductType();
+}
+
+/** 首行产品变化时，清空后续行中产品不一致的选择 */
+function clearIncompatibleSubsequentLines(lockedProduct?: string) {
+  if (!lockedProduct) return;
+  const lines = formData.value.lines || [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line?.businessOrderId) continue;
+    const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
+    if (opt && opt.productType && opt.productType !== lockedProduct) {
+      line.businessOrderId = undefined;
+    }
+  }
 }
 
 function upsertBoOption(opt: BoOption) {
@@ -281,7 +361,10 @@ async function loadBusinessOrderOptions(keyword?: string) {
       orderNo: keyword?.trim() || undefined,
       onlyOpenable: true,
     });
-    const mapped = (page?.list || []).map((bo: any) => mapBoOption(bo));
+    // 复审 #7：前端再过滤一次，避免 legacy productName-only BO 进入候选
+    const mapped = (page?.list || [])
+      .filter((bo: any) => isInvoiceSelectableBo(bo))
+      .map((bo: any) => mapBoOption(bo));
     // 保留已选但不在当前页的选项，避免重提/筛选后丢 label
     const selectedIds = new Set(
       (formData.value.lines || [])
@@ -305,18 +388,43 @@ function onBoSearch(keyword: string) {
   }, 300);
 }
 
-/** 选中商务单：回填建议金额 = 可开余额 */
+/** 选中商务单：回填建议金额 = 可开余额；首行同步产品 */
 async function onBoChange(index: number, boId?: number) {
-  if (!boId) return;
   const line = formData.value.lines[index];
   if (!line) return;
+  if (!boId) {
+    if (index === 0) {
+      syncHeaderProductFromFirstLine();
+      clearIncompatibleSubsequentLines(undefined);
+    }
+    return;
+  }
   let opt = boOptions.value.find((o) => o.value === boId);
   if (!opt) {
     try {
       const bo = await getBusinessOrder(boId);
+      // 复审 #7：直选详情也须满足 invoice-selectable（合同 + 非空 snapshot 产品）
+      if (!isInvoiceSelectableBo(bo)) {
+        message.warning('该商务单缺少合同或产品快照，不可用于开票');
+        line.businessOrderId = undefined;
+        return;
+      }
       opt = mapBoOption(bo);
       upsertBoOption(opt);
     } catch {
+      return;
+    }
+  } else if (!opt.productType || !opt.contractApplicationId) {
+    message.warning('该商务单缺少合同或产品快照，不可用于开票');
+    line.businessOrderId = undefined;
+    return;
+  }
+  // 后续行：若与首行产品不一致则拒绝（服务端仍会兜底）
+  if (index > 0) {
+    const locked = firstLineProductType();
+    if (locked && opt.productType && opt.productType !== locked) {
+      message.warning(`请选择与首行相同产品类型（${locked}）的商务单`);
+      line.businessOrderId = undefined;
       return;
     }
   }
@@ -325,6 +433,10 @@ async function onBoChange(index: number, boId?: number) {
     if (suggest > 0) {
       line.amount = Number(suggest.toFixed(2));
     }
+  }
+  if (index === 0) {
+    syncHeaderProductFromFirstLine();
+    clearIncompatibleSubsequentLines(opt.productType);
   }
 }
 
@@ -363,6 +475,9 @@ function removeLine(index: number) {
     return;
   }
   formData.value.lines.splice(index, 1);
+  // EXP-70 #7：删除首行后同步只读产品，并清理不兼容后续行
+  syncHeaderProductFromFirstLine();
+  clearIncompatibleSubsequentLines(firstLineProductType());
 }
 
 async function loadCompanyOptions() {
@@ -462,7 +577,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
       invoiceCompanyDeptId: detail.invoiceCompanyDeptId,
       invoiceCompany: detail.invoiceCompany,
       invoiceType: detail.invoiceType,
-      taxContent: detail.taxContent,
+      productType: detail.taxContent,
       specialInvoiceRequirement: detail.specialInvoiceRequirement,
       remark: detail.remark as any,
       lines: (detail.lines || []).map((l) => ({
@@ -520,6 +635,11 @@ async function reset(opts?: { id?: number; mode?: string }) {
       formData.value.lines = [{}];
     }
     await ensureSelectedBoOptions(formData.value.lines);
+    // 用首行商务单规范产品覆盖表头展示
+    syncHeaderProductFromFirstLine();
+    if (!formData.value.productType && detail.taxContent) {
+      formData.value.productType = detail.taxContent;
+    }
   } else {
     priorBuyerSnapshotHint.value = undefined;
     formData.value = { mode: 'create', lines: [{}] };
@@ -554,6 +674,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
   onCustomerCompanyChange(formData.value.customerCompanyId);
   submitting.value = true;
   try {
+    // EXP-70：不提交 taxContent；服务端从商务单产品快照派生
     const payload = {
       customerCompanyId: formData.value.customerCompanyId as number,
       buyerName: formData.value.buyerName,
@@ -563,7 +684,6 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       invoiceCompanyDeptId: formData.value.invoiceCompanyDeptId,
       invoiceCompany: formData.value.invoiceCompany,
       invoiceType: formData.value.invoiceType,
-      taxContent: formData.value.taxContent,
       specialInvoiceRequirement: formData.value.specialInvoiceRequirement,
       remark: formData.value.remark,
       lines: formData.value.lines.map((l) => ({
@@ -597,7 +717,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
 <template>
   <div>
     <div class="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-800">
-      仅支持「提交即启流」。无草稿。购方须从客户公司档案选择，税项只读（服务端以档案快照为准）。商务单仅可开余额
+      仅支持「提交即启流」。无草稿。购方须从客户公司档案选择，税项只读（服务端以档案快照为准）。产品类型由商务单（合同）带出只读；同一申请须同产品。商务单仅可开余额
       &gt; 0。
     </div>
     <div
@@ -682,13 +802,11 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           placeholder="请选择发票类型"
         />
       </Form.Item>
-      <Form.Item label="产品类型" name="taxContent">
-        <Select
-          v-model:value="formData.taxContent"
-          class="w-full"
-          allow-clear
-          :options="productTypeOptions"
-          placeholder="请选择产品类型"
+      <Form.Item label="产品类型">
+        <Input
+          :value="formData.productType"
+          disabled
+          placeholder="选择首行商务单后自动带出，不可改"
         />
       </Form.Item>
       <Form.Item label="备注" name="remark">
@@ -721,9 +839,13 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
                   show-search
                   allow-clear
                   :loading="loadingBo"
-                  :options="boOptions"
+                  :options="boOptionsForLine(index)"
                   option-filter-prop="label"
-                  placeholder="搜索单号（仅可开&gt;0）"
+                  :placeholder="
+                    index > 0 && formData.productType
+                      ? `同产品「${formData.productType}」且可开&gt;0`
+                      : '搜索单号（仅可开&gt;0）'
+                  "
                   :filter-option="false"
                   @search="onBoSearch"
                   @change="(v: any) => onBoChange(index, v)"

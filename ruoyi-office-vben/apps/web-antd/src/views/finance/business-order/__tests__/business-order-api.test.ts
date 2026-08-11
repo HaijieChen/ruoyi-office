@@ -113,6 +113,11 @@ describe('Workbook fields present in columns', () => {
     expect(columns.some((c) => c.field === 'settlementAmount')).toBe(true);
   });
 
+  it('columns include productType (EXP-70 snapshot product)', () => {
+    const columns = useGridColumns() ?? [];
+    expect(columns.some((c) => c.field === 'productType')).toBe(true);
+  });
+
   it('filters include entityCompanyDeptId', () => {
     expect(
       useGridFormSchema().some((s) => s.fieldName === 'entityCompanyDeptId'),
@@ -149,16 +154,17 @@ describe('FinanceBusinessOrderApi — endpoint contracts', () => {
   });
 
   it('createBusinessOrder POSTs backend workbook contract fields, no generic fields', () => {
+    // EXP-70：产品由服务端从合同派生，SaveForm 可不带 productName
     const form: FinanceBusinessOrderApi.SaveForm = {
       entityCompanyDeptId: 10,
       orderDate: '2024-01-10',
-      productName: '设备A',
       contactPerson: '张三',
       executionStartDate: '2024-02-01',
       executionEndDate: '2024-12-31',
       payerName: '付款方公司',
       signedExecutionAmount: 100_000,
       discountRate: 0.05,
+      contractApplicationId: 50,
     };
     createBusinessOrder(form);
     expect(mock.post).toHaveBeenCalledWith(
@@ -174,6 +180,8 @@ describe('FinanceBusinessOrderApi — endpoint contracts', () => {
     expect('payableAmount' in payload).toBe(false);
     expect('status' in payload).toBe(false);
     expect('bankAccount' in payload).toBe(false);
+    // 规范写路径：不要求客户端提交产品
+    expect('productName' in payload).toBe(false);
   });
 
   it('updateBusinessOrder PUTs to /finance/business-order/update', () => {
@@ -181,12 +189,12 @@ describe('FinanceBusinessOrderApi — endpoint contracts', () => {
       id: 7,
       entityCompanyDeptId: 10,
       orderDate: '2024-01-10',
-      productName: '设备A',
       contactPerson: '张三',
       executionStartDate: '2024-02-01',
       executionEndDate: '2024-12-31',
       signedExecutionAmount: 50000,
       discountRate: 0,
+      contractApplicationId: 50,
     };
     updateBusinessOrder(form);
     expect(mock.put).toHaveBeenCalledWith('/finance/business-order/update', form);
@@ -236,9 +244,10 @@ describe('Backend contract alignment', () => {
       'importerName',
       'entityCompanyDeptId',
       'entityCompanyName',
+      'productType',
     ];
     // 仅验证字段在类型中存在（TypeScript 编译器会在类型不对时报错）
-    expect(keys.length).toBe(4);
+    expect(keys.length).toBe(5);
     // importer（旧字段）不应存在
     expect('importer' in order).toBe(false);
   });

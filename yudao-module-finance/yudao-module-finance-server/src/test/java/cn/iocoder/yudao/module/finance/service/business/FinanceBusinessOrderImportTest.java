@@ -54,6 +54,7 @@ class FinanceBusinessOrderImportTest {
                 FinanceContractApplicationDO.builder()
                         .id(CONTRACT_APP_ID)
                         .applicationNo("CT-001")
+                        .productType("软件")
                         .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                         .applicantUserId(IMPORTER_ID)
                         .voided(false)
@@ -89,11 +90,43 @@ class FinanceBusinessOrderImportTest {
                         && order.getPayerName() == null
                         && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
                         && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
+                        && "软件".equals(order.getProductTypeSnapshot())
+                        && "软件".equals(order.getProductName())
                         && new BigDecimal("1000.00").compareTo(order.getSignedExecutionAmount()) == 0
                         && new BigDecimal("0.10").compareTo(order.getDiscountRate()) == 0
                         && new BigDecimal("900.00").compareTo(order.getSettlementAmount()) == 0
                         && "备注内容".equals(order.getRemark())
                          && order.getSourceRowHash() != null));
+    }
+
+    @Test
+    void importShouldRejectWhenExcelProductDiffersFromContract() {
+        FinanceBusinessOrderImportExcelVO row = validRow();
+        row.setProductName("硬件");
+        when(businessOrderMapper.selectBySourceRowHash(anyString())).thenReturn(null);
+
+        FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
+                List.of(row), IMPORTER_ID);
+
+        assertTrue(respVO.getOrderNos().isEmpty());
+        assertTrue(respVO.getFailureRows().get(2).contains("不一致"));
+        verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
+    }
+
+    @Test
+    void importHashShouldIgnoreClientProductColumn() {
+        // #10：旧模板填合同产品 vs 新模板留空 → 同一幂等键
+        FinanceBusinessOrderImportExcelVO withProduct = validRow();
+        withProduct.setProductName("软件");
+        FinanceBusinessOrderImportExcelVO blankProduct = validRow();
+        blankProduct.setProductName(null);
+        var amounts = FinanceBusinessOrderImportSupport.normalizeAmounts(
+                withProduct.getSignedExecutionAmount(), withProduct.getDiscountRate());
+        String h1 = FinanceBusinessOrderImportSupport.calculateSourceRowHash(
+                withProduct, amounts, ENTITY_COMPANY_DEPT_ID, "软件");
+        String h2 = FinanceBusinessOrderImportSupport.calculateSourceRowHash(
+                blankProduct, amounts, ENTITY_COMPANY_DEPT_ID, "软件");
+        assertEquals(h1, h2);
     }
 
     @Test
@@ -272,7 +305,7 @@ class FinanceBusinessOrderImportTest {
                 .entityCompanyName(ENTITY_COMPANY_NAME)
                 .contractApplicationNo("CT-001")
                 .orderDate(LocalDate.of(2026, 7, 1))
-                .productName("产品A")
+                .productName("软件") // 与合同一致或留空；写入始终取合同
                 .contactPerson("张三")
                 .executionStartDate(LocalDate.of(2026, 7, 5))
                 .executionEndDate(LocalDate.of(2026, 7, 31))

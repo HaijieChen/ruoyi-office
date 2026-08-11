@@ -139,6 +139,14 @@ public class FinanceBusinessOrderController {
         PageResult<FinanceBusinessOrderDO> pageResult = businessOrderService.getBusinessOrderPage(pageReqVO);
         PageResult<FinanceBusinessOrderRespVO> voPage =
                 BeanUtils.toBean(pageResult, FinanceBusinessOrderRespVO.class, this::fillImporterNames);
+        List<FinanceBusinessOrderDO> orders = pageResult.getList();
+        List<FinanceBusinessOrderRespVO> vos = voPage.getList();
+        if (orders != null && vos != null) {
+            int n = Math.min(orders.size(), vos.size());
+            for (int i = 0; i < n; i++) {
+                enrichProductType(vos.get(i), orders.get(i));
+            }
+        }
         fillContractApplicationNos(voPage.getList());
         return success(voPage);
     }
@@ -148,6 +156,7 @@ public class FinanceBusinessOrderController {
             return null;
         }
         FinanceBusinessOrderRespVO respVO = BeanUtils.toBean(businessOrder, FinanceBusinessOrderRespVO.class);
+        enrichProductType(respVO, businessOrder);
         enrichRemainingBalance(respVO);
         fillContractApplicationNos(List.of(respVO));
         if (businessOrder.getImporterId() == null) {
@@ -162,6 +171,12 @@ public class FinanceBusinessOrderController {
 
     private void fillImporterNames(FinanceBusinessOrderRespVO respVO) {
         enrichRemainingBalance(respVO);
+        // 分页：BeanUtils 不带 productTypeSnapshot；blank-aware 回退 productName（与 Mapper 一致）
+        if (respVO.getProductType() == null || respVO.getProductType().isBlank()) {
+            if (respVO.getProductName() != null && !respVO.getProductName().isBlank()) {
+                respVO.setProductType(respVO.getProductName().trim());
+            }
+        }
         if (respVO.getImporterId() == null) {
             return;
         }
@@ -208,6 +223,29 @@ public class FinanceBusinessOrderController {
                     ? respVO.getInvoicedOccupiedAmount() : BigDecimal.ZERO;
             respVO.setInvoiceOpenableAmount(settlement.subtract(occupied));
         }
+    }
+
+    /**
+     * EXP-70：规范字段 productType 与筛选口径一致（blank-aware）。
+     * {@code COALESCE(NULLIF(TRIM(snapshot),''), product_name)}
+     */
+    private static void enrichProductType(FinanceBusinessOrderRespVO respVO, FinanceBusinessOrderDO order) {
+        if (respVO == null || order == null) {
+            return;
+        }
+        respVO.setProductType(resolveEffectiveProductType(
+                order.getProductTypeSnapshot(), order.getProductName()));
+    }
+
+    /** 与 Mapper 产品筛选 blank-aware 口径一致，便于单测断言 */
+    public static String resolveEffectiveProductType(String productTypeSnapshot, String productName) {
+        if (productTypeSnapshot != null && !productTypeSnapshot.isBlank()) {
+            return productTypeSnapshot.trim();
+        }
+        if (productName != null && !productName.isBlank()) {
+            return productName.trim();
+        }
+        return productName;
     }
 
 }

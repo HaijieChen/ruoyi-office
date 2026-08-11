@@ -151,6 +151,7 @@ class FinanceContractApplicationExecAndBoBindingTest {
                 .id(1L)
                 .importerId(USER)
                 .contractApplicationId(null)
+                .productName("历史产品")
                 .confirmedClaimedAmount(BigDecimal.ZERO)
                 .orderNo("BO-OLD")
                 .importDate(LocalDate.now())
@@ -158,9 +159,34 @@ class FinanceContractApplicationExecAndBoBindingTest {
         FinanceBusinessOrderSaveReqVO req = validBo();
         req.setId(1L);
         req.setContractApplicationId(null);
+        req.setProductName(null);
         req.setRemark("仅改备注");
         assertDoesNotThrow(() -> boService.updateBusinessOrder(req));
-        verify(boMapper).updateById(any(FinanceBusinessOrderDO.class));
+        // #3：不写产品字段（null 跳过）；绝不把请求 productName 写入
+        verify(boMapper).updateById(argThat((FinanceBusinessOrderDO u) ->
+                u.getProductName() == null && u.getProductTypeSnapshot() == null
+                        && u.getContractApplicationId() == null));
+    }
+
+    @Test
+    void updateBoHistoricalEmptyShouldIgnoreClientProductName() {
+        when(boMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
+                .id(1L)
+                .importerId(USER)
+                .contractApplicationId(null)
+                .productName("库内产品")
+                .confirmedClaimedAmount(BigDecimal.ZERO)
+                .orderNo("BO-OLD")
+                .importDate(LocalDate.now())
+                .build());
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(null);
+        req.setProductName("客户端伪造产品");
+        assertDoesNotThrow(() -> boService.updateBusinessOrder(req));
+        verify(boMapper).updateById(argThat((FinanceBusinessOrderDO u) ->
+                u.getProductName() == null && u.getProductTypeSnapshot() == null));
+        verify(boMapper, never()).casChangeContractApplicationId(anyLong(), anyLong(), anyLong(), anyString());
     }
 
     @Test
@@ -214,15 +240,150 @@ class FinanceContractApplicationExecAndBoBindingTest {
                 .importDate(LocalDate.now())
                 .build());
         when(contractMapper.selectById(6L)).thenReturn(approved(6L, USER));
-        when(boMapper.casChangeContractApplicationId(1L, 5L, 6L)).thenReturn(1);
+        when(boMapper.countActiveInvoiceLinesByBusinessOrderId(1L)).thenReturn(0L);
+        when(boMapper.casChangeContractApplicationId(1L, 5L, 6L, "软件")).thenReturn(1);
         FinanceBusinessOrderSaveReqVO req = validBo();
         req.setId(1L);
         req.setContractApplicationId(6L);
+        req.setProductName("客户端篡改");
         assertDoesNotThrow(() -> boService.updateBusinessOrder(req));
-        verify(boMapper).casChangeContractApplicationId(1L, 5L, 6L);
-        // CS-F8：后续 updateById 不得再携带合同 id（null 跳过字段）
+        // EXP-70：CAS 原子刷新合同 + 产品快照
+        verify(boMapper).casChangeContractApplicationId(1L, 5L, 6L, "软件");
+        // #2：CAS 写产品后，普通 updateById 禁止再写权威产品字段
         verify(boMapper).updateById(argThat((FinanceBusinessOrderDO u) ->
-                u.getContractApplicationId() == null));
+                u.getContractApplicationId() == null
+                        && u.getProductTypeSnapshot() == null
+                        && u.getProductName() == null));
+    }
+
+    @Test
+    void updateBoSameContractShouldNotRewriteExistingSnapshot() {
+        when(boMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
+                .id(1L)
+                .importerId(USER)
+                .contractApplicationId(5L)
+                .productTypeSnapshot("软件")
+                .productName("软件")
+                .confirmedClaimedAmount(BigDecimal.ZERO)
+                .invoicedOccupiedAmount(BigDecimal.ZERO)
+                .orderNo("BO-1")
+                .importDate(LocalDate.now())
+                .build());
+        // 合同当前值被管理员改成「硬件」——同合同编辑不得回写快照（#6）
+        when(contractMapper.selectById(5L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(5L)
+                .applicationNo("CT-5")
+                .productType("硬件")
+                .applicantUserId(USER)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .build());
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(5L);
+        req.setContactPerson("李四");
+        assertDoesNotThrow(() -> boService.updateBusinessOrder(req));
+        verify(boMapper, never()).casChangeContractApplicationId(anyLong(), anyLong(), anyLong(), anyString());
+        verify(boMapper, never()).casFillProductSnapshotWhenEmpty(anyLong(), anyLong(), anyString());
+        verify(boMapper).updateById(argThat((FinanceBusinessOrderDO u) ->
+                "李四".equals(u.getContactPerson())
+                        && u.getProductTypeSnapshot() == null
+                        && u.getProductName() == null));
+    }
+
+    @Test
+    void updateBoSameContractEmptySnapshotShouldFillViaSelectableContract() {
+        // 复审 #6 正例：同合同、快照/name 皆空、合同 APPROVED 可补齐
+        when(boMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
+                .id(1L)
+                .importerId(USER)
+                .contractApplicationId(5L)
+                .productTypeSnapshot(null)
+                .productName(null)
+                .confirmedClaimedAmount(BigDecimal.ZERO)
+                .invoicedOccupiedAmount(BigDecimal.ZERO)
+                .orderNo("BO-1")
+                .importDate(LocalDate.now())
+                .build());
+        when(contractMapper.selectById(5L)).thenReturn(approved(5L, USER));
+        when(boMapper.casFillProductSnapshotWhenEmpty(1L, 5L, "软件")).thenReturn(1);
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(5L);
+        assertDoesNotThrow(() -> boService.updateBusinessOrder(req));
+        verify(boMapper).casFillProductSnapshotWhenEmpty(1L, 5L, "软件");
+        verify(boMapper).updateById(argThat((FinanceBusinessOrderDO u) ->
+                u.getProductTypeSnapshot() == null && u.getProductName() == null));
+    }
+
+    @Test
+    void updateBoSameContractEmptySnapshotShouldRejectRejectedContract() {
+        // 复审 #6 负例：rejected 合同不得升级为权威快照
+        when(boMapper.selectById(1L)).thenReturn(emptySnapshotBo(5L));
+        when(contractMapper.selectById(5L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(5L)
+                .applicationNo("CT-5")
+                .productType("软件")
+                .applicantUserId(USER)
+                .approvalStatus(FinanceContractApprovalStatusEnum.REJECTED.getStatus())
+                .voided(false)
+                .build());
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(5L);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> boService.updateBusinessOrder(req));
+        assertEquals(BUSINESS_ORDER_CONTRACT_INVALID.getCode(), ex.getCode());
+        verify(boMapper, never()).casFillProductSnapshotWhenEmpty(anyLong(), anyLong(), anyString());
+    }
+
+    @Test
+    void updateBoSameContractEmptySnapshotShouldRejectVoidedContract() {
+        // 复审 #6 负例：已作废合同
+        when(boMapper.selectById(1L)).thenReturn(emptySnapshotBo(5L));
+        when(contractMapper.selectById(5L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(5L)
+                .applicationNo("CT-5")
+                .productType("软件")
+                .applicantUserId(USER)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(true)
+                .build());
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(5L);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> boService.updateBusinessOrder(req));
+        assertEquals(BUSINESS_ORDER_CONTRACT_INVALID.getCode(), ex.getCode());
+        verify(boMapper, never()).casFillProductSnapshotWhenEmpty(anyLong(), anyLong(), anyString());
+    }
+
+    @Test
+    void updateBoSameContractEmptySnapshotShouldRejectOthersContract() {
+        // 复审 #6 负例：他人合同（applicant ≠ importer）
+        when(boMapper.selectById(1L)).thenReturn(emptySnapshotBo(5L));
+        when(contractMapper.selectById(5L)).thenReturn(approved(5L, OTHER));
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(5L);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> boService.updateBusinessOrder(req));
+        assertEquals(BUSINESS_ORDER_CONTRACT_INVALID.getCode(), ex.getCode());
+        verify(boMapper, never()).casFillProductSnapshotWhenEmpty(anyLong(), anyLong(), anyString());
+    }
+
+    private static FinanceBusinessOrderDO emptySnapshotBo(Long contractId) {
+        return FinanceBusinessOrderDO.builder()
+                .id(1L)
+                .importerId(USER)
+                .contractApplicationId(contractId)
+                .productTypeSnapshot(null)
+                .productName(null)
+                .confirmedClaimedAmount(BigDecimal.ZERO)
+                .invoicedOccupiedAmount(BigDecimal.ZERO)
+                .orderNo("BO-1")
+                .importDate(LocalDate.now())
+                .build();
     }
 
     @Test
@@ -231,20 +392,49 @@ class FinanceContractApplicationExecAndBoBindingTest {
                 .id(1L)
                 .importerId(USER)
                 .contractApplicationId(null)
+                .productName("旧产品")
                 .confirmedClaimedAmount(BigDecimal.ZERO)
                 .invoicedOccupiedAmount(BigDecimal.ZERO)
                 .orderNo("BO-OLD")
                 .importDate(LocalDate.now())
                 .build());
         when(contractMapper.selectById(6L)).thenReturn(approved(6L, USER));
-        when(boMapper.casSetContractApplicationIdWhenEmpty(1L, 6L)).thenReturn(1);
+        when(boMapper.countActiveInvoiceLinesByBusinessOrderId(1L)).thenReturn(0L);
+        when(boMapper.casSetContractApplicationIdWhenEmpty(1L, 6L, "软件")).thenReturn(1);
         FinanceBusinessOrderSaveReqVO req = validBo();
         req.setId(1L);
         req.setContractApplicationId(6L);
         assertDoesNotThrow(() -> boService.updateBusinessOrder(req));
-        verify(boMapper).casSetContractApplicationIdWhenEmpty(1L, 6L);
+        verify(boMapper).countActiveInvoiceLinesByBusinessOrderId(1L);
+        verify(boMapper).casSetContractApplicationIdWhenEmpty(1L, 6L, "软件");
         verify(boMapper).updateById(argThat((FinanceBusinessOrderDO u) ->
-                u.getContractApplicationId() == null));
+                u.getContractApplicationId() == null
+                        && u.getProductTypeSnapshot() == null
+                        && u.getProductName() == null));
+    }
+
+    @Test
+    void updateBoFirstMapShouldBlockWhenActiveInvoiceExistsEvenIfOccupyZero() {
+        // P2 #9
+        when(boMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
+                .id(1L)
+                .importerId(USER)
+                .contractApplicationId(null)
+                .productName("旧")
+                .confirmedClaimedAmount(BigDecimal.ZERO)
+                .invoicedOccupiedAmount(BigDecimal.ZERO)
+                .orderNo("BO-OLD")
+                .importDate(LocalDate.now())
+                .build());
+        when(contractMapper.selectById(6L)).thenReturn(approved(6L, USER));
+        when(boMapper.countActiveInvoiceLinesByBusinessOrderId(1L)).thenReturn(2L);
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(6L);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> boService.updateBusinessOrder(req));
+        assertEquals(BUSINESS_ORDER_ACTIVE_INVOICE_BLOCKS_CONTRACT_CHANGE.getCode(), ex.getCode());
+        verify(boMapper, never()).casSetContractApplicationIdWhenEmpty(anyLong(), anyLong(), anyString());
     }
 
     @Test
@@ -259,13 +449,36 @@ class FinanceContractApplicationExecAndBoBindingTest {
                 .importDate(LocalDate.now())
                 .build());
         when(contractMapper.selectById(6L)).thenReturn(approved(6L, USER));
-        when(boMapper.casChangeContractApplicationId(1L, 5L, 6L)).thenReturn(0);
+        when(boMapper.countActiveInvoiceLinesByBusinessOrderId(1L)).thenReturn(0L);
+        when(boMapper.casChangeContractApplicationId(1L, 5L, 6L, "软件")).thenReturn(0);
         FinanceBusinessOrderSaveReqVO req = validBo();
         req.setId(1L);
         req.setContractApplicationId(6L);
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> boService.updateBusinessOrder(req));
         assertEquals(BUSINESS_ORDER_CONTRACT_CHANGE_FORBIDDEN.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateBoShouldBlockChangeWhenActiveInvoiceExists() {
+        when(boMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
+                .id(1L)
+                .importerId(USER)
+                .contractApplicationId(5L)
+                .confirmedClaimedAmount(BigDecimal.ZERO)
+                .invoicedOccupiedAmount(BigDecimal.ZERO)
+                .orderNo("BO-1")
+                .importDate(LocalDate.now())
+                .build());
+        when(contractMapper.selectById(6L)).thenReturn(approved(6L, USER));
+        when(boMapper.countActiveInvoiceLinesByBusinessOrderId(1L)).thenReturn(1L);
+        FinanceBusinessOrderSaveReqVO req = validBo();
+        req.setId(1L);
+        req.setContractApplicationId(6L);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> boService.updateBusinessOrder(req));
+        assertEquals(BUSINESS_ORDER_ACTIVE_INVOICE_BLOCKS_CONTRACT_CHANGE.getCode(), ex.getCode());
+        verify(boMapper, never()).casChangeContractApplicationId(anyLong(), anyLong(), anyLong(), anyString());
     }
 
     private static FinanceContractApplicationDO pending(Long id, Long applicant, String node) {
@@ -282,6 +495,7 @@ class FinanceContractApplicationExecAndBoBindingTest {
         return FinanceContractApplicationDO.builder()
                 .id(id)
                 .applicationNo("CT-" + id)
+                .productType("软件")
                 .applicantUserId(applicant)
                 .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                 .voided(false)

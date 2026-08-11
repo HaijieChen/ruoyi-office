@@ -54,6 +54,7 @@ class FinanceBusinessOrderServiceImplTest {
         when(contractApplicationMapper.selectById(anyLong())).thenReturn(FinanceContractApplicationDO.builder()
                 .id(CONTRACT_APP_ID)
                 .applicationNo("CT-1")
+                .productType("软件")
                 .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                 .applicantUserId(IMPORTER_ID)
                 .voided(false)
@@ -71,6 +72,7 @@ class FinanceBusinessOrderServiceImplTest {
 
         businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID);
 
+        // EXP-70：忽略客户端 productName，快照/名称均取合同 productType
         verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
                 ORDER_NO.equals(order.getOrderNo())
                         && LocalDate.now().equals(order.getImportDate())
@@ -78,7 +80,8 @@ class FinanceBusinessOrderServiceImplTest {
                         && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
                         && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
                         && CONTRACT_APP_ID.equals(order.getContractApplicationId())
-                        && "产品A".equals(order.getProductName())
+                        && "软件".equals(order.getProductName())
+                        && "软件".equals(order.getProductTypeSnapshot())
                         && "张三".equals(order.getContactPerson())
                         && "付款公司".equals(order.getPayerName())
                         && new BigDecimal("1000.00").compareTo(order.getSignedExecutionAmount()) == 0
@@ -86,6 +89,38 @@ class FinanceBusinessOrderServiceImplTest {
                         && new BigDecimal("1000.00").compareTo(order.getSettlementAmount()) == 0
                         && BigDecimal.ZERO.compareTo(order.getConfirmedClaimedAmount()) == 0
                         && "备注内容".equals(order.getRemark())));
+    }
+
+    @Test
+    void createBusinessOrderShouldIgnoreClientProductAndUseContractProduct() {
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+        reqVO.setProductName("客户端篡改产品");
+
+        businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID);
+
+        verify(businessOrderMapper).insert(argThat((FinanceBusinessOrderDO order) ->
+                "软件".equals(order.getProductTypeSnapshot())
+                        && "软件".equals(order.getProductName())));
+    }
+
+    @Test
+    void createBusinessOrderShouldRejectContractWithoutProductType() {
+        when(contractApplicationMapper.selectById(CONTRACT_APP_ID)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(CONTRACT_APP_ID)
+                .applicationNo("CT-1")
+                .productType(null)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .applicantUserId(IMPORTER_ID)
+                .voided(false)
+                .build());
+        FinanceBusinessOrderSaveReqVO reqVO = validOrder();
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> businessOrderService.createBusinessOrder(reqVO, IMPORTER_ID));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.BUSINESS_ORDER_CONTRACT_PRODUCT_MISSING.getCode(),
+                exception.getCode());
+        verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
     }
 
     @Test
@@ -140,14 +175,16 @@ class FinanceBusinessOrderServiceImplTest {
         when(businessOrderMapper.selectById(1L)).thenReturn(FinanceBusinessOrderDO.builder()
                 .id(1L).orderNo(ORDER_NO).importDate(LocalDate.of(2026, 7, 1)).importerId(IMPORTER_ID)
                 .contractApplicationId(CONTRACT_APP_ID)
+                .productTypeSnapshot("软件")
                 .confirmedClaimedAmount(new BigDecimal("50.00")).sourceRowHash("hash").build());
         FinanceBusinessOrderSaveReqVO reqVO = validOrder();
         reqVO.setId(1L);
         reqVO.setDiscountRate(new BigDecimal("0.25"));
+        reqVO.setProductName("客户端篡改");
 
         businessOrderService.updateBusinessOrder(reqVO);
 
-        // CS-F11：普通 update 不写合同列（null 跳过），合同仅 CAS
+        // CS-F11 / EXP-70 #2：普通 update 不写合同列与权威产品字段（null 跳过）
         verify(businessOrderMapper).updateById(argThat((FinanceBusinessOrderDO order) ->
                 ORDER_NO.equals(order.getOrderNo())
                         && LocalDate.of(2026, 7, 1).equals(order.getImportDate())
@@ -155,6 +192,8 @@ class FinanceBusinessOrderServiceImplTest {
                         && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
                         && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
                         && order.getContractApplicationId() == null
+                        && order.getProductTypeSnapshot() == null
+                        && order.getProductName() == null
                         && new BigDecimal("750.00").compareTo(order.getSettlementAmount()) == 0
                         && new BigDecimal("50.00").compareTo(order.getConfirmedClaimedAmount()) == 0
                         && "hash".equals(order.getSourceRowHash())));

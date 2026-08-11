@@ -26,6 +26,14 @@ public class FinanceInvoiceApplicationLineDO extends BaseDO {
     private Long id;
     private Long applicationId;
     private Long businessOrderId;
+    /**
+     * 来源合同签约申请 id（提交时从商务单复制）
+     */
+    private Long sourceContractApplicationId;
+    /**
+     * 产品类型快照（提交时从商务单复制）
+     */
+    private String productTypeSnapshot;
     private BigDecimal amount;
     private String invoiceCompany;
     private String invoiceType;

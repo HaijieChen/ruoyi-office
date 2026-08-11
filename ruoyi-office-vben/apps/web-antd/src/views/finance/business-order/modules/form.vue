@@ -26,6 +26,11 @@ import { listSelectableContractsForBo } from '#/api/finance/contract-application
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { $t } from '#/locales';
 
+import {
+  resolveEditOpenProductType,
+  resolveProductAfterContractChange,
+} from '../product-display';
+
 defineOptions({ name: 'FinanceBusinessOrderForm' });
 
 const emit = defineEmits(['success']);
@@ -48,7 +53,8 @@ interface FormData {
   contractProcessId?: string;
   contractApplicationId?: number;
   orderDate?: string;
-  productName?: string;
+  /** 只读展示：来自合同 productType（不提交） */
+  productType?: string;
   contactPerson?: string;
   executionStartDate?: string;
   executionEndDate?: string;
@@ -71,6 +77,12 @@ const loadingCompany = ref(false);
 const loadingContract = ref(false);
 /** 合同 id → 对方名称（回填源） */
 const contractCounterpartyMap = ref<Record<number, string>>({});
+/** 合同 id → 产品类型（只读展示） */
+const contractProductMap = ref<Record<number, string>>({});
+/** 打开编辑时已保存的合同 id（复审 #10：选回原合同时恢复快照） */
+const savedContractId = ref<number | null | undefined>();
+/** 打开编辑时已保存的产品快照 */
+const savedProductSnapshot = ref<string | undefined>();
 /** 用户是否手改过付款方；true 时换合同不覆盖 */
 const payerDirty = ref(false);
 /** 系统回填中，忽略 Input 可能触发的 change */
@@ -92,7 +104,6 @@ const rules: Record<string, Rule[]> = {
     },
   ],
   orderDate: [{ required: true, message: '签单日期不能为空', trigger: 'change' }],
-  productName: [{ required: true, message: '产品/服务不能为空', trigger: 'blur' }],
   contactPerson: [{ required: true, message: '联系人不能为空', trigger: 'blur' }],
   executionStartDate: [{ required: true, message: '执行开始日期不能为空', trigger: 'change' }],
   executionEndDate: [{ required: true, message: '执行结束日期不能为空', trigger: 'change' }],
@@ -129,6 +140,9 @@ function resetForm() {
   formData.value = {};
   payerDirty.value = false;
   contractCounterpartyMap.value = {};
+  contractProductMap.value = {};
+  savedContractId.value = undefined;
+  savedProductSnapshot.value = undefined;
   formRef.value?.resetFields();
 }
 
@@ -148,6 +162,23 @@ function maybeAutofillPayerFromContract(contractId?: number | null) {
   payerDirty.value = false;
   queueMicrotask(() => {
     payerAutofilling = false;
+  });
+}
+
+/**
+ * 仅在用户显式切换合同时刷新只读产品展示。
+ * 选回已保存合同 → 恢复已保存快照；否则取合同当前产品（#10）。
+ */
+function refreshProductOnContractChange(contractId?: number | null) {
+  const current =
+    contractId != null && contractProductMap.value[contractId]
+      ? contractProductMap.value[contractId]
+      : undefined;
+  formData.value.productType = resolveProductAfterContractChange({
+    selectedContractId: contractId,
+    savedContractId: savedContractId.value,
+    savedProductSnapshot: savedProductSnapshot.value,
+    contractCurrentProduct: current,
   });
 }
 
@@ -184,20 +215,29 @@ async function loadContractOptions() {
   loadingContract.value = true;
   try {
     const list = (await listSelectableContractsForBo()) || [];
-    const map: Record<number, string> = {};
+    const counterpartyMap: Record<number, string> = {};
+    const productMap: Record<number, string> = {};
     contractOptions.value = list
       .filter((c) => c.id != null)
       .map((c) => {
         const id = c.id as number;
         if (c.counterpartyName && String(c.counterpartyName).trim()) {
-          map[id] = String(c.counterpartyName).trim();
+          counterpartyMap[id] = String(c.counterpartyName).trim();
         }
+        if (c.productType && String(c.productType).trim()) {
+          productMap[id] = String(c.productType).trim();
+        }
+        const no = c.applicationNo || String(c.id);
+        const party = c.counterpartyName ? String(c.counterpartyName).trim() : '-';
+        const product = c.productType ? String(c.productType).trim() : '-';
+        // 合同单号｜对方｜产品
         return {
           value: id,
-          label: `${c.applicationNo || c.id}${c.counterpartyName ? ` | ${c.counterpartyName}` : ''}`,
+          label: `${no}｜${party}｜${product}`,
         };
       });
-    contractCounterpartyMap.value = map;
+    contractCounterpartyMap.value = counterpartyMap;
+    contractProductMap.value = productMap;
   } finally {
     loadingContract.value = false;
   }
@@ -207,13 +247,13 @@ const [Modal, modalApi] = useVbenModal({
   async onConfirm() {
     await formRef.value?.validate();
     modalApi.lock();
+    // EXP-70：payload 不发送产品；服务端从合同派生
     const saveData: FinanceBusinessOrderApi.SaveForm = {
       id: formData.value.id,
       entityCompanyDeptId: formData.value.entityCompanyDeptId!,
       // 正式关联只提交 contractApplicationId；legacy 流程文本不再从 UI 写入
       contractApplicationId: formData.value.contractApplicationId,
       orderDate: formData.value.orderDate!,
-      productName: formData.value.productName!,
       contactPerson: formData.value.contactPerson!,
       executionStartDate: formData.value.executionStartDate!,
       executionEndDate: formData.value.executionEndDate!,
@@ -256,7 +296,12 @@ const [Modal, modalApi] = useVbenModal({
         executionEndDate: formatDateField(detail.executionEndDate),
         importDate: formatDateField(detail.importDate),
         importer: detail.importerName || String(detail.importerId ?? ''),
+        // 只读产品：仅详情快照/legacy（EXP-70 复审 #2，勿用合同当前值）
+        productType: resolveEditOpenProductType(detail),
       };
+      // #10：记住已保存合同与快照，供 A→B→A 恢复
+      savedContractId.value = detail.contractApplicationId ?? null;
+      savedProductSnapshot.value = resolveEditOpenProductType(detail);
       // 编辑打开：保留库中付款方，不覆盖
       payerDirty.value = false;
       // 详情中的主体公司若不在启用列表中，补一条选项以便展示
@@ -275,18 +320,22 @@ const [Modal, modalApi] = useVbenModal({
         ];
       }
       // 已关联合同若不在可选列表（历史/他人员），补一条便于编辑展示
+      // 标签中的产品用详情快照（非合同当前值），避免误导
       if (
         detail.contractApplicationId != null &&
         !contractOptions.value.some((o) => o.value === detail.contractApplicationId)
       ) {
+        const product = detail.productType || detail.productName || '-';
+        const no = detail.contractApplicationNo || `#${detail.contractApplicationId}`;
         contractOptions.value = [
           {
             value: detail.contractApplicationId,
-            label: `合同 #${detail.contractApplicationId}`,
+            label: `${no}｜-｜${product}`,
           },
           ...contractOptions.value,
         ];
       }
+      // EXP-70：编辑初次打开只展示详情快照；显式换合同见 onContractChange
     } finally {
       modalApi.unlock();
     }
@@ -302,9 +351,18 @@ watch(
   },
 );
 
-/** 仅用户变更合同时回填；避免编辑打开写入 detail 时 watch 覆盖库中 payer */
-function onContractChange(id: number | undefined) {
-  maybeAutofillPayerFromContract(id);
+/** 仅用户变更合同时回填；选回已保存合同则恢复已保存快照（#10） */
+function onContractChange(id: unknown) {
+  const contractId =
+    id === null || id === undefined || id === ''
+      ? undefined
+      : Number(id);
+  const normalized =
+    contractId !== undefined && Number.isFinite(contractId)
+      ? contractId
+      : undefined;
+  maybeAutofillPayerFromContract(normalized);
+  refreshProductOnContractChange(normalized);
 }
 </script>
 
@@ -372,8 +430,12 @@ function onContractChange(id: number | undefined) {
           style="width: 100%"
         />
       </Form.Item>
-      <Form.Item label="产品/服务" name="productName">
-        <Input v-model:value="formData.productName" placeholder="请输入产品或服务名称" />
+      <Form.Item label="产品/服务">
+        <Input
+          :value="formData.productType"
+          disabled
+          placeholder="选择合同后自动带出，不可改"
+        />
       </Form.Item>
       <Form.Item label="联系人" name="contactPerson">
         <Input v-model:value="formData.contactPerson" placeholder="请输入联系人" />

@@ -27,8 +27,12 @@ export namespace FinanceBusinessOrderApi {
     contractApplicationNo?: string;
     /** 签单日期 */
     orderDate: string;
-    /** 产品/服务 */
-    productName: string;
+    /** 产品/服务（legacy 兼容读取） */
+    productName?: string;
+    /** 产品类型快照（权威；开票可选仅认此字段） */
+    productTypeSnapshot?: string;
+    /** 产品类型（规范展示字段，优先快照 dual-read；EXP-70） */
+    productType?: string;
     /** 对接人 */
     contactPerson: string;
     /** 执行开始日期 */
@@ -66,16 +70,15 @@ export namespace FinanceBusinessOrderApi {
     contactPerson?: string;
     /** 合同业务单号（正式关联） */
     contractApplicationNo?: string;
-    /** 仅可开余额 > 0（开票下拉用） */
+    /** 开票可选：可开余额 > 0 且有合同且非空 product_type_snapshot（后端 invoice-selectable） */
     onlyOpenable?: boolean;
   }
 
-  /** 创建/编辑表单数据（排除服务端只读字段） */
+  /** 创建/编辑表单数据（排除服务端只读字段；产品由服务端从合同派生，勿提交） */
   export type SaveForm = Pick<
     BusinessOrder,
     | 'entityCompanyDeptId'
     | 'orderDate'
-    | 'productName'
     | 'contactPerson'
     | 'executionStartDate'
     | 'executionEndDate'
@@ -86,6 +89,10 @@ export namespace FinanceBusinessOrderApi {
     payerName?: string;
     discountRate?: number;
     remark?: string;
+    /**
+     * @deprecated EXP-70 兼容期：旧客户端可传，服务端忽略并从合同派生
+     */
+    productName?: string;
   };
 
   /** 导入结果 */
