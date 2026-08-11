@@ -23,7 +23,11 @@ WHERE NOT EXISTS (
     SELECT 1 FROM `system_role` sr WHERE sr.`deleted` = b'0' AND sr.`code` = r.code AND sr.`tenant_id` = 1
 );
 
--- ========== 1. payment_finance：query + update（财务填科目）+ BPM 待办办理依赖平台权限 ==========
+-- ========== 1. payment_finance：付款业务 + 最小 BPM 待办权限 ==========
+-- 业务：query + update（财务填科目）
+-- BPM 最小集（对齐 workbench_bpm_role_menu_fa_bs 审批办理，勿塞全量 admin）：
+--   bpm:task:query / bpm:task:update / bpm:process-instance:query
+--   + 待办/已办/我的流程页面（1207/1208/1201）避免侧栏进不去
 INSERT INTO `system_role_menu` (`role_id`, `menu_id`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
 SELECT r.`id`, m.`id`, 'admin', NOW(), 'admin', NOW(), b'0', 1
 FROM `system_role` r
@@ -32,9 +36,13 @@ WHERE r.`deleted` = b'0' AND r.`code` = 'payment_finance' AND r.`tenant_id` = 1
   AND m.`deleted` = b'0'
   AND (
         m.`component` = 'finance/payment-application/index'
+     OR m.`id` IN (1200, 1201, 1202, 1207, 1208, 1221, 1222)
      OR m.`permission` IN (
             'finance:payment-application:query',
-            'finance:payment-application:update'
+            'finance:payment-application:update',
+            'bpm:task:query',
+            'bpm:task:update',
+            'bpm:process-instance:query'
         )
   )
   AND NOT EXISTS (
@@ -42,21 +50,31 @@ WHERE r.`deleted` = b'0' AND r.`code` = 'payment_finance' AND r.`tenant_id` = 1
       WHERE rm.`role_id` = r.`id` AND rm.`menu_id` = m.`id` AND rm.`tenant_id` = 1 AND rm.`deleted` = b'0'
   );
 
--- ========== 2. payment_cashier：query + record-pay（幂等补齐） ==========
+-- ========== 2. payment_cashier：query + record-pay + 同上最小 BPM 待办权限 ==========
 INSERT INTO `system_role_menu` (`role_id`, `menu_id`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
 SELECT r.`id`, m.`id`, 'admin', NOW(), 'admin', NOW(), b'0', 1
 FROM `system_role` r
 CROSS JOIN `system_menu` m
 WHERE r.`deleted` = b'0' AND r.`code` = 'payment_cashier' AND r.`tenant_id` = 1
   AND m.`deleted` = b'0'
-  AND m.`permission` IN (
-        'finance:payment-application:query',
-        'finance:payment-application:record-pay'
+  AND (
+        m.`id` IN (1200, 1201, 1202, 1207, 1208, 1221, 1222)
+     OR m.`permission` IN (
+            'finance:payment-application:query',
+            'finance:payment-application:record-pay',
+            'bpm:task:query',
+            'bpm:task:update',
+            'bpm:process-instance:query'
+        )
   )
   AND NOT EXISTS (
       SELECT 1 FROM `system_role_menu` rm
       WHERE rm.`role_id` = r.`id` AND rm.`menu_id` = m.`id` AND rm.`tenant_id` = 1 AND rm.`deleted` = b'0'
   );
+
+-- 运维注意：直写 system_role_menu 不会 @CacheEvict Permission Redis。
+-- 执行后请角色管理保存一次菜单，或 POST /admin-api/system/permission/assign-role-menu，
+-- 否则 hasPermission 可能短暂 403（约 1 分钟缓存）。
 
 -- ========== 3. 测试环境候选人：financeadminuser → payment_finance + payment_cashier ==========
 -- 生产：删除/替换本段，按业务名单绑定，切勿把全部 finance_admin 用户默认挂入。

@@ -45,10 +45,19 @@ class FinancePaymentBpmnAndRoleContractTest {
         assertTrue(text.contains("financeadminuser"), "test env binds financeadminuser");
         assertTrue(text.contains("finance:payment-application:query"));
         assertTrue(text.contains("finance:payment-application:record-pay"));
+        // EXP-73 ENV-1：最小 BPM 待办权限必须闭环，避免精简库 todo 403
+        assertTrue(text.contains("bpm:task:query"), "must grant bpm:task:query");
+        assertTrue(text.contains("bpm:task:update"), "must grant bpm:task:update");
+        assertTrue(text.contains("bpm:process-instance:query"),
+                "must grant bpm:process-instance:query for todo/process page");
         // 禁止默认把 finance_admin 整角色当候选人（脚本应保留分离说明）
         assertTrue(text.contains("finance_admin") && text.toLowerCase(Locale.ROOT).contains("分离")
                         || text.contains("禁止把全体 finance_admin"),
                 "must document separation from finance_admin");
+        // 不得把 finance_admin 整角色菜单批量赋给候选人（最小集，非全量 admin）
+        assertFalse(text.contains("r.`code` IN ('finance_admin'")
+                        || text.contains("code` = 'finance_admin' AND m.`permission`"),
+                "must not bulk-assign finance_admin menus as payment candidates");
     }
 
     @Test
