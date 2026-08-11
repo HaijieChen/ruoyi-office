@@ -66,4 +66,10 @@ public class AttachmentRespVO {
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
 
+    /**
+     * 鉴权下载相对路径（保留业务附件；不暴露 fileId/path/url 时使用）。
+     */
+    @Schema(description = "鉴权下载路径", example = "/hrm/employee-entry-bill/attachment/download?billId=1&attachmentId=2")
+    private String downloadPath;
+
 }

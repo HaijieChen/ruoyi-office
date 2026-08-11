@@ -4,6 +4,8 @@ import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReq
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.dal.mysql.AttachmentMapper;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
+import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -15,10 +17,11 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 /**
- * 通用附件：归属校验 + 保留业务类型禁止通用写（#2）。
+ * 通用附件：归属校验 + 保留业务类型禁止通用写 + FileDO 权威写入。
  */
 @ExtendWith(MockitoExtension.class)
 class AttachmentServiceImplTest {
@@ -28,6 +31,8 @@ class AttachmentServiceImplTest {
 
     @Mock
     private AttachmentMapper attachmentMapper;
+    @Mock
+    private FileAccessApi fileAccessApi;
 
     private AttachmentSaveReqVO base(String name) {
         AttachmentSaveReqVO vo = new AttachmentSaveReqVO();
@@ -39,6 +44,16 @@ class AttachmentServiceImplTest {
         vo.setBusinessType("x");
         vo.setBusinessId(1L);
         return vo;
+    }
+
+    private FileRespDTO file(long id, String path, String name) {
+        FileRespDTO f = new FileRespDTO();
+        f.setId(id);
+        f.setPath(path);
+        f.setName(name);
+        f.setSize(2048L);
+        f.setType("application/pdf");
+        return f;
     }
 
     @Test
@@ -107,7 +122,7 @@ class AttachmentServiceImplTest {
     }
 
     @Test
-    void internalSaveListAllowsOnboardingBusinessType() {
+    void internalSaveListAllowsOnboardingWhenFileDoMatchesPrivatePath() {
         when(attachmentMapper.selectListByBusiness(
                 AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 100L))
                 .thenReturn(List.of());
@@ -125,6 +140,8 @@ class AttachmentServiceImplTest {
         neu.setFileId(55L);
         neu.setFilePath("hrm-onboarding-private/new.pdf");
         neu.setFileUrl("");
+        when(fileAccessApi.getFile(55L)).thenReturn(
+                file(55L, "hrm-onboarding-private/new.pdf", "new.pdf"));
 
         attachmentService.saveAttachmentListInternal(
                 AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 100L, List.of(keep, neu));
@@ -136,15 +153,34 @@ class AttachmentServiceImplTest {
         assertEquals(5L, captor.getValue().get(0).getId());
         assertNull(captor.getValue().get(1).getId());
         assertEquals(55L, captor.getValue().get(1).getFileId());
+        assertEquals("hrm-onboarding-private/new.pdf", captor.getValue().get(1).getFilePath());
         assertEquals("", captor.getValue().get(1).getFileUrl());
     }
 
     @Test
-    void internalSaveListRejectsForgedReservedWithoutClaimIdentity() {
+    void internalSaveListRejectsPrivateLookingPathWithMismatchedFileId() {
         when(attachmentMapper.selectListByBusiness(
                 AttachmentServiceImpl.RESERVED_ENTRY_BILL_BUSINESS_TYPE, 1L))
                 .thenReturn(List.of());
-        // 伪造：任意 public fileId/path，无私有目录
+        // 反例：私有样式 path + 任意 fileId（FileDO 真实 path 不同）
+        AttachmentSaveReqVO forged = base("x.pdf");
+        forged.setFileId(777L);
+        forged.setFilePath("hrm-onboarding-private/forged.pdf");
+        forged.setFileUrl("");
+        when(fileAccessApi.getFile(777L)).thenReturn(
+                file(777L, "public/real-report.pdf", "real-report.pdf"));
+
+        assertThrows(ServiceException.class, () ->
+                attachmentService.saveAttachmentListInternal(
+                        AttachmentServiceImpl.RESERVED_ENTRY_BILL_BUSINESS_TYPE, 1L, List.of(forged)));
+        verify(attachmentMapper, never()).insertOrUpdate(anyList());
+    }
+
+    @Test
+    void internalSaveListRejectsForgedReservedWithPublicUrl() {
+        when(attachmentMapper.selectListByBusiness(
+                AttachmentServiceImpl.RESERVED_ENTRY_BILL_BUSINESS_TYPE, 1L))
+                .thenReturn(List.of());
         AttachmentSaveReqVO forged = base("public.pdf");
         forged.setFileId(777L);
         forged.setFilePath("public/report.pdf");
@@ -154,6 +190,7 @@ class AttachmentServiceImplTest {
                 attachmentService.saveAttachmentListInternal(
                         AttachmentServiceImpl.RESERVED_ENTRY_BILL_BUSINESS_TYPE, 1L, List.of(forged)));
         verify(attachmentMapper, never()).insertOrUpdate(anyList());
+        verify(fileAccessApi, never()).getFile(anyLong());
     }
 
     @Test
@@ -167,6 +204,37 @@ class AttachmentServiceImplTest {
         assertThrows(ServiceException.class, () ->
                 attachmentService.saveAttachmentListInternal(
                         AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 1L, List.of(noId)));
+    }
+
+    @Test
+    void transferReservedAllowsHistoricalPublicPathFromSource() {
+        AttachmentDO src = new AttachmentDO();
+        src.setId(10L);
+        src.setBusinessType("201");
+        src.setBusinessId(1L);
+        src.setFileId(105L);
+        src.setFilePath("public/report.pdf");
+        src.setFileName("report.pdf");
+        src.setFileSize(100L);
+        when(attachmentMapper.selectListByBusiness("201", 1L)).thenReturn(List.of(src));
+        when(fileAccessApi.getFile(105L)).thenReturn(
+                file(105L, "public/report.pdf", "report.pdf"));
+
+        attachmentService.transferReservedAttachmentsFromSource(
+                "201", 1L,
+                AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 99L);
+
+        verify(attachmentMapper).deleteByBusiness(
+                AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 99L);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AttachmentDO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(attachmentMapper).insertOrUpdate(captor.capture());
+        AttachmentDO copy = captor.getValue().get(0);
+        assertEquals(105L, copy.getFileId());
+        assertEquals("public/report.pdf", copy.getFilePath());
+        assertEquals("", copy.getFileUrl());
+        assertEquals(AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, copy.getBusinessType());
+        assertEquals(99L, copy.getBusinessId());
     }
 
     @Test

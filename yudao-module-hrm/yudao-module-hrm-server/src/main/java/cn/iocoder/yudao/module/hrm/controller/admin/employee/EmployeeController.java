@@ -102,7 +102,8 @@ public class EmployeeController {
 
     @PostMapping("/onboarding-file/upload")
     @Operation(summary = "上传入职资料并签发一次性 claim（不返回公开 URL）")
-    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create') or @ss.hasPermission('hrm:employee-archive:update')")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create') or @ss.hasPermission('hrm:employee-archive:update') "
+            + "or @ss.hasPermission('hrm:employee-entry-bill:create') or @ss.hasPermission('hrm:employee-entry-bill:update')")
     public CommonResult<OnboardingFileClaimRespVO> uploadOnboardingFile(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws Exception {
         return success(employeeArchiveService.uploadOnboardingFile(file));

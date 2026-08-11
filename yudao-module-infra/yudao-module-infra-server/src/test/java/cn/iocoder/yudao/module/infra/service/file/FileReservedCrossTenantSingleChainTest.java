@@ -44,7 +44,7 @@ import static org.mockito.Mockito.*;
  * <p>
  * 不拆成「仅 mapper」与「仅 mock 服务」两段伪证据。
  */
-class FileReservedCrossTenantSingleChainIT {
+class FileReservedCrossTenantSingleChainTest {
 
     private static final long TENANT_A = 100L;
     private static final long TENANT_B = 200L;

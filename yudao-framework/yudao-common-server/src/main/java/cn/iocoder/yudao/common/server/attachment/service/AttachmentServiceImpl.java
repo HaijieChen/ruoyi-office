@@ -5,6 +5,9 @@ import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReq
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.dal.mysql.AttachmentMapper;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
+import cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs;
+import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -13,10 +16,12 @@ import cn.hutool.core.util.StrUtil;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -45,6 +50,12 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     @Resource
     private AttachmentMapper attachmentMapper;
+
+    /**
+     * 权威文件身份（yudao-server 单体注入；缺失则 reserved 写入 fail-closed）。
+     */
+    @Resource
+    private FileAccessApi fileAccessApi;
 
     @Override
     public Long createAttachment(@Valid AttachmentSaveReqVO createReqVO) {
@@ -234,7 +245,7 @@ public class AttachmentServiceImpl implements AttachmentService {
         }
 
         if (isReservedBusinessType(businessType)) {
-            validateReservedNewAttachmentIdentity(reqVO);
+            applyAuthoritativeReservedIdentity(reqVO, true);
         }
 
         AttachmentDO attachmentDO = BeanUtils.toBean(reqVO, AttachmentDO.class);
@@ -252,20 +263,102 @@ public class AttachmentServiceImpl implements AttachmentService {
     }
 
     /**
-     * 保留业务新行：fileId 必填；path 必须落私有目录；禁止以公开 URL 作为身份。
-     * 身份须由 claim 消费后从 FileDO 派生，本方法做防御性门禁。
+     * 保留业务新行：以 FileAccessApi 权威 FileDO 覆盖身份。
+     * <ul>
+     *   <li>fileId 必填且必须能查到 FileDO</li>
+     *   <li>客户端 path 若提供必须与 FileDO.path 一致（禁止「私有样式 path + 任意 fileId」）</li>
+     *   <li>claim 新写（requirePrivate=true）path 必须落私有目录</li>
+     *   <li>强制清空 fileUrl；name/size/type 以 FileDO 为准</li>
+     * </ul>
      */
-    private void validateReservedNewAttachmentIdentity(AttachmentSaveReqVO reqVO) {
+    private void applyAuthoritativeReservedIdentity(AttachmentSaveReqVO reqVO, boolean requirePrivate) {
         if (reqVO.getFileId() == null) {
-            throw invalidParamException("保留业务附件必须经 claim 派生 fileId，禁止无 claim 写入");
+            throw invalidParamException("保留业务附件必须经 claim/FileDO 派生 fileId，禁止无 claim 写入");
         }
-        if (StrUtil.isBlank(reqVO.getFilePath())
-                || !reqVO.getFilePath().contains("hrm-onboarding-private")) {
-            throw invalidParamException("保留业务附件 path 必须来自私有目录权威记录");
-        }
-        // 允许调用方传空串；非空公开 URL 一律拒绝（防止 URL 污染）
         if (StrUtil.isNotBlank(reqVO.getFileUrl())) {
             throw invalidParamException("保留业务附件禁止写入公开 fileUrl");
+        }
+        if (fileAccessApi == null) {
+            throw invalidParamException("保留业务附件写入失败：FileAccessApi 不可用（fail-closed）");
+        }
+        FileRespDTO file = fileAccessApi.getFile(reqVO.getFileId());
+        if (file == null || file.getId() == null) {
+            throw invalidParamException("保留业务附件 fileId 不存在或不可访问: {}", reqVO.getFileId());
+        }
+        if (StrUtil.isNotBlank(reqVO.getFilePath())
+                && !Objects.equals(reqVO.getFilePath(), file.getPath())) {
+            throw invalidParamException("保留业务附件 path 与权威 FileDO 不一致，禁止伪造");
+        }
+        if (requirePrivate && !FilePrivateDirs.isPrivateDirectory(file.getPath())) {
+            throw invalidParamException("保留业务新附件必须来自 claim 私有目录上传");
+        }
+        // 覆盖为权威身份
+        reqVO.setFileId(file.getId());
+        reqVO.setFilePath(file.getPath());
+        if (StrUtil.isNotBlank(file.getName())) {
+            reqVO.setFileName(file.getName());
+        }
+        if (file.getSize() != null) {
+            reqVO.setFileSize(file.getSize());
+        }
+        if (StrUtil.isNotBlank(file.getType())) {
+            reqVO.setFileType(file.getType());
+        }
+        reqVO.setFileUrl("");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void transferReservedAttachmentsFromSource(String sourceBusinessType, Long sourceBusinessId,
+                                                      String targetBusinessType, Long targetBusinessId) {
+        if (!isReservedBusinessType(sourceBusinessType) || !isReservedBusinessType(targetBusinessType)) {
+            throw invalidParamException("转档仅允许保留业务类型之间复制");
+        }
+        if (sourceBusinessId == null || targetBusinessId == null) {
+            throw invalidParamException("转档业务 ID 不能为空");
+        }
+        if (fileAccessApi == null) {
+            throw invalidParamException("保留业务附件转档失败：FileAccessApi 不可用（fail-closed）");
+        }
+        List<AttachmentDO> sources = attachmentMapper.selectListByBusiness(sourceBusinessType, sourceBusinessId);
+        if (CollUtil.isEmpty(sources)) {
+            return;
+        }
+        List<AttachmentDO> copies = new ArrayList<>();
+        int order = 1;
+        for (AttachmentDO src : sources) {
+            Long fileId = src.getFileId();
+            FileRespDTO file = null;
+            if (fileId != null) {
+                file = fileAccessApi.getFile(fileId);
+            }
+            if (file == null && StrUtil.isNotBlank(src.getFilePath())) {
+                file = fileAccessApi.getUniqueFileByPath(src.getFilePath());
+            }
+            if (file == null || file.getId() == null) {
+                throw invalidParamException(
+                        "历史保留附件无法解析权威 FileDO，拒绝转档: attachmentId={}", src.getId());
+            }
+            AttachmentDO copy = new AttachmentDO();
+            copy.setBusinessType(targetBusinessType);
+            copy.setBusinessId(targetBusinessId);
+            copy.setFileId(file.getId());
+            copy.setFilePath(file.getPath());
+            copy.setFileName(StrUtil.blankToDefault(file.getName(), src.getFileName()));
+            copy.setFileUrl("");
+            copy.setFileSize(file.getSize() != null ? file.getSize() : src.getFileSize());
+            copy.setFileType(StrUtil.blankToDefault(file.getType(), src.getFileType()));
+            copy.setFileExtension(src.getFileExtension());
+            copy.setUploadTime(src.getUploadTime() != null ? src.getUploadTime() : LocalDateTime.now());
+            copy.setSortOrder(src.getSortOrder() != null ? src.getSortOrder() : order);
+            copy.setRemark(src.getRemark());
+            copies.add(copy);
+            order++;
+        }
+        // 目标业务已有行时先清（转档幂等：同员工重复审批不应堆叠）
+        attachmentMapper.deleteByBusiness(targetBusinessType, targetBusinessId);
+        if (!copies.isEmpty()) {
+            attachmentMapper.insertOrUpdate(copies);
         }
     }
 

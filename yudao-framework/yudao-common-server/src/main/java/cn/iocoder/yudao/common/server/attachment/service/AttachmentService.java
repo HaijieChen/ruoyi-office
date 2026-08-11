@@ -86,13 +86,28 @@ public interface AttachmentService {
     void saveAttachmentList(String businessType, Long businessId, List<AttachmentSaveReqVO> attachments);
 
     /**
-     * 内部链路批量保存：允许保留业务类型（仅 HRM 入职资料 claim 消费后调用）
+     * 内部链路批量保存：允许保留业务类型（仅 HRM claim 消费后调用）。
+     * 新行强制 FileAccessApi 权威校验：fileId 对应 FileDO.path，且必须落在私有目录。
      *
      * @param businessType 业务类型
      * @param businessId 业务ID
      * @param attachments 附件列表
      */
     void saveAttachmentListInternal(String businessType, Long businessId, List<AttachmentSaveReqVO> attachments);
+
+    /**
+     * 历史/审批转档：从已存在的同租户保留业务源附件复制到目标业务。
+     * <p>
+     * 身份以权威 FileDO 为准（path 可为迁移后的 public 权威 path），不要求私有目录；
+     * 禁止传入客户端自报身份。仅接受已落库的源 attachment 行。
+     *
+     * @param sourceBusinessType 源业务类型（如 201）
+     * @param sourceBusinessId   源业务 ID
+     * @param targetBusinessType 目标业务类型（如 hrm_employee_archive_onboarding）
+     * @param targetBusinessId   目标业务 ID
+     */
+    void transferReservedAttachmentsFromSource(String sourceBusinessType, Long sourceBusinessId,
+                                               String targetBusinessType, Long targetBusinessId);
 
     /**
      * 根据业务类型和业务ID删除附件
