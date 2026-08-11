@@ -8,7 +8,9 @@ import { message } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 
-import { uploadFile } from '#/api/infra/file';
+import { uploadFile, uploadFileDetail } from '#/api/infra/file';
+import { useAccessStore } from '@vben/stores';
+import { useAppConfig } from '@vben/hooks';
 
 import {
   createAttachmentFromUpload,
@@ -29,6 +31,14 @@ interface Props {
   maxSize?: number;
   /** 隐藏上传按钮（当需要在外部自定义按钮位置时使用） */
   hideUploadButton?: boolean;
+  /**
+   * 使用 upload-detail 返回 fileId claim（入职资料等敏感业务）
+   */
+  useFileClaim?: boolean;
+  /**
+   * 鉴权下载：传入相对路径字段名（如 downloadPath）时走带 token 的下载
+   */
+  authDownload?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -38,6 +48,8 @@ const props = withDefaults(defineProps<Props>(), {
   accept: '*',
   maxSize: 10,
   hideUploadButton: false,
+  useFileClaim: false,
+  authDownload: false,
 });
 
 const emit = defineEmits<{
@@ -50,28 +62,59 @@ const tableData = ref<AttachmentApi.AttachmentSaveReq[]>([]);
 const uploading = ref(false);
 
 /**
- * 实际上传文件到 /infra/file/upload，成功后再写入列表。
- * 返回服务端持久化 URL，刷新后仍可下载。
+ * 实际上传：useFileClaim 时走 /upload-detail 拿权威 fileId。
  */
 async function handleAdd(file: File) {
-  const uploadedUrl = await uploadFile({
-    file,
-    directory: 'common-attachment',
-  });
-  // requestClient.upload 解包后通常为 string URL；兼容 { url } 形态
-  const url =
-    typeof uploadedUrl === 'string'
-      ? uploadedUrl
-      : (uploadedUrl as any)?.url || (uploadedUrl as any)?.data;
-  if (!url || typeof url !== 'string' || url.startsWith('blob:')) {
-    throw new Error('文件上传失败：未获得服务端文件地址');
+  if (props.useFileClaim) {
+    const detail = await uploadFileDetail({
+      file,
+      directory: 'hrm-onboarding',
+    });
+    if (!detail?.id || !detail?.url || String(detail.url).startsWith('blob:')) {
+      throw new Error('文件上传失败：未获得权威 fileId');
+    }
+    const attachment = createAttachmentFromUpload(
+      file,
+      tableData.value.length + 1,
+      {
+        id: detail.id,
+        url: detail.url,
+        path: detail.path,
+        size: detail.size,
+        type: detail.type,
+      },
+    );
+    tableData.value.push(attachment as any);
+  } else {
+    // 通用业务：仍上传到文件服务，但不强制 fileId claim（兼容 DOCX 等）
+    const uploadedUrl = await uploadFile({
+      file,
+      directory: 'common-attachment',
+    });
+    const url =
+      typeof uploadedUrl === 'string'
+        ? uploadedUrl
+        : (uploadedUrl as any)?.url || (uploadedUrl as any)?.data;
+    if (!url || typeof url !== 'string' || url.startsWith('blob:')) {
+      throw new Error('文件上传失败：未获得服务端文件地址');
+    }
+    tableData.value.push({
+      id: undefined,
+      businessType: '',
+      businessId: 0,
+      fileName: file.name,
+      filePath: url,
+      fileUrl: url,
+      fileSize: file.size,
+      fileType: file.type,
+      fileExtension: file.name.includes('.')
+        ? file.name.split('.').pop()!.toLowerCase()
+        : '',
+      uploadTime: new Date(),
+      sortOrder: tableData.value.length + 1,
+      remark: '',
+    } as any);
   }
-  const attachment = createAttachmentFromUpload(
-    file,
-    tableData.value.length + 1,
-    { url },
-  );
-  tableData.value.push(attachment);
   handleUpdateValue();
   message.success('文件上传成功');
 }
@@ -94,17 +137,81 @@ function handleDelete(row: AttachmentApi.AttachmentSaveReq) {
   }
 }
 
+const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
+const accessStore = useAccessStore();
+
+function resolveAuthUrl(row: any): string | undefined {
+  const path = row.downloadPath as string | undefined;
+  if (!path) return undefined;
+  const base = apiURL?.replace(/\/$/, '') || '';
+  return path.startsWith('http')
+    ? path
+    : `${base}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+/** 带 Authorization 头拉取鉴权下载地址 */
+async function fetchAuthorizedBlob(row: any): Promise<Blob | null> {
+  const url = resolveAuthUrl(row);
+  if (!url) return null;
+  const token = accessStore.accessToken;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`下载失败 HTTP ${res.status}`);
+  }
+  return res.blob();
+}
+
 /** 预览附件 */
-function handlePreview(row: AttachmentApi.AttachmentSaveReq) {
-  window.open(row.fileUrl, '_blank');
+async function handlePreview(row: AttachmentApi.AttachmentSaveReq) {
+  try {
+    if (props.authDownload) {
+      const blob = await fetchAuthorizedBlob(row);
+      if (blob) {
+        const obj = URL.createObjectURL(blob);
+        window.open(obj, '_blank');
+        return;
+      }
+    }
+    if (row.fileUrl && !row.fileUrl.startsWith('blob:')) {
+      window.open(row.fileUrl, '_blank');
+    } else {
+      message.warning('无法预览：缺少鉴权下载地址');
+    }
+  } catch (e: any) {
+    message.error(e?.message || '预览失败（可能未登录或无权限）');
+  }
 }
 
 /** 下载附件 */
-function handleDownload(row: AttachmentApi.AttachmentSaveReq) {
-  const link = document.createElement('a');
-  link.href = row.fileUrl;
-  link.download = row.fileName;
-  link.click();
+async function handleDownload(row: AttachmentApi.AttachmentSaveReq) {
+  try {
+    if (props.authDownload) {
+      const blob = await fetchAuthorizedBlob(row);
+      if (blob) {
+        const obj = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = obj;
+        link.download = row.fileName || 'attachment';
+        link.click();
+        URL.revokeObjectURL(obj);
+        return;
+      }
+    }
+    if (row.fileUrl && !row.fileUrl.startsWith('blob:')) {
+      const link = document.createElement('a');
+      link.href = row.fileUrl;
+      link.download = row.fileName;
+      link.click();
+    } else {
+      message.warning('无法下载：缺少鉴权下载地址');
+    }
+  } catch (e: any) {
+    message.error(e?.message || '下载失败（可能未登录或无权限）');
+  }
 }
 
 /** 将最新数据写回并通知父组件 */

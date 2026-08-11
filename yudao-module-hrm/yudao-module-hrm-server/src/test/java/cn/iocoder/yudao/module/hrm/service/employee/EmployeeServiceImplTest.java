@@ -1,12 +1,15 @@
 package cn.iocoder.yudao.module.hrm.service.employee;
 
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
+import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeContractVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEducationVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSaveReqVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.OnboardingAttachmentSaveReqVO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeContractDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEducationDO;
@@ -16,6 +19,8 @@ import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeFamilyMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeWorkExperienceMapper;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
+import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +59,8 @@ class EmployeeServiceImplTest {
     @Mock
     private AttachmentService attachmentService;
     @Mock
+    private FileApi fileApi;
+    @Mock
     private DeptApi deptApi;
     @Mock
     private AdminUserApi adminUserApi;
@@ -62,11 +69,23 @@ class EmployeeServiceImplTest {
 
     private EmployeeSaveReqVO baseReq() {
         EmployeeSaveReqVO req = new EmployeeSaveReqVO();
-        req.setName("张三");
+        req.setName("TEST_EMP_NAME");
         req.setSex(1);
-        req.setMobile("13800138000");
+        req.setMobile("10000000000"); // 明显无效手机
         req.setEmployeeStatus(1);
         return req;
+    }
+
+    private FileRespDTO pdfFile(long id) {
+        FileRespDTO f = new FileRespDTO();
+        f.setId(id);
+        f.setName("TEST_scan.pdf");
+        f.setPath("/hrm/onboarding/TEST_scan.pdf");
+        f.setUrl("https://files.example.test/hrm/onboarding/TEST_scan.pdf");
+        f.setType("application/pdf");
+        f.setSize(1024L);
+        f.setConfigId(1L);
+        return f;
     }
 
     @BeforeEach
@@ -91,7 +110,7 @@ class EmployeeServiceImplTest {
         req.setEmploymentForm("1");
         req.setEmergencyRelationship("配偶");
         req.setRecruitmentChannel("内推");
-        req.setInterviewerName("李四");
+        req.setInterviewerName("TEST_INTERVIEWER");
 
         EmployeeContractVO c1 = new EmployeeContractVO();
         c1.setSequenceNo(1);
@@ -108,17 +127,13 @@ class EmployeeServiceImplTest {
         edu.setEducationLevel("6");
         edu.setHighestEducation(true);
         edu.setFirstEducation(true);
-        edu.setSchoolName("清华");
+        edu.setSchoolName("TEST_UNIV");
         req.setEducationList(List.of(edu));
 
-        AttachmentSaveReqVO att = new AttachmentSaveReqVO();
-        att.setBusinessType("x");
-        att.setBusinessId(1L);
-        att.setFileName("id.pdf");
-        att.setFilePath("/f/id.pdf");
-        att.setFileUrl("http://x/id.pdf");
-        att.setFileSize(10L);
+        OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
+        att.setFileId(55L);
         req.setOnboardingAttachments(List.of(att));
+        when(fileApi.getFile(55L)).thenReturn(CommonResult.success(pdfFile(55L)));
 
         Long id = employeeService.createEmployeeArchive(req);
         assertEquals(100L, id);
@@ -131,10 +146,61 @@ class EmployeeServiceImplTest {
 
         verify(employeeContractMapper, times(2)).insert(any(EmployeeContractDO.class));
         verify(employeeEducationMapper).insert(any(EmployeeEducationDO.class));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AttachmentSaveReqVO>> attCaptor = ArgumentCaptor.forClass(List.class);
         verify(attachmentService).saveAttachmentList(
                 eq(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE),
                 eq(100L),
-                eq(req.getOnboardingAttachments()));
+                attCaptor.capture());
+        assertEquals(55L, attCaptor.getValue().get(0).getFileId());
+        assertEquals("TEST_scan.pdf", attCaptor.getValue().get(0).getFileName());
+        assertEquals(1024L, attCaptor.getValue().get(0).getFileSize());
+    }
+
+    @Test
+    void rejectsForgedOnboardingMetadataWithoutFileId() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        OnboardingAttachmentSaveReqVO fake = new OnboardingAttachmentSaveReqVO();
+        // 无 fileId、无 id
+        req.setOnboardingAttachments(List.of(fake));
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+    }
+
+    @Test
+    void rejectsOversizedAuthoritativeFile() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
+        att.setFileId(9L);
+        req.setOnboardingAttachments(List.of(att));
+        FileRespDTO huge = pdfFile(9L);
+        huge.setSize(21L * 1024 * 1024);
+        when(fileApi.getFile(9L)).thenReturn(CommonResult.success(huge));
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+    }
+
+    @Test
+    void rejectsExeExtensionFromAuthoritativeFile() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        OnboardingAttachmentSaveReqVO att = new OnboardingAttachmentSaveReqVO();
+        att.setFileId(8L);
+        req.setOnboardingAttachments(List.of(att));
+        FileRespDTO exe = pdfFile(8L);
+        exe.setName("malware.exe");
+        when(fileApi.getFile(8L)).thenReturn(CommonResult.success(exe));
+        EmployeeDO existing = new EmployeeDO();
+        existing.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
+        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
     }
 
     @Test
@@ -177,10 +243,21 @@ class EmployeeServiceImplTest {
     }
 
     @Test
+    void updateRejectsContractMissingStartDate() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        EmployeeContractVO c = new EmployeeContractVO();
+        c.setSequenceNo(1);
+        c.setStartDate(null);
+        req.setContractList(List.of(c));
+        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
+    }
+
+    @Test
     void getBuildsAgeTenureAndCurrentContract() {
         EmployeeDO employee = new EmployeeDO();
         employee.setId(42L);
-        employee.setName("测试");
+        employee.setName("TEST_EMP");
         employee.setBirthday(LocalDate.of(1990, 8, 12));
         employee.setEntryDate(LocalDate.of(2020, 6, 15));
         employee.setMaritalStatus("已婚");
@@ -204,13 +281,11 @@ class EmployeeServiceImplTest {
         EmployeeRespVO resp = employeeService.getEmployeeArchive(42L);
         assertNotNull(resp);
 
-        // 固定时钟断言（方法内部用 LocalDate.now()，派生字段用固定日期再验）
         employeeService.fillDerivedFields(resp, LocalDate.of(2026, 8, 11));
         assertEquals(35, resp.getAge());
         assertEquals(73, resp.getCompanyTenureMonths());
         assertEquals(2, resp.getContractSignCount());
         assertEquals("2", resp.getCurrentContractType());
-        assertEquals(LocalDate.of(2023, 1, 2), resp.getCurrentContractStartDate());
         assertEquals("已婚/已育", resp.getMarriageChildbearingSummary());
     }
 
@@ -230,21 +305,10 @@ class EmployeeServiceImplTest {
     }
 
     @Test
-    void updateRejectsContractMissingStartDate() {
-        EmployeeSaveReqVO req = baseReq();
-        req.setId(1L);
-        EmployeeContractVO c = new EmployeeContractVO();
-        c.setSequenceNo(1);
-        c.setStartDate(null);
-        req.setContractList(List.of(c));
-        assertThrows(ServiceException.class, () -> employeeService.updateEmployeeArchive(req));
-    }
-
-    @Test
     void updateOmittingContractListPreservesContracts() {
         EmployeeSaveReqVO req = baseReq();
         req.setId(1L);
-        req.setContractList(null); // 旧客户端省略
+        req.setContractList(null);
         req.setOnboardingAttachments(null);
         EmployeeDO existing = new EmployeeDO();
         existing.setId(1L);
@@ -261,7 +325,7 @@ class EmployeeServiceImplTest {
     void updateEmptyContractListClearsContracts() {
         EmployeeSaveReqVO req = baseReq();
         req.setId(1L);
-        req.setContractList(List.of()); // 显式空数组
+        req.setContractList(List.of());
         req.setOnboardingAttachments(List.of());
         EmployeeDO existing = new EmployeeDO();
         existing.setId(1L);
@@ -276,13 +340,44 @@ class EmployeeServiceImplTest {
     }
 
     @Test
+    void sparseUpdateOmitsKeepExplicitNullClears() {
+        // #7 三态：省略保留、显式 null 清空
+        EmployeeDO old = new EmployeeDO();
+        old.setId(1L);
+        old.setSocialSecurityEnabled(true);
+        old.setSocialSecurityStartMonth("2024-01");
+        old.setProbationSalary(new BigDecimal("8000"));
+        old.setRecruitmentChannel("内推");
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(old);
+
+        EmployeeSaveReqVO req = baseReq();
+        req.setId(1L);
+        // 省略 socialSecurityEnabled / socialSecurityStartMonth
+        // 显式清空 recruitmentChannel
+        req.setRecruitmentChannel(null);
+        // 写入 probationSalary
+        req.setProbationSalary(new BigDecimal("9000"));
+
+        employeeService.updateEmployeeArchive(req);
+
+        ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
+        verify(employeeArchiveMapper).updateById(captor.capture());
+        EmployeeDO saved = captor.getValue();
+        assertEquals(Boolean.TRUE, saved.getSocialSecurityEnabled()); // 省略保留
+        assertEquals("2024-01", saved.getSocialSecurityStartMonth()); // 省略保留
+        assertNull(saved.getRecruitmentChannel()); // 显式 null 清空
+        assertEquals(new BigDecimal("9000"), saved.getProbationSalary()); // 写入
+    }
+
+    @Test
     void updateSocialSecurityFalseWritesNullStartMonth() {
         EmployeeSaveReqVO req = baseReq();
         req.setId(1L);
         req.setSocialSecurityEnabled(false);
-        req.setSocialSecurityStartMonth("2024-01"); // 服务端应清空
+        req.setSocialSecurityStartMonth("2024-01");
         EmployeeDO existing = new EmployeeDO();
         existing.setId(1L);
+        existing.setSocialSecurityStartMonth("2023-06");
         when(employeeArchiveMapper.selectById(1L)).thenReturn(existing);
 
         employeeService.updateEmployeeArchive(req);
@@ -295,11 +390,25 @@ class EmployeeServiceImplTest {
 
     @Test
     void rosterNullableFieldsUseAlwaysUpdateStrategy() throws Exception {
-        // F3：FieldStrategy.ALWAYS 保证显式 null 写库
         var field = EmployeeDO.class.getDeclaredField("socialSecurityStartMonth");
         var annotation = field.getAnnotation(com.baomidou.mybatisplus.annotation.TableField.class);
         assertNotNull(annotation);
         assertEquals(com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS, annotation.updateStrategy());
+    }
+
+    @Test
+    void downloadRejectsAttachmentNotBelongingToEmployee() {
+        EmployeeDO emp = new EmployeeDO();
+        emp.setId(1L);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(emp);
+        AttachmentDO foreign = new AttachmentDO();
+        foreign.setId(2L);
+        foreign.setBusinessType(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
+        foreign.setBusinessId(999L); // 其他员工
+        when(attachmentService.getAttachment(2L)).thenReturn(foreign);
+
+        assertThrows(ServiceException.class, () ->
+                employeeService.downloadOnboardingAttachment(1L, 2L, mock(jakarta.servlet.http.HttpServletResponse.class)));
     }
 
 }

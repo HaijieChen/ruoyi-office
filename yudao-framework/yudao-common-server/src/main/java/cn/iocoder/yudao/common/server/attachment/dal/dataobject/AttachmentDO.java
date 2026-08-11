@@ -38,6 +38,11 @@ public class AttachmentDO extends BaseDO {
      * 业务单据ID
      */
     private Long businessId;
+
+    /**
+     * 关联 infra_file 编号（权威 claim，可选）
+     */
+    private Long fileId;
     
     /**
      * 文件名称

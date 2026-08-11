@@ -372,33 +372,33 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         employeeSaveReqVO.setEducationList(entryBillRespVO.getEducationList());
         employeeSaveReqVO.setFamilyList(entryBillRespVO.getFamilyList());
 
-        // 入职资料：复制入职单附件元数据关联到员工档案（文件本体不重复上传）
-        if (CollUtil.isNotEmpty(entryBillRespVO.getAttachments())) {
-            employeeSaveReqVO.setOnboardingAttachments(
-                    entryBillRespVO.getAttachments().stream().map(att -> {
-                        AttachmentSaveReqVO copy = new AttachmentSaveReqVO();
-                        copy.setFileName(att.getFileName());
-                        copy.setFilePath(att.getFilePath());
-                        copy.setFileUrl(att.getFileUrl());
-                        copy.setFileSize(att.getFileSize());
-                        copy.setFileType(att.getFileType());
-                        copy.setFileExtension(att.getFileExtension());
-                        copy.setUploadTime(att.getUploadTime());
-                        copy.setSortOrder(att.getSortOrder());
-                        copy.setRemark(att.getRemark());
-                        // businessType/businessId 由档案保存时覆盖
-                        copy.setBusinessType(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
-                        copy.setBusinessId(0L);
-                        return copy;
-                    }).collect(Collectors.toList())
-            );
-        }
-
         // 创建员工档案（包含明细信息）
         TenantUtils.execute(entryBill.get().getTenantId(), () -> {
 //            TenantContextHolder.setTenantId(entryBill.get().getTenantId());
 
             Long employeeId = employeeService.createEmployeeArchive(employeeSaveReqVO);
+
+            // 入职资料：复制入职单附件元数据（文件本体不重复上传）；走通用附件保存，不经前端 VO
+            if (CollUtil.isNotEmpty(entryBillRespVO.getAttachments())) {
+                List<AttachmentSaveReqVO> copies = entryBillRespVO.getAttachments().stream().map(att -> {
+                    AttachmentSaveReqVO copy = new AttachmentSaveReqVO();
+                    copy.setFileId(att.getFileId());
+                    copy.setFileName(att.getFileName());
+                    copy.setFilePath(att.getFilePath());
+                    copy.setFileUrl(att.getFileUrl());
+                    copy.setFileSize(att.getFileSize());
+                    copy.setFileType(att.getFileType());
+                    copy.setFileExtension(att.getFileExtension());
+                    copy.setUploadTime(att.getUploadTime());
+                    copy.setSortOrder(att.getSortOrder());
+                    copy.setRemark(att.getRemark());
+                    copy.setBusinessType(EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
+                    copy.setBusinessId(employeeId);
+                    return copy;
+                }).collect(Collectors.toList());
+                attachmentService.saveAttachmentList(
+                        EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE, employeeId, copies);
+            }
 
             // 更新入职申请单的employeeId
             EmployeeEntryBillDO updateObj = new EmployeeEntryBillDO();

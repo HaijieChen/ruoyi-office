@@ -100,6 +100,15 @@ public class EmployeeController {
         ExcelUtils.write(response, "文枢花名册.xlsx", "文枢在职", EmployeeRosterExportVO.class, list);
     }
 
+    @GetMapping("/onboarding-attachment/download")
+    @Operation(summary = "下载入职资料附件（需登录且具备员工档案查询权限）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:query')")
+    public void downloadOnboardingAttachment(@RequestParam("employeeId") Long employeeId,
+                                             @RequestParam("attachmentId") Long attachmentId,
+                                             HttpServletResponse response) throws Exception {
+        employeeArchiveService.downloadOnboardingAttachment(employeeId, attachmentId, response);
+    }
+
     @PostMapping("/generate-user")
     @Operation(summary = "为员工生成系统用户")
     @Parameter(name = "id", description = "员工编号", required = true, example = "1024")

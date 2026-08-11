@@ -2,11 +2,13 @@ package cn.iocoder.yudao.module.infra.api.file;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.infra.api.file.dto.FileCreateReqDTO;
+import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.infra.enums.ApiConstants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -70,4 +72,13 @@ public interface FileApi {
     CommonResult<String> presignGetUrl(@NotEmpty(message = "URL 不能为空") @RequestParam("url") String url,
                                        Integer expirationSeconds);
 
+    @GetMapping(PREFIX + "/get")
+    @Operation(summary = "获得文件元数据（按编号）")
+    CommonResult<FileRespDTO> getFile(@NotNull(message = "文件编号不能为空") @RequestParam("id") Long id);
+
+    @GetMapping(PREFIX + "/get-content")
+    @Operation(summary = "获得文件内容（按编号）")
+    CommonResult<byte[]> getFileContent(@NotNull(message = "文件编号不能为空") @RequestParam("id") Long id);
+
 }
+

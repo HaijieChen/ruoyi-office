@@ -7,7 +7,7 @@ import cn.iocoder.yudao.framework.excel.core.convert.DictConvert;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
+
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -257,10 +257,10 @@ public class EmployeeRespVO {
     private List<EmployeeContractVO> contractList;
 
     /**
-     * 入职资料附件
+     * 入职资料附件（下载走鉴权接口）
      */
     @Schema(description = "入职资料附件")
-    private List<AttachmentRespVO> onboardingAttachments;
+    private List<OnboardingAttachmentRespVO> onboardingAttachments;
 
 }
 

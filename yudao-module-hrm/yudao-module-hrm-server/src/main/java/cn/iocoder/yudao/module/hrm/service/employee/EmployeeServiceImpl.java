@@ -2,7 +2,6 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
@@ -14,6 +13,8 @@ import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.*;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.*;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.*;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
+import cn.iocoder.yudao.module.infra.api.file.FileApi;
+import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
@@ -21,6 +22,7 @@ import cn.iocoder.yudao.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserUpdateReqDTO;
 import cn.iocoder.yudao.module.system.enums.DictTypeConstants;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -31,6 +33,7 @@ import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -46,6 +49,11 @@ import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.*;
 public class EmployeeServiceImpl implements EmployeeService {
 
     public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
+
+    /** 入职资料专用边界（不作用于其他业务附件） */
+    public static final int ONBOARDING_MAX_COUNT = 10;
+    public static final long ONBOARDING_MAX_SIZE_BYTES = 20L * 1024 * 1024;
+    public static final Set<String> ONBOARDING_ALLOWED_EXTENSIONS = Set.of("pdf", "jpg", "jpeg", "png");
 
     private static final DateTimeFormatter YEAR_MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
 
@@ -77,6 +85,9 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Resource
     private AttachmentService attachmentService;
+
+    @Resource
+    private FileApi fileApi;
 
     @Resource
     private DeptApi deptApi;
@@ -111,8 +122,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         saveContracts(archive.getId(), createReqVO.getContractList());
 
         if (createReqVO.getOnboardingAttachments() != null) {
-            attachmentService.saveAttachmentList(
-                    ONBOARDING_ATTACHMENT_BUSINESS_TYPE, archive.getId(), createReqVO.getOnboardingAttachments());
+            saveOnboardingAttachments(archive.getId(), createReqVO.getOnboardingAttachments());
         }
 
         return archive.getId();
@@ -129,11 +139,13 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw exception(EMPLOYEE_ARCHIVE_NOT_EXISTS);
         }
 
-        // 更新主表（可空花名册字段使用 FieldStrategy.ALWAYS，显式 null 会写 SQL NULL）
+        // 主表：先拷贝全量，再对「未出现」的 11 个花名册字段回填旧值（省略=保留）
         EmployeeDO updateObj = BeanUtils.toBean(updateReqVO, EmployeeDO.class);
+        restoreOmittedRosterFields(updateObj, updateReqVO, oldEmployee);
         applyEducationSummary(updateObj, updateReqVO.getEducationList());
-        // 社保为否时清空参保年月
-        if (Boolean.FALSE.equals(updateObj.getSocialSecurityEnabled())) {
+        // 社保为否且请求中出现该字段时，清空参保年月
+        if (updateReqVO.isSocialSecurityEnabledPresent()
+                && Boolean.FALSE.equals(updateObj.getSocialSecurityEnabled())) {
             updateObj.setSocialSecurityStartMonth(null);
         }
         employeeArchiveMapper.updateById(updateObj);
@@ -156,8 +168,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             saveContracts(updateReqVO.getId(), updateReqVO.getContractList());
         }
         if (updateReqVO.getOnboardingAttachments() != null) {
-            attachmentService.saveAttachmentList(
-                    ONBOARDING_ATTACHMENT_BUSINESS_TYPE, updateReqVO.getId(), updateReqVO.getOnboardingAttachments());
+            saveOnboardingAttachments(updateReqVO.getId(), updateReqVO.getOnboardingAttachments());
         }
 
         // 如果已生成用户，同步更新用户信息
@@ -281,10 +292,10 @@ public class EmployeeServiceImpl implements EmployeeService {
         respVO.setContractList(BeanUtils.toBean(contracts, EmployeeContractVO.class));
         fillCurrentContract(respVO, contracts);
 
-        // 入职资料
+        // 入职资料（不暴露公开 URL；下载走鉴权接口）
         List<AttachmentDO> attachments = attachmentService.getAttachmentListByBusiness(
                 ONBOARDING_ATTACHMENT_BUSINESS_TYPE, id);
-        respVO.setOnboardingAttachments(BeanUtils.toBean(attachments, AttachmentRespVO.class));
+        respVO.setOnboardingAttachments(toOnboardingRespList(id, attachments));
 
         fillDerivedFields(respVO, LocalDate.now());
         return respVO;
@@ -464,6 +475,185 @@ public class EmployeeServiceImpl implements EmployeeService {
             item.setEmployeeId(employeeId);
             employeeContractMapper.insert(item);
         });
+    }
+
+    /**
+     * #7：省略的可空字段回填旧值，避免 FieldStrategy.ALWAYS 误清空。
+     */
+    void restoreOmittedRosterFields(EmployeeDO updateObj, EmployeeSaveReqVO req, EmployeeDO old) {
+        if (!req.isEmergencyRelationshipPresent()) {
+            updateObj.setEmergencyRelationship(old.getEmergencyRelationship());
+        }
+        if (!req.isSocialSecurityEnabledPresent()) {
+            updateObj.setSocialSecurityEnabled(old.getSocialSecurityEnabled());
+        }
+        if (!req.isHousingFundEnabledPresent()) {
+            updateObj.setHousingFundEnabled(old.getHousingFundEnabled());
+        }
+        if (!req.isSocialSecurityStartMonthPresent()) {
+            updateObj.setSocialSecurityStartMonth(old.getSocialSecurityStartMonth());
+        }
+        if (!req.isProbationSalaryPresent()) {
+            updateObj.setProbationSalary(old.getProbationSalary());
+        }
+        if (!req.isRegularSalaryPresent()) {
+            updateObj.setRegularSalary(old.getRegularSalary());
+        }
+        if (!req.isFertilityStatusPresent()) {
+            updateObj.setFertilityStatus(old.getFertilityStatus());
+        }
+        if (!req.isHouseholdTypePresent()) {
+            updateObj.setHouseholdType(old.getHouseholdType());
+        }
+        if (!req.isEmploymentFormPresent()) {
+            updateObj.setEmploymentForm(old.getEmploymentForm());
+        }
+        if (!req.isRecruitmentChannelPresent()) {
+            updateObj.setRecruitmentChannel(old.getRecruitmentChannel());
+        }
+        if (!req.isInterviewerNamePresent()) {
+            updateObj.setInterviewerName(old.getInterviewerName());
+        }
+    }
+
+    /**
+     * 入职资料：仅接受 fileId claim / 已有附件 id；元数据以 infra_file 权威记录为准。
+     */
+    void saveOnboardingAttachments(Long employeeId, List<OnboardingAttachmentSaveReqVO> reqs) {
+        if (reqs == null) {
+            return;
+        }
+        if (reqs.size() > ONBOARDING_MAX_COUNT) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_LIMIT);
+        }
+        List<AttachmentSaveReqVO> resolved = new ArrayList<>();
+        Set<Long> seenAttachmentIds = new HashSet<>();
+        Set<Long> seenFileIds = new HashSet<>();
+        for (OnboardingAttachmentSaveReqVO req : reqs) {
+            if (req.getId() != null) {
+                if (!seenAttachmentIds.add(req.getId())) {
+                    throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+                }
+                AttachmentSaveReqVO keep = new AttachmentSaveReqVO();
+                keep.setId(req.getId());
+                keep.setBusinessType(ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
+                keep.setBusinessId(employeeId);
+                // 占位必填字段，toOwnedAttachment 会用库中原值
+                keep.setFileName(".");
+                keep.setFilePath(".");
+                keep.setFileUrl(".");
+                keep.setFileSize(0L);
+                keep.setSortOrder(req.getSortOrder());
+                keep.setRemark(req.getRemark());
+                resolved.add(keep);
+                continue;
+            }
+            if (req.getFileId() == null) {
+                throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            }
+            if (!seenFileIds.add(req.getFileId())) {
+                throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            }
+            FileRespDTO file = fileApi.getFile(req.getFileId()).getCheckedData();
+            if (file == null) {
+                throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            }
+            validateOnboardingFile(file);
+            AttachmentSaveReqVO att = new AttachmentSaveReqVO();
+            att.setBusinessType(ONBOARDING_ATTACHMENT_BUSINESS_TYPE);
+            att.setBusinessId(employeeId);
+            att.setFileId(file.getId());
+            att.setFileName(file.getName());
+            att.setFilePath(file.getPath());
+            att.setFileUrl(file.getUrl());
+            att.setFileSize(file.getSize());
+            att.setFileType(file.getType());
+            att.setFileExtension(resolveExt(file.getName()));
+            att.setSortOrder(req.getSortOrder());
+            att.setRemark(req.getRemark());
+            resolved.add(att);
+        }
+        attachmentService.saveAttachmentList(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, employeeId, resolved);
+    }
+
+    void validateOnboardingFile(FileRespDTO file) {
+        if (file.getSize() != null && file.getSize() > ONBOARDING_MAX_SIZE_BYTES) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        String ext = resolveExt(file.getName());
+        if (StrUtil.isBlank(ext) || !ONBOARDING_ALLOWED_EXTENSIONS.contains(ext)) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+    }
+
+    private static String resolveExt(String name) {
+        if (StrUtil.isBlank(name) || !name.contains(".")) {
+            return null;
+        }
+        return name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+    }
+
+    List<OnboardingAttachmentRespVO> toOnboardingRespList(Long employeeId, List<AttachmentDO> attachments) {
+        if (CollUtil.isEmpty(attachments)) {
+            return Collections.emptyList();
+        }
+        return attachments.stream().map(a -> {
+            OnboardingAttachmentRespVO vo = new OnboardingAttachmentRespVO();
+            vo.setId(a.getId());
+            vo.setFileId(a.getFileId());
+            vo.setFileName(a.getFileName());
+            vo.setFileSize(a.getFileSize());
+            vo.setFileExtension(a.getFileExtension());
+            vo.setFileType(a.getFileType());
+            vo.setSortOrder(a.getSortOrder());
+            vo.setRemark(a.getRemark());
+            vo.setUploadTime(a.getUploadTime());
+            vo.setDownloadPath("/hrm/employee-archive/onboarding-attachment/download?employeeId="
+                    + employeeId + "&attachmentId=" + a.getId());
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 鉴权下载入职资料：需登录 + hrm:employee-archive:query，且附件归属当前员工。
+     */
+    public void downloadOnboardingAttachment(Long employeeId, Long attachmentId, HttpServletResponse response)
+            throws Exception {
+        if (employeeArchiveMapper.selectById(employeeId) == null) {
+            throw exception(EMPLOYEE_ARCHIVE_NOT_EXISTS);
+        }
+        AttachmentDO att = attachmentService.getAttachment(attachmentId);
+        if (att == null
+                || !ONBOARDING_ATTACHMENT_BUSINESS_TYPE.equals(att.getBusinessType())
+                || !employeeId.equals(att.getBusinessId())) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        byte[] content;
+        String fileName = att.getFileName();
+        if (att.getFileId() != null) {
+            content = fileApi.getFileContent(att.getFileId()).getCheckedData();
+            FileRespDTO meta = fileApi.getFile(att.getFileId()).getCheckedData();
+            if (meta != null && StrUtil.isNotBlank(meta.getName())) {
+                fileName = meta.getName();
+            }
+        } else {
+            // 历史无 fileId：拒绝匿名公开 URL，要求补绑 fileId
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        if (content == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        writeDownload(response, fileName, content);
+    }
+
+    private static void writeDownload(HttpServletResponse response, String fileName, byte[] content)
+            throws Exception {
+        response.setContentType("application/octet-stream");
+        String encoded = java.net.URLEncoder.encode(fileName == null ? "file" : fileName, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + encoded);
+        response.getOutputStream().write(content);
+        response.getOutputStream().flush();
     }
 
     void fillDerivedFields(EmployeeRespVO resp, LocalDate today) {

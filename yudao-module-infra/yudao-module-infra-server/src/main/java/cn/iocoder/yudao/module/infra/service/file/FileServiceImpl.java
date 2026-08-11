@@ -62,6 +62,12 @@ public class FileServiceImpl implements FileService {
     @Override
     @SneakyThrows
     public String createFile(byte[] content, String name, String directory, String type) {
+        return createFileReturn(content, name, directory, type).getUrl();
+    }
+
+    @Override
+    @SneakyThrows
+    public FileDO createFileReturn(byte[] content, String name, String directory, String type) {
         // 1.1 处理 type 为空的情况
         if (StrUtil.isEmpty(type)) {
             type = FileTypeUtils.getMineType(content, name);
@@ -86,10 +92,11 @@ public class FileServiceImpl implements FileService {
         String url = client.upload(content, path, type);
 
         // 3. 保存到数据库
-        fileMapper.insert(new FileDO().setConfigId(client.getId())
+        FileDO file = new FileDO().setConfigId(client.getId())
                 .setName(name).setPath(path).setUrl(url)
-                .setType(type).setSize((long) content.length));
-        return url;
+                .setType(type).setSize((long) content.length);
+        fileMapper.insert(file);
+        return file;
     }
 
     @VisibleForTesting

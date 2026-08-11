@@ -1,37 +1,36 @@
 # EXP-75 员工花名册字段补齐 — 验证记录
 
-## 自动化（审查 FAIL 修复后）
+## 自动化（复审 FAIL #1–#7/#9/#2 修复后）
 
 | 命令 | 结果 |
 |---|---|
-| `mvn -pl yudao-module-hrm/yudao-module-hrm-server -am -Dtest=AttachmentServiceImplTest,EmployeeContractMapperTest,EmployeeServiceImplTest,EmployeeRosterExportTest -Dsurefire.failIfNoSpecifiedTests=false test` | PASS（19 tests） |
-| `ruoyi-office-vben/node_modules/.bin/vitest run --dom apps/web-antd/src/views/hrm/employee/__tests__/employee-roster-fields.test.ts` | PASS（5 tests） |
+| `mvn -pl yudao-module-hrm/yudao-module-hrm-server,yudao-module-infra/yudao-module-infra-server -am -Dtest=AttachmentServiceImplTest,EmployeeContractMapperTest,EmployeeServiceImplTest,EmployeeRosterExportTest -Dsurefire.failIfNoSpecifiedTests=false test` | PASS（23 tests） |
+| Vitest employee-roster-fields | PASS（5 tests） |
 
-## F1–F8 修复证据摘要
+## 复审阻断项修复
 
-| 项 | 修复 | 测试 |
+| 编号 | 修复 | 测试/证据 |
 |---|---|---|
-| F1 真实上传 | `AttachmentList` 调用 `/infra/file/upload`，仅用服务端 URL 建元数据 | Vitest `createAttachmentFromUpload`；服务端拒 `blob:` |
-| F5 归属 | `AttachmentServiceImpl` 非空 ID 必须同 businessType+businessId | `rejectsCrossBusinessAttachmentIdHijack` |
-| F6 边界 | 最多 10 份 / 20MB / pdf\|jpg\|jpeg\|png | `rejectsMoreThanTen…`、`rejectsOversized…` |
-| F3 null 写库 | 11 个可空字段 `FieldStrategy.ALWAYS`；社保否清空参保月 | `updateSocialSecurityFalse…`、`rosterNullableFieldsUseAlways…` |
-| F4 集合契约 | null 保留 / 空数组清空 | `updateOmittingContractListPreserves…`、`updateEmptyContractListClears…` |
-| F8 startDate | `@Valid` + 服务端非空校验 | `updateRejectsContractMissingStartDate` |
-| F7 字典标签 + XLSX | `DictFrameworkUtils` 解析；真实写出 | `exportWritesRealXlsxWith52HeadersAndSheetName`；成品 `docs/superpowers/verification/exp75-evidence/文枢花名册-evidence.xlsx` |
-| F2 幂等迁移 | `information_schema` 判列 + PREPARE；表 IF NOT EXISTS；字典/附件 NOT EXISTS | 脚本可重复执行 |
+| #1 鉴权下载 | `GET /hrm/employee-archive/onboarding-attachment/download` + `@PreAuthorize query`；前端 Bearer fetch | `downloadRejectsAttachmentNotBelongingToEmployee` |
+| #5 fileId claim | `/infra/file/upload-detail` 返回 id；保存只信 `FileApi.getFile` 元数据 | `createPersists…`；`rejectsForged…`/`rejectsOversized…`/`rejectsExe…` |
+| #6 专用 VO | `OnboardingAttachmentSaveReqVO` 无 businessType 约束；前端只 POST id/fileId | 服务测试用真实 VO 形状 |
+| #4 限制隔离 | 通用 `AttachmentService` 不再强制 PDF/20MB；仅 onboarding 路径校验 | `allowsDocxForNonOnboardingBusiness` |
+| #9 20MB 传输 | `max-file-size: 20MB`（yudao-server / infra-server） | 配置变更 |
+| #7 三态更新 | setter 记录 present；省略回填旧值；显式 null 清空 | `sparseUpdateOmitsKeepExplicitNullClears` |
+| #3 迁移软删 | 回填 NOT EXISTS 含已软删目标行 | 脚本条件无 `deleted=0` |
+| #2 合成夹具 | 测试/证据使用 `TEST_*` / `10000000000` | 导出 XLSX 内容断言 |
 
-## 导出成品核对
+## 导出证据（合成数据）
 
-- 文件：`docs/superpowers/verification/exp75-evidence/文枢花名册-evidence.xlsx`
-- 工作表：`文枢在职`；表头 52 列；身份证/手机/银行卡为文本字符串
+- `docs/superpowers/verification/exp75-evidence/文枢花名册-evidence.xlsx`
+- 工作表「文枢在职」、52 列；姓名/证件等均为 **TEST_** 前缀合成值，**非真实身份数据**
+- 仓库内同路径已替换为合成版；issue 旧附件若仍含拟真样例，请仓库负责人按隐私流程清理历史版本
+
+## 浏览器 E2E
+
+- 本环境未起完整登录+文件存储联调；鉴权下载与 upload-detail 有代码路径与单测。
+- 阻塞原因：无运行中的 OA 后端/对象存储与测试账号。
 
 ## 迁移
 
-- 脚本：`sql/mysql/hrm_employee_roster_exp75.sql`（幂等续跑）
-- 回滚策略：应用回滚可保留新表/列；旧代码忽略新结构
-
-## 手工验收（环境就绪后）
-
-1. 执行迁移脚本（可重复执行）
-2. 页面实际上传入职资料 → 保存 → 刷新 → 下载
-3. 导出 `文枢花名册.xlsx` 与原模板并排核对字典文案
+- `sql/mysql/hrm_employee_roster_exp75.sql`（幂等 + 软删不复活 + file_id 列）

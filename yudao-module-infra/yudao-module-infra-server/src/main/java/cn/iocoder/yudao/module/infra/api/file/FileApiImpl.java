@@ -1,7 +1,10 @@
 package cn.iocoder.yudao.module.infra.api.file;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.infra.api.file.dto.FileCreateReqDTO;
+import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
+import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileDO;
 import cn.iocoder.yudao.module.infra.service.file.FileService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +29,21 @@ public class FileApiImpl implements FileApi {
     @Override
     public CommonResult<String> presignGetUrl(String url, Integer expirationSeconds) {
         return success(fileService.presignGetUrl(url, expirationSeconds));
+    }
+
+    @Override
+    public CommonResult<FileRespDTO> getFile(Long id) {
+        return success(BeanUtils.toBean(fileService.getFile(id), FileRespDTO.class));
+    }
+
+    @Override
+    public CommonResult<byte[]> getFileContent(Long id) {
+        try {
+            FileDO file = fileService.getFile(id);
+            return success(fileService.getFileContent(file.getConfigId(), file.getPath()));
+        } catch (Exception ex) {
+            throw new RuntimeException("读取文件内容失败: " + id, ex);
+        }
     }
 
 }

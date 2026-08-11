@@ -57,12 +57,15 @@ describe('employee roster field rules', () => {
     ).toBe('合同结束日期不能早于开始日期');
   });
 
-  it('builds attachment metadata only from server upload result', () => {
+  it('builds attachment metadata only from server upload-detail claim', () => {
     const file = new File(['%PDF'], 'scan.pdf', { type: 'application/pdf' });
     const att = createAttachmentFromUpload(file, 1, {
+      id: 1024,
       url: 'https://cdn.example.com/scan.pdf',
       path: '/hrm/scan.pdf',
+      size: 4,
     });
+    expect((att as any).fileId).toBe(1024);
     expect(att.fileUrl).toBe('https://cdn.example.com/scan.pdf');
     expect(att.filePath).toBe('/hrm/scan.pdf');
     expect(att.fileUrl.startsWith('blob:')).toBe(false);

@@ -11,13 +11,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
+/**
+ * 通用附件服务：仅归属校验；类型/大小限制由业务方负责（#4）。
+ */
 @ExtendWith(MockitoExtension.class)
 class AttachmentServiceImplTest {
 
@@ -27,14 +29,13 @@ class AttachmentServiceImplTest {
     @Mock
     private AttachmentMapper attachmentMapper;
 
-    private AttachmentSaveReqVO validPdf(String name) {
+    private AttachmentSaveReqVO base(String name) {
         AttachmentSaveReqVO vo = new AttachmentSaveReqVO();
         vo.setFileName(name);
         vo.setFilePath("/files/" + name);
         vo.setFileUrl("https://files.example.com/" + name);
         vo.setFileSize(1024L);
-        vo.setFileExtension("pdf");
-        vo.setFileType("application/pdf");
+        vo.setFileExtension(name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : "");
         vo.setBusinessType("x");
         vo.setBusinessId(1L);
         return vo;
@@ -47,14 +48,14 @@ class AttachmentServiceImplTest {
 
         AttachmentDO foreign = new AttachmentDO();
         foreign.setId(99L);
-        foreign.setBusinessType("201"); // 入职单
+        foreign.setBusinessType("201");
         foreign.setBusinessId(7L);
         foreign.setFileName("a.pdf");
         foreign.setFilePath("/a.pdf");
         foreign.setFileUrl("https://x/a.pdf");
         when(attachmentMapper.selectById(99L)).thenReturn(foreign);
 
-        AttachmentSaveReqVO hijack = validPdf("a.pdf");
+        AttachmentSaveReqVO hijack = base("a.pdf");
         hijack.setId(99L);
 
         assertThrows(ServiceException.class, () ->
@@ -63,34 +64,20 @@ class AttachmentServiceImplTest {
     }
 
     @Test
-    void rejectsMoreThanTenAttachments() {
-        when(attachmentMapper.selectListByBusiness(anyString(), anyLong())).thenReturn(List.of());
-        List<AttachmentSaveReqVO> list = new ArrayList<>();
-        for (int i = 0; i < 11; i++) {
-            list.add(validPdf("f" + i + ".pdf"));
-        }
-        assertThrows(ServiceException.class, () ->
-                attachmentService.saveAttachmentList("hrm_employee_archive_onboarding", 1L, list));
-    }
+    void allowsDocxForNonOnboardingBusiness() {
+        // #4：通用附件不得被入职资料策略误伤
+        when(attachmentMapper.selectListByBusiness("seal_apply_bill", 1L)).thenReturn(List.of());
+        AttachmentSaveReqVO docx = base("合同.docx");
+        docx.setFileExtension("docx");
+        docx.setFileSize(5L * 1024 * 1024);
 
-    @Test
-    void rejectsOversizedAndIllegalTypeAndBlobUrl() {
-        when(attachmentMapper.selectListByBusiness(anyString(), anyLong())).thenReturn(List.of());
+        attachmentService.saveAttachmentList("seal_apply_bill", 1L, List.of(docx));
 
-        AttachmentSaveReqVO huge = validPdf("big.pdf");
-        huge.setFileSize(21L * 1024 * 1024);
-        assertThrows(ServiceException.class, () ->
-                attachmentService.saveAttachmentList("t", 1L, List.of(huge)));
-
-        AttachmentSaveReqVO exe = validPdf("a.exe");
-        exe.setFileExtension("exe");
-        assertThrows(ServiceException.class, () ->
-                attachmentService.saveAttachmentList("t", 1L, List.of(exe)));
-
-        AttachmentSaveReqVO blob = validPdf("a.pdf");
-        blob.setFileUrl("blob:http://local/uuid");
-        assertThrows(ServiceException.class, () ->
-                attachmentService.saveAttachmentList("t", 1L, List.of(blob)));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AttachmentDO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(attachmentMapper).insertOrUpdate(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("合同.docx", captor.getValue().get(0).getFileName());
     }
 
     @Test
@@ -107,9 +94,9 @@ class AttachmentServiceImplTest {
         owned.setFileUrl("https://x/old.pdf");
         when(attachmentMapper.selectById(5L)).thenReturn(owned);
 
-        AttachmentSaveReqVO keep = validPdf("old.pdf");
+        AttachmentSaveReqVO keep = base("old.pdf");
         keep.setId(5L);
-        AttachmentSaveReqVO neu = validPdf("new.pdf");
+        AttachmentSaveReqVO neu = base("new.pdf");
 
         attachmentService.saveAttachmentList("hrm_employee_archive_onboarding", 100L, List.of(keep, neu));
 
@@ -119,8 +106,6 @@ class AttachmentServiceImplTest {
         assertEquals(2, captor.getValue().size());
         assertEquals(5L, captor.getValue().get(0).getId());
         assertNull(captor.getValue().get(1).getId());
-        assertEquals("hrm_employee_archive_onboarding", captor.getValue().get(1).getBusinessType());
-        assertEquals(100L, captor.getValue().get(1).getBusinessId());
     }
 
 }

@@ -1,7 +1,5 @@
 import type { PageParam, PageResult } from '@vben/request';
 
-import type { AttachmentApi } from '#/api/common/attachment';
-
 import { requestClient } from '#/api/request';
 
 export namespace EmployeeArchiveApi {
@@ -64,7 +62,8 @@ export namespace EmployeeArchiveApi {
     educationList?: EmployeeEducation[]; // 教育经历列表
     familyList?: EmployeeFamily[]; // 家属信息列表
     contractList?: EmployeeContract[]; // 合同明细
-    onboardingAttachments?: AttachmentApi.AttachmentSaveReq[]; // 入职资料
+    /** 入职资料：新附件只传 fileId；已有附件传 id */
+    onboardingAttachments?: OnboardingAttachment[];
   }
 
   export interface EmployeeContract {
@@ -73,6 +72,21 @@ export namespace EmployeeArchiveApi {
     contractType?: string;
     startDate: string;
     endDate?: string;
+  }
+
+  /** 入职资料附件（专用 VO，不自报 businessType/size） */
+  export interface OnboardingAttachment {
+    id?: number;
+    fileId?: number;
+    fileName?: string;
+    fileSize?: number;
+    fileExtension?: string;
+    fileType?: string;
+    sortOrder?: number;
+    remark?: string;
+    uploadTime?: string | Date;
+    /** 鉴权下载相对路径 */
+    downloadPath?: string;
   }
 
   /** 员工工作经历 */

@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { EmployeeArchiveApi } from '#/api/hrm/employee';
-import type { AttachmentApi } from '#/api/common/attachment';
 import type { SystemDeptApi } from '#/api/system/dept';
 
 import { computed, h, onMounted, ref, watch } from 'vue';
@@ -65,8 +64,10 @@ const educationList = ref<EmployeeArchiveApi.EmployeeEducation[]>([]);
 const familyList = ref<EmployeeArchiveApi.EmployeeFamily[]>([]);
 // 合同明细
 const contractList = ref<EmployeeArchiveApi.EmployeeContract[]>([]);
-// 入职资料
-const onboardingAttachments = ref<AttachmentApi.AttachmentSaveReq[]>([]);
+// 入职资料（专用 VO：fileId claim）
+const onboardingAttachments = ref<EmployeeArchiveApi.OnboardingAttachment[]>(
+  [],
+);
 const attachmentListRef = ref<InstanceType<typeof AttachmentList>>();
 
 const educationLevelOptions = getDictOptions(DICT_TYPE.HRM_EDUCATION);
@@ -676,9 +677,20 @@ async function loadData(newId?: string) {
       endDate: item.endDate ? dayjs(item.endDate).format('YYYY-MM-DD') : undefined,
     }));
 
-    // 入职资料
+    // 入职资料（含鉴权 downloadPath）
     onboardingAttachments.value = (data.onboardingAttachments || []).map(
-      (item) => ({ ...item }),
+      (item) => ({
+        id: item.id,
+        fileId: item.fileId,
+        fileName: item.fileName,
+        fileSize: item.fileSize,
+        fileExtension: item.fileExtension,
+        fileType: item.fileType,
+        sortOrder: item.sortOrder,
+        remark: item.remark,
+        uploadTime: item.uploadTime,
+        downloadPath: item.downloadPath,
+      }),
     );
   } catch (error) {
     console.error('加载员工档案失败', error);
@@ -771,7 +783,13 @@ async function handleSave() {
     values.educationList = educationList.value;
     values.familyList = familyList.value;
     values.contractList = normalizedContracts;
-    values.onboardingAttachments = onboardingAttachments.value;
+    // 仅提交专用字段，避免 @Valid 命中通用 AttachmentSaveReqVO
+    values.onboardingAttachments = onboardingAttachments.value.map((a) => ({
+      id: a.id,
+      fileId: a.fileId,
+      sortOrder: a.sortOrder,
+      remark: a.remark,
+    }));
 
     // 只读派生字段不回写
     delete values.age;
@@ -1077,12 +1095,14 @@ onMounted(async () => {
         </template>
         <AttachmentList
           ref="attachmentListRef"
-          v-model="onboardingAttachments"
+          v-model="onboardingAttachments as any"
           :readonly="readonly"
           accept=".pdf,.jpg,.jpeg,.png"
           :max-count="10"
           :max-size="20"
           :hide-upload-button="true"
+          :use-file-claim="true"
+          :auth-download="true"
         />
       </CardContainer>
     </div>

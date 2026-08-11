@@ -127,34 +127,31 @@ export function useAttachmentActions(
 }
 
 /**
- * 根据已成功上传到文件服务的结果创建附件元数据。
- * fileUrl 必须是服务端返回的持久化访问地址，禁止使用 blob: 本地 URL。
+ * 根据 /infra/file/upload-detail 权威 claim 创建附件元数据。
+ * 必须携带 fileId；禁止 blob: URL。
  */
 export function createAttachmentFromUpload(
   file: File,
   sortOrder: number,
-  uploaded: { url: string; path?: string },
-): AttachmentApi.AttachmentSaveReq {
-  const url = uploaded.url;
-  // path：优先服务端 path；否则从 URL 路径段推导（去掉 query）
-  let path = uploaded.path;
-  if (!path) {
-    try {
-      const u = new URL(url, 'http://local.invalid');
-      path = u.pathname || url;
-    } catch {
-      path = url;
-    }
+  uploaded: { id: number; url: string; path?: string; size?: number; type?: string },
+): AttachmentApi.AttachmentSaveReq & { fileId?: number; downloadPath?: string } {
+  if (!uploaded?.id) {
+    throw new Error('文件上传必须返回权威 fileId');
   }
+  if (!uploaded.url || uploaded.url.startsWith('blob:')) {
+    throw new Error('文件上传失败：未获得服务端文件地址');
+  }
+  const path = uploaded.path || uploaded.url;
   return {
     id: undefined,
+    fileId: uploaded.id,
     businessType: '',
     businessId: 0,
     fileName: file.name,
     filePath: path,
-    fileUrl: url,
-    fileSize: file.size,
-    fileType: file.type,
+    fileUrl: uploaded.url,
+    fileSize: uploaded.size ?? file.size,
+    fileType: uploaded.type ?? file.type,
     fileExtension: file.name.includes('.')
       ? file.name.split('.').pop()!.toLowerCase()
       : '',
@@ -165,15 +162,15 @@ export function createAttachmentFromUpload(
 }
 
 /**
- * @deprecated 使用 createAttachmentFromUpload；保留别名避免外部引用断裂
+ * @deprecated 使用 createAttachmentFromUpload
  */
 export function createAttachment(
   file: File,
   sortOrder: number,
-  uploaded?: { url: string; path?: string },
+  uploaded?: { id: number; url: string; path?: string; size?: number; type?: string },
 ): AttachmentApi.AttachmentSaveReq {
-  if (!uploaded?.url) {
-    throw new Error('必须先完成文件上传再创建附件元数据');
+  if (!uploaded?.id || !uploaded?.url) {
+    throw new Error('必须先完成文件上传（upload-detail）再创建附件元数据');
   }
   return createAttachmentFromUpload(file, sortOrder, uploaded);
 }

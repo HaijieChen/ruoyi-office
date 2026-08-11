@@ -37,6 +37,12 @@ public interface FileService {
                       String name, String directory, String type);
 
     /**
+     * 保存文件并返回完整文件记录（含权威 id/size/path/url）
+     */
+    FileDO createFileReturn(@NotEmpty(message = "文件内容不能为空") byte[] content,
+                            String name, String directory, String type);
+
+    /**
      * 生成文件预签名地址信息，用于上传
      *
      * @param name      文件名

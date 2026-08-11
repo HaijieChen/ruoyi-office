@@ -10,6 +10,7 @@ import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.*;
 import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileDO;
 import cn.iocoder.yudao.module.infra.service.file.FileService;
+// FileUploadRespVO in same vo.file package
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
@@ -52,6 +53,27 @@ public class FileController {
         byte[] content = IoUtil.readBytes(file.getInputStream());
         return success(fileService.createFile(content, file.getOriginalFilename(),
                 uploadReqVO.getDirectory(), file.getContentType()));
+    }
+
+    @PostMapping("/upload-detail")
+    @Operation(summary = "上传文件并返回权威文件 claim（id/path/size）",
+            description = "敏感业务（如入职资料）应使用本接口，仅用返回的 fileId 绑定附件元数据")
+    @Parameter(name = "file", description = "文件附件", required = true,
+            schema = @Schema(type = "string", format = "binary"))
+    public CommonResult<FileUploadRespVO> uploadFileDetail(@Valid FileUploadReqVO uploadReqVO) throws Exception {
+        MultipartFile file = uploadReqVO.getFile();
+        byte[] content = IoUtil.readBytes(file.getInputStream());
+        FileDO created = fileService.createFileReturn(content, file.getOriginalFilename(),
+                uploadReqVO.getDirectory(), file.getContentType());
+        FileUploadRespVO resp = new FileUploadRespVO();
+        resp.setId(created.getId());
+        resp.setUrl(created.getUrl());
+        resp.setPath(created.getPath());
+        resp.setName(created.getName());
+        resp.setType(created.getType());
+        resp.setSize(created.getSize());
+        resp.setConfigId(created.getConfigId());
+        return success(resp);
     }
 
     @GetMapping("/presigned-url")

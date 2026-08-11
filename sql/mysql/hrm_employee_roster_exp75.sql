@@ -228,15 +228,25 @@ WHERE NOT EXISTS (
   SELECT 1 FROM system_dict_data x WHERE x.dict_type = 'hrm_contract_type' AND x.value = d.value AND x.deleted = 0
 );
 
--- 9. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
+-- 9. common_attachment.file_id（权威文件 claim）
+SET @col_exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'common_attachment' AND COLUMN_NAME = 'file_id');
+SET @sql := IF(@col_exists = 0,
+  'ALTER TABLE `common_attachment` ADD COLUMN `file_id` bigint NULL DEFAULT NULL COMMENT ''关联 infra_file 编号'' AFTER `business_id`',
+  'SELECT ''skip common_attachment.file_id'' AS msg');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 10. 历史入职单附件 → 员工档案入职资料（仅复制元数据，幂等）
+-- 去重：包含已软删目标行，避免软删后全量重跑复活活动附件（#3）
 INSERT INTO `common_attachment` (
-  `business_type`, `business_id`, `file_name`, `file_path`, `file_url`,
+  `business_type`, `business_id`, `file_id`, `file_name`, `file_path`, `file_url`,
   `file_size`, `file_type`, `file_extension`, `upload_time`, `sort_order`,
   `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`
 )
 SELECT
   'hrm_employee_archive_onboarding',
   e.employee_id,
+  a.file_id,
   a.file_name,
   a.file_path,
   a.file_url,
@@ -262,6 +272,6 @@ WHERE a.business_type = '201'
     WHERE t.business_type = 'hrm_employee_archive_onboarding'
       AND t.business_id = e.employee_id
       AND t.file_path = a.file_path
-      AND t.deleted = b'0'
       AND t.tenant_id = a.tenant_id
+      -- 不加 deleted=0：软删后重跑不得复活
   );

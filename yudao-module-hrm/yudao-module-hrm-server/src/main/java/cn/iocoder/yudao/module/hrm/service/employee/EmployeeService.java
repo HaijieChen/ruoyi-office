@@ -94,5 +94,11 @@ public interface EmployeeService {
      */
     List<EmployeeRosterExportVO> getEmployeeRosterExportList(EmployeePageReqVO pageReqVO);
 
+    /**
+     * 鉴权下载入职资料附件
+     */
+    void downloadOnboardingAttachment(Long employeeId, Long attachmentId,
+                                      jakarta.servlet.http.HttpServletResponse response) throws Exception;
+
 }
 

@@ -23,6 +23,9 @@ public class AttachmentRespVO {
     @ExcelProperty("业务单据ID")
     private Long businessId;
 
+    @Schema(description = "关联 infra_file 编号", example = "1024")
+    private Long fileId;
+
     @Schema(description = "文件名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "合同文件.pdf")
     @ExcelProperty("文件名称")
     private String fileName;

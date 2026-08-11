@@ -146,13 +146,14 @@ class EmployeeRosterExportTest {
 
     @Test
     void exportWritesRealXlsxWith52HeadersAndSheetName() throws Exception {
+        // #2：明显无效的合成夹具，禁止使用拟真身份数据
         EmployeeRosterExportVO row = new EmployeeRosterExportVO();
         row.setSequenceNo(1);
         row.setSocialSecurityEnabled("是");
-        row.setName("钟伟");
-        row.setIdCard("430981198311201111");
-        row.setMobile("15995408684");
-        row.setBankAccount("6217231102004496773");
+        row.setName("TEST_EMP_NAME");
+        row.setIdCard("TEST_ID_CARD_000000000000");
+        row.setMobile("10000000000");
+        row.setBankAccount("TEST_BANK_ACCT_0000");
         row.setSex("男");
         row.setCurrentContractType("无固定期限");
         row.setOnboardingAttachmentStatus("已上传2份");
@@ -164,15 +165,12 @@ class EmployeeRosterExportTest {
         byte[] bytes = out.toByteArray();
         assertTrue(bytes.length > 100, "xlsx should not be empty");
 
-        // 写盘供人工/审查证据
         java.nio.file.Path evidenceDir = java.nio.file.Paths.get("target/exp75-export-evidence");
         java.nio.file.Files.createDirectories(evidenceDir);
         java.nio.file.Path xlsx = evidenceDir.resolve("文枢花名册-evidence.xlsx");
         java.nio.file.Files.write(xlsx, bytes);
 
-        // 读回表头与工作表名
         try (java.io.ByteArrayInputStream in = new java.io.ByteArrayInputStream(bytes)) {
-            // FastExcel 同步读第一行头
             java.util.concurrent.atomic.AtomicReference<List<String>> headerRef =
                     new java.util.concurrent.atomic.AtomicReference<>();
             cn.idev.excel.FastExcelFactory.read(in, new cn.idev.excel.event.AnalysisEventListener<java.util.Map<Integer, String>>() {
@@ -187,10 +185,10 @@ class EmployeeRosterExportTest {
 
                 @Override
                 public void invoke(java.util.Map<Integer, String> data, cn.idev.excel.context.AnalysisContext context) {
-                    // 证件/银行卡应为文本
-                    assertEquals("430981198311201111", data.get(12)); // 身份证号列
-                    assertEquals("15995408684", data.get(13));
-                    assertEquals("6217231102004496773", data.get(41));
+                    assertEquals("TEST_ID_CARD_000000000000", data.get(12));
+                    assertEquals("10000000000", data.get(13));
+                    assertEquals("TEST_BANK_ACCT_0000", data.get(41));
+                    assertEquals("TEST_EMP_NAME", data.get(6));
                 }
 
                 @Override
