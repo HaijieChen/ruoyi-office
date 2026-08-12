@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { EmployeeArchiveApi } from '#/api/hrm/employee';
 
-import { computed, onActivated, ref } from 'vue';
+import { onActivated, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
@@ -35,43 +35,6 @@ const checkedIds = ref<number[]>([]);
 
 // 部门选择弹窗引用
 const deptSelectModalRef = ref<InstanceType<typeof DeptSelectModal>>();
-
-/**
- * 工具栏按钮：批量生成用户不再用 disabled 置灰。
- * 未勾选时点击给出明确提示，避免 HR 账号下误以为无权限/功能不可用。
- */
-const toolbarActions = computed(() => [
-  {
-    label: $t('ui.actionTitle.create'),
-    type: 'primary' as const,
-    icon: ACTION_ICON.ADD,
-    auth: ['hrm:employee-archive:create'],
-    onClick: handleCreate,
-  },
-  {
-    label: $t('ui.actionTitle.export'),
-    type: 'primary' as const,
-    icon: ACTION_ICON.DOWNLOAD,
-    auth: ['hrm:employee-archive:export'],
-    onClick: handleExport,
-  },
-  {
-    label: '批量生成用户',
-    type: 'primary' as const,
-    icon: ACTION_ICON.ADD,
-    auth: ['hrm:employee-archive:create'],
-    onClick: handleBatchGenerateUser,
-  },
-  {
-    label: $t('ui.actionTitle.deleteBatch'),
-    type: 'primary' as const,
-    danger: true,
-    icon: ACTION_ICON.DELETE,
-    disabled: isEmpty(checkedIds.value),
-    auth: ['hrm:employee-archive:delete'],
-    onClick: handleDeleteBatch,
-  },
-]);
 
 /** 刷新表格 */
 function onRefresh() {
@@ -259,7 +222,41 @@ onActivated(() => {
   <Page auto-content-height>
     <Grid table-title="员工档案列表">
       <template #toolbar-tools>
-        <TableAction :actions="toolbarActions" />
+        <TableAction
+          :actions="[
+            {
+              label: $t('ui.actionTitle.create'),
+              type: 'primary',
+              icon: ACTION_ICON.ADD,
+              auth: ['hrm:employee-archive:create'],
+              onClick: handleCreate,
+            },
+            {
+              label: $t('ui.actionTitle.export'),
+              type: 'primary',
+              icon: ACTION_ICON.DOWNLOAD,
+              auth: ['hrm:employee-archive:export'],
+              onClick: handleExport,
+            },
+            {
+              label: '批量生成用户',
+              type: 'primary',
+              icon: ACTION_ICON.ADD,
+              disabled: isEmpty(checkedIds),
+              auth: ['hrm:employee-archive:create'],
+              onClick: handleBatchGenerateUser,
+            },
+            {
+              label: $t('ui.actionTitle.deleteBatch'),
+              type: 'primary',
+              danger: true,
+              icon: ACTION_ICON.DELETE,
+              disabled: isEmpty(checkedIds),
+              auth: ['hrm:employee-archive:delete'],
+              onClick: handleDeleteBatch,
+            },
+          ]"
+        />
       </template>
       <template #actions="{ row }">
         <TableAction

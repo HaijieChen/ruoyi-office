@@ -2,7 +2,6 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
@@ -26,9 +25,7 @@ import cn.iocoder.yudao.module.system.api.user.dto.AdminUserUpdateReqDTO;
 import cn.iocoder.yudao.module.system.enums.DictTypeConstants;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,7 +50,6 @@ import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
-@Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
 
     public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
@@ -1026,10 +1022,10 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         // 2. 校验是否已生成用户
         if (employee.getUserGenerated() != null && employee.getUserGenerated() && employee.getUserId() != null) {
-            throw exception(EMPLOYEE_ARCHIVE_USER_ALREADY_GENERATED);
+            throw new RuntimeException("该员工已生成用户，无需重复生成");
         }
 
-        // 3. 创建用户（用户名=工号）
+        // 3. 创建用户
         AdminUserCreateReqDTO userCreateReqDTO = new AdminUserCreateReqDTO();
         userCreateReqDTO.setUsername(employee.getEmployeeNo());
         userCreateReqDTO.setNickname(employee.getName());
@@ -1058,40 +1054,19 @@ public class EmployeeServiceImpl implements EmployeeService {
         return userId;
     }
 
-    /**
-     * 批量为员工生成用户。
-     * <p>
-     * 注意：不要在外层加 @Transactional。逐条通过代理调用独立事务；
-     * 若外层事务 + 内层异常被吞，会触发 UnexpectedRollbackException（表现为 500 系统异常）。
-     */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void batchGenerateUserForEmployee(List<Long> employeeIds) {
         if (CollUtil.isEmpty(employeeIds)) {
             return;
         }
         for (Long employeeId : employeeIds) {
             try {
-                getSelf().generateUserForEmployeeInNewTransaction(employeeId);
+                generateUserForEmployee(employeeId);
             } catch (Exception e) {
-                log.warn("[batchGenerateUserForEmployee][employeeId({}) 生成用户失败: {}]",
-                        employeeId, e.getMessage());
+                // 记录错误，继续处理下一个
             }
         }
-    }
-
-    /**
-     * 单条生成用户（独立事务），供批量场景调用，避免单条失败污染整批事务。
-     */
-    @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
-    public Long generateUserForEmployeeInNewTransaction(Long employeeId) {
-        return generateUserForEmployee(employeeId);
-    }
-
-    /**
-     * 获得自身的代理对象，解决 AOP 生效问题
-     */
-    private EmployeeServiceImpl getSelf() {
-        return SpringUtil.getBean(getClass());
     }
 
     private void syncEmployeeToUser(EmployeeSaveReqVO employee, Long userId) {

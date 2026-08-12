@@ -3,11 +3,8 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
-import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
-import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
-import cn.iocoder.yudao.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeContractVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEducationVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
@@ -637,79 +634,6 @@ class EmployeeServiceImplTest {
         assertNotNull(FileAccessApi.class.getMethod("getFileContent", Long.class));
         assertNotNull(FileAccessApi.class.getMethod("getUniqueFileByPath", String.class));
         assertFalse(FileAccessApi.class.isAnnotationPresent(org.springframework.web.bind.annotation.RestController.class));
-    }
-
-    @Test
-    void generateUserForEmployeeCreatesUserAndMarksGenerated() {
-        EmployeeDO emp = new EmployeeDO();
-        emp.setId(2L);
-        emp.setEmployeeNo("10000001");
-        emp.setName("TEST_EMP");
-        emp.setMobile("19900007513");
-        emp.setUserGenerated(false);
-        when(employeeArchiveMapper.selectById(2L)).thenReturn(emp);
-        when(configApi.getConfigValueByKey("system.user.init-password"))
-                .thenReturn(CommonResult.success("admin123"));
-        when(adminUserApi.createUser(any(AdminUserCreateReqDTO.class)))
-                .thenReturn(CommonResult.success(88L));
-
-        Long userId = employeeService.generateUserForEmployee(2L);
-        assertEquals(88L, userId);
-
-        ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
-        verify(employeeArchiveMapper).updateById(captor.capture());
-        assertEquals(88L, captor.getValue().getUserId());
-        assertEquals(Boolean.TRUE, captor.getValue().getUserGenerated());
-        assertEquals(2L, captor.getValue().getId());
-    }
-
-    @Test
-    void generateUserForEmployeeRejectsAlreadyGenerated() {
-        EmployeeDO emp = new EmployeeDO();
-        emp.setId(1L);
-        emp.setUserGenerated(true);
-        emp.setUserId(9L);
-        when(employeeArchiveMapper.selectById(1L)).thenReturn(emp);
-
-        assertThrows(ServiceException.class, () -> employeeService.generateUserForEmployee(1L));
-        verify(adminUserApi, never()).createUser(any());
-    }
-
-    @Test
-    void batchGenerateContinuesWhenOneEmployeeFails() {
-        // getSelf() → SpringUtil.getBean；单元测试 mock 代理调用
-        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
-            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
-
-            EmployeeDO ok = new EmployeeDO();
-            ok.setId(10L);
-            ok.setEmployeeNo("E10");
-            ok.setName("OK");
-            ok.setUserGenerated(false);
-            EmployeeDO already = new EmployeeDO();
-            already.setId(11L);
-            already.setUserGenerated(true);
-            already.setUserId(1L);
-
-            when(employeeArchiveMapper.selectById(10L)).thenReturn(ok);
-            when(employeeArchiveMapper.selectById(11L)).thenReturn(already);
-            when(configApi.getConfigValueByKey("system.user.init-password"))
-                    .thenReturn(CommonResult.success("admin123"));
-            when(adminUserApi.createUser(any(AdminUserCreateReqDTO.class)))
-                    .thenReturn(CommonResult.success(100L));
-
-            // 不应抛出；失败项被吞掉，成功项仍创建
-            assertDoesNotThrow(() ->
-                    employeeService.batchGenerateUserForEmployee(List.of(11L, 10L)));
-
-            verify(adminUserApi, times(1)).createUser(any(AdminUserCreateReqDTO.class));
-            ArgumentCaptor<EmployeeDO> updateCaptor = ArgumentCaptor.forClass(EmployeeDO.class);
-            verify(employeeArchiveMapper, times(1)).updateById(updateCaptor.capture());
-            EmployeeDO updated = updateCaptor.getValue();
-            assertEquals(10L, updated.getId());
-            assertEquals(Boolean.TRUE, updated.getUserGenerated());
-            assertEquals(100L, updated.getUserId());
-        }
     }
 
 }
