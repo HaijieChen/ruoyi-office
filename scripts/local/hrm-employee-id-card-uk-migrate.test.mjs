@@ -285,18 +285,23 @@ INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-INV', 0, 1);
     assert.match(gen, /nullif/);
     // 若 migrate 成功修好，旧 UK 可卸；若 fail-closed 中途失败，旧 UK 应仍在
   }
+  // 终态：不得保留 deleted=1；若 fail-closed 中途失败则旧 UK 必须仍在
   if (err) {
+    assert.match(err, /fail-closed|45000|must match|STORED GENERATED|precheck/i);
     const old = mysql(
       `SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema='${db}' AND table_name='hrm_employee' AND index_name='uk_hrm_employee_id_card';`,
     ).trim();
-    // fail-closed 在修复前不得静默卸旧 UK：若脚本在 DROP 旧 UK 之后才 fail 则不合格
-    // 本实现：先校验列再装新 UK 再卸旧；错误列会重建为正确，然后可卸旧。
-    // 反例要求：不得 migrate OK 且留下 deleted=1。上面已断言表达式。
-    assert.ok(true);
+    assert.equal(old, '1', 'fail-closed must not drop old UK while leaving bad definition');
   } else {
-    // 成功路径：必须已修复表达式
     const norm = gen.replace(/\s+/g, '');
     assert.match(norm, /deleted`?=0/);
+    assert.doesNotMatch(norm, /deleted`?=1/);
+    // 成功重建后 active 同证必须 1062
+    const fail = mysql(
+      `USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-INV', 0, 1);`,
+      { expectFail: true },
+    );
+    assert.match(fail, /1062|Duplicate/i);
   }
 });
 
@@ -354,7 +359,6 @@ CREATE TABLE hrm_employee (
   UNIQUE KEY uk_hrm_employee_id_card (tenant_id, id_card, deleted),
   UNIQUE KEY uk_hrm_employee_active_id_card (tenant_id, active_id_card)
 );
--- 两行 active 不同证号，但都会被错误表达式映射成 NULL 以外？
 -- 当 id_card='ID-Q' 时 active 为 NULL；当 id_card='ID-Q1' 时 active 为 'ID-Q1'
 INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-Q', 0, 1);
 INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-Q', 1, 1);
@@ -378,11 +382,118 @@ INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-Q', 1, 1);
   assert.match(fail, /1062|Duplicate/i);
 });
 
+test('migrate: utf8mb4_bin collation must rebuild; case-only dup is 1062 (F1)', () => {
+  const db = `${schema}_bincol`;
+  mysql(`CREATE DATABASE IF NOT EXISTS \`${db}\``);
+  mysql(`
+USE \`${db}\`;
+DROP TABLE IF EXISTS hrm_employee;
+CREATE TABLE hrm_employee (
+  id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  id_card varchar(18) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  deleted bit(1) NOT NULL DEFAULT b'0',
+  tenant_id bigint NOT NULL DEFAULT 1,
+  -- 表达式正确但 collation 错误：binary 会放过 case-only 重复
+  active_id_card varchar(18) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin
+    GENERATED ALWAYS AS (IF(deleted = 0, NULLIF(TRIM(id_card), ''), NULL)) STORED,
+  UNIQUE KEY uk_hrm_employee_id_card (tenant_id, id_card, deleted),
+  UNIQUE KEY uk_hrm_employee_active_id_card (tenant_id, active_id_card)
+);
+INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('CASE-ID-X', 0, 1);
+`);
+  mysqlFile(migrateSqlPath, db);
+  const coll = mysql(
+    `SELECT LOWER(COLLATION_NAME) FROM information_schema.columns WHERE table_schema='${db}' AND table_name='hrm_employee' AND column_name='active_id_card';`,
+  ).trim();
+  assert.equal(coll, 'utf8mb4_unicode_ci');
+  const cs = mysql(
+    `SELECT LOWER(CHARACTER_SET_NAME) FROM information_schema.columns WHERE table_schema='${db}' AND table_name='hrm_employee' AND column_name='active_id_card';`,
+  ).trim();
+  assert.equal(cs, 'utf8mb4');
+  // case-only 重复必须 1062（unicode_ci）
+  const fail = mysql(
+    `USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('case-id-x', 0, 1);`,
+    { expectFail: true },
+  );
+  assert.match(fail, /1062|Duplicate/i);
+  const old = mysql(
+    `SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema='${db}' AND table_name='hrm_employee' AND index_name='uk_hrm_employee_id_card';`,
+  ).trim();
+  assert.equal(old, '0');
+});
+
+test('migrate: Tab/CR/LF NULLIF sentinel must not be accepted (F2)', () => {
+  for (const [tag, hex] of [
+    ['tab', '09'],
+    ['lf', '0A'],
+    ['cr', '0D'],
+  ]) {
+    const db = `${schema}_ws_${tag}`;
+    mysql(`CREATE DATABASE IF NOT EXISTS \`${db}\``);
+    mysql(`
+USE \`${db}\`;
+DROP TABLE IF EXISTS hrm_employee;
+CREATE TABLE hrm_employee (
+  id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  id_card varchar(18) DEFAULT NULL,
+  deleted bit(1) NOT NULL DEFAULT b'0',
+  tenant_id bigint NOT NULL DEFAULT 1,
+  -- 错误 sentinel：NULLIF 第二参数为控制字符（非精确空串）
+  active_id_card varchar(18) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    GENERATED ALWAYS AS (IF(deleted = 0, NULLIF(TRIM(id_card), _utf8mb4 0x${hex}), NULL)) STORED,
+  UNIQUE KEY uk_hrm_employee_id_card (tenant_id, id_card, deleted),
+  UNIQUE KEY uk_hrm_employee_active_id_card (tenant_id, active_id_card)
+);
+INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-WS-${tag}', 0, 1);
+`);
+    mysqlFile(migrateSqlPath, db);
+    // 用 HEX 检查控制字节是否仍嵌在表达式中（避免客户端换行干扰）
+    const genHex = mysql(
+      `SELECT HEX(GENERATION_EXPRESSION) FROM information_schema.columns WHERE table_schema='${db}' AND table_name='hrm_employee' AND column_name='active_id_card';`,
+    ).trim().toUpperCase();
+    // 控制字符作为独立字节：在 hex 中为 09/0A/0D，且两侧为转义引号 5C27（\'）
+    assert.ok(
+      !genHex.includes(`5C27${hex}5C27`),
+      `${tag}: control-char NULLIF sentinel must be rebuilt (found \\'0x${hex}\\' in generation)`,
+    );
+    const gen = mysql(
+      `SELECT LOWER(REPLACE(GENERATION_EXPRESSION,' ','')) FROM information_schema.columns WHERE table_schema='${db}' AND table_name='hrm_employee' AND column_name='active_id_card';`,
+    ).trim();
+    assert.match(gen, /nullif\(trim\(/);
+    assert.match(gen, /deleted`?=0/);
+    // 权威空串：多条空白 active 允许（映射为 NULL）
+    mysql(`USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('', 0, 1), ('  ', 0, 1);`);
+    const blanks = mysql(
+      `USE \`${db}\`; SELECT COUNT(*) FROM hrm_employee WHERE deleted=0 AND NULLIF(TRIM(id_card),'') IS NULL;`,
+    ).trim();
+    assert.equal(blanks, '2', `${tag}: blank actives must be allowed after empty-string sentinel rebuild`);
+    // 同证 active 仍唯一
+    const fail = mysql(
+      `USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-WS-${tag}', 0, 1);`,
+      { expectFail: true },
+    );
+    assert.match(fail, /1062|Duplicate/i);
+  }
+});
+
 
 test.after(() => {
   try {
     mysql(`DROP DATABASE IF EXISTS \`${schema}\``);
-    for (const s of [`${schema}_badcol`, `${schema}_badidx`, `${schema}_blank`, `${schema}_idem`, `${schema}_rb`, `${schema}_inv`, `${schema}_pfx`, `${schema}_sentinel`]) {
+    for (const s of [
+      `${schema}_badcol`,
+      `${schema}_badidx`,
+      `${schema}_blank`,
+      `${schema}_idem`,
+      `${schema}_rb`,
+      `${schema}_inv`,
+      `${schema}_pfx`,
+      `${schema}_sentinel`,
+      `${schema}_bincol`,
+      `${schema}_ws_tab`,
+      `${schema}_ws_lf`,
+      `${schema}_ws_cr`,
+    ]) {
       mysql(`DROP DATABASE IF EXISTS \`${s}\``);
     }
   } catch {
