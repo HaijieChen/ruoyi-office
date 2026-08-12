@@ -56,6 +56,17 @@ public class BpmProcessDefinitionRespVO extends BpmModelMetaInfoVO {
     @Schema(description = "流程定义排序", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long sort;
 
+    // ========== 嵌入式流程发起资格（后端权威，前端勿硬编码权限真相） ==========
+
+    @Schema(description = "当前用户是否可发起该流程（列表仅返回 canStart=true；详情/深链用于友好空态）", example = "true")
+    private Boolean canStart;
+
+    @Schema(description = "嵌入式流程要求的业务权限标识；非嵌入式为 null", example = "finance:payment-application:create")
+    private String requiredStartPermission;
+
+    @Schema(description = "不可发起时的友好原因（直接展示，勿再弹通用 403）", example = "无付款发起权限，请联系管理员分配付款发起角色")
+    private String cannotStartReason;
+
     @Schema(description = "BPMN UserTask 用户任务")
     @Data
     public static class UserTask {

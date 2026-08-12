@@ -65,6 +65,8 @@ public class BpmModelServiceImpl implements BpmModelService {
     private BpmProcessDefinitionService processDefinitionService;
     @Resource
     private BpmFormService bpmFormService;
+    @Resource
+    private BpmProcessStartEligibilityService processStartEligibilityService;
 
     @Resource
     private BpmTaskCandidateInvoker taskCandidateInvoker;
@@ -221,6 +223,8 @@ public class BpmModelServiceImpl implements BpmModelService {
         validateBpmnXml(bpmnBytes, metaInfo.getType());
         // 1.3 校验表单已配
         BpmFormDO form = validateFormConfig(metaInfo);
+        // 1.3.1 嵌入式业务表单：requiredStartPermission 必须已配置（权威元数据），缺配置禁止发布
+        processStartEligibilityService.validateEmbedStartPermissionConfigured(model.getKey());
         // 1.4 校验任务分配规则已配置
         taskCandidateInvoker.validateBpmnConfig(bpmnBytes);
         // 1.5 获取仿钉钉流程设计器模型数据

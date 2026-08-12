@@ -92,8 +92,8 @@ const activeTab = ref('form');
 const activityNodes = ref<BpmProcessInstanceApi.ApprovalNodeInfo[]>([]);
 const processInstanceStartLoading = ref(false);
 
-/** NORMAL vs CUSTOM embed */
-const shellMode = ref<'embed' | 'normal' | 'unregistered'>('normal');
+/** NORMAL vs CUSTOM embed vs 业务权限拒绝 */
+const shellMode = ref<'embed' | 'normal' | 'unregistered' | 'denied'>('normal');
 const EmbedComponent = shallowRef<Component | null>(null);
 /** 动态业务表单实例（async SFC expose） */
 const embedBodyRef = ref<any>(null);
@@ -101,6 +101,8 @@ const embedBodyRef = ref<any>(null);
 const embedReady = ref(false);
 const embedLoading = ref(false);
 const embedError = ref<null | string>(null);
+/** 后端 canStart=false 时的友好空态文案（权威，勿硬编码权限点） */
+const startDeniedReason = ref<null | string>(null);
 /** 取消过期的 embed 初始化 */
 let embedInitGen = 0;
 /** 预测请求序号，仅应用最新结果（P2） */
@@ -110,8 +112,9 @@ let predictTimer: ReturnType<typeof setTimeout> | undefined;
 const isNormalShell = computed(() => shellMode.value === 'normal');
 const isEmbedShell = computed(() => shellMode.value === 'embed');
 const isUnregistered = computed(() => shellMode.value === 'unregistered');
+const isStartDenied = computed(() => shellMode.value === 'denied');
 const canSubmit = computed(() => {
-  if (isUnregistered.value) return false;
+  if (isUnregistered.value || isStartDenied.value) return false;
   if (isEmbedShell.value) return embedReady.value && !embedLoading.value;
   return true;
 });
@@ -284,7 +287,22 @@ async function initProcessInfo(row: any, formVariables?: any) {
   embedReady.value = false;
   embedLoading.value = false;
   embedError.value = null;
+  startDeniedReason.value = null;
   activeTab.value = 'form';
+
+  // 嵌入式业务表单：先用后端 canStart 权威预检（深链/缓存/撤权后直接访问）
+  // 列表已隐藏无权限项；此处禁止加载受保护数据，禁止半屏字段与通用 403 toast
+  if (resolveCreateShellEmbedLoader(row.key)) {
+    const eligibility = await resolveStartEligibility(row);
+    if (gen !== embedInitGen) return;
+    if (eligibility.canStart === false) {
+      shellMode.value = 'denied';
+      startDeniedReason.value =
+        eligibility.cannotStartReason ||
+        '无发起权限，请联系管理员分配对应业务角色';
+      return;
+    }
+  }
 
   if (row.formType === BpmModelFormType.NORMAL) {
     shellMode.value = 'normal';
@@ -376,8 +394,64 @@ async function initProcessInfo(row: any, formVariables?: any) {
     console.error(error);
     embedReady.value = false;
     embedLoading.value = false;
-    embedError.value = error?.message || '加载业务表单失败';
+    // 403「没有该操作权限」：转为友好空态，不弹通用 toast / 不展示「加载业务表单失败」
+    const bizMsg =
+      error?.response?.data?.msg ||
+      error?.data?.msg ||
+      error?.message ||
+      '';
+    const isForbidden =
+      error?.data?.code === 403 ||
+      error?.response?.data?.code === 403 ||
+      bizMsg.includes('没有该操作权限');
+    if (isForbidden) {
+      shellMode.value = 'denied';
+      startDeniedReason.value =
+        startDeniedReason.value ||
+        '无发起权限，请联系管理员分配对应业务角色';
+      embedError.value = null;
+      return;
+    }
+    embedError.value = bizMsg || '加载业务表单失败';
     message.error(embedError.value);
+  }
+}
+
+/**
+ * 解析发起资格：优先列表行上的后端字段；深链时再 get 一次权威元数据。
+ * 前端禁止根据权限码自行判断是否可发起。
+ */
+async function resolveStartEligibility(row: {
+  id?: string;
+  key?: string;
+  canStart?: boolean;
+  cannotStartReason?: string;
+}): Promise<{ canStart?: boolean; cannotStartReason?: string }> {
+  if (row.canStart === false) {
+    return {
+      canStart: false,
+      cannotStartReason: row.cannotStartReason,
+    };
+  }
+  if (row.canStart === true) {
+    return { canStart: true };
+  }
+  // 行上无 canStart（旧缓存/深链）：向后端拉取权威结果
+  try {
+    const detail = await getProcessDefinition(row.id, row.key);
+    if (!detail) {
+      return { canStart: true };
+    }
+    return {
+      canStart: detail.canStart,
+      cannotStartReason: detail.cannotStartReason,
+    };
+  } catch {
+    // 预检失败不放开嵌入加载；保守拒绝
+    return {
+      canStart: false,
+      cannotStartReason: '无法校验发起权限，请稍后重试或联系管理员',
+    };
   }
 }
 
@@ -507,6 +581,14 @@ defineExpose({ initProcessInfo });
 
     <div v-if="isUnregistered" class="py-16">
       <Empty description="该流程未配置发起表单组件，无法在统一发起中提交" />
+    </div>
+
+    <div v-else-if="isStartDenied" class="py-16">
+      <Empty
+        :description="
+          startDeniedReason || '无发起权限，请联系管理员分配对应业务角色'
+        "
+      />
     </div>
 
     <Tabs
