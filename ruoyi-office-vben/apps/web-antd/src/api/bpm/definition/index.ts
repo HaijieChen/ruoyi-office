@@ -26,6 +26,12 @@ export namespace BpmProcessDefinitionApi {
     formFields?: string[];
     icon?: string;
     startUsers?: BpmModelApi.UserInfo[];
+    /** 后端权威：当前用户是否可发起（列表仅返回可发起项；深链/详情用） */
+    canStart?: boolean;
+    /** 嵌入式流程要求的业务权限；前端勿硬编码权限真相 */
+    requiredStartPermission?: string;
+    /** 不可发起时的友好原因，直接展示，勿再弹通用 403 */
+    cannotStartReason?: string;
   }
 }
 

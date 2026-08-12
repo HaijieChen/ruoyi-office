@@ -42,6 +42,7 @@ import cn.iocoder.yudao.module.bpm.framework.flowable.core.util.BpmnModelUtils;
 import cn.iocoder.yudao.module.bpm.framework.flowable.core.util.FlowableUtils;
 import cn.iocoder.yudao.module.bpm.framework.flowable.core.util.SimpleModelUtils;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessDefinitionService;
+import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessStartEligibilityService;
 import cn.iocoder.yudao.module.bpm.service.message.BpmMessageService;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
@@ -107,6 +108,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
     @Resource
     private BpmProcessDefinitionService processDefinitionService;
+    @Resource
+    private BpmProcessStartEligibilityService processStartEligibilityService;
     @Resource
     @Lazy // 避免循环依赖
     private BpmTaskService taskService;
@@ -965,10 +968,12 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         if (processDefinitionInfo == null) {
             throw exception(PROCESS_DEFINITION_NOT_EXISTS);
         }
-        // 1.2 校验是否能够发起
+        // 1.2 校验是否能够发起（用户/部门白名单）
         if (!processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId)) {
             throw exception(PROCESS_INSTANCE_START_USER_CAN_START);
         }
+        // 1.2.1 嵌入式业务表单：业务 create 权限（与列表 canStart 同一评估）
+        processStartEligibilityService.validateStartOrThrow(definition.getKey());
         // 1.3 校验发起人自选审批人
         validateStartUserSelectAssignees(userId, definition, startUserSelectAssignees, variables);
 
