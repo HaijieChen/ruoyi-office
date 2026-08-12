@@ -337,10 +337,52 @@ INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('Y2222', 0, 1);
 });
 
 
+
+test('migrate: NULLIF sentinel ID-Q must not be accepted (P1-1 empty-string only)', () => {
+  const db = `${schema}_sentinel`;
+  mysql(`CREATE DATABASE IF NOT EXISTS \`${db}\``);
+  mysql(`
+USE \`${db}\`;
+DROP TABLE IF EXISTS hrm_employee;
+CREATE TABLE hrm_employee (
+  id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  id_card varchar(18) DEFAULT NULL,
+  deleted bit(1) NOT NULL DEFAULT b'0',
+  tenant_id bigint NOT NULL DEFAULT 1,
+  -- 错误 sentinel：NULLIF 第二参数为 'ID-Q' 而非空串
+  active_id_card varchar(18) GENERATED ALWAYS AS (IF(deleted = 0, NULLIF(TRIM(id_card), 'ID-Q'), NULL)) STORED,
+  UNIQUE KEY uk_hrm_employee_id_card (tenant_id, id_card, deleted),
+  UNIQUE KEY uk_hrm_employee_active_id_card (tenant_id, active_id_card)
+);
+-- 两行 active 不同证号，但都会被错误表达式映射成 NULL 以外？
+-- 当 id_card='ID-Q' 时 active 为 NULL；当 id_card='ID-Q1' 时 active 为 'ID-Q1'
+INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-Q', 0, 1);
+INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-Q', 1, 1);
+`);
+  // 脚本应判定列错误并安全重建为 '' sentinel
+  mysqlFile(migrateSqlPath, db);
+  const gen = mysql(
+    `SELECT LOWER(REPLACE(generation_expression,' ','')) FROM information_schema.columns WHERE table_schema='${db}' AND table_name='hrm_employee' AND column_name='active_id_card';`,
+  ).trim();
+  assert.doesNotMatch(gen, /id-q/i);
+  assert.match(gen, /deleted`?=0/);
+  assert.match(gen, /nullif\(trim\(/);
+  // empty sentinel only — reject non-empty NULLIF 2nd arg like 'ID-Q'
+  assert.doesNotMatch(gen, /nullif\(trim\(`id_card`\),(_[a-z0-9]+)?\\'[a-z0-9]/);
+  // 双 active 同证必须被新 UK 拒绝
+  mysql(`USE \`${db}\`; DELETE FROM hrm_employee; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-S', 0, 1);`);
+  const fail = mysql(
+    `USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-S', 0, 1);`,
+    { expectFail: true },
+  );
+  assert.match(fail, /1062|Duplicate/i);
+});
+
+
 test.after(() => {
   try {
     mysql(`DROP DATABASE IF EXISTS \`${schema}\``);
-    for (const s of [`${schema}_badcol`, `${schema}_badidx`, `${schema}_blank`, `${schema}_idem`, `${schema}_rb`, `${schema}_inv`, `${schema}_pfx`]) {
+    for (const s of [`${schema}_badcol`, `${schema}_badidx`, `${schema}_blank`, `${schema}_idem`, `${schema}_rb`, `${schema}_inv`, `${schema}_pfx`, `${schema}_sentinel`]) {
       mysql(`DROP DATABASE IF EXISTS \`${s}\``);
     }
   } catch {

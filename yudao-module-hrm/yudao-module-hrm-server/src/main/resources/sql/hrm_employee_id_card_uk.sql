@@ -8,9 +8,10 @@
 --   UNIQUE KEY uk_hrm_employee_active_id_card (`tenant_id`, `active_id_card`)
 --     全列索引：information_schema.statistics.SUB_PART IS NULL
 --
--- 探针（禁止仅关键词子串）
---   列：STORED GENERATED + 归一化表达式必须以
---       if((`deleted`=0),nullif(trim(`id_card`),  开头，并以 ),null) 结尾；
+-- 探针（禁止仅关键词子串 / 禁止 NULLIF 任意第二参数）
+--   列：STORED GENERATED + 归一化后 REGEXP 精确匹配
+--       if((`deleted`=0),nullif(trim(`id_card`),[_charset]''),null)
+--       第二参数仅空串 ''（可选 _latin1/_utf8mb4 等 introducer）；拒绝 'ID-Q' 等
 --       拒绝 if((`deleted`=1),...)
 --   索引：non_unique=0 且 (seq1=tenant_id, seq2=active_id_card) 且两列 SUB_PART IS NULL
 --
@@ -36,6 +37,9 @@ BEGIN
     DECLARE v_gen   VARCHAR(1024) DEFAULT '';
     DECLARE v_type  VARCHAR(64) DEFAULT '';
     DECLARE v_norm  VARCHAR(1024) DEFAULT '';
+    DECLARE v_arg   VARCHAR(256) DEFAULT NULL;
+    DECLARE v_empty VARCHAR(8) DEFAULT NULL;
+    DECLARE v_prefix VARCHAR(64) DEFAULT NULL;
 
     SELECT `EXTRA`,
            LOWER(IFNULL(`GENERATION_EXPRESSION`, '')),
@@ -51,23 +55,39 @@ BEGIN
         SET p_ok = 0;
     ELSE
         SET v_norm = REPLACE(REPLACE(REPLACE(REPLACE(v_gen, ' ', ''), '\n', ''), '\t', ''), '\r', '');
-        -- 权威结构：if((`deleted`=0),nullif(trim(`id_card`),...),NULL)
-        -- 允许 empty-string 的 charset 前缀差异（_latin1'' / _utf8mb4'' 等）
-        SET p_ok = IF(
-            UPPER(v_extra) LIKE '%STORED%GENERATED%'
-            AND v_type LIKE 'varchar(18)%'
-            AND (
-                v_norm LIKE 'if((`deleted`=0),nullif(trim(`id_card`),%'
-                OR v_norm LIKE 'if((`deleted`=0),nullif(trim(id_card),%'
-            )
-            AND v_norm LIKE '%),null)'
-            AND v_norm NOT LIKE 'if((`deleted`=1)%'
-            AND v_norm NOT LIKE 'if(`deleted`=1%'
-            AND v_norm NOT LIKE '%`deleted`=1)%nullif%'
-            AND v_norm NOT LIKE 'if((`deleted`<>0)%'
-            AND v_norm NOT LIKE 'if((`deleted`!=0)%',
-            1, 0
-        );
+        -- MySQL 将空串字面量存成 \'\'（反斜杠+引号×2），非空如 ID-Q 存成 \'id-q\'
+        SET v_empty = CONCAT(CHAR(92), CHAR(39), CHAR(92), CHAR(39));
+        -- 提取 nullif(trim(`id_card`), <ARG> ),null 中的 <ARG>
+        IF v_norm LIKE 'if((`deleted`=0),nullif(trim(`id_card`),%),null)'
+           OR v_norm LIKE 'if((`deleted`=0),nullif(trim(id_card),%),null)' THEN
+            SET v_arg = SUBSTRING_INDEX(
+                SUBSTRING_INDEX(v_norm, 'nullif(trim(`id_card`),', -1),
+                '),null)', 1);
+            IF v_arg = v_norm OR v_arg = '' THEN
+                SET v_arg = SUBSTRING_INDEX(
+                    SUBSTRING_INDEX(v_norm, 'nullif(trim(id_card),', -1),
+                    '),null)', 1);
+            END IF;
+        ELSE
+            SET v_arg = NULL;
+        END IF;
+
+        -- 仅允许 ARG = \'\' 或 _charset\'\' （charset introducer + 空串）
+        IF v_arg IS NULL THEN
+            SET p_ok = 0;
+        ELSEIF RIGHT(v_arg, 4) = v_empty THEN
+            SET v_prefix = LEFT(v_arg, CHAR_LENGTH(v_arg) - 4);
+            SET p_ok = IF(
+                UPPER(v_extra) LIKE '%STORED%GENERATED%'
+                AND v_type LIKE 'varchar(18)%'
+                AND (v_prefix = '' OR v_prefix REGEXP '^_[a-z0-9]+$')
+                AND v_norm NOT LIKE 'if((`deleted`=1)%'
+                AND v_norm NOT LIKE 'if(`deleted`=1%',
+                1, 0
+            );
+        ELSE
+            SET p_ok = 0;
+        END IF;
     END IF;
 END$$
 
