@@ -184,14 +184,7 @@ export function useGridColumns(): VxeTableGridOptions<EmployeeArchiveApi.Employe
       title: '用户状态',
       field: 'userGenerated',
       width: 100,
-      cellRender: {
-        name: 'VxeCellRender',
-        props: {
-          render: ({ row }: any) => {
-            return row.userGenerated ? '已生成' : '未生成';
-          },
-        },
-      },
+      formatter: ({ cellValue }) => (cellValue ? '已生成' : '未生成'),
     },
     {
       title: '创建时间',
