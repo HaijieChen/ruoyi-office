@@ -422,7 +422,7 @@ INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('CASE-ID-X', 0, 1)
   assert.equal(old, '0');
 });
 
-test('migrate: Tab/CR/LF NULLIF sentinel must not be accepted (F2)', () => {
+test('migrate: Tab/CR/LF NULLIF sentinel must not be accepted (ws-ctrl)', () => {
   for (const [tag, hex] of [
     ['tab', '09'],
     ['lf', '0A'],
@@ -476,6 +476,85 @@ INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-WS-${tag}', 0,
   }
 });
 
+test('migrate: single-space NULLIF sentinel must rebuild; blanks multi-insert OK (F1)', () => {
+  const db = `${schema}_spcsent`;
+  mysql(`CREATE DATABASE IF NOT EXISTS \`${db}\``);
+  mysql(`
+USE \`${db}\`;
+DROP TABLE IF EXISTS hrm_employee;
+CREATE TABLE hrm_employee (
+  id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  id_card varchar(18) DEFAULT NULL,
+  deleted bit(1) NOT NULL DEFAULT b'0',
+  tenant_id bigint NOT NULL DEFAULT 1,
+  -- 错误：单 ASCII 空格 sentinel（全局去空格会被误判为 ''）
+  active_id_card varchar(18) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    GENERATED ALWAYS AS (IF(deleted = 0, NULLIF(TRIM(id_card), ' '), NULL)) STORED,
+  UNIQUE KEY uk_hrm_employee_id_card (tenant_id, id_card, deleted),
+  UNIQUE KEY uk_hrm_employee_active_id_card (tenant_id, active_id_card)
+);
+INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-SP', 0, 1);
+`);
+  mysqlFile(migrateSqlPath, db);
+  // 终态 generation 不得再把 ' ' 当作 sentinel：hex 中不应出现 5C27205C27（\' \')
+  const genHex = mysql(
+    `SELECT HEX(GENERATION_EXPRESSION) FROM information_schema.columns WHERE table_schema='${db}' AND table_name='hrm_employee' AND column_name='active_id_card';`,
+  ).trim().toUpperCase();
+  assert.ok(!genHex.includes('5C27205C27'), 'space sentinel must be rebuilt to empty string');
+  // 多条空白 active 必须可插入（权威 NULLIF(...,'')）
+  mysql(`USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('', 0, 1), ('  ', 0, 1);`);
+  const blanks = mysql(
+    `USE \`${db}\`; SELECT COUNT(*) FROM hrm_employee WHERE deleted=0 AND NULLIF(TRIM(id_card),'') IS NULL;`,
+  ).trim();
+  assert.equal(blanks, '2');
+  const fail = mysql(
+    `USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-SP', 0, 1);`,
+    { expectFail: true },
+  );
+  assert.match(fail, /1062|Duplicate/i);
+});
+
+test('migrate: nested compound NULLIF sentinel must rebuild; dual active 1062 (F2)', () => {
+  const db = `${schema}_nest`;
+  mysql(`CREATE DATABASE IF NOT EXISTS \`${db}\``);
+  mysql(`
+USE \`${db}\`;
+DROP TABLE IF EXISTS hrm_employee;
+CREATE TABLE hrm_employee (
+  id bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  id_card varchar(18) DEFAULT NULL,
+  deleted bit(1) NOT NULL DEFAULT b'0',
+  tenant_id bigint NOT NULL DEFAULT 1,
+  -- 审查复现：嵌套复合第二参数会让 -1 后缀探针吃到内层空串
+  active_id_card varchar(18) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    GENERATED ALWAYS AS (
+      IF(deleted = 0, NULLIF(TRIM(id_card), IF(1 = 1, NULLIF(TRIM(id_card), ''), NULL)), NULL)
+    ) STORED,
+  UNIQUE KEY uk_hrm_employee_id_card (tenant_id, id_card, deleted),
+  UNIQUE KEY uk_hrm_employee_active_id_card (tenant_id, active_id_card)
+);
+INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-NEST', 0, 1);
+`);
+  // 错误定义下同证双 active 可能被放行；迁移后必须 1062
+  mysqlFile(migrateSqlPath, db);
+  const gen = mysql(
+    `SELECT LOWER(GENERATION_EXPRESSION) FROM information_schema.columns WHERE table_schema='${db}' AND table_name='hrm_employee' AND column_name='active_id_card';`,
+  ).trim();
+  // 终态仅一层 nullif(trim
+  const cnt = (gen.match(/nullif\s*\(\s*trim\s*\(/g) || []).length;
+  assert.equal(cnt, 1, 'nested nullif must be rebuilt to single outer nullif');
+  assert.doesNotMatch(gen.replace(/\s+/g, ''), /nullif\(trim\(`?id_card`?\),if\(/);
+  const fail = mysql(
+    `USE \`${db}\`; INSERT INTO hrm_employee(id_card, deleted, tenant_id) VALUES ('ID-NEST', 0, 1);`,
+    { expectFail: true },
+  );
+  assert.match(fail, /1062|Duplicate/i);
+  const active = mysql(
+    `USE \`${db}\`; SELECT COUNT(*) FROM hrm_employee WHERE deleted=0 AND id_card='ID-NEST';`,
+  ).trim();
+  assert.equal(active, '1');
+});
+
 
 test.after(() => {
   try {
@@ -493,6 +572,8 @@ test.after(() => {
       `${schema}_ws_tab`,
       `${schema}_ws_lf`,
       `${schema}_ws_cr`,
+      `${schema}_spcsent`,
+      `${schema}_nest`,
     ]) {
       mysql(`DROP DATABASE IF EXISTS \`${s}\``);
     }

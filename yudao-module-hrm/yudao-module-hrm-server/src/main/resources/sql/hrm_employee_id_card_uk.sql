@@ -9,14 +9,16 @@
 --   UNIQUE KEY uk_hrm_employee_active_id_card (`tenant_id`, `active_id_card`)
 --     全列索引：information_schema.statistics.SUB_PART IS NULL
 --
--- 探针（禁止仅关键词子串 / 禁止 NULLIF 任意第二参数）
---   列：STORED GENERATED + charset/collation 权威匹配 + 表达式 ARG 精确匹配
+-- 探针（禁止仅关键词子串 / 禁止 NULLIF 任意第二参数 / 禁止嵌套复合 ARG）
+--   列：STORED GENERATED + charset/collation 权威匹配 + 外层 NULLIF ARG 精确匹配
 --       CHARACTER_SET_NAME=utf8mb4 AND COLLATION_NAME=utf8mb4_unicode_ci
 --         （或与 id_card 列 charset/collation 完全一致）
 --       if((`deleted`=0),nullif(trim(`id_card`),[_charset]''),null)
 --       第二参数仅精确空串 ''（可选 _latin1/_utf8mb4 等 introducer）
---       解析时仅去掉 ASCII 空格，不得删除 Tab/CR/LF（避免把 '\t' 归一成 ''）
---       拒绝 'ID-Q'、Tab/CR/LF 等非空 sentinel；拒绝 if((`deleted`=1),...)
+--       结构归一化仅折叠「=」两侧空格，绝不删除字面量内空格（防 ' ' → ''）
+--       取**最外层/首次** nullif(trim(id_card),…) 的 ARG（禁止 SUBSTRING -1 吃到内层）
+--       ARG 不得含 () , 空白/控制字符；仅允许一个 nullif(trim(
+--       拒绝 ' '/'ID-Q'/Tab/嵌套 IF/IFNULL/CONCAT 等；拒绝 if((`deleted`=1),...)
 --   索引：non_unique=0 且 (seq1=tenant_id, seq2=active_id_card) 且两列 SUB_PART IS NULL
 --
 -- 顺序：预检 → 修复列/UK 并 fail-closed 校验 → 最后 DROP 旧 uk_hrm_employee_id_card
@@ -46,9 +48,13 @@ BEGIN
     DECLARE v_id_coll VARCHAR(64) DEFAULT NULL;
     DECLARE v_norm  VARCHAR(1024) DEFAULT '';
     DECLARE v_arg   VARCHAR(256) DEFAULT NULL;
+    DECLARE v_rest  VARCHAR(1024) DEFAULT '';
     DECLARE v_empty VARCHAR(8) DEFAULT NULL;
     DECLARE v_prefix VARCHAR(64) DEFAULT NULL;
     DECLARE v_cs_ok INT DEFAULT 0;
+    DECLARE v_marker VARCHAR(64) DEFAULT '';
+    DECLARE v_pos INT DEFAULT 0;
+    DECLARE v_nullif_cnt INT DEFAULT 0;
 
     SELECT `EXTRA`,
            LOWER(IFNULL(`GENERATION_EXPRESSION`, '')),
@@ -74,23 +80,33 @@ BEGIN
     IF v_extra IS NULL THEN
         SET p_ok = 0;
     ELSE
-        -- 仅去掉 ASCII 空格做结构匹配；保留 Tab/CR/LF，避免把非空 sentinel 归一成空串
-        SET v_norm = REPLACE(v_gen, ' ', '');
-        -- MySQL 将空串字面量存成 \'\'（常带 _latin1 等 introducer）；非空如 ID-Q / Tab 不得通过
+        -- 仅折叠比较运算符两侧空格；禁止全局去空格（否则 ' ' 字面量会变成 ''）
+        SET v_norm = v_gen;
+        SET v_norm = REPLACE(v_norm, ' = ', '=');
+        SET v_norm = REPLACE(v_norm, ' =', '=');
+        SET v_norm = REPLACE(v_norm, '= ', '=');
+        -- MySQL 将空串字面量存成 \'\'（常带 _latin1 等 introducer）
         SET v_empty = CONCAT(CHAR(92), CHAR(39), CHAR(92), CHAR(39));
-        -- 提取 nullif(trim(`id_card`), <ARG> ),null 中的 <ARG>（不改写字面量内容）
-        IF v_norm LIKE 'if((`deleted`=0),nullif(trim(`id_card`),%),null)'
-           OR v_norm LIKE 'if((`deleted`=0),nullif(trim(id_card),%),null)' THEN
-            SET v_arg = SUBSTRING_INDEX(
-                SUBSTRING_INDEX(v_norm, 'nullif(trim(`id_card`),', -1),
-                '),null)', 1);
-            IF v_arg = v_norm OR v_arg = '' THEN
-                SET v_arg = SUBSTRING_INDEX(
-                    SUBSTRING_INDEX(v_norm, 'nullif(trim(id_card),', -1),
-                    '),null)', 1);
+
+        -- 必须恰好一个 nullif(trim( —— 拒绝嵌套 NULLIF(TRIM(...), IF(...,NULLIF(...)))
+        SET v_nullif_cnt = (CHAR_LENGTH(v_norm) - CHAR_LENGTH(REPLACE(v_norm, 'nullif(trim(', '')))
+            / CHAR_LENGTH('nullif(trim(');
+
+        SET v_arg = NULL;
+        IF v_nullif_cnt = 1
+           AND (v_norm LIKE 'if((`deleted`=0),nullif(trim(`id_card`),%),null)'
+                OR v_norm LIKE 'if((`deleted`=0),nullif(trim(id_card),%),null)') THEN
+            -- 取**首次/外层** nullif(trim 的 ARG（禁止 SUBSTRING_INDEX -1 吃到内层）
+            SET v_marker = 'nullif(trim(`id_card`),';
+            SET v_pos = LOCATE(v_marker, v_norm);
+            IF v_pos = 0 THEN
+                SET v_marker = 'nullif(trim(id_card),';
+                SET v_pos = LOCATE(v_marker, v_norm);
             END IF;
-        ELSE
-            SET v_arg = NULL;
+            IF v_pos > 0 THEN
+                SET v_rest = SUBSTRING(v_norm, v_pos + CHAR_LENGTH(v_marker));
+                SET v_arg = SUBSTRING_INDEX(v_rest, '),null)', 1);
+            END IF;
         END IF;
 
         -- charset/collation：权威 utf8mb4 + utf8mb4_unicode_ci，或与 id_card 完全一致
@@ -100,10 +116,14 @@ BEGIN
             1, 0
         );
 
-        -- 仅允许 ARG = \'\' 或 _charset\'\' （精确空串；禁止 Tab/CR/LF 等控制字符）
-        IF v_arg IS NULL THEN
+        -- 仅允许 ARG = \'\' 或 _charset\'\'；拒绝嵌套/复合（含括号逗号）与任意空白字面量
+        IF v_arg IS NULL OR v_arg = '' THEN
             SET p_ok = 0;
         ELSEIF RIGHT(v_arg, 4) = v_empty
+               AND LOCATE('(', v_arg) = 0
+               AND LOCATE(')', v_arg) = 0
+               AND LOCATE(',', v_arg) = 0
+               AND LOCATE(' ', v_arg) = 0
                AND LOCATE(CHAR(9), v_arg) = 0
                AND LOCATE(CHAR(10), v_arg) = 0
                AND LOCATE(CHAR(13), v_arg) = 0 THEN
