@@ -120,4 +120,16 @@ public interface EmployeeMapper extends BaseMapperX<EmployeeDO> {
                 .eq(EmployeeDO::getUserId, userId));
     }
 
+    /**
+     * 根据身份证号查询员工（花名册导入 upsert 键）
+     */
+    default EmployeeDO selectByIdCard(String idCard) {
+        if (idCard == null || idCard.isBlank()) {
+            return null;
+        }
+        return selectOne(new LambdaQueryWrapperX<EmployeeDO>()
+                .eq(EmployeeDO::getIdCard, idCard.trim())
+                .last("LIMIT 1"));
+    }
+
 }

@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
@@ -25,6 +26,7 @@ import cn.iocoder.yudao.module.system.api.user.dto.AdminUserUpdateReqDTO;
 import cn.iocoder.yudao.module.system.enums.DictTypeConstants;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -50,6 +52,7 @@ import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
 
     public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
@@ -330,6 +333,60 @@ public class EmployeeServiceImpl implements EmployeeService {
     public PageResult<EmployeeRespVO> getEmployeeArchiveSelectablePage(EmployeeSelectPageReqVO pageReqVO) {
         PageResult<EmployeeDO> pageResult = employeeArchiveMapper.selectPageExcludeFormal(pageReqVO);
         return buildEmployeeRespPage(pageResult);
+    }
+
+    /**
+     * 花名册导入：逐行 upsert，外层不加事务，避免单行失败拖垮整批。
+     * 行号按「表头在第 2 行」约定：数据行 Excel 行号 = index + 3。
+     */
+    @Override
+    public EmployeeRosterImportRespVO importEmployeeRosterList(List<EmployeeRosterImportExcelVO> rows) {
+        if (CollUtil.isEmpty(rows)) {
+            throw new IllegalArgumentException("导入数据不能为空");
+        }
+        EmployeeRosterImportRespVO resp = EmployeeRosterImportRespVO.builder()
+                .createNames(new ArrayList<>())
+                .updateNames(new ArrayList<>())
+                .failureRows(new LinkedHashMap<>())
+                .build();
+        Set<String> seenIdCards = new HashSet<>();
+        EmployeeServiceImpl self = getSelf();
+        for (int i = 0; i < rows.size(); i++) {
+            // 附件结构：第1行标题、第2行表头、第3行起数据
+            int excelRowNumber = i + 3;
+            EmployeeRosterImportExcelVO row = rows.get(i);
+            try {
+                EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(row);
+                String idCard = req.getIdCard();
+                if (!seenIdCards.add(idCard)) {
+                    resp.getFailureRows().put(excelRowNumber, "文件内身份证号重复：" + idCard);
+                    continue;
+                }
+                EmployeeDO existing = employeeArchiveMapper.selectByIdCard(idCard);
+                if (existing == null) {
+                    self.createEmployeeArchive(req);
+                    resp.getCreateNames().add(req.getName());
+                } else {
+                    req.setId(existing.getId());
+                    req.setEmployeeNo(existing.getEmployeeNo());
+                    self.updateEmployeeArchive(req);
+                    resp.getUpdateNames().add(req.getName());
+                }
+            } catch (Exception ex) {
+                String reason = ex.getMessage();
+                if (StrUtil.isBlank(reason)) {
+                    reason = ex.getClass().getSimpleName();
+                }
+                // ServiceException 带业务文案
+                log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, reason);
+                resp.getFailureRows().put(excelRowNumber, reason);
+            }
+        }
+        return resp;
+    }
+
+    private EmployeeServiceImpl getSelf() {
+        return SpringUtil.getBean(getClass());
     }
 
     @Override

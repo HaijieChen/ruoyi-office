@@ -5,7 +5,7 @@ import type { EmployeeArchiveApi } from '#/api/hrm/employee';
 import { onActivated, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
@@ -25,6 +25,7 @@ import { $t } from '#/locales';
 import { DeptSelectModal } from '#/views/system/dept/components';
 
 import { useGridColumns, useGridFormSchema } from './data';
+import ImportModal from './modules/import-modal.vue';
 
 defineOptions({ name: 'HrmEmployeeArchiveList' });
 
@@ -35,6 +36,10 @@ const checkedIds = ref<number[]>([]);
 
 // 部门选择弹窗引用
 const deptSelectModalRef = ref<InstanceType<typeof DeptSelectModal>>();
+
+const [ImportModalComp, importModalApi] = useVbenModal({
+  connectedComponent: ImportModal,
+});
 
 /** 刷新表格 */
 function onRefresh() {
@@ -112,6 +117,11 @@ async function handleExport() {
   } finally {
     hideLoading();
   }
+}
+
+/** 导入文枢花名册 */
+function handleImport() {
+  importModalApi.open();
 }
 
 /** 生成用户 */
@@ -239,6 +249,13 @@ onActivated(() => {
               onClick: handleExport,
             },
             {
+              label: '导入',
+              type: 'primary',
+              icon: ACTION_ICON.UPLOAD,
+              auth: ['hrm:employee-archive:create'],
+              onClick: handleImport,
+            },
+            {
               label: '批量生成用户',
               type: 'primary',
               icon: ACTION_ICON.ADD,
@@ -292,6 +309,7 @@ onActivated(() => {
     </Grid>
     <!-- 部门选择弹窗 -->
     <DeptSelectModal ref="deptSelectModalRef" @select="handleDeptSelect" />
+    <ImportModalComp @success="onRefresh" />
   </Page>
 </template>
 

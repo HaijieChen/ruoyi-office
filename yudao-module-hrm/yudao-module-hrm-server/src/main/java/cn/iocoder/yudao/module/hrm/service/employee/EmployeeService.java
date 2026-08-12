@@ -4,6 +4,8 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeePageReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRosterExportVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRosterImportExcelVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRosterImportRespVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSelectPageReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSaveReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.OnboardingFileClaimRespVO;
@@ -94,6 +96,14 @@ public interface EmployeeService {
      * @return 导出列表
      */
     List<EmployeeRosterExportVO> getEmployeeRosterExportList(EmployeePageReqVO pageReqVO);
+
+    /**
+     * 批量导入文枢花名册（按身份证号 upsert，逐行部分成功）
+     *
+     * @param rows 已解析的 Excel 数据行（不含表头）
+     * @return 成功/失败明细
+     */
+    EmployeeRosterImportRespVO importEmployeeRosterList(List<EmployeeRosterImportExcelVO> rows);
 
     /**
      * 鉴权下载入职资料附件
