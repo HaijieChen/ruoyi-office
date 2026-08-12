@@ -20,7 +20,10 @@ import {
 } from 'ant-design-vue';
 
 import { getCategorySimpleList } from '#/api/bpm/category';
-import { getProcessDefinitionList } from '#/api/bpm/definition';
+import {
+  getProcessDefinition,
+  getProcessDefinitionList,
+} from '#/api/bpm/definition';
 import { getProcessInstance } from '#/api/bpm/processInstance';
 
 import ProcessDefinitionDetail from './modules/form.vue';
@@ -62,9 +65,19 @@ async function getList() {
         message.error('重新发起流程失败，原因：流程实例不存在');
         return;
       }
-      const processDefinition = processDefinitionList.value.find(
+      let processDefinition = processDefinitionList.value.find(
         (item: any) => item.key === processInstance.processDefinition?.key,
       );
+      // 列表因 canStart 已隐藏：深链/撤权后仍需友好拒绝，不加载业务表单
+      if (!processDefinition) {
+        const key = processInstance.processDefinition?.key;
+        const id = processInstance.processDefinition?.id;
+        try {
+          processDefinition = await getProcessDefinition(id, key);
+        } catch {
+          processDefinition = undefined;
+        }
+      }
       if (!processDefinition) {
         message.error('重新发起流程失败，原因：流程定义不存在');
         return;
@@ -83,10 +96,13 @@ async function loadCategoryList() {
 
 /** 获取所有流程定义数据 */
 async function loadProcessDefinitionList() {
-  // 流程定义
-  processDefinitionList.value = await getProcessDefinitionList({
+  // 流程定义（后端已按 canStart 过滤；此处防御性再滤一层，勿硬编码业务权限）
+  const list = await getProcessDefinitionList({
     suspensionState: 1,
   });
+  processDefinitionList.value = (list || []).filter(
+    (item) => item.canStart !== false,
+  );
 
   // 空搜索，初始化相关数据
   handleQuery();

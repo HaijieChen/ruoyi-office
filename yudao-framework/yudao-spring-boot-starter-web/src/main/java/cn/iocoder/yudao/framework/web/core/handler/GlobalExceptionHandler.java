@@ -23,6 +23,7 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ValidationException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.util.Assert;
@@ -96,6 +97,9 @@ public class GlobalExceptionHandler {
         }
         if (ex instanceof MaxUploadSizeExceededException) {
             return maxUploadSizeExceededExceptionHandler((MaxUploadSizeExceededException) ex);
+        }
+        if (ex instanceof DataIntegrityViolationException) {
+            return dataIntegrityViolationExceptionHandler((DataIntegrityViolationException) ex);
         }
         if (ex instanceof NoHandlerFoundException) {
             return noHandlerFoundExceptionHandler((NoHandlerFoundException) ex);
@@ -221,6 +225,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public CommonResult<?> maxUploadSizeExceededExceptionHandler(MaxUploadSizeExceededException ex) {
         return CommonResult.error(BAD_REQUEST.getCode(), "上传文件过大，请调整后重试");
+    }
+
+    /**
+     * DB 约束 / Data truncation（如 mediumblob 装 20MB）→ 稳定 4xx，避免 500
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public CommonResult<?> dataIntegrityViolationExceptionHandler(DataIntegrityViolationException ex) {
+        String msg = ExceptionUtil.getRootCauseMessage(ex);
+        if (msg != null) {
+            String m = msg.toLowerCase();
+            if (m.contains("data truncation")
+                    || m.contains("data too long")
+                    || m.contains("max_allowed_packet")
+                    || m.contains("packet for query is too large")) {
+                log.warn("[dataIntegrityViolationExceptionHandler][file/content truncation] {}", msg);
+                return CommonResult.error(BAD_REQUEST.getCode(), "文件内容过大，无法存储，请控制在业务上限内");
+            }
+        }
+        log.warn("[dataIntegrityViolationExceptionHandler]", ex);
+        return CommonResult.error(BAD_REQUEST.getCode(), "数据写入失败，请检查后重试");
     }
 
     /**

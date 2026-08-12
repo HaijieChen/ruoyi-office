@@ -5,6 +5,8 @@ import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEducationDO;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -18,6 +20,16 @@ public interface EmployeeEducationMapper extends BaseMapperX<EmployeeEducationDO
     default List<EmployeeEducationDO> selectListByEmployeeId(Long employeeId) {
         return selectList(new LambdaQueryWrapperX<EmployeeEducationDO>()
                 .eq(EmployeeEducationDO::getEmployeeId, employeeId)
+                .orderByDesc(EmployeeEducationDO::getStartTime));
+    }
+
+    default List<EmployeeEducationDO> selectListByEmployeeIds(Collection<Long> employeeIds) {
+        if (employeeIds == null || employeeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return selectList(new LambdaQueryWrapperX<EmployeeEducationDO>()
+                .in(EmployeeEducationDO::getEmployeeId, employeeIds)
+                .orderByAsc(EmployeeEducationDO::getEmployeeId)
                 .orderByDesc(EmployeeEducationDO::getStartTime));
     }
 

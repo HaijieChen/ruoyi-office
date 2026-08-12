@@ -105,7 +105,7 @@ async function handleExport() {
   const hideLoading = message.loading('正在导出...', 0);
   try {
     const data = await exportEmployeeArchiveExcel(await gridApi.formApi.getValues());
-    downloadFileFromBlobPart({ fileName: '员工档案.xls', source: data });
+    downloadFileFromBlobPart({ fileName: '文枢花名册.xlsx', source: data });
     message.success('导出成功');
   } catch (error) {
     message.error('导出失败');

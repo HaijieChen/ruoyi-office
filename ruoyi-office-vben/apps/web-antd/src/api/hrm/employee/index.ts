@@ -24,11 +24,30 @@ export namespace EmployeeArchiveApi {
     currentAddress?: string; // 现居住地址
     emergencyContact?: string; // 紧急联系人
     emergencyPhone?: string; // 联系电话
+    emergencyRelationship?: string; // 紧急联系人关系
+    socialSecurityEnabled?: boolean | null; // 是否缴纳社保
+    housingFundEnabled?: boolean | null; // 是否缴纳公积金
+    socialSecurityStartMonth?: string; // 参保年月 yyyy-MM
+    probationSalary?: number; // 试用期薪资
+    regularSalary?: number; // 转正薪资
+    fertilityStatus?: string; // 生育状况
+    householdType?: string; // 户籍性质
+    employmentForm?: string; // 用工形式
+    recruitmentChannel?: string; // 招聘渠道
+    interviewerName?: string; // 面试人
+    age?: number; // 年龄
+    companyTenureMonths?: number; // 司龄月数
+    marriageChildbearingSummary?: string;
+    contractSignCount?: number;
+    currentContractType?: string;
+    currentContractStartDate?: string;
+    currentContractEndDate?: string;
     avatar?: string; // 照片
     bankName?: string; // 工资开户行
     bankAccount?: string; // 工资卡账户
+    jobPost?: string; // 职位
     jobPosition?: string; // 职务
-    employeeStatus?: number; // 人员状态（1:正式 2:试用期 3:实习生 4:兼职 5:零时工）
+    employeeStatus?: number; // 人员状态（员工类型）
     deptId?: number; // 所属部门
     deptName?: string; // 所属部门名称
     companyId?: number; // 所属公司ID
@@ -42,6 +61,42 @@ export namespace EmployeeArchiveApi {
     workExperienceList?: EmployeeWorkExperience[]; // 工作经历列表
     educationList?: EmployeeEducation[]; // 教育经历列表
     familyList?: EmployeeFamily[]; // 家属信息列表
+    contractList?: EmployeeContract[]; // 合同明细
+    /** 入职资料：新附件只传 claimToken；已有附件传 id */
+    onboardingAttachments?: OnboardingAttachment[];
+  }
+
+  export interface EmployeeContract {
+    id?: number;
+    sequenceNo: 1 | 2 | 3 | 4;
+    contractType?: string;
+    startDate: string;
+    endDate?: string;
+  }
+
+  /** 入职资料附件（专用 VO，不自报 businessType/size/url） */
+  export interface OnboardingAttachment {
+    id?: number;
+    /** 一次性 claim（新上传） */
+    claimToken?: string;
+    fileName?: string;
+    fileSize?: number;
+    fileExtension?: string;
+    fileType?: string;
+    sortOrder?: number;
+    remark?: string;
+    uploadTime?: string | Date;
+    /** 鉴权下载相对路径 */
+    downloadPath?: string;
+  }
+
+  /** 入职资料上传 claim 响应（无公开 URL/path/configId） */
+  export interface OnboardingFileClaim {
+    claimToken: string;
+    fileName?: string;
+    fileSize?: number;
+    fileExtension?: string;
+    expireTime?: number;
   }
 
   /** 员工工作经历 */
@@ -58,6 +113,11 @@ export namespace EmployeeArchiveApi {
     id?: number; // 编号
     startTime?: string; // 开始时间 (YYYY-MM-DD)
     endTime?: string; // 截止时间 (YYYY-MM-DD)
+    educationLevel?: string; // 学历
+    educationType?: string; // 学历类别
+    degree?: string; // 学位
+    firstEducation?: boolean; // 第一学历
+    highestEducation?: boolean; // 最高学历
     major?: string; // 专业
     schoolName?: string; // 学校名称
   }
@@ -171,5 +231,18 @@ export function generateUserForEmployee(id: number) {
 export function batchGenerateUserForEmployee(ids: number[]) {
   return requestClient.post<boolean>(
     `/hrm/employee-archive/batch-generate-user?ids=${ids.join(',')}`,
+  );
+}
+
+/** 上传入职资料：返回一次性 claimToken（不返回公开直链） */
+export function uploadOnboardingFile(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return requestClient.post<EmployeeArchiveApi.OnboardingFileClaim>(
+    '/hrm/employee-archive/onboarding-file/upload',
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    },
   );
 }

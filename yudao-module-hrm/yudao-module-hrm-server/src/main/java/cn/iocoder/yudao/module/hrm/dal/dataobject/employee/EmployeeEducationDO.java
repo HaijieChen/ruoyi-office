@@ -45,6 +45,31 @@ public class EmployeeEducationDO extends BaseDO {
     private LocalDate endTime;
 
     /**
+     * 学历
+     */
+    private String educationLevel;
+
+    /**
+     * 学历类别
+     */
+    private String educationType;
+
+    /**
+     * 学位
+     */
+    private String degree;
+
+    /**
+     * 是否第一学历
+     */
+    private Boolean firstEducation;
+
+    /**
+     * 是否最高学历
+     */
+    private Boolean highestEducation;
+
+    /**
      * 专业
      */
     private String major;

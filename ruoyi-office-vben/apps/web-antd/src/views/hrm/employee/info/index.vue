@@ -6,13 +6,16 @@ import { computed, h, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
-import { useTabs } from '@vben/hooks';
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions, useTabs } from '@vben/hooks';
 
 import {
   Button,
+  Checkbox,
   DatePicker,
   Input,
   message,
+  Select,
   Space,
   Table,
 } from 'ant-design-vue';
@@ -24,6 +27,7 @@ import {
   getEmployeeArchive,
   updateEmployeeArchive,
 } from '#/api/hrm/employee';
+import { AttachmentList } from '#/components/attachment-list';
 import { CardContainer } from '#/components/basic-form';
 import { DeptSelectModal } from '#/views/system/dept/components';
 
@@ -32,6 +36,12 @@ import {
   useBasicFormSchema,
   useWorkFormSchema,
 } from './data';
+import {
+  normalizeContractList,
+  validateContractList,
+  validateEducationRoles,
+  validateSocialSecurity,
+} from './roster-rules';
 
 defineOptions({ name: 'HrmEmployeeArchiveInfo' });
 
@@ -52,6 +62,31 @@ const workExperienceList = ref<EmployeeArchiveApi.EmployeeWorkExperience[]>([]);
 const educationList = ref<EmployeeArchiveApi.EmployeeEducation[]>([]);
 // 家属信息列表
 const familyList = ref<EmployeeArchiveApi.EmployeeFamily[]>([]);
+// 合同明细
+const contractList = ref<EmployeeArchiveApi.EmployeeContract[]>([]);
+// 入职资料（专用 VO：claimToken / 已有 id + downloadPath）
+const onboardingAttachments = ref<EmployeeArchiveApi.OnboardingAttachment[]>(
+  [],
+);
+const attachmentListRef = ref<InstanceType<typeof AttachmentList>>();
+
+const educationLevelOptions = getDictOptions(DICT_TYPE.HRM_EDUCATION);
+const educationTypeOptions = getDictOptions(DICT_TYPE.HRM_EDUCATION_TYPE);
+const contractTypeOptions = getDictOptions(DICT_TYPE.HRM_CONTRACT_TYPE);
+
+const currentContractSummary = computed(() => {
+  if (!contractList.value.length) {
+    return '暂无合同';
+  }
+  const current = contractList.value[contractList.value.length - 1]!;
+  const start = current.startDate || '-';
+  const end = current.endDate || '无固定期限';
+  const typeLabel =
+    contractTypeOptions.find((o) => o.value === current.contractType)?.label ||
+    current.contractType ||
+    '-';
+  return `当前合同：第${current.sequenceNo || contractList.value.length}次 · ${typeLabel} · ${start} 至 ${end}`;
+});
 
 // 工作经历表格列定义
 const workExperienceColumns = [
@@ -155,13 +190,13 @@ const educationColumns = [
   {
     title: '开始时间',
     dataIndex: 'startTime',
-    width: 150,
+    width: 140,
     customRender: ({ text, index }: any) => {
       if (readonly.value) return text || '-';
       return h(DatePicker, {
         value: text ? dayjs(text) : null,
         format: 'YYYY-MM-DD',
-        placeholder: '请选择开始时间',
+        placeholder: '开始',
         style: { width: '100%' },
         onChange: (date: any) => {
           if (educationList.value[index]) {
@@ -174,15 +209,15 @@ const educationColumns = [
     },
   },
   {
-    title: '截止时间',
+    title: '毕业时间',
     dataIndex: 'endTime',
-    width: 150,
+    width: 140,
     customRender: ({ text, index }: any) => {
       if (readonly.value) return text || '-';
       return h(DatePicker, {
         value: text ? dayjs(text) : null,
         format: 'YYYY-MM-DD',
-        placeholder: '请选择截止时间',
+        placeholder: '毕业',
         style: { width: '100%' },
         onChange: (date: any) => {
           if (educationList.value[index]) {
@@ -195,14 +230,83 @@ const educationColumns = [
     },
   },
   {
-    title: '专业',
-    dataIndex: 'major',
-    width: 150,
+    title: '学历',
+    dataIndex: 'educationLevel',
+    width: 120,
+    customRender: ({ text, index }: any) => {
+      if (readonly.value) {
+        return (
+          educationLevelOptions.find((o) => o.value === text)?.label ||
+          text ||
+          '-'
+        );
+      }
+      return h(Select, {
+        value: text,
+        options: educationLevelOptions,
+        placeholder: '学历',
+        allowClear: true,
+        style: { width: '100%' },
+        onChange: (val: any) => {
+          if (educationList.value[index]) {
+            educationList.value[index].educationLevel = val;
+          }
+        },
+      } as any);
+    },
+  },
+  {
+    title: '学历类别',
+    dataIndex: 'educationType',
+    width: 120,
+    customRender: ({ text, index }: any) => {
+      if (readonly.value) {
+        return (
+          educationTypeOptions.find((o) => o.value === text)?.label ||
+          text ||
+          '-'
+        );
+      }
+      return h(Select, {
+        value: text,
+        options: educationTypeOptions,
+        placeholder: '类别',
+        allowClear: true,
+        style: { width: '100%' },
+        onChange: (val: any) => {
+          if (educationList.value[index]) {
+            educationList.value[index].educationType = val;
+          }
+        },
+      } as any);
+    },
+  },
+  {
+    title: '学位',
+    dataIndex: 'degree',
+    width: 100,
     customRender: ({ text, index }: any) => {
       if (readonly.value) return text || '-';
       return h(Input, {
         value: text,
-        placeholder: '请输入专业',
+        placeholder: '学位',
+        onChange: (e: any) => {
+          if (educationList.value[index]) {
+            educationList.value[index].degree = e.target.value;
+          }
+        },
+      } as any);
+    },
+  },
+  {
+    title: '专业',
+    dataIndex: 'major',
+    width: 120,
+    customRender: ({ text, index }: any) => {
+      if (readonly.value) return text || '-';
+      return h(Input, {
+        value: text,
+        placeholder: '专业',
         onChange: (e: any) => {
           if (educationList.value[index]) {
             educationList.value[index].major = e.target.value;
@@ -214,11 +318,12 @@ const educationColumns = [
   {
     title: '学校名称',
     dataIndex: 'schoolName',
+    width: 140,
     customRender: ({ text, index }: any) => {
       if (readonly.value) return text || '-';
       return h(Input, {
         value: text,
-        placeholder: '请输入学校名称',
+        placeholder: '学校',
         onChange: (e: any) => {
           if (educationList.value[index]) {
             educationList.value[index].schoolName = e.target.value;
@@ -228,9 +333,41 @@ const educationColumns = [
     },
   },
   {
+    title: '第一学历',
+    dataIndex: 'firstEducation',
+    width: 90,
+    customRender: ({ text, index }: any) => {
+      return h(Checkbox, {
+        checked: !!text,
+        disabled: readonly.value,
+        onChange: (e: any) => {
+          if (educationList.value[index]) {
+            educationList.value[index].firstEducation = e.target.checked;
+          }
+        },
+      } as any);
+    },
+  },
+  {
+    title: '最高学历',
+    dataIndex: 'highestEducation',
+    width: 90,
+    customRender: ({ text, index }: any) => {
+      return h(Checkbox, {
+        checked: !!text,
+        disabled: readonly.value,
+        onChange: (e: any) => {
+          if (educationList.value[index]) {
+            educationList.value[index].highestEducation = e.target.checked;
+          }
+        },
+      } as any);
+    },
+  },
+  {
     title: '操作',
     key: 'action',
-    width: 100,
+    width: 80,
     customRender: ({ index }: any) => {
       if (readonly.value) return '-';
       return h(
@@ -240,6 +377,100 @@ const educationColumns = [
           size: 'small',
           danger: true,
           onClick: () => handleDeleteEducation(index),
+        },
+        () => '删除',
+      );
+    },
+  },
+];
+
+// 合同明细表格列
+const contractColumns = [
+  {
+    title: '次数',
+    dataIndex: 'sequenceNo',
+    width: 70,
+    customRender: ({ text }: any) => text || '-',
+  },
+  {
+    title: '合同类型',
+    dataIndex: 'contractType',
+    width: 160,
+    customRender: ({ text, index }: any) => {
+      if (readonly.value) {
+        return (
+          contractTypeOptions.find((o) => o.value === text)?.label ||
+          text ||
+          '-'
+        );
+      }
+      return h(Select, {
+        value: text,
+        options: contractTypeOptions,
+        placeholder: '类型',
+        allowClear: true,
+        style: { width: '100%' },
+        onChange: (val: any) => {
+          if (contractList.value[index]) {
+            contractList.value[index].contractType = val;
+          }
+        },
+      } as any);
+    },
+  },
+  {
+    title: '开始日期',
+    dataIndex: 'startDate',
+    width: 150,
+    customRender: ({ text, index }: any) => {
+      if (readonly.value) return text || '-';
+      return h(DatePicker, {
+        value: text ? dayjs(text) : null,
+        format: 'YYYY-MM-DD',
+        style: { width: '100%' },
+        onChange: (date: any) => {
+          if (contractList.value[index]) {
+            contractList.value[index].startDate = date
+              ? dayjs(date).format('YYYY-MM-DD')
+              : ('' as any);
+          }
+        },
+      } as any);
+    },
+  },
+  {
+    title: '结束日期',
+    dataIndex: 'endDate',
+    width: 150,
+    customRender: ({ text, index }: any) => {
+      if (readonly.value) return text || '无固定期限';
+      return h(DatePicker, {
+        value: text ? dayjs(text) : null,
+        format: 'YYYY-MM-DD',
+        style: { width: '100%' },
+        onChange: (date: any) => {
+          if (contractList.value[index]) {
+            contractList.value[index].endDate = date
+              ? dayjs(date).format('YYYY-MM-DD')
+              : undefined;
+          }
+        },
+      } as any);
+    },
+  },
+  {
+    title: '操作',
+    key: 'action',
+    width: 80,
+    customRender: ({ index }: any) => {
+      if (readonly.value) return '-';
+      return h(
+        Button,
+        {
+          type: 'link',
+          size: 'small',
+          danger: true,
+          onClick: () => handleDeleteContract(index),
         },
         () => '删除',
       );
@@ -426,13 +657,41 @@ async function loadData(newId?: string) {
         endTime: item.endTime ? dayjs(item.endTime).format('YYYY-MM-DD') : '',
         major: item.major || '',
         schoolName: item.schoolName || '',
+        firstEducation: !!item.firstEducation,
+        highestEducation: !!item.highestEducation,
       }));
+    } else {
+      educationList.value = [];
     }
 
     // 加载家属信息
-    if (data.familyList) {
-      familyList.value = data.familyList;
-    }
+    familyList.value = data.familyList || [];
+
+    // 合同
+    contractList.value = (data.contractList || []).map((item, index) => ({
+      ...item,
+      sequenceNo: (item.sequenceNo || index + 1) as 1 | 2 | 3 | 4,
+      startDate: item.startDate
+        ? dayjs(item.startDate).format('YYYY-MM-DD')
+        : '',
+      endDate: item.endDate ? dayjs(item.endDate).format('YYYY-MM-DD') : undefined,
+    }));
+
+    // 入职资料（含鉴权 downloadPath；不暴露 fileId/url）
+    onboardingAttachments.value = (data.onboardingAttachments || []).map(
+      (item) => ({
+        id: item.id,
+        claimToken: item.claimToken,
+        fileName: item.fileName,
+        fileSize: item.fileSize,
+        fileExtension: item.fileExtension,
+        fileType: item.fileType,
+        sortOrder: item.sortOrder,
+        remark: item.remark,
+        uploadTime: item.uploadTime,
+        downloadPath: item.downloadPath,
+      }),
+    );
   } catch (error) {
     console.error('加载员工档案失败', error);
     message.error('加载员工档案失败');
@@ -482,11 +741,64 @@ async function handleSave() {
       values.formalDate = undefined;
     }
 
+    // 花名册校验
+    const ssError = validateSocialSecurity({
+      socialSecurityEnabled: values.socialSecurityEnabled as boolean | null,
+      socialSecurityStartMonth: values.socialSecurityStartMonth as string,
+    });
+    if (ssError) {
+      message.error(ssError);
+      loading.value = false;
+      return;
+    }
+    const eduError = validateEducationRoles(educationList.value);
+    if (eduError) {
+      message.error(eduError);
+      loading.value = false;
+      return;
+    }
+
+    let normalizedContracts: EmployeeArchiveApi.EmployeeContract[];
+    try {
+      normalizedContracts = normalizeContractList(contractList.value);
+    } catch (e: any) {
+      message.error(e?.message || '合同数据不合法');
+      loading.value = false;
+      return;
+    }
+    const contractError = validateContractList(normalizedContracts);
+    if (contractError) {
+      message.error(contractError);
+      loading.value = false;
+      return;
+    }
+
+    // 社保为否时清空参保年月
+    if (values.socialSecurityEnabled === false) {
+      values.socialSecurityStartMonth = undefined;
+    }
+
     // 表格中的日期字段已在 onChange 中设置为 undefined，直接使用即可
     values.workExperienceList = workExperienceList.value;
     values.educationList = educationList.value;
-
     values.familyList = familyList.value;
+    values.contractList = normalizedContracts;
+    // 仅提交专用字段：已有 id 或新 claimToken
+    values.onboardingAttachments = onboardingAttachments.value.map((a) => ({
+      id: a.id,
+      claimToken: a.claimToken,
+      sortOrder: a.sortOrder,
+      remark: a.remark,
+    }));
+
+    // 只读派生字段不回写
+    delete values.age;
+    delete values.companyTenureMonths;
+    delete values.marriageChildbearingSummary;
+    delete values.contractSignCount;
+    delete values.currentContractType;
+    delete values.currentContractStartDate;
+    delete values.currentContractEndDate;
 
     if (formData.value.id) {
       values.id = formData.value.id;
@@ -545,12 +857,37 @@ function handleAddEducation() {
     endTime: '',
     major: '',
     schoolName: '',
+    firstEducation: false,
+    highestEducation: false,
   };
   educationList.value.push(newItem);
 }
 
 function handleDeleteEducation(index: number) {
   educationList.value.splice(index, 1);
+}
+
+// ========== 合同相关操作 ==========
+function handleAddContract() {
+  if (contractList.value.length >= 4) {
+    message.warning('最多维护四次合同');
+    return;
+  }
+  const next = (contractList.value.length + 1) as 1 | 2 | 3 | 4;
+  contractList.value.push({
+    sequenceNo: next,
+    startDate: '',
+    contractType: undefined,
+  });
+}
+
+function handleDeleteContract(index: number) {
+  contractList.value.splice(index, 1);
+  contractList.value = normalizeContractList(contractList.value);
+}
+
+function handleUploadAttachment() {
+  attachmentListRef.value?.handleTriggerUpload?.();
 }
 
 // ========== 家属信息相关操作 ==========
@@ -700,6 +1037,28 @@ onMounted(async () => {
           :pagination="false"
           :row-key="(record, index) => record.id || `edu_${index}`"
           size="small"
+          :scroll="{ x: 1200 }"
+        />
+      </CardContainer>
+    </div>
+
+    <!-- 合同信息 -->
+    <div class="mb-4 rounded-lg bg-white p-4 shadow-sm">
+      <CardContainer title="合同信息">
+        <template #extra>
+          <Button v-if="!readonly" type="primary" @click="handleAddContract">
+            添加合同
+          </Button>
+        </template>
+        <div class="mb-2 text-sm text-gray-500">
+          {{ currentContractSummary }}
+        </div>
+        <Table
+          :columns="contractColumns"
+          :data-source="contractList"
+          :pagination="false"
+          :row-key="(record, index) => record.id || `contract_${index}`"
+          size="small"
         />
       </CardContainer>
     </div>
@@ -718,6 +1077,32 @@ onMounted(async () => {
           :pagination="false"
           :row-key="(record, index) => record.id || `family_${index}`"
           size="small"
+        />
+      </CardContainer>
+    </div>
+
+    <!-- 入职资料 -->
+    <div class="mb-4 rounded-lg bg-white p-4 shadow-sm">
+      <CardContainer title="入职资料">
+        <template #extra>
+          <Button
+            v-if="!readonly"
+            type="primary"
+            @click="handleUploadAttachment"
+          >
+            上传附件
+          </Button>
+        </template>
+        <AttachmentList
+          ref="attachmentListRef"
+          v-model="onboardingAttachments as any"
+          :readonly="readonly"
+          accept=".pdf,.jpg,.jpeg,.png"
+          :max-count="10"
+          :max-size="20"
+          :hide-upload-button="true"
+          :use-file-claim="true"
+          :auth-download="true"
         />
       </CardContainer>
     </div>

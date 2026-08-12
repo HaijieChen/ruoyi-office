@@ -25,6 +25,9 @@ public interface ErrorCodeConstants {
     ErrorCode MODEL_DEPLOY_FAIL_BPMN_USER_TASK_NAME_NOT_EXISTS = new ErrorCode(1_009_002_006, "部署流程失败，原因：BPMN 流程图中，用户任务({})的名字不存在");
     ErrorCode MODEL_UPDATE_FAIL_NOT_MANAGER = new ErrorCode(1_009_002_007, "操作流程失败，原因：你不是该流程({})的管理员");
     ErrorCode MODEL_DEPLOY_FAIL_FIRST_USER_TASK_CANDIDATE_STRATEGY_ERROR = new ErrorCode(1_009_002_008, "部署流程失败，原因：首个任务({})的审批人不能是【审批人自选】");
+    /** 嵌入式业务表单必须配置 requiredStartPermission（权威元数据），否则禁止发布 */
+    ErrorCode MODEL_DEPLOY_FAIL_START_PERMISSION_NOT_CONFIG = new ErrorCode(1_009_002_009,
+            "部署流程失败，原因：嵌入式流程【{}】未配置发起权限 requiredStartPermission");
 
     // ========== 流程定义 1-009-003-000 ==========
     ErrorCode PROCESS_DEFINITION_KEY_NOT_MATCH = new ErrorCode(1_009_003_000, "流程定义的标识期望是({})，当前是({})，请修改 BPMN 流程图");
@@ -39,6 +42,8 @@ public interface ErrorCodeConstants {
     ErrorCode PROCESS_INSTANCE_START_USER_SELECT_ASSIGNEES_NOT_CONFIG = new ErrorCode(1_009_004_003, "任务({})的候选人未配置");
     ErrorCode PROCESS_INSTANCE_START_USER_SELECT_ASSIGNEES_NOT_EXISTS = new ErrorCode(1_009_004_004, "任务({})的候选人({})不存在");
     ErrorCode PROCESS_INSTANCE_START_USER_CAN_START = new ErrorCode(1_009_004_005, "发起流程失败，你没有权限发起该流程");
+    /** 嵌入式流程业务发起权限不足或配置缺失；msg 参数为友好文案 */
+    ErrorCode PROCESS_INSTANCE_START_PERMISSION_DENIED = new ErrorCode(1_009_004_011, "{}");
     ErrorCode PROCESS_INSTANCE_CANCEL_FAIL_NOT_ALLOW = new ErrorCode(1_009_004_005, "流程取消失败，该流程不允许取消");
     ErrorCode PROCESS_INSTANCE_CANCEL_FAIL_ACTIVE_TASK_FORBIDDEN = new ErrorCode(1_009_004_009,
             "流程取消失败，当前活动任务已进入禁止取消的节点");

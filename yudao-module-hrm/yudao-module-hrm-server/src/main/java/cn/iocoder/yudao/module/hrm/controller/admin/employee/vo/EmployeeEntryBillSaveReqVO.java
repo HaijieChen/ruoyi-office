@@ -8,7 +8,6 @@ import java.time.LocalDate;
 import jakarta.validation.constraints.NotNull;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.util.List;
-import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
 
 import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_MONTH_DAY;
 
@@ -153,8 +152,12 @@ public class EmployeeEntryBillSaveReqVO {
     @Schema(description = "备注", example = "优秀员工")
     private String remark;
 
-    @Schema(description = "附件列表")
-    private List<AttachmentSaveReqVO> attachments;
+    /**
+     * 入职单附件（保留类型 201）：已有记录传 id；新附件必须传 claimToken（与档案入职资料同级权威）。
+     * 禁止客户端自报 fileId/path/url 抬升为全局 reserved。
+     */
+    @Schema(description = "附件列表（新附件仅 claimToken；已有附件仅 id）")
+    private List<OnboardingAttachmentSaveReqVO> attachments;
 
     /**
      * 工作经历列表

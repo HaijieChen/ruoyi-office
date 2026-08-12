@@ -13,6 +13,8 @@ import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmProcessDefinitio
 import cn.iocoder.yudao.module.bpm.service.definition.BpmCategoryService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmFormService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessDefinitionService;
+import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessStartEligibility;
+import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessStartEligibilityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,6 +51,8 @@ public class BpmProcessDefinitionController {
     private BpmFormService formService;
     @Resource
     private BpmCategoryService categoryService;
+    @Resource
+    private BpmProcessStartEligibilityService processStartEligibilityService;
 
     @GetMapping("/page")
     @Operation(summary = "获得流程定义分页")
@@ -94,12 +98,15 @@ public class BpmProcessDefinitionController {
             BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionMap.get(processDefinition.getId());
             return processDefinitionInfo == null // 不存在
                     || Boolean.FALSE.equals(processDefinitionInfo.getVisible()) // visible 不可见
-                    || !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId); // 无权限发起
+                    || !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId) // 用户/部门白名单
+                    || processStartEligibilityService.shouldHideFromStartList(processDefinition.getKey()); // 嵌入式业务 create 权限
         });
 
-        // 2. 拼接 VO 返回
-        return success(BpmProcessDefinitionConvert.INSTANCE.buildProcessDefinitionList(
-                list, null, processDefinitionMap, null, null));
+        // 2. 拼接 VO 返回（列表仅含可发起项；仍填充 canStart 元数据供前端防御性消费）
+        List<BpmProcessDefinitionRespVO> voList = BpmProcessDefinitionConvert.INSTANCE.buildProcessDefinitionList(
+                list, null, processDefinitionMap, null, null);
+        fillStartEligibility(voList);
+        return success(voList);
     }
 
     @GetMapping("/simple-list")
@@ -132,8 +139,30 @@ public class BpmProcessDefinitionController {
         }
         BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionService.getProcessDefinitionInfo(processDefinition.getId());
         BpmnModel bpmnModel = processDefinitionService.getProcessDefinitionBpmnModel(processDefinition.getId());
-        return success(BpmProcessDefinitionConvert.INSTANCE.buildProcessDefinition(
-                processDefinition, null, processDefinitionInfo, null, null, bpmnModel));
+        BpmProcessDefinitionRespVO respVO = BpmProcessDefinitionConvert.INSTANCE.buildProcessDefinition(
+                processDefinition, null, processDefinitionInfo, null, null, bpmnModel);
+        fillStartEligibility(respVO);
+        return success(respVO);
+    }
+
+    private void fillStartEligibility(List<BpmProcessDefinitionRespVO> list) {
+        if (CollUtil.isEmpty(list)) {
+            return;
+        }
+        for (BpmProcessDefinitionRespVO vo : list) {
+            fillStartEligibility(vo);
+        }
+    }
+
+    private void fillStartEligibility(BpmProcessDefinitionRespVO vo) {
+        if (vo == null) {
+            return;
+        }
+        BpmProcessStartEligibility eligibility = processStartEligibilityService.evaluate(vo.getKey());
+        vo.setCanStart(eligibility.isCanStart());
+        vo.setRequiredStartPermission(eligibility.getRequiredStartPermission());
+        vo.setCannotStartReason(eligibility.getCannotStartReason());
     }
 
 }
+

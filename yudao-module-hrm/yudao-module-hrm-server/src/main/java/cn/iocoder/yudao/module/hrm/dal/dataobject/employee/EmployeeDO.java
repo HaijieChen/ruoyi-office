@@ -1,7 +1,9 @@
 package cn.iocoder.yudao.module.hrm.dal.dataobject.employee;
 
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
@@ -127,6 +129,72 @@ public class EmployeeDO extends BaseDO {
      * 联系电话
      */
     private String emergencyPhone;
+
+    /**
+     * 紧急联系人关系（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String emergencyRelationship;
+
+    /**
+     * 是否缴纳社保（可空，未知不为否；显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Boolean socialSecurityEnabled;
+
+    /**
+     * 是否缴纳公积金（可空，未知不为否；显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Boolean housingFundEnabled;
+
+    /**
+     * 参保年月 yyyy-MM（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String socialSecurityStartMonth;
+
+    /**
+     * 试用期薪资（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private BigDecimal probationSalary;
+
+    /**
+     * 转正薪资（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private BigDecimal regularSalary;
+
+    /**
+     * 生育状况（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String fertilityStatus;
+
+    /**
+     * 户籍性质（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String householdType;
+
+    /**
+     * 用工形式（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String employmentForm;
+
+    /**
+     * 招聘渠道（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String recruitmentChannel;
+
+    /**
+     * 面试人（显式 null 可清空）
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String interviewerName;
 
     /**
      * 照片

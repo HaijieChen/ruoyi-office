@@ -7,9 +7,11 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
+import cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.*;
 import cn.iocoder.yudao.module.infra.dal.dataobject.file.FileDO;
 import cn.iocoder.yudao.module.infra.service.file.FileService;
+// FileUploadRespVO in same vo.file package
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
@@ -48,10 +50,39 @@ public class FileController {
     @Parameter(name = "file", description = "文件附件", required = true,
             schema = @Schema(type = "string", format = "binary"))
     public CommonResult<String> uploadFile(@Valid FileUploadReqVO uploadReqVO) throws Exception {
+        rejectPrivateOnboardingDirectory(uploadReqVO.getDirectory());
         MultipartFile file = uploadReqVO.getFile();
         byte[] content = IoUtil.readBytes(file.getInputStream());
         return success(fileService.createFile(content, file.getOriginalFilename(),
                 uploadReqVO.getDirectory(), file.getContentType()));
+    }
+
+    @PostMapping("/upload-detail")
+    @Operation(summary = "上传文件并返回元数据（id/path/size）",
+            description = "通用上传；入职资料等敏感业务请走 HRM 专用 upload/claim，勿使用本接口")
+    @Parameter(name = "file", description = "文件附件", required = true,
+            schema = @Schema(type = "string", format = "binary"))
+    public CommonResult<FileUploadRespVO> uploadFileDetail(@Valid FileUploadReqVO uploadReqVO) throws Exception {
+        rejectPrivateOnboardingDirectory(uploadReqVO.getDirectory());
+        MultipartFile file = uploadReqVO.getFile();
+        byte[] content = IoUtil.readBytes(file.getInputStream());
+        FileDO created = fileService.createFileReturn(content, file.getOriginalFilename(),
+                uploadReqVO.getDirectory(), file.getContentType());
+        FileUploadRespVO resp = new FileUploadRespVO();
+        resp.setId(created.getId());
+        resp.setUrl(created.getUrl());
+        resp.setPath(created.getPath());
+        resp.setName(created.getName());
+        resp.setType(created.getType());
+        resp.setSize(created.getSize());
+        resp.setConfigId(created.getConfigId());
+        return success(resp);
+    }
+
+    private void rejectPrivateOnboardingDirectory(String directoryOrPath) {
+        if (FilePrivateDirs.isPrivateDirectory(directoryOrPath)) {
+            throw new IllegalArgumentException("入职资料私有目录禁止经通用上传/预签名接口写入，请使用 HRM onboarding-file/upload");
+        }
     }
 
     @GetMapping("/presigned-url")
@@ -63,12 +94,14 @@ public class FileController {
     public CommonResult<FilePresignedUrlRespVO> getFilePresignedUrl(
             @RequestParam("name") String name,
             @RequestParam(value = "directory", required = false) String directory) {
+        rejectPrivateOnboardingDirectory(directory);
         return success(fileService.presignPutUrl(name, directory));
     }
 
     @PostMapping("/create")
     @Operation(summary = "创建文件", description = "模式二：前端上传文件：配合 presigned-url 接口，记录上传了上传的文件")
     public CommonResult<Long> createFile(@Valid @RequestBody FileCreateReqVO createReqVO) {
+        rejectPrivateOnboardingDirectory(createReqVO.getPath());
         return success(fileService.createFile(createReqVO));
     }
 
@@ -112,9 +145,14 @@ public class FileController {
             throw new IllegalArgumentException("结尾的 path 路径必须传递");
         }
         // 解码，解决中文路径的问题
-        // https://gitee.com/zhijiantianya/ruoyi-vue-pro/pulls/807/
-        // https://gitee.com/zhijiantianya/ruoyi-vue-pro/pulls/1432/
         path = URLUtil.decode(path, StandardCharsets.UTF_8, false);
+
+        // 入职资料私有目录禁止匿名直链（目录名可能出现在 path 任意段）
+        if (FilePrivateDirs.isPrivateDirectory(path)) {
+            log.warn("[getFileContent][拒绝匿名访问入职资料 path={}]", path);
+            response.setStatus(HttpStatus.FORBIDDEN.value());
+            return;
+        }
 
         // 读取内容
         byte[] content = fileService.getFileContent(configId, path);

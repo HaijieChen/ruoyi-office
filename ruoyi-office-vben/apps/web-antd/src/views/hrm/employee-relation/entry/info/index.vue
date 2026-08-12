@@ -504,9 +504,12 @@ onMounted(() => {
             ref="attachmentListRef"
             v-model="formData.attachments"
             :readonly="readonly"
+            accept=".pdf,.jpg,.jpeg,.png"
             :max-count="10"
             :max-size="20"
             :hide-upload-button="true"
+            :use-file-claim="true"
+            :auth-download="true"
           />
         </CardContainer>
       </template>

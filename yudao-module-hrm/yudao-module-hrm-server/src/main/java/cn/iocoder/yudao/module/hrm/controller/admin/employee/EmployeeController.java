@@ -91,15 +91,31 @@ public class EmployeeController {
     }
 
     @GetMapping("/export-excel")
-    @Operation(summary = "导出员工档案 Excel")
+    @Operation(summary = "导出文枢花名册 Excel")
     @PreAuthorize("@ss.hasPermission('hrm:employee-archive:export')")
     @ApiAccessLog(operateType = EXPORT)
     public void exportEmployeeArchiveExcel(@Valid EmployeePageReqVO pageReqVO,
                                            HttpServletResponse response) throws IOException {
-        pageReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
-        List<EmployeeRespVO> list = employeeArchiveService.getEmployeeArchivePage(pageReqVO).getList();
-        // 导出 Excel
-        ExcelUtils.write(response, "员工档案.xls", "数据", EmployeeRespVO.class, list);
+        List<EmployeeRosterExportVO> list = employeeArchiveService.getEmployeeRosterExportList(pageReqVO);
+        ExcelUtils.write(response, "文枢花名册.xlsx", "文枢在职", EmployeeRosterExportVO.class, list);
+    }
+
+    @PostMapping("/onboarding-file/upload")
+    @Operation(summary = "上传入职资料并签发一次性 claim（不返回公开 URL）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create') or @ss.hasPermission('hrm:employee-archive:update') "
+            + "or @ss.hasPermission('hrm:employee-entry-bill:create') or @ss.hasPermission('hrm:employee-entry-bill:update')")
+    public CommonResult<OnboardingFileClaimRespVO> uploadOnboardingFile(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws Exception {
+        return success(employeeArchiveService.uploadOnboardingFile(file));
+    }
+
+    @GetMapping("/onboarding-attachment/download")
+    @Operation(summary = "下载入职资料附件（需登录且具备员工档案查询权限）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:query')")
+    public void downloadOnboardingAttachment(@RequestParam("employeeId") Long employeeId,
+                                             @RequestParam("attachmentId") Long attachmentId,
+                                             HttpServletResponse response) throws Exception {
+        employeeArchiveService.downloadOnboardingAttachment(employeeId, attachmentId, response);
     }
 
     @PostMapping("/generate-user")

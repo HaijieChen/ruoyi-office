@@ -3,8 +3,10 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeePageReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRosterExportVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSelectPageReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSaveReqVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.OnboardingFileClaimRespVO;
 import jakarta.validation.Valid;
 
 import java.util.List;
@@ -84,6 +86,26 @@ public interface EmployeeService {
      * @return 生成结果（成功数量、失败数量）
      */
     void batchGenerateUserForEmployee(List<Long> employeeIds);
+
+    /**
+     * 获得文枢花名册导出列表（52 列）
+     *
+     * @param pageReqVO 查询条件
+     * @return 导出列表
+     */
+    List<EmployeeRosterExportVO> getEmployeeRosterExportList(EmployeePageReqVO pageReqVO);
+
+    /**
+     * 鉴权下载入职资料附件
+     */
+    void downloadOnboardingAttachment(Long employeeId, Long attachmentId,
+                                      jakarta.servlet.http.HttpServletResponse response) throws Exception;
+
+    /**
+     * 上传入职资料并签发一次性 claim（不返回公开 URL）
+     */
+    OnboardingFileClaimRespVO uploadOnboardingFile(org.springframework.web.multipart.MultipartFile file)
+            throws Exception;
 
 }
 

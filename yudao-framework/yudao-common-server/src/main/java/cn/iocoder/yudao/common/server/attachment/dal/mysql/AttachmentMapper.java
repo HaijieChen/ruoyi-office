@@ -5,6 +5,8 @@ import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -26,6 +28,25 @@ public interface AttachmentMapper extends BaseMapperX<AttachmentDO> {
         return selectList(new LambdaQueryWrapper<AttachmentDO>()
                 .eq(AttachmentDO::getBusinessType, businessType)
                 .eq(AttachmentDO::getBusinessId, businessId)
+                .orderByAsc(AttachmentDO::getSortOrder)
+                .orderByAsc(AttachmentDO::getCreateTime));
+    }
+
+    /**
+     * 根据业务类型和业务ID集合批量查询附件
+     *
+     * @param businessType 业务类型
+     * @param businessIds 业务ID集合
+     * @return 附件列表
+     */
+    default List<AttachmentDO> selectListByBusinessIds(String businessType, Collection<Long> businessIds) {
+        if (businessIds == null || businessIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return selectList(new LambdaQueryWrapper<AttachmentDO>()
+                .eq(AttachmentDO::getBusinessType, businessType)
+                .in(AttachmentDO::getBusinessId, businessIds)
+                .orderByAsc(AttachmentDO::getBusinessId)
                 .orderByAsc(AttachmentDO::getSortOrder)
                 .orderByAsc(AttachmentDO::getCreateTime));
     }

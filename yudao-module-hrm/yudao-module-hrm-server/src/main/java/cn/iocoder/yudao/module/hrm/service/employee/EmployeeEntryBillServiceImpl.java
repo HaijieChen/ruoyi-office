@@ -29,14 +29,26 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.*;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
+import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
+import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
 import cn.iocoder.yudao.framework.common.service.FlowBillService;
+import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
+import cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs;
+import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
+
+import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_ID_CARD_EXISTS;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_MOBILE_EXISTS;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_NOT_EXISTS;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_INVALID;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_LIMIT;
 import static cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum.APPROVE;
 
 /**
@@ -56,10 +68,16 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
     private AttachmentService attachmentService;
 
     @Resource
-    private BpmProcessInstanceApi processInstanceApi;
+    private FileAccessApi fileAccessApi;
+
+    @Resource
+    private OnboardingFileClaimMapper onboardingFileClaimMapper;
 
     @Resource
     private EmployeeService employeeService;
+
+    @Resource
+    private BpmProcessInstanceApi processInstanceApi;
 
     @Resource
     private EmployeeMapper employeeMapper;
@@ -100,10 +118,8 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         // 保存明细信息
         saveDetailLists(entryBill.getId(), saveReqVO);
 
-        // 保存附件信息
-        if (saveReqVO.getAttachments() != null) {
-            attachmentService.saveAttachmentList(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), entryBill.getId(), saveReqVO.getAttachments());
-        }
+        // 保存附件：仅 id 保留或 claim 消费；禁止客户端自报 fileId/path 抬升 reserved
+        saveEntryBillAttachments(entryBill.getId(), saveReqVO.getAttachments());
 
         // 返回
         return entryBill.getId();
@@ -128,6 +144,9 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         // 保存明细信息
         saveDetailLists(entryBill.getId(), saveReqVO);
 
+        // H3：claim 校验/附件落库必须在 BPM 远端提交之前，避免远端副作用不可回滚
+        saveEntryBillAttachments(entryBill.getId(), saveReqVO.getAttachments());
+
         // 智能提交 BPM 流程（如果流程实例不存在则创建，存在则审批发起人任务）
         Map<String, Object> processInstanceVariables = BpmProcessVariableUtils.buildBillVariables(saveReqVO);
         processInstanceVariables.put(BpmProcessVariableConstants.CAUSE, entryBill.getName()+"入职申请");
@@ -139,13 +158,156 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         // 将工作流的编号，更新到单据中
         employeeEntryBillMapper.updateById(new EmployeeEntryBillDO().setId(entryBill.getId()).setProcessInstanceId(processInstanceId));
         
-        // 保存附件信息
-        if (saveReqVO.getAttachments() != null) {
-            attachmentService.saveAttachmentList(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), entryBill.getId(), saveReqVO.getAttachments());
-        }
-        
         // 返回
         return entryBill.getId();
+    }
+
+    /**
+     * 入职单附件（business_type=201）：与档案 onboarding claim 同级权威。
+     * <ul>
+     *   <li>已有附件：仅允许 id（同业务归属）</li>
+     *   <li>新附件：必须 claimToken；fileId/path 从权威 FileDO 派生，url 清空</li>
+     *   <li>无 claim 不得写入可被全局 reserved 提升的身份</li>
+     * </ul>
+     */
+    void saveEntryBillAttachments(Long billId, List<OnboardingAttachmentSaveReqVO> reqs) {
+        if (reqs == null) {
+            return;
+        }
+        if (reqs.size() > EmployeeServiceImpl.ONBOARDING_MAX_COUNT) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_LIMIT);
+        }
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        String businessType = HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode();
+        List<AttachmentSaveReqVO> resolved = new ArrayList<>();
+        Set<Long> seenAttachmentIds = new HashSet<>();
+        Set<String> seenClaims = new HashSet<>();
+        for (OnboardingAttachmentSaveReqVO req : reqs) {
+            if (req.getId() != null) {
+                if (!seenAttachmentIds.add(req.getId())) {
+                    throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+                }
+                AttachmentSaveReqVO keep = new AttachmentSaveReqVO();
+                keep.setId(req.getId());
+                keep.setBusinessType(businessType);
+                keep.setBusinessId(billId);
+                keep.setFileName(".");
+                keep.setFilePath(".");
+                keep.setFileUrl(".");
+                keep.setFileSize(0L);
+                keep.setSortOrder(req.getSortOrder());
+                keep.setRemark(req.getRemark());
+                resolved.add(keep);
+                continue;
+            }
+            if (StrUtil.isBlank(req.getClaimToken()) || !seenClaims.add(req.getClaimToken())) {
+                throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            }
+            OnboardingFileClaimDO claim = consumeEntryBillClaim(req.getClaimToken(), userId, billId);
+            FileRespDTO file = fileAccessApi.getFile(claim.getFileId());
+            if (file == null) {
+                throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            }
+            validateEntryBillClaimFile(file);
+            AttachmentSaveReqVO att = new AttachmentSaveReqVO();
+            att.setBusinessType(businessType);
+            att.setBusinessId(billId);
+            att.setFileId(file.getId());
+            att.setFileName(file.getName());
+            att.setFilePath(file.getPath());
+            att.setFileUrl("");
+            att.setFileSize(file.getSize());
+            att.setFileType(file.getType());
+            att.setFileExtension(resolveExt(file.getName()));
+            att.setSortOrder(req.getSortOrder());
+            att.setRemark(req.getRemark());
+            resolved.add(att);
+        }
+        attachmentService.saveAttachmentListInternal(businessType, billId, resolved);
+    }
+
+    /**
+     * 原子消费 claim（purpose=hrm-onboarding，与档案入职资料同级）。
+     * consumed_employee_id 复用字段存入职单 id。
+     */
+    OnboardingFileClaimDO consumeEntryBillClaim(String claimToken, Long userId, Long billId) {
+        if (StrUtil.isBlank(claimToken) || userId == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        int rows = onboardingFileClaimMapper.consumeIfOpen(
+                claimToken, userId, OnboardingFileClaimDO.PURPOSE, billId, now);
+        if (rows != 1) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        OnboardingFileClaimDO claim = onboardingFileClaimMapper.selectByClaimToken(claimToken);
+        if (claim == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        return claim;
+    }
+
+    void validateEntryBillClaimFile(FileRespDTO file) {
+        if (file.getSize() != null && file.getSize() > EmployeeServiceImpl.ONBOARDING_MAX_SIZE_BYTES) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        String ext = resolveExt(file.getName());
+        if (StrUtil.isBlank(ext) || !EmployeeServiceImpl.ONBOARDING_ALLOWED_EXTENSIONS.contains(ext)) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        if (file.getPath() == null || !FilePrivateDirs.isPrivateDirectory(file.getPath())) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+    }
+
+    private static String resolveExt(String name) {
+        if (name == null) {
+            return "";
+        }
+        int i = name.lastIndexOf('.');
+        if (i < 0 || i == name.length() - 1) {
+            return "";
+        }
+        return name.substring(i + 1).toLowerCase(Locale.ROOT);
+    }
+
+    @Override
+    public OnboardingFileClaimRespVO uploadEntryBillFile(org.springframework.web.multipart.MultipartFile file)
+            throws Exception {
+        // 与档案共用权威 claim 签发（私有目录 + 一次性 token + 上传者绑定）
+        return employeeService.uploadOnboardingFile(file);
+    }
+
+    @Override
+    public void downloadEntryBillAttachment(Long billId, Long attachmentId, HttpServletResponse response)
+            throws Exception {
+        validateEmployeeEntryBillExists(billId);
+        AttachmentDO att = attachmentService.getAttachmentInternal(attachmentId);
+        String typeCode = HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode();
+        if (att == null
+                || !typeCode.equals(att.getBusinessType())
+                || !billId.equals(att.getBusinessId())) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        Long fileId = att.getFileId();
+        if (fileId == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        FileRespDTO meta = fileAccessApi.getFile(fileId);
+        if (meta == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        byte[] content = fileAccessApi.getFileContent(fileId);
+        if (content == null) {
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+        }
+        String fileName = StrUtil.blankToDefault(meta.getName(), att.getFileName());
+        response.setContentType("application/octet-stream");
+        String encoded = java.net.URLEncoder.encode(fileName == null ? "file" : fileName, java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename*=UTF-8''" + encoded);
+        response.getOutputStream().write(content);
+        response.getOutputStream().flush();
     }
 
     @Override
@@ -221,11 +383,29 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         
         EmployeeEntryBillRespVO respVO = BeanUtils.toBean(entryBill, EmployeeEntryBillRespVO.class);
         
-        // 获取附件信息
-        respVO.setAttachments(BeanUtils.toBean(
-            attachmentService.getAttachmentListByBusiness(HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), id),
-            AttachmentRespVO.class
-        ));
+        // 附件：不暴露 fileId/path/url；仅 id + 元数据 + 鉴权 downloadPath
+        List<AttachmentDO> atts = attachmentService.getAttachmentListByBusinessInternal(
+                HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(), id);
+        if (CollUtil.isNotEmpty(atts)) {
+            respVO.setAttachments(atts.stream().map(a -> {
+                AttachmentRespVO vo = new AttachmentRespVO();
+                vo.setId(a.getId());
+                vo.setBusinessType(a.getBusinessType());
+                vo.setBusinessId(a.getBusinessId());
+                vo.setFileName(a.getFileName());
+                vo.setFileSize(a.getFileSize());
+                vo.setFileType(a.getFileType());
+                vo.setFileExtension(a.getFileExtension());
+                vo.setUploadTime(a.getUploadTime());
+                vo.setSortOrder(a.getSortOrder());
+                vo.setRemark(a.getRemark());
+                vo.setFilePath("");
+                vo.setFileUrl("");
+                vo.setDownloadPath("/hrm/employee-entry-bill/attachment/download?billId="
+                        + id + "&attachmentId=" + a.getId());
+                return vo;
+            }).collect(Collectors.toList()));
+        }
         
         // 获取明细信息：优先从员工档案明细表获取（如果已创建员工档案），否则从入职申请单明细表获取
         if (entryBill.getEmployeeId() != null) {
@@ -374,6 +554,13 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
 //            TenantContextHolder.setTenantId(entryBill.get().getTenantId());
 
             Long employeeId = employeeService.createEmployeeArchive(employeeSaveReqVO);
+
+            // 入职资料：从已落库 201 源行转档（权威 FileDO，允许历史 public path；不经私有目录门禁）
+            attachmentService.transferReservedAttachmentsFromSource(
+                    HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode(),
+                    entryBillId,
+                    EmployeeServiceImpl.ONBOARDING_ATTACHMENT_BUSINESS_TYPE,
+                    employeeId);
 
             // 更新入职申请单的employeeId
             EmployeeEntryBillDO updateObj = new EmployeeEntryBillDO();

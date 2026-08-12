@@ -70,6 +70,12 @@
             <artifactId>yudao-module-bpm-api</artifactId>
             <version>${revision}</version>
         </dependency>
+        <!-- EXP-75：reserved 附件写入校验 FileDO 权威身份 -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>yudao-module-infra-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>yudao-spring-boot-starter-mq</artifactId>
