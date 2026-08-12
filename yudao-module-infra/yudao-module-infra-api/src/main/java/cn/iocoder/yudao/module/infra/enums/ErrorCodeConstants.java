@@ -33,6 +33,8 @@ public interface ErrorCodeConstants {
     ErrorCode FILE_PATH_EXISTS = new ErrorCode(1_001_003_000, "文件路径已存在");
     ErrorCode FILE_NOT_EXISTS = new ErrorCode(1_001_003_001, "文件不存在");
     ErrorCode FILE_IS_EMPTY = new ErrorCode(1_001_003_002, "文件为空");
+    /** DB provider 存储上限 / 数据包截断等：稳定 4xx，避免 500 Data truncation */
+    ErrorCode FILE_CONTENT_TOO_LARGE = new ErrorCode(1_001_003_003, "文件内容过大，无法存储（请控制在业务上限内，或改用磁盘/对象存储）");
 
     // ========== 代码生成器 1-001-004-000 ==========
     ErrorCode CODEGEN_TABLE_EXISTS = new ErrorCode(1_001_004_002, "表定义已经存在");

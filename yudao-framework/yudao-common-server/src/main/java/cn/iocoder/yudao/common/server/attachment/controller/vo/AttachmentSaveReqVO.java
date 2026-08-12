@@ -21,6 +21,9 @@ public class AttachmentSaveReqVO {
     @NotNull(message = "业务单据ID不能为空")
     private Long businessId;
 
+    @Schema(description = "关联 infra_file 编号（权威 claim）", example = "1024")
+    private Long fileId;
+
     @Schema(description = "文件名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "合同文件.pdf")
     @NotEmpty(message = "文件名称不能为空")
     private String fileName;

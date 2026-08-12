@@ -1,6 +1,7 @@
 DELETE FROM "infra_config";
 DELETE FROM "infra_file_config";
 DELETE FROM "infra_file";
+DELETE FROM "common_attachment";
 DELETE FROM "infra_job";
 DELETE FROM "infra_job_log";
 DELETE FROM "infra_api_access_log";

@@ -31,6 +31,17 @@ export namespace InfraFileApi {
     file: globalThis.File;
     directory?: string;
   }
+
+  /** 上传详情（权威 claim） */
+  export interface FileUploadDetail {
+    id: number;
+    url: string;
+    path: string;
+    name?: string;
+    type?: string;
+    size?: number;
+    configId?: number;
+  }
 }
 
 /** 查询文件列表 */
@@ -75,4 +86,19 @@ export function uploadFile(
     delete data.directory;
   }
   return requestClient.upload('/infra/file/upload', data, { onUploadProgress });
+}
+
+/** 上传文件并返回权威 claim（id/path/size），敏感业务（入职资料）使用 */
+export function uploadFileDetail(
+  data: InfraFileApi.FileUploadReqVO,
+  onUploadProgress?: AxiosProgressEvent,
+) {
+  if (!data.directory) {
+    delete data.directory;
+  }
+  return requestClient.upload<InfraFileApi.FileUploadDetail>(
+    '/infra/file/upload-detail',
+    data,
+    { onUploadProgress },
+  );
 }

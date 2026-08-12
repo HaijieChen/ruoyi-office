@@ -3,7 +3,14 @@ package cn.iocoder.yudao.module.hrm.controller.admin.employee.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+
+import jakarta.validation.Valid;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -83,6 +90,153 @@ public class EmployeeSaveReqVO {
     @Schema(description = "联系电话", example = "13900139000")
     private String emergencyPhone;
 
+    /**
+     * 花名册可空字段：JSON 省略=保留；显式 null=清空；非空=写入。
+     * 通过自定义 setter 记录字段是否出现在请求中。
+     */
+    @Schema(description = "紧急联系人关系", example = "配偶")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private String emergencyRelationship;
+    @JsonIgnore
+    private boolean emergencyRelationshipPresent;
+
+    @Schema(description = "是否缴纳社保", example = "true")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private Boolean socialSecurityEnabled;
+    @JsonIgnore
+    private boolean socialSecurityEnabledPresent;
+
+    @Schema(description = "是否缴纳公积金", example = "true")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private Boolean housingFundEnabled;
+    @JsonIgnore
+    private boolean housingFundEnabledPresent;
+
+    @Schema(description = "参保年月 yyyy-MM", example = "2024-01")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private String socialSecurityStartMonth;
+    @JsonIgnore
+    private boolean socialSecurityStartMonthPresent;
+
+    @Schema(description = "试用期薪资", example = "8000.00")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private BigDecimal probationSalary;
+    @JsonIgnore
+    private boolean probationSalaryPresent;
+
+    @Schema(description = "转正薪资", example = "10000.00")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private BigDecimal regularSalary;
+    @JsonIgnore
+    private boolean regularSalaryPresent;
+
+    @Schema(description = "生育状况", example = "1")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private String fertilityStatus;
+    @JsonIgnore
+    private boolean fertilityStatusPresent;
+
+    @Schema(description = "户籍性质", example = "1")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private String householdType;
+    @JsonIgnore
+    private boolean householdTypePresent;
+
+    @Schema(description = "用工形式", example = "1")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private String employmentForm;
+    @JsonIgnore
+    private boolean employmentFormPresent;
+
+    @Schema(description = "招聘渠道", example = "内推")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private String recruitmentChannel;
+    @JsonIgnore
+    private boolean recruitmentChannelPresent;
+
+    @Schema(description = "面试人", example = "王五")
+    @Getter
+    @Setter(AccessLevel.NONE)
+    private String interviewerName;
+    @JsonIgnore
+    private boolean interviewerNamePresent;
+
+    @JsonProperty("emergencyRelationship")
+    public void setEmergencyRelationship(String emergencyRelationship) {
+        this.emergencyRelationship = emergencyRelationship;
+        this.emergencyRelationshipPresent = true;
+    }
+
+    @JsonProperty("socialSecurityEnabled")
+    public void setSocialSecurityEnabled(Boolean socialSecurityEnabled) {
+        this.socialSecurityEnabled = socialSecurityEnabled;
+        this.socialSecurityEnabledPresent = true;
+    }
+
+    @JsonProperty("housingFundEnabled")
+    public void setHousingFundEnabled(Boolean housingFundEnabled) {
+        this.housingFundEnabled = housingFundEnabled;
+        this.housingFundEnabledPresent = true;
+    }
+
+    @JsonProperty("socialSecurityStartMonth")
+    public void setSocialSecurityStartMonth(String socialSecurityStartMonth) {
+        this.socialSecurityStartMonth = socialSecurityStartMonth;
+        this.socialSecurityStartMonthPresent = true;
+    }
+
+    @JsonProperty("probationSalary")
+    public void setProbationSalary(BigDecimal probationSalary) {
+        this.probationSalary = probationSalary;
+        this.probationSalaryPresent = true;
+    }
+
+    @JsonProperty("regularSalary")
+    public void setRegularSalary(BigDecimal regularSalary) {
+        this.regularSalary = regularSalary;
+        this.regularSalaryPresent = true;
+    }
+
+    @JsonProperty("fertilityStatus")
+    public void setFertilityStatus(String fertilityStatus) {
+        this.fertilityStatus = fertilityStatus;
+        this.fertilityStatusPresent = true;
+    }
+
+    @JsonProperty("householdType")
+    public void setHouseholdType(String householdType) {
+        this.householdType = householdType;
+        this.householdTypePresent = true;
+    }
+
+    @JsonProperty("employmentForm")
+    public void setEmploymentForm(String employmentForm) {
+        this.employmentForm = employmentForm;
+        this.employmentFormPresent = true;
+    }
+
+    @JsonProperty("recruitmentChannel")
+    public void setRecruitmentChannel(String recruitmentChannel) {
+        this.recruitmentChannel = recruitmentChannel;
+        this.recruitmentChannelPresent = true;
+    }
+
+    @JsonProperty("interviewerName")
+    public void setInterviewerName(String interviewerName) {
+        this.interviewerName = interviewerName;
+        this.interviewerNamePresent = true;
+    }
+
     @Schema(description = "照片", example = "http://127.0.0.1:48080/admin-api/infra/file/4/get/xxx.jpg")
     private String avatar;
 
@@ -142,6 +296,21 @@ public class EmployeeSaveReqVO {
      */
     @Schema(description = "家属信息列表")
     private List<EmployeeFamilyVO> familyList;
+
+    /**
+     * 合同明细列表（最多 4 条）。null=不修改；[]=清空。
+     */
+    @Schema(description = "合同明细列表；null 表示不修改，空数组表示清空")
+    @Valid
+    private List<EmployeeContractVO> contractList;
+
+    /**
+     * 入职资料附件。null=不修改；[]=清空。
+     * 专用 VO：新附件只传 fileId（权威 claim），不传 businessType/businessId/伪造 size。
+     */
+    @Schema(description = "入职资料附件；null 表示不修改，空数组表示清空")
+    @Valid
+    private List<OnboardingAttachmentSaveReqVO> onboardingAttachments;
 
 }
 

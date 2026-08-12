@@ -90,6 +90,18 @@ public interface EmployeeEntryBillService {
      */
     PageResult<EmployeeEntryBillDO> getEmployeeEntryBillPage(EmployeeEntryBillPageReqVO pageReqVO);
 
+    /**
+     * 鉴权下载入职单附件（登录 + entry-bill:query + 归属校验）
+     */
+    void downloadEntryBillAttachment(Long billId, Long attachmentId, jakarta.servlet.http.HttpServletResponse response)
+            throws Exception;
+
+    /**
+     * 上传入职单附件并签发 claim（与档案 onboarding claim 同级）
+     */
+    OnboardingFileClaimRespVO uploadEntryBillFile(org.springframework.web.multipart.MultipartFile file)
+            throws Exception;
+
 }
 
 

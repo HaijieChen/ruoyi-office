@@ -8,6 +8,8 @@ import cn.hutool.crypto.digest.DigestUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FilePageReqVO;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
@@ -56,12 +58,31 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public PageResult<FileDO> getFilePage(FilePageReqVO pageReqVO) {
-        return fileMapper.selectPage(pageReqVO);
+        // 跨租户判定入职绑定（infra_file 全局，common_attachment 有 tenant）
+        return TenantUtils.executeIgnore(() -> fileMapper.selectPagePublic(pageReqVO));
     }
 
     @Override
     @SneakyThrows
     public String createFile(byte[] content, String name, String directory, String type) {
+        return createFileReturn(content, name, directory, type).getUrl();
+    }
+
+    @Override
+    @SneakyThrows
+    public FileDO createFileReturn(byte[] content, String name, String directory, String type) {
+        return doCreateFileReturn(content, name, directory, type, false);
+    }
+
+    @Override
+    @SneakyThrows
+    public FileDO createFileReturnAllowPrivate(byte[] content, String name, String directory, String type) {
+        return doCreateFileReturn(content, name, directory, type, true);
+    }
+
+    @SneakyThrows
+    private FileDO doCreateFileReturn(byte[] content, String name, String directory, String type,
+                                      boolean allowPrivate) {
         // 1.1 处理 type 为空的情况
         if (StrUtil.isEmpty(type)) {
             type = FileTypeUtils.getMineType(content, name);
@@ -80,16 +101,19 @@ public class FileServiceImpl implements FileService {
 
         // 2.1 生成上传的 path，需要保证唯一
         String path = generateUploadPath(name, directory);
-        // 2.2 上传到文件存储器
+        // 2.2 校验最终 path（防 name 注入私有前缀）
+        rejectPrivateStoragePath(path, allowPrivate);
+        // 2.3 上传到文件存储器
         FileClient client = fileConfigService.getMasterFileClient();
         Assert.notNull(client, "客户端(master) 不能为空");
         String url = client.upload(content, path, type);
 
         // 3. 保存到数据库
-        fileMapper.insert(new FileDO().setConfigId(client.getId())
+        FileDO file = new FileDO().setConfigId(client.getId())
                 .setName(name).setPath(path).setUrl(url)
-                .setType(type).setSize((long) content.length));
-        return url;
+                .setType(type).setSize((long) content.length);
+        fileMapper.insert(file);
+        return file;
     }
 
     @VisibleForTesting
@@ -124,11 +148,24 @@ public class FileServiceImpl implements FileService {
         return name;
     }
 
+    /**
+     * 通用入口拒绝最终 path 落入私有命名空间（含 name 注入）。
+     */
+    @VisibleForTesting
+    void rejectPrivateStoragePath(String path, boolean allowPrivate) {
+        if (!allowPrivate && FilePrivateDirs.isPrivateDirectory(path)) {
+            throw new IllegalArgumentException(
+                    "最终 path 含入职资料私有目录，禁止经通用上传/预签名写入: " + path);
+        }
+    }
+
     @Override
     @SneakyThrows
     public FilePresignedUrlRespVO presignPutUrl(String name, String directory) {
         // 1. 生成上传的 path，需要保证唯一
         String path = generateUploadPath(name, directory);
+        // 校验最终 path（防 name=hrm-onboarding-private/... 无扩展名注入）
+        rejectPrivateStoragePath(path, false);
 
         // 2. 获取文件预签名地址
         FileClient fileClient = fileConfigService.getMasterFileClient();
@@ -140,12 +177,15 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public String presignGetUrl(String url, Integer expirationSeconds) {
+        // 读预签名：拒绝私有 path/url
+        rejectPrivateStoragePath(url, false);
         FileClient fileClient = fileConfigService.getMasterFileClient();
         return fileClient.presignGetUrl(url, expirationSeconds);
     }
 
     @Override
     public Long createFile(FileCreateReqVO createReqVO) {
+        rejectPrivateStoragePath(createReqVO.getPath(), false);
         createReqVO.setUrl(HttpUtils.removeUrlQuery(createReqVO.getUrl())); // 目的：移除私有桶情况下，URL 的签名参数
         FileDO file = BeanUtils.toBean(createReqVO, FileDO.class);
         fileMapper.insert(file);
@@ -154,13 +194,19 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public FileDO getFile(Long id) {
-        return validateFileExists(id);
+        FileDO file = validateFileExists(id);
+        // 通用 get：私有文件 / 入职绑定（含软删）不可见
+        rejectPrivateStoragePath(file.getPath(), false);
+        rejectReservedAttachmentBound(file.getId(), file.getPath());
+        return file;
     }
 
     @Override
     public void deleteFile(Long id) throws Exception {
         // 校验存在
         FileDO file = validateFileExists(id);
+        rejectPrivateStoragePath(file.getPath(), false);
+        rejectReservedAttachmentBound(file.getId(), file.getPath());
 
         // 从文件存储器中删除
         FileClient client = fileConfigService.getFileClient(file.getConfigId());
@@ -174,17 +220,17 @@ public class FileServiceImpl implements FileService {
     @Override
     @SneakyThrows
     public void deleteFileList(List<Long> ids) {
-        // 删除文件
         List<FileDO> files = fileMapper.selectByIds(ids);
+        // 预检整批：任一私有目录或入职绑定 → 整批拒绝，provider 0 次 delete
         for (FileDO file : files) {
-            // 获取客户端
+            rejectPrivateStoragePath(file.getPath(), false);
+            rejectReservedAttachmentBound(file.getId(), file.getPath());
+        }
+        for (FileDO file : files) {
             FileClient client = fileConfigService.getFileClient(file.getConfigId());
             Assert.notNull(client, "客户端({}) 不能为空", file.getPath());
-            // 删除文件
             client.delete(file.getPath());
         }
-
-        // 删除记录
         fileMapper.deleteByIds(ids);
     }
 
@@ -198,6 +244,51 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public byte[] getFileContent(Long configId, String path) throws Exception {
+        // 匿名/通用下载：拒私有目录 + 拒入职绑定（含软删）
+        rejectPrivateStoragePath(path, false);
+        rejectReservedAttachmentBound(null, path);
+        FileClient client = fileConfigService.getFileClient(configId);
+        Assert.notNull(client, "客户端({}) 不能为空", configId);
+        return client.getContent(path);
+    }
+
+    /**
+     * 入职绑定守卫：含软删、跨租户；mapper/SQL 异常 fail-closed。
+     */
+    void rejectReservedAttachmentBound(Long fileId, String path) {
+        try {
+            TenantUtils.executeIgnore(() -> {
+                if (fileId != null) {
+                    Long byId = fileMapper.countReservedAttachmentByFileId(fileId);
+                    if (byId != null && byId > 0) {
+                        throw new IllegalArgumentException(
+                                "fileId 绑定入职资料/入职单附件，禁止通用操作: " + fileId);
+                    }
+                }
+                if (StrUtil.isNotBlank(path)) {
+                    Long byPath = fileMapper.countReservedAttachmentByPath(path);
+                    if (byPath != null && byPath > 0) {
+                        throw new IllegalArgumentException(
+                                "path 绑定入职资料/入职单附件，禁止通用操作: " + path);
+                    }
+                }
+            });
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            // TenantUtils 可能包装 cause；还原 IllegalArgumentException
+            Throwable c = ex.getCause();
+            if (c instanceof IllegalArgumentException) {
+                throw (IllegalArgumentException) c;
+            }
+            throw new IllegalStateException("入职附件保密校验失败（fail-closed）", ex);
+        }
+    }
+
+    /**
+     * 权威内容读取（含私有 path）：仅 FileAccessApi 使用。
+     */
+    public byte[] getFileContentAllowPrivate(Long configId, String path) throws Exception {
         FileClient client = fileConfigService.getFileClient(configId);
         Assert.notNull(client, "客户端({}) 不能为空", configId);
         return client.getContent(path);

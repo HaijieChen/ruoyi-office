@@ -115,6 +115,24 @@ public class EmployeeEntryBillController {
                         BeanUtils.toBean(list, EmployeeEntryBillRespVO.class));
     }
 
+    @PostMapping("/onboarding-file/upload")
+    @Operation(summary = "上传入职单附件并签发 claim（entry-bill 权限；与档案 claim 同级）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-entry-bill:create') or @ss.hasPermission('hrm:employee-entry-bill:update')")
+    public CommonResult<OnboardingFileClaimRespVO> uploadEntryBillFile(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws Exception {
+        // 复用 EmployeeService 同一 claim 签发（purpose=hrm-onboarding）
+        return success(employeeEntryBillService.uploadEntryBillFile(file));
+    }
+
+    @GetMapping("/attachment/download")
+    @Operation(summary = "下载入职单附件（鉴权；不走匿名直链）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-entry-bill:query')")
+    public void downloadEntryBillAttachment(@RequestParam("billId") Long billId,
+                                            @RequestParam("attachmentId") Long attachmentId,
+                                            HttpServletResponse response) throws Exception {
+        employeeEntryBillService.downloadEntryBillAttachment(billId, attachmentId, response);
+    }
+
 }
 
 

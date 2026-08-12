@@ -216,6 +216,11 @@ const HRM_DICT = {
   HRM_NATION: 'hrm_nation', // 民族
   HRM_POLITICAL_STATUS: 'hrm_political_status', // 政治面貌
   HRM_MARITAL_STATUS: 'hrm_marital_status', // 婚姻状况
+  HRM_FERTILITY_STATUS: 'hrm_fertility_status', // 生育状况
+  HRM_HOUSEHOLD_TYPE: 'hrm_household_type', // 户籍性质
+  HRM_EDUCATION_TYPE: 'hrm_education_type', // 学历类别
+  HRM_EMPLOYMENT_FORM: 'hrm_employment_form', // 用工形式
+  HRM_CONTRACT_TYPE: 'hrm_contract_type', // 合同类型
   HRM_TRANSFER_TYPE: 'hrm_transfer_type', // 异动类型
   HRM_TRANSFER_REASON: 'hrm_transfer_reason', // 异动原因
   HRM_RESIGNATION_TYPE: 'hrm_resignation_type', // 离职类型

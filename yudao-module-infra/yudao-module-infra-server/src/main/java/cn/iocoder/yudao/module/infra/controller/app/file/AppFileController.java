@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.infra.controller.app.file;
 
 import cn.hutool.core.io.IoUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.infra.api.file.FilePrivateDirs;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
 import cn.iocoder.yudao.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import cn.iocoder.yudao.module.infra.controller.app.file.vo.AppFileUploadReqVO;
@@ -37,6 +38,7 @@ public class AppFileController {
             schema = @Schema(type = "string", format = "binary"))
     @PermitAll
     public CommonResult<String> uploadFile(AppFileUploadReqVO uploadReqVO) throws Exception {
+        rejectPrivateOnboardingDirectory(uploadReqVO.getDirectory());
         MultipartFile file = uploadReqVO.getFile();
         byte[] content = IoUtil.readBytes(file.getInputStream());
         return success(fileService.createFile(content, file.getOriginalFilename(),
@@ -52,6 +54,7 @@ public class AppFileController {
     public CommonResult<FilePresignedUrlRespVO> getFilePresignedUrl(
             @RequestParam("name") String name,
             @RequestParam(value = "directory", required = false) String directory) {
+        rejectPrivateOnboardingDirectory(directory);
         return success(fileService.presignPutUrl(name, directory));
     }
 
@@ -59,7 +62,14 @@ public class AppFileController {
     @Operation(summary = "创建文件", description = "模式二：前端上传文件：配合 presigned-url 接口，记录上传了上传的文件")
     @PermitAll
     public CommonResult<Long> createFile(@Valid @RequestBody FileCreateReqVO createReqVO) {
+        rejectPrivateOnboardingDirectory(createReqVO.getPath());
         return success(fileService.createFile(createReqVO));
+    }
+
+    private void rejectPrivateOnboardingDirectory(String directoryOrPath) {
+        if (FilePrivateDirs.isPrivateDirectory(directoryOrPath)) {
+            throw new IllegalArgumentException("入职资料私有目录禁止经通用 App 上传/预签名写入");
+        }
     }
 
 }

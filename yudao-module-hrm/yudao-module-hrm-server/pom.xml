@@ -146,8 +146,8 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring.boot.version}</version>
                 <configuration>
-                    <!-- 单体模式下跳过 repackage，由 yudao-server 统一打包 -->
-                    <skip>${skip.repackage}</skip>
+                    <!-- EXP-75：禁止 standalone HRM 可执行 jar；始终由 yudao-server 单体打包 -->
+                    <skip>true</skip>
                 </configuration>
                 <executions>
                     <execution>
