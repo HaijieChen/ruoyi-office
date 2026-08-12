@@ -99,7 +99,11 @@ final class EmployeeRosterImportSupport {
         req.setBirthday(parseBirthday(row.getBirthdayMonth()));
         req.setHouseholdAddress(trim(row.getHouseholdAddress()));
         req.setCurrentAddress(trim(row.getCurrentAddress()));
-        req.setEmployeeStatus(parseEmployeeStatus(row.getEmployeeType()));
+        // 员工类型：有值才写入；空白留给 import 路径区分 create 默认正式 / update 保留旧值（F1）
+        Integer employeeStatus = parseEmployeeStatusOrNull(row.getEmployeeType());
+        if (employeeStatus != null) {
+            req.setEmployeeStatus(employeeStatus);
+        }
         req.setEmploymentForm(resolveDictOrRaw(DICT_EMPLOYMENT_FORM, row.getEmploymentForm()));
         req.setBankAccount(normalizeBankAccount(row.getBankAccount()));
         req.setBankName(trim(row.getBankName()));
@@ -277,9 +281,12 @@ final class EmployeeRosterImportSupport {
         return null;
     }
 
-    static Integer parseEmployeeStatus(String raw) {
+    /**
+     * 解析员工类型标签；空白返回 null（由调用方决定 create 默认 / update 保留）。
+     */
+    static Integer parseEmployeeStatusOrNull(String raw) {
         if (StrUtil.isBlank(raw)) {
-            return EmployeeStatusEnum.FORMAL.getStatus();
+            return null;
         }
         String t = raw.trim();
         for (EmployeeStatusEnum e : EmployeeStatusEnum.values()) {
@@ -295,7 +302,6 @@ final class EmployeeRosterImportSupport {
         } catch (Exception ignored) {
             // dict 未就绪
         }
-        // 兼容「兼职」等未进枚举的标签：默认正式，避免整行失败
         if (t.contains("试用")) {
             return EmployeeStatusEnum.PROBATIONARY.getStatus();
         }
@@ -305,7 +311,39 @@ final class EmployeeRosterImportSupport {
         if (t.contains("离职")) {
             return EmployeeStatusEnum.RESIGNED.getStatus();
         }
+        // 无法识别的非空标签：仍回落正式，避免脏文案导致整行失败
         return EmployeeStatusEnum.FORMAL.getStatus();
+    }
+
+    /** 创建路径：空白员工类型默认正式 */
+    static Integer defaultEmployeeStatusForCreate(Integer parsedOrNull) {
+        return parsedOrNull != null ? parsedOrNull : EmployeeStatusEnum.FORMAL.getStatus();
+    }
+
+    /**
+     * 身份证脱敏：保留后 4 位，前部用 *（日志与失败明细禁止完整证号，F2）。
+     */
+    static String maskIdCard(String idCard) {
+        if (StrUtil.isBlank(idCard)) {
+            return "(empty)";
+        }
+        String t = idCard.trim();
+        if (t.length() <= 4) {
+            return "****";
+        }
+        return "*".repeat(t.length() - 4) + t.substring(t.length() - 4);
+    }
+
+    /** 将可能含完整证号的文案脱敏后写入日志 */
+    static String sanitizeReasonForLog(String reason, String idCard) {
+        if (StrUtil.isBlank(reason)) {
+            return reason;
+        }
+        String r = reason;
+        if (StrUtil.isNotBlank(idCard) && r.contains(idCard)) {
+            r = r.replace(idCard, maskIdCard(idCard));
+        }
+        return r;
     }
 
     static void applyMarriageChildbearing(EmployeeSaveReqVO req, String summary) {

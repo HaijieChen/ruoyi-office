@@ -1,7 +1,12 @@
 package cn.iocoder.yudao.module.hrm.service.employee;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import cn.hutool.extra.spring.SpringUtil;
 import cn.idev.excel.annotation.ExcelProperty;
+import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
+import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRosterImportExcelVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRosterImportRespVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSaveReqVO;
@@ -12,7 +17,7 @@ import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeFamilyMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeWorkExperienceMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.OnboardingFileClaimMapper;
-import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
+import cn.iocoder.yudao.module.hrm.enums.EmployeeStatusEnum;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
@@ -24,7 +29,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -218,6 +225,165 @@ class EmployeeRosterImportTest {
             verify(employeeArchiveMapper, atLeastOnce()).insert(insertCap.capture());
             assertEquals("新建员", insertCap.getValue().getName());
         }
+    }
+
+    @Test
+    void blankEmployeeTypeDoesNotSetStatusOnSaveReq_andCreateDefaultsFormal() {
+        EmployeeRosterImportExcelVO blankType = EmployeeRosterImportExcelVO.builder()
+                .name("试用保留")
+                .idCard("110101199001019999")
+                .mobile("13900001111")
+                .sex("女")
+                .employeeType("  ")
+                .build();
+        EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(blankType);
+        assertNull(req.getEmployeeStatus(), "F1: blank type must not force FORMAL on VO");
+
+        assertEquals(EmployeeStatusEnum.FORMAL.getStatus(),
+                EmployeeRosterImportSupport.defaultEmployeeStatusForCreate(null));
+        assertEquals(EmployeeStatusEnum.PROBATIONARY.getStatus(),
+                EmployeeRosterImportSupport.defaultEmployeeStatusForCreate(
+                        EmployeeStatusEnum.PROBATIONARY.getStatus()));
+    }
+
+    @Test
+    void importUpdateWithBlankEmployeeTypeKeepsExistingStatus() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            String idCard = "110101199001018888";
+            EmployeeRosterImportExcelVO row = EmployeeRosterImportExcelVO.builder()
+                    .name("试用员工甲")
+                    .idCard(idCard)
+                    .mobile("13900002222")
+                    .sex("男")
+                    .employeeType(null) // blank
+                    .build();
+
+            EmployeeDO existing = new EmployeeDO();
+            existing.setId(55L);
+            existing.setEmployeeNo("10000055");
+            existing.setEmployeeStatus(EmployeeStatusEnum.PROBATIONARY.getStatus());
+            existing.setName("旧名");
+            when(employeeArchiveMapper.selectByIdCard(idCard)).thenReturn(existing);
+            when(employeeArchiveMapper.selectById(55L)).thenReturn(existing);
+
+            EmployeeRosterImportRespVO resp =
+                    employeeService.importEmployeeRosterList(List.of(row));
+            assertEquals(1, resp.getUpdateNames().size());
+            assertTrue(resp.getFailureRows().isEmpty());
+
+            ArgumentCaptor<EmployeeDO> updateCap = ArgumentCaptor.forClass(EmployeeDO.class);
+            verify(employeeArchiveMapper).updateById(updateCap.capture());
+            assertEquals(EmployeeStatusEnum.PROBATIONARY.getStatus(),
+                    updateCap.getValue().getEmployeeStatus(),
+                    "F1: update must keep probationary when Excel 员工类型 blank");
+        }
+    }
+
+    @Test
+    void duplicateIdCardInFileIsMaskedInFailureAndLogs() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            String idCard = "110101199001017777";
+            EmployeeRosterImportExcelVO r1 = baseRow(idCard, "甲");
+            EmployeeRosterImportExcelVO r2 = baseRow(idCard, "乙");
+
+            when(employeeArchiveMapper.selectByIdCard(idCard)).thenReturn(null);
+            lenient().doAnswer(inv -> {
+                EmployeeDO e = inv.getArgument(0);
+                e.setId(1L);
+                return 1;
+            }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
+            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+
+            Logger logger = (Logger) LoggerFactory.getLogger(EmployeeServiceImpl.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                EmployeeRosterImportRespVO resp =
+                        employeeService.importEmployeeRosterList(List.of(r1, r2));
+                assertEquals(1, resp.getCreateNames().size());
+                assertEquals(1, resp.getFailureRows().size());
+                String fail = resp.getFailureRows().get(4); // second data row = excel 4
+                assertNotNull(fail);
+                assertFalse(fail.contains(idCard), "F2: failure detail must not contain full idCard");
+                assertTrue(fail.contains("7777") || fail.contains("****"),
+                        "F2: masked form should retain last4 or stars");
+
+                boolean logLeak = appender.list.stream()
+                        .map(ILoggingEvent::getFormattedMessage)
+                        .anyMatch(m -> m != null && m.contains(idCard));
+                assertFalse(logLeak, "F2: warn log must not contain full idCard");
+            } finally {
+                logger.detachAppender(appender);
+            }
+        }
+    }
+
+    @Test
+    void maskIdCardHelpers() {
+        assertEquals("**************1234",
+                EmployeeRosterImportSupport.maskIdCard("110101199001011234"));
+        assertEquals("(empty)", EmployeeRosterImportSupport.maskIdCard(null));
+        String full = "证号 110101199001011234 重复";
+        assertFalse(EmployeeRosterImportSupport.sanitizeReasonForLog(full, "110101199001011234")
+                .contains("110101199001011234"));
+    }
+
+    @Test
+    void concurrentCreateDuplicateKeyFallsBackToUpdate() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            String idCard = "110101199001016666";
+            EmployeeRosterImportExcelVO row = baseRow(idCard, "并发员");
+
+            EmployeeDO winner = new EmployeeDO();
+            winner.setId(77L);
+            winner.setEmployeeNo("10000077");
+            winner.setEmployeeStatus(EmployeeStatusEnum.INTERN.getStatus());
+
+            // first select: not found → try create; insert throws UK; re-select finds winner
+            when(employeeArchiveMapper.selectByIdCard(idCard))
+                    .thenReturn(null)
+                    .thenReturn(winner);
+            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            doThrow(new DuplicateKeyException("uk_hrm_employee_id_card"))
+                    .when(employeeArchiveMapper).insert(any(EmployeeDO.class));
+            when(employeeArchiveMapper.selectById(77L)).thenReturn(winner);
+
+            EmployeeRosterImportRespVO resp =
+                    employeeService.importEmployeeRosterList(List.of(row));
+            assertEquals(0, resp.getCreateNames().size());
+            assertEquals(1, resp.getUpdateNames().size());
+            assertTrue(resp.getFailureRows().isEmpty());
+            verify(employeeArchiveMapper).updateById(any(EmployeeDO.class));
+        }
+    }
+
+    @Test
+    void officialTemplateXlsxDataRowsAreReadableWithHeadRow2() throws Exception {
+        ClassPathResource resource = new ClassPathResource("excel/文枢花名册导入模板.xlsx");
+        assertTrue(resource.exists());
+        byte[] bytes;
+        try (InputStream in = resource.getInputStream()) {
+            bytes = in.readAllBytes();
+        }
+        List<EmployeeRosterImportExcelVO> rows =
+                ExcelUtils.read(bytes, EmployeeRosterImportExcelVO.class, 2);
+        // 官方模板含示例数据行
+        assertFalse(rows.isEmpty(), "F4: template should yield data rows under headRowNumber=2");
+        EmployeeRosterImportExcelVO first = rows.get(0);
+        assertNotNull(first.getName());
+        assertNotNull(first.getIdCard());
+        // 映射不抛
+        EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(first);
+        assertEquals(first.getName().trim(), req.getName());
+        assertNotNull(req.getIdCard());
+        assertNotNull(req.getSex());
     }
 
     private static EmployeeRosterImportExcelVO baseRow(String idCard, String name) {

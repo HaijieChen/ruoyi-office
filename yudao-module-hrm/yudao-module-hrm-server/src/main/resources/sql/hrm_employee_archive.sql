@@ -59,6 +59,8 @@ CREATE TABLE `hrm_employee` (
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE KEY `uk_employee_no` (`employee_no`,`deleted`,`tenant_id`) USING BTREE,
+  -- 花名册导入按身份证 upsert：租户+逻辑删除维度唯一（NULL id_card 不参与冲突）
+  UNIQUE KEY `uk_hrm_employee_id_card` (`tenant_id`,`id_card`,`deleted`) USING BTREE,
   KEY `idx_dept_id` (`dept_id`) USING BTREE,
   KEY `idx_employee_status` (`employee_status`) USING BTREE,
   KEY `idx_user_id` (`user_id`) USING BTREE
