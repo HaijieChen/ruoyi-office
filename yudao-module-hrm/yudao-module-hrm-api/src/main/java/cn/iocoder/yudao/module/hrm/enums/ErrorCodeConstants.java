@@ -21,6 +21,7 @@ public interface ErrorCodeConstants {
     ErrorCode EMPLOYEE_ROSTER_CONTRACT_START_REQUIRED = new ErrorCode(1_050_001_009, "合同开始日期不能为空");
     ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_LIMIT = new ErrorCode(1_050_001_010, "入职资料最多 10 份");
     ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_INVALID = new ErrorCode(1_050_001_011, "入职资料附件不合法");
+    ErrorCode EMPLOYEE_ARCHIVE_USER_ALREADY_GENERATED = new ErrorCode(1_050_001_012, "该员工已生成用户，无需重复生成");
 
     // ========== 员工入职申请单 1-050-002-000 ==========
     ErrorCode EMPLOYEE_ENTRY_BILL_NOT_EXISTS = new ErrorCode(1_050_002_001, "员工入职申请单不存在");
