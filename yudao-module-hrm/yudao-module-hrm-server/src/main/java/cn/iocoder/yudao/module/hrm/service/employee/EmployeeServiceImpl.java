@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
@@ -25,6 +26,7 @@ import cn.iocoder.yudao.module.system.api.user.dto.AdminUserUpdateReqDTO;
 import cn.iocoder.yudao.module.system.enums.DictTypeConstants;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -50,6 +52,7 @@ import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.*;
  */
 @Service
 @Validated
+@Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
 
     public static final String ONBOARDING_ATTACHMENT_BUSINESS_TYPE = "hrm_employee_archive_onboarding";
@@ -330,6 +333,97 @@ public class EmployeeServiceImpl implements EmployeeService {
     public PageResult<EmployeeRespVO> getEmployeeArchiveSelectablePage(EmployeeSelectPageReqVO pageReqVO) {
         PageResult<EmployeeDO> pageResult = employeeArchiveMapper.selectPageExcludeFormal(pageReqVO);
         return buildEmployeeRespPage(pageResult);
+    }
+
+    /**
+     * 花名册导入：逐行 upsert，外层不加事务，避免单行失败拖垮整批。
+     * 行号按「表头在第 2 行」约定：数据行 Excel 行号 = index + 3。
+     * <p>
+     * P1-A：员工类型解析值不可变；仅真正 create 成功路径默认正式；UK 冲突回退 update 前恢复原始 null。<br>
+     * F2：日志与失败明细中的身份证脱敏。<br>
+     * P1-B：依赖 active-only 唯一键 uk_hrm_employee_active_id_card（生成列 active_id_card）。
+     */
+    @Override
+    public EmployeeRosterImportRespVO importEmployeeRosterList(List<EmployeeRosterImportExcelVO> rows) {
+        if (CollUtil.isEmpty(rows)) {
+            throw new IllegalArgumentException("导入数据不能为空");
+        }
+        EmployeeRosterImportRespVO resp = EmployeeRosterImportRespVO.builder()
+                .createNames(new ArrayList<>())
+                .updateNames(new ArrayList<>())
+                .failureRows(new LinkedHashMap<>())
+                .build();
+        Set<String> seenIdCards = new HashSet<>();
+        EmployeeServiceImpl self = getSelf();
+        for (int i = 0; i < rows.size(); i++) {
+            // 附件结构：第1行标题、第2行表头、第3行起数据
+            int excelRowNumber = i + 3;
+            EmployeeRosterImportExcelVO row = rows.get(i);
+            String idCardForMask = null;
+            try {
+                EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(row);
+                String idCard = req.getIdCard();
+                idCardForMask = idCard;
+                // P1-A：解析后的员工类型快照不可变（空白保持 null）
+                final Integer parsedEmployeeStatus = req.getEmployeeStatus();
+                if (!seenIdCards.add(idCard)) {
+                    String masked = EmployeeRosterImportSupport.maskIdCard(idCard);
+                    String failReason = "文件内身份证号重复：" + masked;
+                    log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, failReason);
+                    resp.getFailureRows().put(excelRowNumber, failReason);
+                    continue;
+                }
+                EmployeeDO existing = employeeArchiveMapper.selectByIdCard(idCard);
+                if (existing == null) {
+                    // 仅 create 路径：空白 → 正式；失败回退时必须恢复 parsedEmployeeStatus
+                    req.setEmployeeStatus(EmployeeRosterImportSupport.defaultEmployeeStatusForCreate(
+                            parsedEmployeeStatus));
+                    try {
+                        self.createEmployeeArchive(req);
+                        resp.getCreateNames().add(req.getName());
+                    } catch (org.springframework.dao.DataIntegrityViolationException dup) {
+                        // active-only UK 或工号 UK 冲突 → 重查后 update
+                        existing = employeeArchiveMapper.selectByIdCard(idCard);
+                        if (existing == null) {
+                            throw dup;
+                        }
+                        // P1-A：恢复原始解析值，使 applyImportUpdate 在空白时保留获胜行状态
+                        req.setEmployeeStatus(parsedEmployeeStatus);
+                        applyImportUpdate(self, req, existing);
+                        resp.getUpdateNames().add(req.getName());
+                        log.info("[importEmployeeRosterList][row={} idCard={} concurrent create conflict, switched to update id={}]",
+                                excelRowNumber, EmployeeRosterImportSupport.maskIdCard(idCard), existing.getId());
+                    }
+                } else {
+                    // 直接 update：req 仍为原始 parsedEmployeeStatus（空白=null → 保留旧值）
+                    applyImportUpdate(self, req, existing);
+                    resp.getUpdateNames().add(req.getName());
+                }
+            } catch (Exception ex) {
+                String reason = ex.getMessage();
+                if (StrUtil.isBlank(reason)) {
+                    reason = ex.getClass().getSimpleName();
+                }
+                String safeReason = EmployeeRosterImportSupport.sanitizeReasonForLog(reason, idCardForMask);
+                log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, safeReason);
+                resp.getFailureRows().put(excelRowNumber, safeReason);
+            }
+        }
+        return resp;
+    }
+
+    /** 导入 update：空白员工类型回填旧值，避免误改为正式（P1-A） */
+    private void applyImportUpdate(EmployeeServiceImpl self, EmployeeSaveReqVO req, EmployeeDO existing) {
+        req.setId(existing.getId());
+        req.setEmployeeNo(existing.getEmployeeNo());
+        if (req.getEmployeeStatus() == null) {
+            req.setEmployeeStatus(existing.getEmployeeStatus());
+        }
+        self.updateEmployeeArchive(req);
+    }
+
+    private EmployeeServiceImpl getSelf() {
+        return SpringUtil.getBean(getClass());
     }
 
     @Override

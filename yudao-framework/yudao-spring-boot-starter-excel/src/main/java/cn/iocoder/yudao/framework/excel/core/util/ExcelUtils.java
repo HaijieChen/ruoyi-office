@@ -8,6 +8,7 @@ import cn.iocoder.yudao.framework.excel.core.handler.SelectSheetWriteHandler;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
@@ -45,12 +46,36 @@ public class ExcelUtils {
     }
 
     public static <T> List<T> read(MultipartFile file, Class<T> head) throws IOException {
+        return read(file, head, 1);
+    }
+
+    /**
+     * 读取 Excel
+     *
+     * @param headRowNumber 表头所在行号（从 1 开始）。默认 1 表示首行为表头；
+     *                      文枢原模板为「标题行 + 表头行」时传 2。
+     */
+    public static <T> List<T> read(MultipartFile file, Class<T> head, int headRowNumber) throws IOException {
         // 参考 https://ruoyioffice.com/zM77F 帖子，增加 try 处理，兼容 windows 场景
         try (InputStream inputStream = file.getInputStream()) {
-            return FastExcelFactory.read(inputStream, head, null)
-                    .autoCloseStream(false) // 不要自动关闭，交给 Servlet 自己处理
-                    .doReadAllSync();
+            return read(inputStream, head, headRowNumber);
         }
+    }
+
+    /**
+     * 从字节数组读取（同一文件可多次尝试不同 headRowNumber）
+     */
+    public static <T> List<T> read(byte[] bytes, Class<T> head, int headRowNumber) throws IOException {
+        try (InputStream inputStream = new ByteArrayInputStream(bytes)) {
+            return read(inputStream, head, headRowNumber);
+        }
+    }
+
+    private static <T> List<T> read(InputStream inputStream, Class<T> head, int headRowNumber) {
+        return FastExcelFactory.read(inputStream, head, null)
+                .autoCloseStream(false)
+                .headRowNumber(headRowNumber)
+                .doReadAllSync();
     }
 
 }
