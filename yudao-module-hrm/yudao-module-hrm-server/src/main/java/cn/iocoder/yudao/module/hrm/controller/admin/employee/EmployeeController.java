@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.apilog.core.annotation.ApiAccessLog;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageParam;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.*;
 import cn.iocoder.yudao.module.hrm.service.employee.EmployeeService;
@@ -13,14 +14,19 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StreamUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 
 import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
+import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.IMPORT;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 
 @Tag(name = "管理后台 - 员工档案管理")
@@ -98,6 +104,42 @@ public class EmployeeController {
                                            HttpServletResponse response) throws IOException {
         List<EmployeeRosterExportVO> list = employeeArchiveService.getEmployeeRosterExportList(pageReqVO);
         ExcelUtils.write(response, "文枢花名册.xlsx", "文枢在职", EmployeeRosterExportVO.class, list);
+    }
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "下载文枢花名册导入模板（表头与官方附件第 2 行一致）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:export') or @ss.hasPermission('hrm:employee-archive:create')")
+    public void getImportTemplate(HttpServletResponse response) throws IOException {
+        // 直接下发官方模板字节，保证 52 列 title 含换行/长文案与附件逐字一致
+        ClassPathResource resource = new ClassPathResource("excel/文枢花名册导入模板.xlsx");
+        if (!resource.exists()) {
+            throw new IllegalStateException("导入模板资源不存在");
+        }
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.addHeader("Content-Disposition",
+                "attachment;filename=" + HttpUtils.encodeUtf8("文枢花名册导入模板.xlsx"));
+        try (InputStream in = resource.getInputStream()) {
+            StreamUtils.copy(in, response.getOutputStream());
+        }
+        response.flushBuffer();
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "导入文枢花名册（按身份证号 upsert，部分成功）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create')")
+    @ApiAccessLog(operateType = IMPORT)
+    public CommonResult<EmployeeRosterImportRespVO> importEmployeeRoster(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        // 官方模板：第 1 行标题、第 2 行表头 → headRowNumber=2
+        // MultipartFile 流只能读一次：先落内存
+        byte[] bytes = file.getBytes();
+        List<EmployeeRosterImportExcelVO> rows =
+                ExcelUtils.read(bytes, EmployeeRosterImportExcelVO.class, 2);
+        // 兼容仅表头无标题行：若读出空且文件非空，再按首行表头试一次
+        if (rows.isEmpty() && bytes.length > 0) {
+            rows = ExcelUtils.read(bytes, EmployeeRosterImportExcelVO.class, 1);
+        }
+        return success(employeeArchiveService.importEmployeeRosterList(rows));
     }
 
     @PostMapping("/onboarding-file/upload")

@@ -220,6 +220,28 @@ export function exportEmployeeArchiveExcel(
   });
 }
 
+/** 文枢花名册导入结果 */
+export namespace EmployeeRosterImportApi {
+  export interface ImportResult {
+    createNames: string[];
+    updateNames: string[];
+    failureRows: Record<number, string>;
+  }
+}
+
+/** 下载文枢花名册导入模板（官方附件表头） */
+export function importEmployeeRosterTemplate() {
+  return requestClient.download('/hrm/employee-archive/get-import-template');
+}
+
+/** 导入文枢花名册 Excel */
+export function importEmployeeRoster(file: File) {
+  return requestClient.upload<EmployeeRosterImportApi.ImportResult>(
+    '/hrm/employee-archive/import',
+    { file },
+  );
+}
+
 /** 为员工生成系统用户 */
 export function generateUserForEmployee(id: number) {
   return requestClient.post<number>(
