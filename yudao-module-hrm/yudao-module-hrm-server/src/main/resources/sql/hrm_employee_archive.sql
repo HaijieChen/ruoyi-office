@@ -57,10 +57,13 @@ CREATE TABLE `hrm_employee` (
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
+  -- 在职身份证：deleted=0 时等于 id_card，软删为 NULL（允许多墓碑 + 再建）
+  `active_id_card` varchar(18) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      GENERATED ALWAYS AS (IF(`deleted` = 0, `id_card`, NULL)) STORED
+      COMMENT '在职身份证（软删为 NULL，供 active-only 唯一）',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE KEY `uk_employee_no` (`employee_no`,`deleted`,`tenant_id`) USING BTREE,
-  -- 花名册导入按身份证 upsert：租户+逻辑删除维度唯一（NULL id_card 不参与冲突）
-  UNIQUE KEY `uk_hrm_employee_id_card` (`tenant_id`,`id_card`,`deleted`) USING BTREE,
+  UNIQUE KEY `uk_hrm_employee_active_id_card` (`tenant_id`,`active_id_card`) USING BTREE,
   KEY `idx_dept_id` (`dept_id`) USING BTREE,
   KEY `idx_employee_status` (`employee_status`) USING BTREE,
   KEY `idx_user_id` (`user_id`) USING BTREE

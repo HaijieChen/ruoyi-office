@@ -339,9 +339,9 @@ public class EmployeeServiceImpl implements EmployeeService {
      * 花名册导入：逐行 upsert，外层不加事务，避免单行失败拖垮整批。
      * 行号按「表头在第 2 行」约定：数据行 Excel 行号 = index + 3。
      * <p>
-     * F1：空白员工类型 — create 默认正式，update 回填旧 employeeStatus。<br>
+     * P1-A：员工类型解析值不可变；仅真正 create 成功路径默认正式；UK 冲突回退 update 前恢复原始 null。<br>
      * F2：日志与失败明细中的身份证脱敏。<br>
-     * F3：依赖 uk_hrm_employee_id_card (tenant_id,id_card,deleted)；并发 create 冲突时重查 update。
+     * P1-B：依赖 active-only 唯一键 uk_hrm_employee_active_id_card（生成列 active_id_card）。
      */
     @Override
     public EmployeeRosterImportRespVO importEmployeeRosterList(List<EmployeeRosterImportExcelVO> rows) {
@@ -364,34 +364,38 @@ public class EmployeeServiceImpl implements EmployeeService {
                 EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(row);
                 String idCard = req.getIdCard();
                 idCardForMask = idCard;
+                // P1-A：解析后的员工类型快照不可变（空白保持 null）
+                final Integer parsedEmployeeStatus = req.getEmployeeStatus();
                 if (!seenIdCards.add(idCard)) {
                     String masked = EmployeeRosterImportSupport.maskIdCard(idCard);
                     String failReason = "文件内身份证号重复：" + masked;
-                    // F2：禁止完整证号进应用日志
                     log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, failReason);
                     resp.getFailureRows().put(excelRowNumber, failReason);
                     continue;
                 }
                 EmployeeDO existing = employeeArchiveMapper.selectByIdCard(idCard);
                 if (existing == null) {
-                    // F1：创建时空白员工类型 → 正式
+                    // 仅 create 路径：空白 → 正式；失败回退时必须恢复 parsedEmployeeStatus
                     req.setEmployeeStatus(EmployeeRosterImportSupport.defaultEmployeeStatusForCreate(
-                            req.getEmployeeStatus()));
+                            parsedEmployeeStatus));
                     try {
                         self.createEmployeeArchive(req);
                         resp.getCreateNames().add(req.getName());
                     } catch (org.springframework.dao.DataIntegrityViolationException dup) {
-                        // F3：uk_hrm_employee_id_card（或工号 UK）冲突 → 按身份证重查后 update
+                        // active-only UK 或工号 UK 冲突 → 重查后 update
                         existing = employeeArchiveMapper.selectByIdCard(idCard);
                         if (existing == null) {
                             throw dup;
                         }
+                        // P1-A：恢复原始解析值，使 applyImportUpdate 在空白时保留获胜行状态
+                        req.setEmployeeStatus(parsedEmployeeStatus);
                         applyImportUpdate(self, req, existing);
                         resp.getUpdateNames().add(req.getName());
                         log.info("[importEmployeeRosterList][row={} idCard={} concurrent create conflict, switched to update id={}]",
                                 excelRowNumber, EmployeeRosterImportSupport.maskIdCard(idCard), existing.getId());
                     }
                 } else {
+                    // 直接 update：req 仍为原始 parsedEmployeeStatus（空白=null → 保留旧值）
                     applyImportUpdate(self, req, existing);
                     resp.getUpdateNames().add(req.getName());
                 }
@@ -402,14 +406,13 @@ public class EmployeeServiceImpl implements EmployeeService {
                 }
                 String safeReason = EmployeeRosterImportSupport.sanitizeReasonForLog(reason, idCardForMask);
                 log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, safeReason);
-                // 失败明细同步脱敏，避免完整证号进 API 响应
                 resp.getFailureRows().put(excelRowNumber, safeReason);
             }
         }
         return resp;
     }
 
-    /** 导入 update：空白员工类型回填旧值，避免误改为正式（F1） */
+    /** 导入 update：空白员工类型回填旧值，避免误改为正式（P1-A） */
     private void applyImportUpdate(EmployeeServiceImpl self, EmployeeSaveReqVO req, EmployeeDO existing) {
         req.setId(existing.getId());
         req.setEmployeeNo(existing.getEmployeeNo());

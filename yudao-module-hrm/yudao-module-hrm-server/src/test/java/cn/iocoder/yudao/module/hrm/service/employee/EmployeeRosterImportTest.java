@@ -351,7 +351,7 @@ class EmployeeRosterImportTest {
                     .thenReturn(null)
                     .thenReturn(winner);
             when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
-            doThrow(new DuplicateKeyException("uk_hrm_employee_id_card"))
+            doThrow(new DuplicateKeyException("uk_hrm_employee_active_id_card"))
                     .when(employeeArchiveMapper).insert(any(EmployeeDO.class));
             when(employeeArchiveMapper.selectById(77L)).thenReturn(winner);
 
@@ -361,6 +361,54 @@ class EmployeeRosterImportTest {
             assertEquals(1, resp.getUpdateNames().size());
             assertTrue(resp.getFailureRows().isEmpty());
             verify(employeeArchiveMapper).updateById(any(EmployeeDO.class));
+        }
+    }
+
+    /**
+     * P1-A 组合回归：空白员工类型 + 并发 UK 冲突回退 update；
+     * 获胜行为试用期时不得被写成正式。
+     */
+    @Test
+    void blankEmployeeTypeOnConcurrentConflictKeepsWinnerNonFormalStatus() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            String idCard = "110101199001015555";
+            EmployeeRosterImportExcelVO row = EmployeeRosterImportExcelVO.builder()
+                    .name("空白冲突员")
+                    .idCard(idCard)
+                    .mobile("13900005555")
+                    .sex("女")
+                    .employeeType(null) // 空白
+                    .build();
+
+            EmployeeDO winner = new EmployeeDO();
+            winner.setId(88L);
+            winner.setEmployeeNo("10000088");
+            winner.setEmployeeStatus(EmployeeStatusEnum.PROBATIONARY.getStatus());
+            winner.setName("先写入试用");
+
+            when(employeeArchiveMapper.selectByIdCard(idCard))
+                    .thenReturn(null)
+                    .thenReturn(winner);
+            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            // create 路径会先 default 为正式再 insert；冲突后必须恢复 null 再 update
+            doThrow(new DuplicateKeyException("uk_hrm_employee_active_id_card"))
+                    .when(employeeArchiveMapper).insert(any(EmployeeDO.class));
+            when(employeeArchiveMapper.selectById(88L)).thenReturn(winner);
+
+            EmployeeRosterImportRespVO resp =
+                    employeeService.importEmployeeRosterList(List.of(row));
+            assertEquals(1, resp.getUpdateNames().size());
+            assertTrue(resp.getFailureRows().isEmpty());
+
+            ArgumentCaptor<EmployeeDO> updateCap = ArgumentCaptor.forClass(EmployeeDO.class);
+            verify(employeeArchiveMapper).updateById(updateCap.capture());
+            assertEquals(EmployeeStatusEnum.PROBATIONARY.getStatus(),
+                    updateCap.getValue().getEmployeeStatus(),
+                    "P1-A: blank type + conflict fallback must keep winner probationary");
+            assertNotEquals(EmployeeStatusEnum.FORMAL.getStatus(),
+                    updateCap.getValue().getEmployeeStatus());
         }
     }
 
