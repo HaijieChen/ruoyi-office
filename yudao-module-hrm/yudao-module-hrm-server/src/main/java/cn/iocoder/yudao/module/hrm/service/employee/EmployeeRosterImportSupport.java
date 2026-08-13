@@ -34,8 +34,22 @@ final class EmployeeRosterImportSupport {
     private static final String DICT_EMPLOYMENT_FORM = "hrm_employment_form";
     private static final String DICT_CONTRACT_TYPE = "hrm_contract_type";
 
+    /** 带分隔符的起止区间，如 2021/09/03-2024/08/31、2021年9月3日-无固定期限 */
     private static final Pattern DATE_RANGE = Pattern.compile(
             "^\\s*(\\d{4}[-/.年]\\d{1,2}[-/.月]?\\d{0,2}日?)\\s*[-~至到]+\\s*(.+?)\\s*$");
+    /** 紧凑 8 位日起止区间，如 20210903-无固定期限、20210903-20240831 */
+    private static final Pattern DATE_RANGE_COMPACT = Pattern.compile(
+            "^\\s*(\\d{8})\\s*[-~至到]+\\s*(.+?)\\s*$");
+
+    /** 日期字段正确格式说明（用于失败原因，避免用户不知如何改） */
+    static final String DATE_FORMAT_HINT =
+            "正确示例：2024-01-15、2024/01/15、2024.01.15、20240115、2024年1月15日";
+    /** 年月字段正确格式说明 */
+    static final String YEAR_MONTH_FORMAT_HINT =
+            "正确示例：2024-01、2024/01、202401；Excel 日期格 2024/1/1 或 2024-01-01 亦可（按年月入库）";
+    /** 合同区间正确格式说明 */
+    static final String CONTRACT_RANGE_FORMAT_HINT =
+            "正确示例：2021/09/03-2024/08/31、2021-09-03~2024-08-31、20210903-无固定期限、2021/09/03-无固定期限";
 
     private EmployeeRosterImportSupport() {
     }
@@ -61,7 +75,7 @@ final class EmployeeRosterImportSupport {
         }
         Integer sex = parseSex(row.getSex());
         if (sex == null) {
-            throw new IllegalArgumentException("性别不能为空或无法识别（请填男/女）");
+            throw new IllegalArgumentException("性别不能为空或无法识别（正确示例：男 / 女）");
         }
 
         EmployeeSaveReqVO req = new EmployeeSaveReqVO();
@@ -88,8 +102,15 @@ final class EmployeeRosterImportSupport {
         if (hf != null) {
             req.setHousingFundEnabled(hf);
         }
-        String ssMonth = normalizeYearMonth(row.getSocialSecurityStartMonth());
-        if (ssMonth != null) {
+        // 参保年月：兼容 Excel 日期格读成 2024-01-01 / 2024/1/1 / 序列化字符串
+        String ssMonthRaw = trim(row.getSocialSecurityStartMonth());
+        if (StrUtil.isNotBlank(ssMonthRaw)) {
+            String ssMonth = normalizeYearMonth(ssMonthRaw);
+            if (ssMonth == null) {
+                throw new IllegalArgumentException(
+                        "参保年月格式无法解析：" + ssMonthRaw + "；" + YEAR_MONTH_FORMAT_HINT
+                                + "；Excel 日期格亦可（如 2024/1/1 → 按 2024-01 入库）");
+            }
             req.setSocialSecurityStartMonth(ssMonth);
         }
         req.setNation(resolveDictOrRaw(DICT_NATION, row.getNation()));
@@ -202,18 +223,31 @@ final class EmployeeRosterImportSupport {
         if (StrUtil.isBlank(range)) {
             return;
         }
-        LocalDate[] se = parseDateRange(range.trim());
-        if (se == null || se[0] == null) {
-            throw new IllegalArgumentException("合同起止日期无法解析：" + range);
+        try {
+            LocalDate[] se = parseDateRange(range.trim());
+            if (se == null || se[0] == null) {
+                throw new IllegalArgumentException(
+                        "合同起止日期无法解析：" + range + "；" + CONTRACT_RANGE_FORMAT_HINT);
+            }
+            EmployeeContractVO c = new EmployeeContractVO();
+            c.setSequenceNo(seq);
+            c.setStartDate(se[0]);
+            c.setEndDate(se[1]);
+            if (StrUtil.isNotBlank(typeHint)) {
+                c.setContractType(resolveDictOrRaw(DICT_CONTRACT_TYPE, typeHint));
+            }
+            list.add(c);
+        } catch (IllegalArgumentException ex) {
+            // 补齐合同区间示例（子解析可能只带了单日示例）
+            String msg = ex.getMessage();
+            if (msg != null && !msg.contains("无固定期限") && !msg.contains("合同起止")) {
+                throw new IllegalArgumentException(msg + "；" + CONTRACT_RANGE_FORMAT_HINT);
+            }
+            if (msg != null && msg.contains("合同起止") && !msg.contains("正确示例")) {
+                throw new IllegalArgumentException(msg + "；" + CONTRACT_RANGE_FORMAT_HINT);
+            }
+            throw ex;
         }
-        EmployeeContractVO c = new EmployeeContractVO();
-        c.setSequenceNo(seq);
-        c.setStartDate(se[0]);
-        c.setEndDate(se[1]);
-        if (StrUtil.isNotBlank(typeHint)) {
-            c.setContractType(resolveDictOrRaw(DICT_CONTRACT_TYPE, typeHint));
-        }
-        list.add(c);
     }
 
     static LocalDate[] parseDateRange(String range) {
@@ -221,14 +255,22 @@ final class EmployeeRosterImportSupport {
             return null;
         }
         String s = range.trim().replace('～', '-').replace('—', '-');
+        // 1) 紧凑 8 位日：20210903-无固定期限 / 20210903-20240831
+        Matcher compact = DATE_RANGE_COMPACT.matcher(s);
+        if (compact.matches()) {
+            LocalDate start = parseDate(compact.group(1), "合同起");
+            LocalDate end = parseOpenEndDate(compact.group(2));
+            return new LocalDate[]{start, end};
+        }
+        // 2) 带分隔符区间
         Matcher m = DATE_RANGE.matcher(s);
         if (m.matches()) {
             LocalDate start = parseDate(m.group(1), "合同起");
             LocalDate end = parseOpenEndDate(m.group(2));
             return new LocalDate[]{start, end};
         }
-        // 仅起始
-        LocalDate only = parseDate(s, "合同日期");
+        // 3) 仅起始日
+        LocalDate only = parseDate(s, "合同起");
         return only == null ? null : new LocalDate[]{only, null};
     }
 
@@ -346,6 +388,61 @@ final class EmployeeRosterImportSupport {
         return r;
     }
 
+    /**
+     * 导入行失败原因：字段校验类保留原文；SQL/表结构类改写为可读说明，禁止把 MyBatis 堆栈直接回前端。
+     */
+    static String humanizeImportFailure(Throwable ex, String idCard) {
+        if (ex == null) {
+            return "未知错误";
+        }
+        String raw = firstNonBlankMessage(ex);
+        if (isSchemaOrSqlGrammarFailure(ex, raw)) {
+            return "系统数据表结构异常（非 Excel 字段填写错误），请联系管理员检查库表是否已执行花名册字段迁移";
+        }
+        if (StrUtil.isBlank(raw)) {
+            raw = ex.getClass().getSimpleName();
+        }
+        // 截断过长 JDBC/MyBatis 文案，避免整段 SQL 刷屏
+        if (raw.length() > 240) {
+            raw = raw.substring(0, 240) + "…";
+        }
+        return sanitizeReasonForLog(raw, idCard);
+    }
+
+    private static String firstNonBlankMessage(Throwable ex) {
+        Throwable cur = ex;
+        while (cur != null) {
+            if (StrUtil.isNotBlank(cur.getMessage())) {
+                return cur.getMessage().trim();
+            }
+            cur = cur.getCause();
+        }
+        return null;
+    }
+
+    private static boolean isSchemaOrSqlGrammarFailure(Throwable ex, String raw) {
+        String hay = (raw == null ? "" : raw) + " " + walkExceptionNames(ex);
+        String lower = hay.toLowerCase();
+        return lower.contains("unknown column")
+                || lower.contains("bad sql grammar")
+                || lower.contains("sqlsyntaxerrorexception")
+                || lower.contains("error querying database")
+                || lower.contains("doesn't exist")
+                || lower.contains("does not exist");
+    }
+
+    private static String walkExceptionNames(Throwable ex) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = ex;
+        int depth = 0;
+        while (cur != null && depth < 8) {
+            sb.append(cur.getClass().getName()).append(' ');
+            cur = cur.getCause();
+            depth++;
+        }
+        return sb.toString();
+    }
+
     static void applyMarriageChildbearing(EmployeeSaveReqVO req, String summary) {
         if (StrUtil.isBlank(summary)) {
             return;
@@ -442,7 +539,7 @@ final class EmployeeRosterImportSupport {
                 // fallthrough
             }
         }
-        throw new IllegalArgumentException(field + "日期格式无法解析：" + raw);
+        throw new IllegalArgumentException(field + "格式无法解析：" + raw + "；" + DATE_FORMAT_HINT);
     }
 
     static LocalDate parseBirthday(String raw) {
@@ -456,26 +553,96 @@ final class EmployeeRosterImportSupport {
             if (ym != null) {
                 return LocalDate.parse(ym + "-01");
             }
-            throw ex;
+            throw new IllegalArgumentException(
+                    "出生年月格式无法解析：" + raw + "；" + YEAR_MONTH_FORMAT_HINT + "；也可填完整日期如 1990-01-15");
         }
     }
 
+    /**
+     * 归一化参保/出生年月为 yyyy-MM。
+     * <p>
+     * 兼容：
+     * <ul>
+     *   <li>yyyy-MM / yyyy/M / yyyy.MM / yyyy年M月</li>
+     *   <li>yyyyMM（6 位）</li>
+     *   <li>完整日期 yyyy-MM-dd、yyyy/M/d、yyyy年M月d日（取年月）</li>
+     *   <li>带时间后缀 2024-01-01 00:00:00 / 2024-01-01T00:00</li>
+     *   <li>Excel 序列日（纯数字天数，约 1～60000）→ 转本地日期再取年月</li>
+     * </ul>
+     */
     static String normalizeYearMonth(String raw) {
         if (StrUtil.isBlank(raw)) {
             return null;
         }
-        String t = raw.trim().replace('.', '-').replace('/', '-').replace("年", "-").replace("月", "");
+        String original = raw.trim();
+        // 截掉时间部分
+        String t = original;
+        if (t.contains("T")) {
+            t = t.substring(0, t.indexOf('T'));
+        }
+        if (t.contains(" ")) {
+            t = t.substring(0, t.indexOf(' '));
+        }
+        t = t.replace('.', '-').replace('/', '-')
+                .replace("年", "-").replace("月", "-").replace("日", "");
+        // 折叠多余连字符
+        while (t.contains("--")) {
+            t = t.replace("--", "-");
+        }
         if (t.endsWith("-")) {
             t = t.substring(0, t.length() - 1);
         }
+        t = t.trim();
+
+        // yyyy-M / yyyy-MM
         if (t.matches("\\d{4}-\\d{1,2}")) {
             String[] p = t.split("-");
-            return String.format(Locale.ROOT, "%s-%02d", p[0], Integer.parseInt(p[1]));
+            return formatYearMonth(Integer.parseInt(p[0]), Integer.parseInt(p[1]));
         }
+        // yyyy-M-d / yyyy-MM-dd（Excel 日期格常读成完整日）
+        if (t.matches("\\d{4}-\\d{1,2}-\\d{1,2}")) {
+            String[] p = t.split("-");
+            return formatYearMonth(Integer.parseInt(p[0]), Integer.parseInt(p[1]));
+        }
+        // yyyyMM
         if (t.matches("\\d{6}")) {
-            return t.substring(0, 4) + "-" + t.substring(4, 6);
+            return formatYearMonth(Integer.parseInt(t.substring(0, 4)), Integer.parseInt(t.substring(4, 6)));
+        }
+        // yyyyMMdd
+        if (t.matches("\\d{8}")) {
+            return formatYearMonth(Integer.parseInt(t.substring(0, 4)), Integer.parseInt(t.substring(4, 6)));
+        }
+        // Excel 序列日：如 45292 → 2024-01-01
+        if (t.matches("\\d+(\\.\\d+)?")) {
+            try {
+                double serial = Double.parseDouble(t);
+                // Excel 日序列合理范围（1900-01-01 起约 1～60000+）
+                if (serial >= 1 && serial < 100000) {
+                    // EasyExcel/POI 常用 1899-12-30 纪元
+                    LocalDate d = LocalDate.of(1899, 12, 30).plusDays((long) serial);
+                    return formatYearMonth(d.getYear(), d.getMonthValue());
+                }
+            } catch (Exception ignored) {
+                // fallthrough
+            }
+        }
+        // 最后尝试 parseDate 再取年月
+        try {
+            LocalDate d = parseDate(original, "年月");
+            if (d != null) {
+                return formatYearMonth(d.getYear(), d.getMonthValue());
+            }
+        } catch (IllegalArgumentException ignored) {
+            // fallthrough
         }
         return null;
+    }
+
+    private static String formatYearMonth(int year, int month) {
+        if (year < 1900 || year > 2100 || month < 1 || month > 12) {
+            return null;
+        }
+        return String.format(Locale.ROOT, "%04d-%02d", year, month);
     }
 
     private static String normalizeDateText(String t) {

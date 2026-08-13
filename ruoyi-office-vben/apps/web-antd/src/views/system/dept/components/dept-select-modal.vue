@@ -1,13 +1,25 @@
 <script lang="ts" setup>
 import type { SystemDeptApi } from '#/api/system/dept';
 
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
 import { message, Tree } from 'ant-design-vue';
 
 import { useDeptSelectData } from './dept-select-data';
+
+const props = withDefaults(
+  defineProps<{
+    /**
+     * 是否允许选择公司节点。
+     * - false（默认）：编辑档案等场景，公司不可选（须选部门）
+     * - true：列表筛选等场景，公司可选（后端按公司展开下属员工）
+     */
+    allowCompany?: boolean;
+  }>(),
+  { allowCompany: false },
+);
 
 /** 定义组件事件 */
 const emit = defineEmits<{
@@ -28,6 +40,10 @@ const formData = reactive({
 // 树选中的 keys（用于 v-model）
 const selectedKeys = ref<number[]>([]);
 
+const modalTitle = computed(() =>
+  props.allowCompany ? '选择部门或公司' : '选择部门',
+);
+
 // 同步 selectedDept 和 selectedKeys
 watch(
   () => formData.selectedDept,
@@ -39,7 +55,7 @@ watch(
 
 /** 模态框实例 */
 const [Modal, modalApi] = useVbenModal({
-  title: '选择部门',
+  title: modalTitle.value,
   class: 'w-2/3 max-w-3xl',
   async onConfirm() {
     return handleConfirm();
@@ -49,14 +65,19 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
+// 允许动态标题
+watch(modalTitle, (t) => {
+  modalApi.setState({ title: t });
+});
+
 /** 确认选择 */
 async function handleConfirm() {
   if (!formData.selectedDept) {
-    message.error('请选择部门');
+    message.error(props.allowCompany ? '请选择部门或公司' : '请选择部门');
     return false;
   }
 
-  // 查找所属公司信息（名称和ID）
+  // 查找所属公司信息（名称和ID）；若自身即公司则 companyId=自身
   const company = findCompany(formData.selectedDept.id!);
   const deptWithCompany = {
     ...formData.selectedDept,
@@ -83,8 +104,8 @@ function handleSelect(keys: any[]) {
   const selectedNode = findDeptById(treeData.value, selectedId);
 
   if (selectedNode) {
-    // 检查是否为公司类型，公司类型不可选
-    if (selectedNode.orgType === '1') {
+    // 默认：公司类型不可选；allowCompany=true 时可选
+    if (selectedNode.orgType === '1' && !props.allowCompany) {
       message.warning('不能选择公司，请选择部门');
       formData.selectedDept = null;
       selectedKeys.value = [];
@@ -133,9 +154,17 @@ defineExpose({
         @select="handleSelect"
       >
         <template #title="{ orgType, name }">
-          <span :class="{ 'text-gray-400': orgType === '1' }">
+          <span
+            :class="{
+              'text-gray-400': orgType === '1' && !allowCompany,
+            }"
+          >
             {{ name }}
-            <span v-if="orgType === '1'" class="ml-2 text-xs text-gray-400">
+            <span
+              v-if="orgType === '1'"
+              class="ml-2 text-xs"
+              :class="allowCompany ? 'text-blue-500' : 'text-gray-400'"
+            >
               (公司)
             </span>
           </span>

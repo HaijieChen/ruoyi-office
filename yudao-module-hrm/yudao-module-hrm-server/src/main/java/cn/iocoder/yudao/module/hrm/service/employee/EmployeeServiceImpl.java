@@ -280,20 +280,25 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         EmployeeRespVO respVO = BeanUtils.toBean(archive, EmployeeRespVO.class);
 
-        // 获取部门名称（如果数据库中没有保存，则通过部门查找）
+        // 部门/公司展示名补全：编辑页依赖 deptId + deptName；导入写库后打开修改须可渲染
         if (archive.getDeptId() != null) {
-            if (archive.getDeptName() == null) {
-                CommonResult<DeptRespDTO> dept = deptApi.getDept(archive.getDeptId());
-                if (dept != null && dept.isSuccess() && dept.getData() != null) {
+            CommonResult<DeptRespDTO> dept = deptApi.getDept(archive.getDeptId());
+            if (dept != null && dept.isSuccess() && dept.getData() != null) {
+                if (StrUtil.isBlank(respVO.getDeptName())) {
                     respVO.setDeptName(dept.getData().getName());
                 }
             }
-
             if (archive.getCompanyId() == null) {
                 Long companyId = findCompanyIdByDeptId(archive.getDeptId());
                 if (companyId != null) {
                     respVO.setCompanyId(companyId);
                 }
+            }
+        }
+        if (respVO.getCompanyId() != null && StrUtil.isBlank(respVO.getCompanyName())) {
+            CommonResult<DeptRespDTO> company = deptApi.getDept(respVO.getCompanyId());
+            if (company != null && company.isSuccess() && company.getData() != null) {
+                respVO.setCompanyName(company.getData().getName());
             }
         }
 
@@ -325,6 +330,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public PageResult<EmployeeRespVO> getEmployeeArchivePage(EmployeePageReqVO pageReqVO) {
+        expandOrgFilterIfCompany(pageReqVO);
         PageResult<EmployeeDO> pageResult = employeeArchiveMapper.selectPage(pageReqVO);
         return buildEmployeeRespPage(pageResult);
     }
@@ -355,6 +361,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .build();
         Set<String> seenIdCards = new HashSet<>();
         EmployeeServiceImpl self = getSelf();
+        // 整批一次拉启用部门，按名称绑定 deptId（禁止静默空绑）
+        Map<String, List<DeptRespDTO>> deptsByName = loadEnabledDeptsByName();
         for (int i = 0; i < rows.size(); i++) {
             // 附件结构：第1行标题、第2行表头、第3行起数据
             int excelRowNumber = i + 3;
@@ -364,6 +372,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(row);
                 String idCard = req.getIdCard();
                 idCardForMask = idCard;
+                // 部门：模板有「部门」列 → 必须解析为当前租户启用部门的 deptId
+                bindDeptForImport(req, deptsByName);
                 // P1-A：解析后的员工类型快照不可变（空白保持 null）
                 final Integer parsedEmployeeStatus = req.getEmployeeStatus();
                 if (!seenIdCards.add(idCard)) {
@@ -400,16 +410,66 @@ public class EmployeeServiceImpl implements EmployeeService {
                     resp.getUpdateNames().add(req.getName());
                 }
             } catch (Exception ex) {
-                String reason = ex.getMessage();
-                if (StrUtil.isBlank(reason)) {
-                    reason = ex.getClass().getSimpleName();
-                }
-                String safeReason = EmployeeRosterImportSupport.sanitizeReasonForLog(reason, idCardForMask);
-                log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, safeReason);
+                String safeReason = EmployeeRosterImportSupport.humanizeImportFailure(ex, idCardForMask);
+                log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, safeReason, ex);
                 resp.getFailureRows().put(excelRowNumber, safeReason);
             }
         }
         return resp;
+    }
+
+    /**
+     * 加载当前租户启用部门，按名称分组（同名多条时导入 fail-closed）。
+     */
+    Map<String, List<DeptRespDTO>> loadEnabledDeptsByName() {
+        CommonResult<List<DeptRespDTO>> result = deptApi.getSimpleDeptList();
+        List<DeptRespDTO> list = result != null && result.isSuccess() ? result.getData() : null;
+        if (CollUtil.isEmpty(list)) {
+            return Collections.emptyMap();
+        }
+        Map<String, List<DeptRespDTO>> byName = new HashMap<>();
+        for (DeptRespDTO d : list) {
+            if (d == null || d.getId() == null || StrUtil.isBlank(d.getName())) {
+                continue;
+            }
+            byName.computeIfAbsent(d.getName().trim(), k -> new ArrayList<>(2)).add(d);
+        }
+        return byName;
+    }
+
+    /**
+     * 花名册导入：部门名 → 有效 deptId（及公司）。缺失/不存在/重名/禁用均行级失败。
+     */
+    void bindDeptForImport(EmployeeSaveReqVO req, Map<String, List<DeptRespDTO>> deptsByName) {
+        String rawName = req.getDeptName();
+        if (StrUtil.isBlank(rawName)) {
+            throw new IllegalArgumentException("部门不能为空，请填写系统中已有的部门名称");
+        }
+        String name = rawName.trim();
+        List<DeptRespDTO> matches = deptsByName != null ? deptsByName.get(name) : null;
+        if (CollUtil.isEmpty(matches)) {
+            throw new IllegalArgumentException(
+                    "部门不存在或未启用：" + name + "（须与组织架构中的部门名称完全一致）");
+        }
+        if (matches.size() > 1) {
+            throw new IllegalArgumentException(
+                    "部门名称在系统中存在多个匹配，无法唯一绑定：" + name + "，请联系管理员处理重名部门");
+        }
+        DeptRespDTO dept = matches.get(0);
+        req.setDeptId(dept.getId());
+        req.setDeptName(dept.getName());
+        Long companyId = findCompanyIdByDeptId(dept.getId());
+        if (companyId != null) {
+            req.setCompanyId(companyId);
+            // 未填单位名称时用公司节点名称补全，便于编辑页展示
+            if (StrUtil.isBlank(req.getCompanyName())) {
+                CommonResult<DeptRespDTO> company = deptApi.getDept(companyId);
+                if (company != null && company.isSuccess() && company.getData() != null
+                        && StrUtil.isNotBlank(company.getData().getName())) {
+                    req.setCompanyName(company.getData().getName());
+                }
+            }
+        }
     }
 
     /** 导入 update：空白员工类型回填旧值，避免误改为正式（P1-A） */
@@ -426,8 +486,47 @@ public class EmployeeServiceImpl implements EmployeeService {
         return SpringUtil.getBean(getClass());
     }
 
+    /**
+     * 列表/导出：若筛选节点是公司（orgType=1），展开为「companyId 匹配 或 deptId 落在公司子树」。
+     * 普通部门保持精确 deptId 匹配（原语义）。
+     */
+    void expandOrgFilterIfCompany(EmployeePageReqVO req) {
+        if (req == null || req.getDeptId() == null) {
+            return;
+        }
+        // 已由调用方预展开则跳过
+        if (CollUtil.isNotEmpty(req.getDeptIds()) || req.getCompanyId() != null) {
+            return;
+        }
+        CommonResult<DeptRespDTO> result = deptApi.getDept(req.getDeptId());
+        if (result == null || !result.isSuccess() || result.getData() == null) {
+            return;
+        }
+        DeptRespDTO node = result.getData();
+        // 非公司：保持 eq(deptId)
+        if (!"1".equals(node.getOrgType())) {
+            return;
+        }
+        Long companyId = req.getDeptId();
+        LinkedHashSet<Long> deptIds = new LinkedHashSet<>();
+        deptIds.add(companyId);
+        CommonResult<List<DeptRespDTO>> children = deptApi.getChildDeptList(companyId);
+        if (children != null && children.isSuccess() && CollUtil.isNotEmpty(children.getData())) {
+            for (DeptRespDTO d : children.getData()) {
+                if (d != null && d.getId() != null) {
+                    deptIds.add(d.getId());
+                }
+            }
+        }
+        req.setCompanyId(companyId);
+        req.setDeptIds(deptIds);
+        // 清空精确 deptId，改由 deptIds/companyId 条件生效
+        req.setDeptId(null);
+    }
+
     @Override
     public List<EmployeeRosterExportVO> getEmployeeRosterExportList(EmployeePageReqVO pageReqVO) {
+        expandOrgFilterIfCompany(pageReqVO);
         pageReqVO.setPageSize(cn.iocoder.yudao.framework.common.pojo.PageParam.PAGE_SIZE_NONE);
         List<EmployeeDO> employees = employeeArchiveMapper.selectPage(pageReqVO).getList();
         if (CollUtil.isEmpty(employees)) {
