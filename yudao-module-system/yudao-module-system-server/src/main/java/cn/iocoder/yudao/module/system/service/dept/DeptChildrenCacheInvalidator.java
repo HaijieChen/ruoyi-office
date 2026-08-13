@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.system.service.dept;
 
+import cn.hutool.core.util.ObjectUtil;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.system.dal.redis.RedisKeyConstants;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
@@ -13,36 +15,31 @@ import org.springframework.stereotype.Component;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
 
 /**
  * 组织子树缓存协调器：代际 + cache-aside（G2-TAIL）+ 命名空间隔离（C1）
- * + 旧写失效信号（R2-FINAL-01）+ 禁止读路径覆盖 epoch（R2-FINAL-01-TAIL）。
+ * + 旧写失效信号（R2-FINAL-01 / TAIL）+ <b>租户作用域一致（R2-FINAL-02）</b>。
  * <p>
- * <b>C1</b>：{@link GenerationStampedSet} 只写入 {@link RedisKeyConstants#DEPT_CHILDREN_ID_LIST_V2}。
- * <p>
- * <b>G2-TAIL</b>：写成功 {@link #bumpGenerationAndEvict()}；读路径 {@link #putIfGeneration} 拒绝过期 put。
- * <p>
- * <b>R2-FINAL-01</b>：legacy 中放置 {@link Long} epoch 标记；旧包 allEntries clear 抹掉标记；
- * 新包 {@link #getIfFresh} 检测后 bump+清 V2。
- * <p>
- * <b>R2-FINAL-01-TAIL</b>：普通读的 {@link #putIfGeneration} <strong>禁止</strong>
- * {@code restoreLegacyEpochMarker}。epoch 仅允许由
- * {@link #bumpGenerationAndEvict()} / {@link #onLegacyInvalidationSignal()} 在 clear 后写入<strong>当前 gen</strong>，
- * 不得用更早的 {@code loadGen} 覆盖「末次 epoch GET 与 restore 之间」的旧写 clear。
- * <p>
- * 部署：滚动窗口新旧写者可并存（新读可检测旧写失效且不会被读路径 restore 抹掉）。
+ * <b>R2-FINAL-02</b>：generation、legacy epoch、V2 均按当前租户分区。
+ * Redisson key：{@code system:dept:children:gen:{tenantId}}；本地 fallback：
+ * {@code ConcurrentHashMap&lt;tenantId, AtomicLong&gt;}。
+ * 与 {@code TenantRedisCacheManager} 对 cacheName 追加 {@code :tenantId} 的作用域对齐，
+ * 避免租户 A 的 epoch miss 全局 bump 导致租户 B 代际 ping-pong。
  */
 @Component
 @Slf4j
 public class DeptChildrenCacheInvalidator {
 
-    private static final String REDIS_GEN_KEY = "system:dept:children:gen";
+    /** Redisson 代际 key 前缀；完整 key = prefix + tenantId */
+    public static final String REDIS_GEN_KEY_PREFIX = "system:dept:children:gen:";
 
     /**
      * 遗留 cache 中的 epoch 标记键（String，非部门 Long id）。
      * 值类型 {@link Long}：旧 classpath 可反序列化。
+     * 实际存储位置随 {@link CacheManager} 租户后缀隔离。
      */
     public static final String LEGACY_EPOCH_MARKER_KEY = "__dept_children_v2_epoch__";
 
@@ -51,41 +48,44 @@ public class DeptChildrenCacheInvalidator {
     @Resource
     private ObjectProvider<RedissonClient> redissonClientProvider;
 
-    private final AtomicLong localGeneration = new AtomicLong(0L);
+    /** 无 Redisson 时按租户的进程内代际 */
+    private final ConcurrentHashMap<Long, AtomicLong> localGenerationByTenant = new ConcurrentHashMap<>();
 
-    /** G2-TAIL：load 后、put 前 */
     @VisibleForTesting
     volatile LongConsumer afterLoadBeforePutHook;
 
-    /**
-     * R2-FINAL-01-TAIL：末次 epoch intact 检查通过之后、方法返回之前。
-     * 用于注入「旧包 clear legacy」且证明不会 restore 覆盖。
-     */
     @VisibleForTesting
     volatile Runnable afterLastEpochCheckBeforeReturnHook;
 
+    /** 当前租户 id（与锁/TenantRedisCacheManager 一致：null → 0） */
+    public long currentTenantId() {
+        return ObjectUtil.defaultIfNull(TenantContextHolder.getTenantId(), 0L);
+    }
+
+    /** 当前租户的 generation Redis key（供测试断言） */
+    public String redisGenerationKey() {
+        return REDIS_GEN_KEY_PREFIX + currentTenantId();
+    }
+
     public long currentGeneration() {
+        Long tenantId = currentTenantId();
         RedissonClient redisson = redissonClientProvider.getIfAvailable();
         if (redisson != null) {
-            return redisson.getAtomicLong(REDIS_GEN_KEY).get();
+            return redisson.getAtomicLong(REDIS_GEN_KEY_PREFIX + tenantId).get();
         }
-        return localGeneration.get();
+        return localGenerationByTenant
+                .computeIfAbsent(tenantId, id -> new AtomicLong(0L))
+                .get();
     }
 
     /**
-     * 写事务成功提交后：递增代际、清空 V2+遗留，并写回 legacy epoch=当前 gen。
-     * （唯一允许的「写路径」restore 之一；gen 为 bump 后的新值，非过期 loadGen）
+     * 写事务成功提交后：递增<strong>当前租户</strong>代际、清空该租户 V2+遗留，写 epoch。
      */
     public void bumpGenerationAndEvict() {
-        RedissonClient redisson = redissonClientProvider.getIfAvailable();
-        if (redisson != null) {
-            redisson.getAtomicLong(REDIS_GEN_KEY).incrementAndGet();
-        } else {
-            localGeneration.incrementAndGet();
-        }
+        bumpGenerationOnly();
         evictValuesOnly();
         writeLegacyEpochMarker(currentGeneration());
-        log.debug("[bumpGenerationAndEvict] gen={} v2 cleared, legacy epoch written", currentGeneration());
+        log.debug("[bumpGenerationAndEvict] tenant={} gen={}", currentTenantId(), currentGeneration());
     }
 
     public void evictNow() {
@@ -102,7 +102,7 @@ public class DeptChildrenCacheInvalidator {
             return null;
         }
         if (!isLegacyEpochSignalIntact()) {
-            log.debug("[getIfFresh] legacy epoch broken → old-package write signal, invalidate V2");
+            log.debug("[getIfFresh] tenant={} legacy epoch broken → invalidate V2", currentTenantId());
             onLegacyInvalidationSignal();
             return null;
         }
@@ -128,10 +128,8 @@ public class DeptChildrenCacheInvalidator {
     }
 
     /**
-     * 仅当 loadGeneration 仍等于当前 gen 且 epoch 完好时写入 V2。
-     * <p>
-     * <b>R2-FINAL-01-TAIL</b>：成功 put 后<strong>不</strong>调用 writeLegacyEpochMarker。
-     * epoch 完好时无需写回；若旧写在末次 GET 之后 clear 了 epoch，禁止用 loadGen 覆盖该信号。
+     * 仅当 loadGeneration 仍等于<strong>当前租户</strong> gen 且 epoch 完好时写入 V2。
+     * 成功 put 后不写 epoch（R2-FINAL-01-TAIL）。
      */
     public boolean putIfGeneration(Long deptId, long loadGeneration, Set<Long> ids) {
         LongConsumer loadHook = afterLoadBeforePutHook;
@@ -152,7 +150,6 @@ public class DeptChildrenCacheInvalidator {
         }
         Set<Long> safe = ids == null ? Collections.emptySet() : Set.copyOf(ids);
         cache.put(deptId, new GenerationStampedSet(loadGeneration, safe));
-        // 末次校验：gen 或 epoch 已变则撤回 put
         if (currentGeneration() != loadGeneration || !isLegacyEpochSignalIntact()) {
             cache.evict(deptId);
             if (!isLegacyEpochSignalIntact()) {
@@ -160,13 +157,10 @@ public class DeptChildrenCacheInvalidator {
             }
             return false;
         }
-        // R2-FINAL-01-TAIL 测试钩子：插在「末次 epoch intact」之后；此处不得再 writeLegacyEpochMarker
         Runnable tailHook = afterLastEpochCheckBeforeReturnHook;
         if (tailHook != null) {
             tailHook.run();
         }
-        // 若钩子期间旧写 clear 了 epoch：仍不得 restore；返回 true 时 V2 可能短暂存在，
-        // 但后续 getIfFresh 会因 epoch 破损失效（见 tail 回归测）
         return true;
     }
 
@@ -195,25 +189,24 @@ public class DeptChildrenCacheInvalidator {
         return RedisKeyConstants.DEPT_CHILDREN_ID_LIST;
     }
 
-    /**
-     * 旧包 clear / 首次无标记：bump gen + 清 V2 + 写入 epoch=新 gen。
-     * 此处写 epoch 用的是 bump 后的当前 gen，不是过期 loadGen。
-     */
-    private void onLegacyInvalidationSignal() {
+    private void bumpGenerationOnly() {
+        Long tenantId = currentTenantId();
         RedissonClient redisson = redissonClientProvider.getIfAvailable();
         if (redisson != null) {
-            redisson.getAtomicLong(REDIS_GEN_KEY).incrementAndGet();
+            redisson.getAtomicLong(REDIS_GEN_KEY_PREFIX + tenantId).incrementAndGet();
         } else {
-            localGeneration.incrementAndGet();
+            localGenerationByTenant
+                    .computeIfAbsent(tenantId, id -> new AtomicLong(0L))
+                    .incrementAndGet();
         }
+    }
+
+    private void onLegacyInvalidationSignal() {
+        bumpGenerationOnly();
         clearCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
         writeLegacyEpochMarker(currentGeneration());
     }
 
-    /**
-     * 仅允许从 bumpGenerationAndEvict / onLegacyInvalidationSignal 调用。
-     * 禁止 putIfGeneration 成功路径调用（R2-FINAL-01-TAIL）。
-     */
     private void writeLegacyEpochMarker(long gen) {
         Cache legacy = getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
         if (legacy == null) {

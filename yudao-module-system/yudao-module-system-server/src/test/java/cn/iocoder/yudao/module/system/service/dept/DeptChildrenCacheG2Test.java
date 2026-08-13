@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
@@ -53,8 +52,8 @@ public class DeptChildrenCacheG2Test extends BaseDbUnitTest {
         @Bean
         @Primary
         public CacheManager deptChildrenCacheManager() {
-            // V2 为主；遗留名一并注册供 clear 双清
-            return new ConcurrentMapCacheManager(
+            // 租户分区（与生产 TenantRedisCacheManager 对齐）；测试固定 tenant=1
+            return new TenantPartitionedConcurrentMapCacheManager(
                     RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2,
                     RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
         }

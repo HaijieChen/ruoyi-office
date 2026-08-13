@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
@@ -43,8 +42,7 @@ public class DeptChildrenCacheC1NamespaceTest extends BaseDbUnitTest {
         @Bean
         @Primary
         public CacheManager dualNamespaceCacheManager() {
-            // 同时注册新旧命名空间，便于断言「只写 V2」
-            return new ConcurrentMapCacheManager(
+            return new TenantPartitionedConcurrentMapCacheManager(
                     RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
                     RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
         }

@@ -16,7 +16,8 @@
 --   * 旧包 @CacheEvict(allEntries) 抹掉 epoch；新包 getIfFresh 检测 → bump + 清 V2。
 --   * stamped 绝不写入遗留名（C1）。
 -- - 回滚应用：停新包后仅旧包读遗留名；V2 键可残留至 TTL，旧包不访问。
--- - 生产需 Redisson（租户写锁 + 代际 AtomicLong）。
+-- - 生产需 Redisson（租户写锁 + 按租户代际 AtomicLong：system:dept:children:gen:{tenantId}）。
+-- - generation / V2 / legacy epoch 均按租户分区，与 TenantRedisCacheManager 后缀一致（R2-FINAL-02）。
 -- - 发布前仍执行本权限脚本 + EXP-73 列预检。
 
 SET NAMES utf8mb4;
