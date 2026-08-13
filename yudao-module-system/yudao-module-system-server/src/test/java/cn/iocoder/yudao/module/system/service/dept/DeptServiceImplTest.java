@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author niudehua
  */
-@Import({DeptServiceImpl.class, DeptMutationLock.class})
+@Import({DeptServiceImpl.class, DeptMutationLock.class, DeptChildrenCacheInvalidator.class})
 public class DeptServiceImplTest extends BaseDbUnitTest {
 
     @Resource

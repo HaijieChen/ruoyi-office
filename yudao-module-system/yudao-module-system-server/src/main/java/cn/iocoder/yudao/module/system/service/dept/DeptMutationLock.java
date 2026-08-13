@@ -16,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -24,31 +25,28 @@ import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.DEPT_IMPOR
 /**
  * 租户级组织写锁 + 事务边界：
  * <p>
- * <b>先锁 → 再开事务 → 业务 → commit/rollback → 最后 unlock</b>，
- * 避免「锁已释放、事务尚未提交」窗口导致并发同路径重复节点。
+ * <b>F1</b>：先锁 → 再开事务 → 业务 → commit/rollback → 最后 unlock。
  * <p>
- * 导入与手工 create/update/delete 共用；嵌套调用（import → createDept）依赖锁可重入
- * 与事务 PROPAGATION_REQUIRED 挂起到外层同一事务。
- * <p>
- * 生产用 Redisson；单测无 Redisson 时回退进程内 {@link ReentrantLock}。
+ * <b>G2</b>：仅当本层开启了<strong>新事务</strong>且成功提交后（{@code TransactionTemplate.execute}
+ * 正常返回之后、unlock 之前）清空 {@code DEPT_CHILDREN_ID_LIST}。
+ * 嵌套 {@code PROPAGATION_REQUIRED} join 外层时 {@code isNewTransaction=false}，
+ * 内层返回<strong>不会</strong> evict，避免提交前清缓存被并发读回填旧快照。
+ * 回滚抛错时不执行 evict。
  */
 @Component
 @Slf4j
 public class DeptMutationLock {
 
     private static final String LOCK_KEY_PATTERN = "system:dept:mutation:%s";
-    /** 等待获取锁的最长时间 */
     private static final long WAIT_SECONDS = 3L;
-    /**
-     * Redisson 锁租约。大批量导入可能超过 120s 时有过期风险（审查残余项）；
-     * 不使用 -1 watchdog 以避免依赖 Redisson 线程在部分环境异常时永久持锁。
-     */
     private static final long LEASE_SECONDS = 120L;
 
     @Resource
     private ObjectProvider<RedissonClient> redissonClientProvider;
     @Resource
     private PlatformTransactionManager transactionManager;
+    @Resource
+    private DeptChildrenCacheInvalidator deptChildrenCacheInvalidator;
 
     private TransactionTemplate transactionTemplate;
 
@@ -74,8 +72,19 @@ public class DeptMutationLock {
         Long tenantId = ObjectUtil.defaultIfNull(TenantContextHolder.getTenantId(), 0L);
         HeldLock held = acquire(tenantId);
         try {
-            // 锁内开启/加入事务；TransactionTemplate 在 lambda 返回后 commit，再进入 finally unlock
-            return transactionTemplate.execute(status -> callQuietly(action));
+            AtomicBoolean openedNewTransaction = new AtomicBoolean(false);
+            T result = transactionTemplate.execute(status -> {
+                if (status.isNewTransaction()) {
+                    openedNewTransaction.set(true);
+                }
+                return callQuietly(action);
+            });
+            // 此处 TransactionTemplate 已完成 commit（异常回滚则不会到此）
+            // 仅最外层新事务在成功提交后失效子树缓存（G2）
+            if (openedNewTransaction.get()) {
+                deptChildrenCacheInvalidator.evictNow();
+            }
+            return result;
         } finally {
             held.unlock();
         }

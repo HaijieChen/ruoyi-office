@@ -45,7 +45,8 @@ import static org.mockito.Mockito.when;
 /**
  * {@link DeptImportServiceImpl} 单元测试
  */
-@Import({DeptImportServiceImpl.class, DeptServiceImpl.class, DeptMutationLock.class})
+@Import({DeptImportServiceImpl.class, DeptServiceImpl.class, DeptMutationLock.class,
+        DeptChildrenCacheInvalidator.class})
 public class DeptImportServiceImplTest extends BaseDbUnitTest {
 
     @Resource
@@ -319,6 +320,27 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
                 .count();
         assertEquals(1L, sameName, "双并发 import 同路径不得产生重复节点 ok=" + ok + " failed=" + failed);
         assertTrue(ok.get() >= 1, "至少一笔 import 应成功");
+    }
+
+    @Test
+    void importSuccessTreeMatchesDbAfterCommit() throws Exception {
+        List<DeptImportExcelVO> rows = List.of(
+                row("缓存父", "", "公司", "0", "启用", "CNY", null),
+                row("缓存子", "缓存父", "部门", "1", "启用", null, null)
+        );
+        byte[] bytes = writeExcel(rows);
+        try (MockedStatic<?> login = mockLogin()) {
+            DeptImportRespVO preview = deptImportService.validateImport(xlsxFile(bytes));
+            assertTrue(preview.getCanCommit());
+            DeptImportRespVO committed = deptImportService.importDepts(xlsxFile(bytes), preview.getFileDigest());
+            assertTrue(committed.getCanCommit());
+            assertEquals(2, committed.getCreateCount());
+            List<DeptDO> all = deptMapper.selectList(new DeptListReqVO());
+            DeptDO parent = all.stream().filter(d -> "缓存父".equals(d.getName())).findFirst().orElseThrow();
+            assertTrue(all.stream().anyMatch(d -> "缓存子".equals(d.getName())
+                    && parent.getId().equals(d.getParentId())));
+            assertEquals(1, deptService.getChildDeptList(parent.getId()).size());
+        }
     }
 
     @Test

@@ -14,7 +14,6 @@ import cn.iocoder.yudao.module.system.dal.redis.RedisKeyConstants;
 import cn.iocoder.yudao.module.system.enums.OrgTypeEnum;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -44,9 +43,13 @@ public class DeptServiceImpl implements DeptService {
     @Resource
     private DeptMutationLock deptMutationLock;
 
+    /**
+     * 组织写：经 {@link DeptMutationLock}（先锁→事务→commit→afterCommit 清子树缓存→unlock）。
+     * <p>
+     * 不再使用方法级 {@code @CacheEvict}：嵌套 REQUIRED 时会在外层 commit 前清空缓存，
+     * 引发 G2「并发读回填旧快照」窗口。
+     */
     @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public Long createDept(DeptSaveReqVO createReqVO) {
         return deptMutationLock.execute(() -> {
             if (createReqVO.getParentId() == null) {
@@ -68,8 +71,6 @@ public class DeptServiceImpl implements DeptService {
     }
 
     @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void updateDept(DeptSaveReqVO updateReqVO) {
         deptMutationLock.execute(() -> {
             if (updateReqVO.getParentId() == null) {
@@ -92,8 +93,6 @@ public class DeptServiceImpl implements DeptService {
     }
 
     @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void deleteDept(Long id) {
         deptMutationLock.execute(() -> {
             // 校验是否存在
@@ -109,8 +108,6 @@ public class DeptServiceImpl implements DeptService {
     }
 
     @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void deleteDeptList(List<Long> ids) {
         deptMutationLock.execute(() -> {
             // 校验是否有子部门
