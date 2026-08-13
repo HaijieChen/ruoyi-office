@@ -78,7 +78,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, clazz);
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -92,7 +92,7 @@ public class JsonUtils {
             JsonNode pathNode = treeNode.path(path);
             return objectMapper.readValue(pathNode.toString(), clazz);
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -104,7 +104,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, objectMapper.getTypeFactory().constructType(type));
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -116,7 +116,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, objectMapper.getTypeFactory().constructType(type));
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -144,7 +144,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(bytes, clazz);
         } catch (IOException e) {
-            log.error("json parse err,json:{}", bytes, e);
+            logParseError(bytes, e);
             throw new RuntimeException(e);
         }
     }
@@ -153,7 +153,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, typeReference);
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -180,7 +180,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, objectMapper.getTypeFactory().constructCollectionType(List.class, clazz));
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -194,7 +194,7 @@ public class JsonUtils {
             JsonNode pathNode = treeNode.path(path);
             return objectMapper.readValue(pathNode.toString(), objectMapper.getTypeFactory().constructCollectionType(List.class, clazz));
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -203,7 +203,7 @@ public class JsonUtils {
         try {
             return objectMapper.readTree(text);
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
     }
@@ -212,9 +212,20 @@ public class JsonUtils {
         try {
             return objectMapper.readTree(text);
         } catch (IOException e) {
-            log.error("json parse err,json:{}", text, e);
+            logParseError(text, e);
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * EXP-87 G2：解析失败禁止 log 原文 body（可能含 accountNo 等敏感字段），仅记录长度。
+     */
+    private static void logParseError(String text, Exception e) {
+        log.error("json parse err, length={}", text != null ? text.length() : 0, e);
+    }
+
+    private static void logParseError(byte[] bytes, Exception e) {
+        log.error("json parse err, length={}", bytes != null ? bytes.length : 0, e);
     }
 
     public static boolean isJson(String text) {

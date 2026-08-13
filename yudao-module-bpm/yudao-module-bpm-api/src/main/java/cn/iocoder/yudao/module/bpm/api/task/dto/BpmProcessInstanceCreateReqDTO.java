@@ -39,4 +39,14 @@ public class BpmProcessInstanceCreateReqDTO {
     @Schema(description = "任务审批信息")
     private BpmTaskApproveReqDTO taskApproveReqDTO;
 
+    /**
+     * 可信业务通道标记（内部 RPC 专用）。
+     * <p>
+     * 仅 Finance 等领域服务经独立菜单 API 发起薪资/税金等「菜单专属」流程时置 true，
+     * 以绕过通用 BPM 发起目录/直启上的 hide+deny；通用 HTTP create 不得设置。
+     * null/false 一律按通用通道处理。
+     */
+    @Schema(description = "可信业务通道（内部领域服务启动；通用入口禁止）", hidden = true)
+    private Boolean trustedBusinessStart;
+
 }

@@ -237,6 +237,9 @@ public interface ErrorCodeConstants {
     /** 支付幂等键必填 */
     ErrorCode PAYMENT_APPLICATION_IDEMPOTENCY_KEY_REQUIRED = new ErrorCode(1_040_006_030,
             "支付幂等键不能为空");
+    /** 同幂等键但载荷指纹不一致 */
+    ErrorCode PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT = new ErrorCode(1_040_006_031,
+            "支付幂等键已存在但请求载荷不一致，禁止静默覆盖");
 
     // ========== 公司银行账户 1-040-007-000 ==========
     ErrorCode COMPANY_BANK_ACCOUNT_NOT_EXISTS = new ErrorCode(1_040_007_000, "公司银行账户不存在");

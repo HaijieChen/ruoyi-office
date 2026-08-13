@@ -727,6 +727,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         FinancePaymentPayLineDO existingLine =
                 payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
         if (existingLine != null) {
+            // EXP-87 G3：同键必须比对规范化指纹；不一致冲突，禁止静默当成功
+            assertIdempotentPayLineMatches(existingLine, reqVO);
             ensureHeaderEvidenceIfFullyPaid(application, reqVO);
             return;
         }
@@ -1051,12 +1053,14 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (StrUtil.isNotBlank(application.getEntityCompanyName())) {
             variables.put(BpmProcessVariableConstants.COMPANY_NAME, application.getEntityCompanyName());
         }
+        // EXP-87 G1：Finance 领域服务走可信业务通道；薪税通用 BPM 直启仍 hide+deny
         return processInstanceApi.createProcessInstance(userId,
                         new BpmProcessInstanceCreateReqDTO()
                                 .setProcessDefinitionKey(processDefinitionKey)
                                 .setBusinessKey(String.valueOf(application.getId()))
                                 .setVariables(variables)
-                                .setStartUserSelectAssignees(startUserSelectAssignees))
+                                .setStartUserSelectAssignees(startUserSelectAssignees)
+                                .setTrustedBusinessStart(true))
                 .getCheckedData();
     }
 
@@ -1193,6 +1197,41 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
             if (complete && task != null) {
                 completeCashierTask(task);
+            }
+        }
+    }
+
+    /**
+     * EXP-87 G3：同 idempotencyKey 命中已有 pay_line 时，比对规范化指纹。
+     * 指纹字段：账户 / 金额 / 支付日 / 凭证 URL / ERP 凭证号。
+     * 请求 payAmount 为空表示「按剩余整笔」——与已落库金额比对时，仅当请求显式给了金额才比金额，
+     * 但账户/日期/凭证/ERP 必须一致；若显式金额与落库不一致则冲突。
+     */
+    private static void assertIdempotentPayLineMatches(FinancePaymentPayLineDO existing,
+                                                       FinancePaymentRecordPayReqVO reqVO) {
+        if (!Objects.equals(existing.getCompanyBankAccountId(), reqVO.getCompanyBankAccountId())) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        if (!Objects.equals(existing.getActualPayDate(), reqVO.getActualPayDate())) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        String reqVoucher = reqVO.getPayVoucherUrl() != null ? reqVO.getPayVoucherUrl().trim() : null;
+        String existingVoucher = existing.getPayVoucherUrl() != null ? existing.getPayVoucherUrl().trim() : null;
+        if (!Objects.equals(existingVoucher, reqVoucher)) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        String reqErp = trimToNull(reqVO.getErpVoucherNo());
+        String existingErp = trimToNull(existing.getErpVoucherNo());
+        if (!Objects.equals(existingErp, reqErp)) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        if (reqVO.getPayAmount() != null) {
+            BigDecimal reqAmount = normalizePayAmount(reqVO.getPayAmount());
+            BigDecimal existingAmount = existing.getPayAmount() != null
+                    ? existing.getPayAmount().setScale(AMOUNT_SCALE, RoundingMode.UNNECESSARY)
+                    : null;
+            if (existingAmount == null || reqAmount.compareTo(existingAmount) != 0) {
+                throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
             }
         }
     }

@@ -789,9 +789,9 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         // 获得流程定义
         ProcessDefinition definition = processDefinitionService
                 .getProcessDefinition(createReqVO.getProcessDefinitionId());
-        // 发起流程
+        // 通用 HTTP 入口：非可信通道
         return createProcessInstance0(userId, definition, createReqVO.getVariables(), null,
-                createReqVO.getStartUserSelectAssignees());
+                createReqVO.getStartUserSelectAssignees(), false);
     }
 
     @Override
@@ -801,10 +801,11 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
             // 获得流程定义
             ProcessDefinition definition = processDefinitionService
                     .getActiveProcessDefinition(createReqDTO.getProcessDefinitionKey());
-            // 发起流程
+            boolean trusted = Boolean.TRUE.equals(createReqDTO.getTrustedBusinessStart());
+            // 发起流程（可信标记仅内部 RPC DTO 可带）
             return createProcessInstance0(userId, definition, createReqDTO.getVariables(),
                     createReqDTO.getBusinessKey(),
-                    createReqDTO.getStartUserSelectAssignees());
+                    createReqDTO.getStartUserSelectAssignees(), trusted);
         });
     }
 
@@ -852,9 +853,10 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
                 ProcessDefinition definition = processDefinitionService
                         .getActiveProcessDefinition(createReqDTO.getProcessDefinitionKey());
+                boolean trusted = Boolean.TRUE.equals(createReqDTO.getTrustedBusinessStart());
                 return createProcessInstance0(userId, definition, createReqDTO.getVariables(),
                         createReqDTO.getBusinessKey(),
-                        createReqDTO.getStartUserSelectAssignees());
+                        createReqDTO.getStartUserSelectAssignees(), trusted);
             }
         });
     }
@@ -955,7 +957,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
     private String createProcessInstance0(Long userId, ProcessDefinition definition,
                                           Map<String, Object> variables, String businessKey,
-                                          Map<String, List<Long>> startUserSelectAssignees) {
+                                          Map<String, List<Long>> startUserSelectAssignees,
+                                          boolean trustedBusinessStart) {
         // 1.1 校验流程定义
         if (definition == null) {
             throw exception(PROCESS_DEFINITION_NOT_EXISTS);
@@ -972,8 +975,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         if (!processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId)) {
             throw exception(PROCESS_INSTANCE_START_USER_CAN_START);
         }
-        // 1.2.1 嵌入式业务表单：业务 create 权限（与列表 canStart 同一评估）
-        processStartEligibilityService.validateStartOrThrow(definition.getKey());
+        // 1.2.1 嵌入式业务表单：业务 create 权限（通用恒 deny 薪税；可信业务通道可过）
+        processStartEligibilityService.validateStartOrThrow(definition.getKey(), trustedBusinessStart);
         // 1.3 校验发起人自选审批人
         validateStartUserSelectAssignees(userId, definition, startUserSelectAssignees, variables);
 
