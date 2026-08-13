@@ -65,3 +65,44 @@ export async function deleteDept(id: number) {
 export async function deleteDeptList(ids: number[]) {
   return requestClient.delete(`/system/dept/delete-list?ids=${ids.join(',')}`);
 }
+
+/** 组织架构导入 */
+export namespace SystemDeptImportApi {
+  export interface ImportError {
+    rowNumber: number;
+    orgPath?: string;
+    field?: string;
+    code: string;
+    message: string;
+  }
+
+  export interface ImportResult {
+    fileDigest: string;
+    totalRows: number;
+    createCount: number;
+    skipCount: number;
+    canCommit: boolean;
+    errors: ImportError[];
+  }
+}
+
+/** 下载组织架构导入模板 */
+export function getDeptImportTemplate() {
+  return requestClient.download('/system/dept/get-import-template');
+}
+
+/** 校验组织架构导入文件（只读预览） */
+export function validateDeptImport(file: File) {
+  return requestClient.upload<SystemDeptImportApi.ImportResult>(
+    '/system/dept/import/validate',
+    { file },
+  );
+}
+
+/** 提交组织架构导入（整批原子） */
+export function importDept(file: File, expectedDigest: string) {
+  return requestClient.upload<SystemDeptImportApi.ImportResult>(
+    '/system/dept/import',
+    { file, expectedDigest },
+  );
+}

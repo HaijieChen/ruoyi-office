@@ -41,73 +41,89 @@ public class DeptServiceImpl implements DeptService {
 
     @Resource
     private DeptMapper deptMapper;
+    @Resource
+    private DeptMutationLock deptMutationLock;
 
     @Override
     @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public Long createDept(DeptSaveReqVO createReqVO) {
-        if (createReqVO.getParentId() == null) {
-            createReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
-        }
-        // 校验父部门的有效性
-        validateParentDept(null, createReqVO.getParentId());
-        // 校验部门名的唯一性
-        validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
-        normalizeAndValidateFunctionalCurrency(createReqVO);
+        return deptMutationLock.execute(() -> {
+            if (createReqVO.getParentId() == null) {
+                createReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
+            }
+            // 校验父部门的有效性
+            validateParentDept(null, createReqVO.getParentId());
+            // 公司不能挂在部门下（与导入共用）
+            validateCompanyNotUnderDepartment(createReqVO.getOrgType(), createReqVO.getParentId());
+            // 校验部门名的唯一性
+            validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
+            normalizeAndValidateFunctionalCurrency(createReqVO);
 
-        // 插入部门
-        DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
-        deptMapper.insert(dept);
-        return dept.getId();
+            // 插入部门
+            DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
+            deptMapper.insert(dept);
+            return dept.getId();
+        });
     }
 
     @Override
     @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void updateDept(DeptSaveReqVO updateReqVO) {
-        if (updateReqVO.getParentId() == null) {
-            updateReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
-        }
-        // 校验自己存在
-        validateDeptExists(updateReqVO.getId());
-        // 校验父部门的有效性
-        validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
-        // 校验部门名的唯一性
-        validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), updateReqVO.getName());
-        normalizeAndValidateFunctionalCurrency(updateReqVO);
+        deptMutationLock.execute(() -> {
+            if (updateReqVO.getParentId() == null) {
+                updateReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
+            }
+            // 校验自己存在
+            validateDeptExists(updateReqVO.getId());
+            // 校验父部门的有效性
+            validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
+            validateCompanyNotUnderDepartment(updateReqVO.getOrgType(), updateReqVO.getParentId());
+            // 校验部门名的唯一性
+            validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), updateReqVO.getName());
+            normalizeAndValidateFunctionalCurrency(updateReqVO);
 
-        // 更新部门
-        DeptDO updateObj = BeanUtils.toBean(updateReqVO, DeptDO.class);
-        deptMapper.updateById(updateObj);
+            // 更新部门
+            DeptDO updateObj = BeanUtils.toBean(updateReqVO, DeptDO.class);
+            deptMapper.updateById(updateObj);
+            return null;
+        });
     }
 
     @Override
     @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void deleteDept(Long id) {
-        // 校验是否存在
-        validateDeptExists(id);
-        // 校验是否有子部门
-        if (deptMapper.selectCountByParentId(id) > 0) {
-            throw exception(DEPT_EXITS_CHILDREN);
-        }
-        // 删除部门
-        deptMapper.deleteById(id);
+        deptMutationLock.execute(() -> {
+            // 校验是否存在
+            validateDeptExists(id);
+            // 校验是否有子部门
+            if (deptMapper.selectCountByParentId(id) > 0) {
+                throw exception(DEPT_EXITS_CHILDREN);
+            }
+            // 删除部门
+            deptMapper.deleteById(id);
+            return null;
+        });
     }
 
     @Override
     @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void deleteDeptList(List<Long> ids) {
-        // 校验是否有子部门
-        for (Long id : ids) {
-            if (deptMapper.selectCountByParentId(id) > 0) {
-                throw exception(DEPT_EXITS_CHILDREN);
+        deptMutationLock.execute(() -> {
+            // 校验是否有子部门
+            for (Long id : ids) {
+                if (deptMapper.selectCountByParentId(id) > 0) {
+                    throw exception(DEPT_EXITS_CHILDREN);
+                }
             }
-        }
 
-        // 批量删除部门
-        deptMapper.deleteByIds(ids);
+            // 批量删除部门
+            deptMapper.deleteByIds(ids);
+            return null;
+        });
     }
 
     @VisibleForTesting
@@ -168,6 +184,26 @@ public class DeptServiceImpl implements DeptService {
         }
         if (ObjectUtil.notEqual(dept.getId(), id)) {
             throw exception(DEPT_NAME_DUPLICATE);
+        }
+    }
+
+    /**
+     * 公司节点不能挂在部门下（后端不变量，与导入/前端表单一致）。
+     */
+    @VisibleForTesting
+    void validateCompanyNotUnderDepartment(String orgType, Long parentId) {
+        if (parentId == null || DeptDO.PARENT_ID_ROOT.equals(parentId)) {
+            return;
+        }
+        if (!OrgTypeEnum.COMPANY.getValue().equals(String.valueOf(orgType))) {
+            return;
+        }
+        DeptDO parentDept = deptMapper.selectById(parentId);
+        if (parentDept == null) {
+            return; // 父不存在由 validateParentDept 处理
+        }
+        if (OrgTypeEnum.DEPARTMENT.getValue().equals(String.valueOf(parentDept.getOrgType()))) {
+            throw exception(DEPT_PARENT_TYPE_INVALID);
         }
     }
 

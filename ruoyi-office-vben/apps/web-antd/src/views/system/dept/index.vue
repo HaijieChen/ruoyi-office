@@ -15,9 +15,15 @@ import { $t } from '#/locales';
 
 import { useGridColumns } from './data';
 import Form from './modules/form.vue';
+import ImportForm from './modules/import-form.vue';
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [ImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportForm,
   destroyOnClose: true,
 });
 
@@ -36,6 +42,11 @@ function handleRefresh() {
 /** 创建部门 */
 function handleCreate() {
   formModalApi.setData(null).open();
+}
+
+/** 导入组织 */
+function handleImport() {
+  importModalApi.open();
 }
 
 /** 添加下级部门 */
@@ -129,6 +140,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <FormModal @success="handleRefresh" />
+    <ImportModal @success="handleRefresh" />
     <Grid table-title="组织列表">
       <template #toolbar-tools>
         <TableAction
@@ -139,6 +151,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['system:dept:create'],
               onClick: handleCreate,
+            },
+            {
+              label: '导入组织',
+              type: 'primary',
+              auth: ['system:dept:import'],
+              onClick: handleImport,
             },
             {
               label: isExpanded ? '收缩' : '展开',
