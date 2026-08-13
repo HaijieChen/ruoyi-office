@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.finance.controller.admin.companyaccount;
 
+import cn.iocoder.yudao.framework.apilog.core.annotation.ApiAccessLog;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
@@ -42,6 +43,7 @@ public class FinanceCompanyBankAccountController {
     @PostMapping("/create")
     @Operation(summary = "创建公司银行账户")
     @PreAuthorize("@ss.hasPermission('finance:company-bank-account:create')")
+    @ApiAccessLog(sanitizeKeys = {"accountNo", "account_no"})
     public CommonResult<Long> create(@Valid @RequestBody FinanceCompanyBankAccountSaveReqVO reqVO) {
         return success(bankAccountService.create(reqVO));
     }
@@ -49,6 +51,7 @@ public class FinanceCompanyBankAccountController {
     @PutMapping("/update")
     @Operation(summary = "更新公司银行账户")
     @PreAuthorize("@ss.hasPermission('finance:company-bank-account:update')")
+    @ApiAccessLog(sanitizeKeys = {"accountNo", "account_no"})
     public CommonResult<Boolean> update(@Valid @RequestBody FinanceCompanyBankAccountSaveReqVO reqVO) {
         bankAccountService.update(reqVO);
         return success(true);

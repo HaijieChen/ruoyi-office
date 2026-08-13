@@ -171,6 +171,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     public void resubmit(Long id, FinancePaymentApplicationResubmitReqVO reqVO, Long userId) {
         FinancePaymentApplicationDO existing = getApplication(id);
         assertOwner(existing, userId);
+        assertOrdinaryKind(existing);
+        assertNoPayLines(id);
         if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
                 || Boolean.TRUE.equals(existing.getVoided())) {
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
@@ -183,7 +185,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .eq("applicant_user_id", userId)
                 .eq("status", FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
                 .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
+                .and(w -> w.eq("application_kind", FinancePaymentApplicationKindEnum.ORDINARY.getCode())
+                        .or().isNull("application_kind"))
                 .set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .set("application_kind", FinancePaymentApplicationKindEnum.ORDINARY.getCode())
                 .set("voided", Boolean.FALSE)
                 .set("current_node_key", null)
                 .set("current_node_name", null)
@@ -332,6 +337,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (!FinancePaymentApplicationKindEnum.SALARY.getCode().equals(existing.getApplicationKind())) {
             throw exception(PAYMENT_APPLICATION_KIND_INVALID);
         }
+        // 支付流水不可变：有任一 pay_line 禁止重提
+        assertNoPayLines(id);
         if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
                 || Boolean.TRUE.equals(existing.getVoided())) {
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
@@ -378,8 +385,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (claimed == 0) {
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
         }
-        // 清旧支付明细 + 重写薪资明细
-        clearPayLines(id);
+        // 业务明细可重写；支付流水不可变（此处已 assertNoPayLines）
         salaryLineMapper.deleteByApplicationId(id);
         insertSalaryLines(id, preparedLines.salaryLines());
 
@@ -400,6 +406,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (!FinancePaymentApplicationKindEnum.TAX.getCode().equals(existing.getApplicationKind())) {
             throw exception(PAYMENT_APPLICATION_KIND_INVALID);
         }
+        assertNoPayLines(id);
         if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
                 || Boolean.TRUE.equals(existing.getVoided())) {
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
@@ -447,7 +454,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (claimed == 0) {
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
         }
-        clearPayLines(id);
         taxLineMapper.deleteByApplicationId(id);
         insertTaxLines(id, preparedLines.taxLines());
 
@@ -561,6 +567,15 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         throw exception(PAYMENT_APPLICATION_ACCESS_DENIED);
     }
 
+    /**
+     * 普通付款读路径类型闭合：仅 ORDINARY（历史 null 视为 ORDINARY）。
+     */
+    public FinancePaymentApplicationDO getOrdinaryApplicationForRead(Long id, Long userId, boolean manageAll) {
+        FinancePaymentApplicationDO application = getApplicationForRead(id, userId, manageAll);
+        assertOrdinaryKind(application);
+        return application;
+    }
+
     @Override
     public boolean canAccessDetail(Long id, Long userId) {
         if (id == null || userId == null) {
@@ -644,6 +659,11 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)) {
             assertCashierEvidencePresent(current);
         }
+        // EXP-87 FINAL：已有实际支付流水禁止驳回（支付行不可变，避免重提破坏台账）
+        if (FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(normalized)
+                && hasPayLines(appId)) {
+            throw exception(PAYMENT_APPLICATION_HAS_PAY_LINES);
+        }
 
         UpdateWrapper<FinancePaymentApplicationDO> uw = new UpdateWrapper<FinancePaymentApplicationDO>()
                 .eq("id", appId)
@@ -690,33 +710,44 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (application == null) {
             throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
         }
-        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
-                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
-            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
-        }
 
-        // F2：校验办理人/候选人后再写台账
-        Task task = requireCashierTask(reqVO.getTaskId(), application, userId);
-
-        // 幂等：同 idempotencyKey 已存在则直接处理办结逻辑
+        // 幂等优先：同键已落库时，任务可能已 complete，不得先校验 task 导致 TASK_INVALID
         String idem = trimToNull(reqVO.getIdempotencyKey());
         if (idem != null) {
-            FinancePaymentPayLineDO existing = payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
-            if (existing != null) {
-                maybeCompleteCashier(application, task, reqVO);
+            FinancePaymentPayLineDO existingLine =
+                    payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
+            if (existingLine != null) {
+                ensureHeaderEvidenceIfFullyPaid(application, reqVO);
                 return;
             }
         }
+
+        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
+                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
+            // 已足额且终态：无新键时也视为幂等成功
+            BigDecimal paid = sumPayLines(application.getId());
+            if (application.getApplyAmount() != null
+                    && paid.compareTo(application.getApplyAmount()) == 0
+                    && (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(application.getStatus())
+                    || application.getActualPayDate() != null)) {
+                return;
+            }
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+
+        // F2：新支付须校验办理人/候选人
+        Task task = requireCashierTask(reqVO.getTaskId(), application, userId);
 
         // 账户归属主体：普通付款用单头主体；薪资/税金可用账户所属主体（须在明细主体集合内）
         Long entityForAccount = resolvePayEntityCompanyDeptId(application, reqVO.getCompanyBankAccountId());
         FinanceCompanyBankAccountDO account = companyBankAccountService
                 .requireEnabledForEntityCompany(reqVO.getCompanyBankAccountId(), entityForAccount);
+        assertAccountCurrencyMatchesApplication(application, account);
 
         BigDecimal alreadyPaid = sumPayLines(application.getId());
         BigDecimal remaining = application.getApplyAmount().subtract(alreadyPaid);
         if (remaining.compareTo(ZERO) <= 0) {
-            // 已足额：幂等办结
+            // 已足额：幂等办结（任务仍有效时 complete）
             maybeCompleteCashier(application, task, reqVO);
             return;
         }
@@ -1146,21 +1177,60 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
     private void maybeCompleteCashier(FinancePaymentApplicationDO application, Task task,
                                       FinancePaymentRecordPayReqVO reqVO) {
+        ensureHeaderEvidenceIfFullyPaid(application, reqVO);
         BigDecimal sum = sumPayLines(application.getId());
         if (application.getApplyAmount() != null && sum.compareTo(application.getApplyAmount()) == 0) {
-            if (application.getActualPayDate() == null || StrUtil.isBlank(application.getPayVoucherUrl())) {
-                applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
-                        .eq("id", application.getId())
-                        .set("actual_pay_date", reqVO.getActualPayDate())
-                        .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
-                        .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null)));
-            }
             boolean complete = reqVO.getCompleteWhenFullyPaid() == null
                     || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
-            if (complete) {
+            if (complete && task != null) {
                 completeCashierTask(task);
             }
         }
+    }
+
+    /** 足额时补写头证据；幂等重试不依赖 task 是否仍 active。 */
+    private void ensureHeaderEvidenceIfFullyPaid(FinancePaymentApplicationDO application,
+                                                 FinancePaymentRecordPayReqVO reqVO) {
+        BigDecimal sum = sumPayLines(application.getId());
+        if (application.getApplyAmount() == null || sum.compareTo(application.getApplyAmount()) != 0) {
+            return;
+        }
+        if (application.getActualPayDate() == null || StrUtil.isBlank(application.getPayVoucherUrl())) {
+            applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                    .eq("id", application.getId())
+                    .set("actual_pay_date", reqVO.getActualPayDate())
+                    .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
+                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null)));
+        }
+    }
+
+    private static void assertAccountCurrencyMatchesApplication(FinancePaymentApplicationDO application,
+                                                                FinanceCompanyBankAccountDO account) {
+        if (application.getCurrency() == null || account.getCurrency() == null) {
+            return;
+        }
+        if (!application.getCurrency().trim().equalsIgnoreCase(account.getCurrency().trim())) {
+            throw exception(PAYMENT_ACCOUNT_CURRENCY_MISMATCH);
+        }
+    }
+
+    private static void assertOrdinaryKind(FinancePaymentApplicationDO application) {
+        String kind = StrUtil.blankToDefault(application.getApplicationKind(),
+                FinancePaymentApplicationKindEnum.ORDINARY.getCode());
+        if (!FinancePaymentApplicationKindEnum.ORDINARY.getCode().equals(kind)) {
+            throw exception(PAYMENT_APPLICATION_KIND_INVALID);
+        }
+    }
+
+    private void assertNoPayLines(Long paymentApplicationId) {
+        if (hasPayLines(paymentApplicationId)) {
+            throw exception(PAYMENT_APPLICATION_HAS_PAY_LINES);
+        }
+    }
+
+    private boolean hasPayLines(Long paymentApplicationId) {
+        List<FinancePaymentPayLineDO> lines = payLineMapper.selectByApplicationId(paymentApplicationId);
+        return CollUtil.isNotEmpty(lines);
     }
 
     private void completeCashierTask(Task task) {
@@ -1338,14 +1408,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 line.setTenantId(tenantId);
             }
             taxLineMapper.insert(line);
-        }
-    }
-
-    /** 重提前清除已登记支付明细（逻辑删）。 */
-    private void clearPayLines(Long paymentApplicationId) {
-        List<FinancePaymentPayLineDO> lines = payLineMapper.selectByApplicationId(paymentApplicationId);
-        for (FinancePaymentPayLineDO line : lines) {
-            payLineMapper.deleteById(line.getId());
         }
     }
 

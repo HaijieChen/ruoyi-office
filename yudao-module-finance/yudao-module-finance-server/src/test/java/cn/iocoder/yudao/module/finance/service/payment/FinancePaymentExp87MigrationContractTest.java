@@ -85,6 +85,38 @@ class FinancePaymentExp87MigrationContractTest {
         assertTrue(text.contains("payAmount"));
     }
 
+    @Test
+    void salaryTaxNotInEmbedRegistry() throws Exception {
+        Path fe = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/create/embed-registry.ts");
+        String ts = Files.readString(fe);
+        assertFalse(ts.contains("finance_salary_payment_apply:"));
+        assertFalse(ts.contains("finance_tax_payment_apply:"));
+        Path be = findRoot().resolve(
+                "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmEmbedProcessStartPermissionRegistry.java");
+        String java = Files.readString(be);
+        assertFalse(java.contains("\"finance_salary_payment_apply\""));
+        assertFalse(java.contains("\"finance_tax_payment_apply\""));
+    }
+
+    @Test
+    void accessLogSanitizesAccountNo() throws Exception {
+        Path filter = findRoot().resolve(
+                "yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/iocoder/yudao/framework/apilog/core/filter/ApiAccessLogFilter.java");
+        String text = Files.readString(filter);
+        assertTrue(text.contains("accountNo"));
+        assertTrue(text.contains("payeeBankAccount"));
+    }
+
+    @Test
+    void forwardOnlyRunbookExists() throws Exception {
+        Path doc = findRoot().resolve("sql/mysql/EXP87_FORWARD_ONLY_RUNBOOK.md");
+        assertTrue(Files.exists(doc));
+        String text = Files.readString(doc);
+        assertTrue(text.contains("forward-only") || text.contains("Forward-only") || text.contains("仅向前"));
+        assertTrue(text.contains("mysqldump") || text.contains("备份"));
+    }
+
     private static Path findRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null && !Files.isDirectory(current.resolve("sql/mysql"))) {

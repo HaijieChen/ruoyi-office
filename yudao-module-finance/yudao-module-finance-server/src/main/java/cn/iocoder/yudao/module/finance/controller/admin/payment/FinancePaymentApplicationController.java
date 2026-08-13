@@ -77,24 +77,28 @@ public class FinancePaymentApplicationController {
     }
 
     @GetMapping("/get")
-    @Operation(summary = "付款申请详情（本人 / FA / 当前任务办理人）")
+    @Operation(summary = "付款申请详情（本人 / FA / 当前任务办理人；仅 ORDINARY）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:query') or @financePaymentAccess.canTaskContextOrOwnerRead(#id)")
     public CommonResult<FinancePaymentApplicationRespVO> get(@RequestParam("id") Long id) {
         boolean manageAll = securityFrameworkService.hasPermission(MANAGE_ALL_PERMISSION);
-        FinancePaymentApplicationDO app = paymentApplicationService.getApplicationForRead(
+        FinancePaymentApplicationDO app = paymentApplicationService.getOrdinaryApplicationForRead(
                 id, getLoginUserId(), manageAll);
         return success(toResp(app));
     }
 
     @GetMapping("/page")
-    @Operation(summary = "付款申请分页（默认仅普通付款）")
+    @Operation(summary = "付款申请分页（仅普通付款 ORDINARY）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:query')")
     public CommonResult<PageResult<FinancePaymentApplicationRespVO>> page(
             @Valid FinancePaymentApplicationPageReqVO pageReqVO) {
-        // EXP-87：普通入口默认不混入薪资/税金独立单；历史 SALARY/TAX 事由仍属 ORDINARY kind
-        if (pageReqVO.getApplicationKind() == null || pageReqVO.getApplicationKind().isBlank()) {
-            pageReqVO.setApplicationKind("ORDINARY");
+        // EXP-87 类型闭合：普通入口强制 ORDINARY，拒绝 SALARY/TAX 穿透
+        if (pageReqVO.getApplicationKind() != null
+                && !pageReqVO.getApplicationKind().isBlank()
+                && !"ORDINARY".equals(pageReqVO.getApplicationKind())) {
+            throw cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception(
+                    cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.PAYMENT_APPLICATION_KIND_INVALID);
         }
+        pageReqVO.setApplicationKind("ORDINARY");
         boolean manageAll = securityFrameworkService.hasPermission(MANAGE_ALL_PERMISSION);
         PageResult<FinancePaymentApplicationDO> page = paymentApplicationService.getApplicationPage(
                 pageReqVO, getLoginUserId(), manageAll);
@@ -110,19 +114,22 @@ public class FinancePaymentApplicationController {
     }
 
     @PostMapping("/record-pay")
-    @Operation(summary = "出纳支付登记并 complete 任务")
+    @Operation(summary = "出纳支付登记并 complete 任务（仅 ORDINARY）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:record-pay')")
     public CommonResult<Boolean> recordPay(@Valid @RequestBody FinancePaymentRecordPayReqVO reqVO) {
+        // 类型闭合：禁止对薪资/税金单走普通 record-pay
+        paymentApplicationService.getOrdinaryApplicationForRead(reqVO.getId(), getLoginUserId(), true);
         paymentApplicationService.recordPay(reqVO, getLoginUserId());
         return success(true);
     }
 
     @PutMapping("/update-accounting-subject")
-    @Operation(summary = "财务主管节点写入会计科目（F4）")
+    @Operation(summary = "财务主管节点写入会计科目（F4；仅 ORDINARY）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:query') or @financePaymentAccess.canTaskContextOrOwnerRead(#id)")
     public CommonResult<Boolean> updateAccountingSubject(@RequestParam("id") @NotNull Long id,
                                                          @RequestParam("taskId") @NotEmpty String taskId,
                                                          @RequestParam("accountingSubject") @NotEmpty String accountingSubject) {
+        paymentApplicationService.getOrdinaryApplicationForRead(id, getLoginUserId(), true);
         paymentApplicationService.updateAccountingSubject(id, accountingSubject, taskId, getLoginUserId());
         return success(true);
     }

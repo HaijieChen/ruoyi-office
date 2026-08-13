@@ -57,6 +57,9 @@ public interface FinancePaymentApplicationService {
      */
     FinancePaymentApplicationDO getApplicationForRead(Long id, Long userId, boolean manageAll);
 
+    /** 普通付款读：强制 application_kind=ORDINARY */
+    FinancePaymentApplicationDO getOrdinaryApplicationForRead(Long id, Long userId, boolean manageAll);
+
     boolean canAccessDetail(Long id, Long userId);
 
     PageResult<FinancePaymentApplicationDO> getApplicationPage(FinancePaymentApplicationPageReqVO pageReqVO,

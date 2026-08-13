@@ -22,12 +22,7 @@ public final class BpmEmbedProcessStartPermissionRegistry {
         map.put("finance_payment_apply", new Entry(
                 "finance:payment-application:create",
                 "无付款发起权限，请联系管理员分配付款发起角色"));
-        map.put("finance_salary_payment_apply", new Entry(
-                "finance:salary-payment:create",
-                "无薪资付款发起权限，请联系管理员分配相应角色"));
-        map.put("finance_tax_payment_apply", new Entry(
-                "finance:tax-payment:create",
-                "无税金付款发起权限，请联系管理员分配相应角色"));
+        // EXP-87 FINAL：薪资/税金不走通用嵌入发起壳，仅独立菜单；勿注册 embed，避免「未配置发起表单」
         map.put("finance_contract_sign", new Entry(
                 "finance:contract-application:create",
                 "无合同签约发起权限，请联系管理员分配商务发起角色"));

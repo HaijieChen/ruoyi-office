@@ -228,6 +228,12 @@ public interface ErrorCodeConstants {
     /** V1 一单一币种 */
     ErrorCode PAYMENT_APPLICATION_MULTI_CURRENCY_FORBIDDEN = new ErrorCode(1_040_006_027,
             "同一申请仅允许一个币种，跨币种请分单");
+    /** 付款账户币种与申请币种不一致 */
+    ErrorCode PAYMENT_ACCOUNT_CURRENCY_MISMATCH = new ErrorCode(1_040_006_028,
+            "付款账户币种与申请币种不一致，V1 不支持跨币种支付");
+    /** 已有实际支付流水，禁止驳回/重提（支付行不可变） */
+    ErrorCode PAYMENT_APPLICATION_HAS_PAY_LINES = new ErrorCode(1_040_006_029,
+            "已有实际支付记录，禁止驳回或重提；支付流水不可变，请走作废/冲正流程");
 
     // ========== 公司银行账户 1-040-007-000 ==========
     ErrorCode COMPANY_BANK_ACCOUNT_NOT_EXISTS = new ErrorCode(1_040_007_000, "公司银行账户不存在");
