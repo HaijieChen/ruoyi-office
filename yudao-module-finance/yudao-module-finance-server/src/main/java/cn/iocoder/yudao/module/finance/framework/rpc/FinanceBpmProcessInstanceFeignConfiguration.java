@@ -5,11 +5,10 @@ import feign.RequestInterceptor;
 import org.springframework.context.annotation.Bean;
 
 /**
- * EXP-87 F2：仅绑定 {@link cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi} 的 Feign 子上下文配置。
+ * EXP-87 F3：仅挂到 {@link FinanceBpmProcessInstanceApi} 的 {@code @FeignClient(configuration=)}。
  * <p>
- * <strong>故意不加</strong> {@code @Configuration}：若被组件扫描进父 ApplicationContext，
- * RequestInterceptor 会污染 System/Infra/其他 Feign 客户端。
- * 仅通过 {@code @EnableFeignClients(defaultConfiguration = ...)} 引入。
+ * <strong>故意不加</strong> {@code @Configuration}，避免被组件扫描进父 ApplicationContext
+ * 从而污染其他 Feign 命名上下文。
  */
 public class FinanceBpmProcessInstanceFeignConfiguration {
 

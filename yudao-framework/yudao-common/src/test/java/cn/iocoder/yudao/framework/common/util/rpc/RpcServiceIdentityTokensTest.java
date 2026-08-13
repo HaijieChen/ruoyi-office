@@ -31,19 +31,36 @@ class RpcServiceIdentityTokensTest {
     }
 
     @Test
-    void wrongAudience_rejected_crossRouteReplay() {
-        // 其他路由截获的 token 不能授权 create-by-business
-        String otherAudience = "POST /rpc-api/bpm/process-instance/create";
+    void wrongAudience_path_rejected() {
+        String other = "POST /rpc-api/bpm/process-instance/create@bpm-server";
         String token = RpcServiceIdentityTokens.sign(
-                RpcServiceIdentityConstants.FINANCE_SERVER, otherAudience, SECRET);
+                RpcServiceIdentityConstants.FINANCE_SERVER, other, SECRET);
         assertFalse(RpcServiceIdentityTokens.verify(
                 RpcServiceIdentityConstants.FINANCE_SERVER, AUDIENCE, token, SECRET));
-        // 系统调用路径
-        String systemAudience = "POST /rpc-api/system/oauth2/token";
-        String sysToken = RpcServiceIdentityTokens.sign(
-                RpcServiceIdentityConstants.FINANCE_SERVER, systemAudience, SECRET);
+    }
+
+    @Test
+    void wrongAudience_target_rejected() {
+        // 他服务同路径不得得到可授权令牌
+        String otherTarget = "POST /rpc-api/bpm/process-instance/create-by-business@system-server";
+        String token = RpcServiceIdentityTokens.sign(
+                RpcServiceIdentityConstants.FINANCE_SERVER, otherTarget, SECRET);
         assertFalse(RpcServiceIdentityTokens.verify(
-                RpcServiceIdentityConstants.FINANCE_SERVER, AUDIENCE, sysToken, SECRET));
+                RpcServiceIdentityConstants.FINANCE_SERVER, AUDIENCE, token, SECRET));
+    }
+
+    @Test
+    void exactPathNormalization() {
+        assertTrue(RpcServiceIdentityConstants.isExactPrivilegedCreateByBusiness(
+                "POST", "/rpc-api/bpm/process-instance/create-by-business"));
+        assertTrue(RpcServiceIdentityConstants.isExactPrivilegedCreateByBusiness(
+                "post", "/rpc-api/bpm/process-instance/create-by-business/"));
+        assertFalse(RpcServiceIdentityConstants.isExactPrivilegedCreateByBusiness(
+                "POST", "/rpc-api/bpm/process-instance/create-by-business/extra"));
+        assertFalse(RpcServiceIdentityConstants.isExactPrivilegedCreateByBusiness(
+                "POST", "/rpc-api/bpm/process-instance/create"));
+        assertFalse(RpcServiceIdentityConstants.isExactPrivilegedCreateByBusiness(
+                "GET", "/rpc-api/bpm/process-instance/create-by-business"));
     }
 
     @Test

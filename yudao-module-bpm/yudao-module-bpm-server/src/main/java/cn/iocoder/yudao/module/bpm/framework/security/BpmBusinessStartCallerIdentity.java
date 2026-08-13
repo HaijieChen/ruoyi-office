@@ -87,8 +87,8 @@ public final class BpmBusinessStartCallerIdentity {
     }
 
     /**
-     * 本 Guard/Filter 仅服务于 create-by-business；验签 audience 固定为该 privileged 路径。
-     * （令牌若绑定其他路径 audience 一律失败，实现跨路由防重放。）
+     * 本 Guard/Filter 仅服务于 create-by-business；
+     * audience = POST + path + @bpm-server（跨路径/跨目标令牌一律失败）。
      */
     private static String resolveAudience(HttpServletRequest request) {
         return RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS;

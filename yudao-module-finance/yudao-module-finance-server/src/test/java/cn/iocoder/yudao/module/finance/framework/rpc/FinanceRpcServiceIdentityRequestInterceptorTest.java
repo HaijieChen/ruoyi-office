@@ -13,7 +13,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * EXP-87 F2：身份拦截器作用域 + 路径限定 + audience 绑定。
+ * EXP-87 F3：精确路径 + BPM 目标绑定 + 非 privileged 无头。
  */
 class FinanceRpcServiceIdentityRequestInterceptorTest {
 
@@ -26,19 +26,19 @@ class FinanceRpcServiceIdentityRequestInterceptorTest {
         return new FinanceRpcServiceIdentityRequestInterceptor(props);
     }
 
-    private static RequestTemplate template(String method, String path) {
+    private static RequestTemplate template(String method, String path, String targetName) {
         RequestTemplate t = new RequestTemplate();
         t.method(method);
-        // Feign path 形态
         t.uri(path);
-        t.target("http://bpm-server");
+        t.feignTarget(new Target.HardCodedTarget<>(Object.class, targetName, "http://" + targetName));
         return t;
     }
 
     @Test
-    void createByBusiness_attachesVerifiableAudienceBoundIdentity() {
+    void createByBusiness_onBpmTarget_attachesAudienceBoundIdentity() {
         RequestTemplate template = template("POST",
-                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS);
+                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS,
+                RpcServiceIdentityConstants.BPM_SERVER);
         interceptor().apply(template);
 
         Collection<String> names = template.headers().get(RpcServiceIdentityConstants.HEADER_SERVICE_NAME);
@@ -53,32 +53,57 @@ class FinanceRpcServiceIdentityRequestInterceptorTest {
     }
 
     @Test
+    void createByBusiness_onWrongTarget_noIdentityHeaders() {
+        RequestTemplate template = template("POST",
+                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS,
+                "system-server");
+        interceptor().apply(template);
+        assertNoIdentityHeaders(template);
+    }
+
+    @Test
+    void pathPrefixLookalike_noIdentityHeaders() {
+        // contains 会误匹配，精确匹配必须拒绝
+        RequestTemplate template = template("POST",
+                "/rpc-api/bpm/process-instance/create-by-business/extra",
+                RpcServiceIdentityConstants.BPM_SERVER);
+        interceptor().apply(template);
+        assertNoIdentityHeaders(template);
+    }
+
+    @Test
     void genericBpmCreate_noIdentityHeaders() {
-        RequestTemplate template = template("POST", "/rpc-api/bpm/process-instance/create");
+        RequestTemplate template = template("POST", "/rpc-api/bpm/process-instance/create",
+                RpcServiceIdentityConstants.BPM_SERVER);
         interceptor().apply(template);
         assertNoIdentityHeaders(template);
     }
 
     @Test
     void systemLikePath_noIdentityHeaders() {
-        // 模拟误挂到其他客户端时，也不得附加 privileged 头
-        RequestTemplate template = template("POST", "/rpc-api/system/user/get");
+        RequestTemplate template = template("POST", "/rpc-api/system/user/get", "system-server");
         interceptor().apply(template);
         assertNoIdentityHeaders(template);
     }
 
     @Test
-    void infraLikePath_noIdentityHeaders() {
-        RequestTemplate template = template("GET", "/rpc-api/infra/file/get");
-        interceptor().apply(template);
-        assertNoIdentityHeaders(template);
-    }
-
-    @Test
-    void tokenForOtherRoute_cannotAuthorizeCreateByBusiness() {
-        String otherAudience = "POST /rpc-api/bpm/process-instance/create";
+    void tokenForOtherTarget_cannotAuthorizeCreateByBusiness() {
+        String other = RpcServiceIdentityConstants.audience("POST",
+                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS, "system-server");
         String replay = RpcServiceIdentityTokens.sign(
-                RpcServiceIdentityConstants.FINANCE_SERVER, otherAudience, STRONG_SECRET);
+                RpcServiceIdentityConstants.FINANCE_SERVER, other, STRONG_SECRET);
+        assertFalse(RpcServiceIdentityTokens.verify(
+                RpcServiceIdentityConstants.FINANCE_SERVER,
+                RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS,
+                replay, STRONG_SECRET));
+    }
+
+    @Test
+    void tokenForOtherPath_cannotAuthorizeCreateByBusiness() {
+        String other = RpcServiceIdentityConstants.audience("POST",
+                "/rpc-api/bpm/process-instance/create", RpcServiceIdentityConstants.BPM_SERVER);
+        String replay = RpcServiceIdentityTokens.sign(
+                RpcServiceIdentityConstants.FINANCE_SERVER, other, STRONG_SECRET);
         assertFalse(RpcServiceIdentityTokens.verify(
                 RpcServiceIdentityConstants.FINANCE_SERVER,
                 RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS,
@@ -93,40 +118,33 @@ class FinanceRpcServiceIdentityRequestInterceptorTest {
         FinanceRpcServiceIdentityRequestInterceptor interceptor =
                 new FinanceRpcServiceIdentityRequestInterceptor(props);
         RequestTemplate template = template("POST",
-                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS);
+                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS,
+                RpcServiceIdentityConstants.BPM_SERVER);
         assertThrows(IllegalStateException.class, () -> interceptor.apply(template));
-    }
-
-    @Test
-    void apply_withBlacklistedDevDefault_onPrivilegedPath_failsClosed() {
-        RpcServiceIdentityProperties props = new RpcServiceIdentityProperties();
-        props.setEnabled(true);
-        props.setSecret("yudao-rpc-service-identity-dev-only");
-        FinanceRpcServiceIdentityRequestInterceptor interceptor =
-                new FinanceRpcServiceIdentityRequestInterceptor(props);
-        RequestTemplate template = template("POST",
-                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS);
-        assertThrows(IllegalStateException.class, () -> interceptor.apply(template));
-    }
-
-    @Test
-    void apply_withMissingSecret_onNonPrivilegedPath_doesNotThrow() {
-        // 非 privileged 路径不读 secret
-        RpcServiceIdentityProperties props = new RpcServiceIdentityProperties();
-        props.setEnabled(true);
-        props.setSecret(null);
-        FinanceRpcServiceIdentityRequestInterceptor interceptor =
-                new FinanceRpcServiceIdentityRequestInterceptor(props);
-        RequestTemplate template = template("POST", "/rpc-api/system/user/get");
-        assertDoesNotThrow(() -> interceptor.apply(template));
-        assertNoIdentityHeaders(template);
     }
 
     @Test
     void feignConfiguration_isNotSpringConfigurationAnnotation() {
-        // 防止被组件扫描为父上下文全局 Bean
         assertFalse(FinanceBpmProcessInstanceFeignConfiguration.class
                 .isAnnotationPresent(org.springframework.context.annotation.Configuration.class));
+    }
+
+    @Test
+    void financeBpmApi_usesClientConfigurationNotDefaultConfiguration() {
+        org.springframework.cloud.openfeign.FeignClient ann =
+                FinanceBpmProcessInstanceApi.class.getAnnotation(
+                        org.springframework.cloud.openfeign.FeignClient.class);
+        assertNotNull(ann);
+        assertArrayEquals(new Class<?>[]{FinanceBpmProcessInstanceFeignConfiguration.class},
+                ann.configuration());
+        // EnableFeignClients 不得带 defaultConfiguration
+        org.springframework.cloud.openfeign.EnableFeignClients enable =
+                cn.iocoder.yudao.module.finance.framework.rpc.config.RpcConfiguration.class
+                        .getAnnotation(org.springframework.cloud.openfeign.EnableFeignClients.class);
+        assertNotNull(enable);
+        assertEquals(0, enable.defaultConfiguration().length,
+                "must not use @EnableFeignClients(defaultConfiguration=…)");
+        assertArrayEquals(new Class<?>[]{FinanceBpmProcessInstanceApi.class}, enable.clients());
     }
 
     private static void assertNoIdentityHeaders(RequestTemplate template) {

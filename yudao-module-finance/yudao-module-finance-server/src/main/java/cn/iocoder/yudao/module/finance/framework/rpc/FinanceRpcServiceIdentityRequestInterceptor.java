@@ -7,14 +7,14 @@ import cn.iocoder.yudao.framework.security.config.RpcServiceIdentityProperties;
 import cn.iocoder.yudao.framework.security.config.RpcServiceIdentitySecretValidator;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
+import feign.Target;
 import lombok.RequiredArgsConstructor;
 
 /**
- * EXP-87 G1/F2：仅 privileged BPM 路径附带 Finance 服务身份 HMAC。
+ * EXP-87 F3：仅 privileged BPM create-by-business 附带 Finance 服务身份 HMAC。
  * <p>
- * - 仅应通过 {@link FinanceBpmProcessInstanceFeignConfiguration} 挂到 {@code BpmProcessInstanceApi}，
- *   <strong>不得</strong>注册为父 ApplicationContext 的全局 {@code RequestInterceptor} Bean。
- * - 仅当请求路径为 create-by-business 时写 Header；签名绑定 audience，防跨路由重放。
+ * 仅通过 {@link FinanceBpmProcessInstanceApi}{@code @FeignClient(configuration=)} 挂载；
+ * method+path <strong>精确匹配</strong>；audience 绑定 BPM 目标服务名，防跨服务/跨路径重放。
  */
 @RequiredArgsConstructor
 public class FinanceRpcServiceIdentityRequestInterceptor implements RequestInterceptor {
@@ -27,42 +27,56 @@ public class FinanceRpcServiceIdentityRequestInterceptor implements RequestInter
             return;
         }
         if (!isPrivilegedBpmCreateByBusiness(template)) {
-            // F2：非 privileged 路径（含其他 Feign 若误挂本拦截器）一律不附身份头
+            return;
+        }
+        String targetName = resolveTargetName(template);
+        if (!RpcServiceIdentityConstants.BPM_SERVER.equals(targetName)) {
+            // 目标不是 bpm-server：不签发（即使路径碰巧相同）
             return;
         }
         String secret = RpcServiceIdentitySecretValidator.requireStrongSecretOrThrow(properties.getSecret());
         String serviceName = RpcServiceIdentityConstants.FINANCE_SERVER;
-        String audience = RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS;
+        String audience = RpcServiceIdentityConstants.audience(
+                RpcServiceIdentityConstants.METHOD_BPM_CREATE_BY_BUSINESS,
+                RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS,
+                RpcServiceIdentityConstants.BPM_SERVER);
         String token = RpcServiceIdentityTokens.sign(serviceName, audience, secret);
         template.header(RpcServiceIdentityConstants.HEADER_SERVICE_NAME, serviceName);
         template.header(RpcServiceIdentityConstants.HEADER_SERVICE_TOKEN, token);
     }
 
     /**
-     * 是否 create-by-business privileged 调用。
+     * method + 规范化 path 精确相等，且目标为 bpm-server。
      */
     static boolean isPrivilegedBpmCreateByBusiness(RequestTemplate template) {
         if (template == null) {
             return false;
         }
         String method = template.method();
-        if (method == null || !"POST".equalsIgnoreCase(method)) {
+        String path = resolvePath(template);
+        if (!RpcServiceIdentityConstants.isExactPrivilegedCreateByBusiness(method, path)) {
             return false;
         }
-        String path = resolvePath(template);
-        return path != null && path.contains(RpcServiceIdentityConstants.PATH_BPM_CREATE_BY_BUSINESS);
+        return RpcServiceIdentityConstants.BPM_SERVER.equals(resolveTargetName(template));
     }
 
-    private static String resolvePath(RequestTemplate template) {
-        // Feign: path() 可能是相对 path；url() 可能含 query
+    static String resolveTargetName(RequestTemplate template) {
+        if (template == null) {
+            return null;
+        }
+        Target<?> target = template.feignTarget();
+        if (target == null) {
+            return null;
+        }
+        String name = target.name();
+        return StrUtil.isBlank(name) ? null : name.trim();
+    }
+
+    static String resolvePath(RequestTemplate template) {
         String path = template.path();
         if (StrUtil.isBlank(path)) {
             path = template.url();
         }
-        if (path == null) {
-            return null;
-        }
-        int q = path.indexOf('?');
-        return q >= 0 ? path.substring(0, q) : path;
+        return RpcServiceIdentityConstants.normalizePath(path);
     }
 }
