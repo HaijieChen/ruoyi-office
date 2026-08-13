@@ -10,12 +10,9 @@ import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptListReqV
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.dal.mysql.dept.DeptMapper;
-import cn.iocoder.yudao.module.system.dal.redis.RedisKeyConstants;
 import cn.iocoder.yudao.module.system.enums.OrgTypeEnum;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -41,73 +38,88 @@ public class DeptServiceImpl implements DeptService {
 
     @Resource
     private DeptMapper deptMapper;
+    @Resource
+    private DeptMutationLock deptMutationLock;
+    @Resource
+    private DeptChildrenCacheInvalidator deptChildrenCacheInvalidator;
 
+    /**
+     * 组织写：经 {@link DeptMutationLock}（先锁→事务→commit→bump gen + clear→unlock）。
+     * <p>
+     * 子树缓存用代际 cache-aside（见 {@link #getChildDeptIdListFromCache}），闭合 G2-TAIL 尾随 put。
+     */
     @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public Long createDept(DeptSaveReqVO createReqVO) {
-        if (createReqVO.getParentId() == null) {
-            createReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
-        }
-        // 校验父部门的有效性
-        validateParentDept(null, createReqVO.getParentId());
-        // 校验部门名的唯一性
-        validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
-        normalizeAndValidateFunctionalCurrency(createReqVO);
+        return deptMutationLock.execute(() -> {
+            if (createReqVO.getParentId() == null) {
+                createReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
+            }
+            // 校验父部门的有效性
+            validateParentDept(null, createReqVO.getParentId());
+            // 公司不能挂在部门下（与导入共用）
+            validateCompanyNotUnderDepartment(createReqVO.getOrgType(), createReqVO.getParentId());
+            // 校验部门名的唯一性
+            validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
+            normalizeAndValidateFunctionalCurrency(createReqVO);
 
-        // 插入部门
-        DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
-        deptMapper.insert(dept);
-        return dept.getId();
+            // 插入部门
+            DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
+            deptMapper.insert(dept);
+            return dept.getId();
+        });
     }
 
     @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void updateDept(DeptSaveReqVO updateReqVO) {
-        if (updateReqVO.getParentId() == null) {
-            updateReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
-        }
-        // 校验自己存在
-        validateDeptExists(updateReqVO.getId());
-        // 校验父部门的有效性
-        validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
-        // 校验部门名的唯一性
-        validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), updateReqVO.getName());
-        normalizeAndValidateFunctionalCurrency(updateReqVO);
+        deptMutationLock.execute(() -> {
+            if (updateReqVO.getParentId() == null) {
+                updateReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
+            }
+            // 校验自己存在
+            validateDeptExists(updateReqVO.getId());
+            // 校验父部门的有效性
+            validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
+            validateCompanyNotUnderDepartment(updateReqVO.getOrgType(), updateReqVO.getParentId());
+            // 校验部门名的唯一性
+            validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), updateReqVO.getName());
+            normalizeAndValidateFunctionalCurrency(updateReqVO);
 
-        // 更新部门
-        DeptDO updateObj = BeanUtils.toBean(updateReqVO, DeptDO.class);
-        deptMapper.updateById(updateObj);
+            // 更新部门
+            DeptDO updateObj = BeanUtils.toBean(updateReqVO, DeptDO.class);
+            deptMapper.updateById(updateObj);
+            return null;
+        });
     }
 
     @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void deleteDept(Long id) {
-        // 校验是否存在
-        validateDeptExists(id);
-        // 校验是否有子部门
-        if (deptMapper.selectCountByParentId(id) > 0) {
-            throw exception(DEPT_EXITS_CHILDREN);
-        }
-        // 删除部门
-        deptMapper.deleteById(id);
-    }
-
-    @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
-            allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
-    public void deleteDeptList(List<Long> ids) {
-        // 校验是否有子部门
-        for (Long id : ids) {
+        deptMutationLock.execute(() -> {
+            // 校验是否存在
+            validateDeptExists(id);
+            // 校验是否有子部门
             if (deptMapper.selectCountByParentId(id) > 0) {
                 throw exception(DEPT_EXITS_CHILDREN);
             }
-        }
+            // 删除部门
+            deptMapper.deleteById(id);
+            return null;
+        });
+    }
 
-        // 批量删除部门
-        deptMapper.deleteByIds(ids);
+    @Override
+    public void deleteDeptList(List<Long> ids) {
+        deptMutationLock.execute(() -> {
+            // 校验是否有子部门
+            for (Long id : ids) {
+                if (deptMapper.selectCountByParentId(id) > 0) {
+                    throw exception(DEPT_EXITS_CHILDREN);
+                }
+            }
+
+            // 批量删除部门
+            deptMapper.deleteByIds(ids);
+            return null;
+        });
     }
 
     @VisibleForTesting
@@ -168,6 +180,26 @@ public class DeptServiceImpl implements DeptService {
         }
         if (ObjectUtil.notEqual(dept.getId(), id)) {
             throw exception(DEPT_NAME_DUPLICATE);
+        }
+    }
+
+    /**
+     * 公司节点不能挂在部门下（后端不变量，与导入/前端表单一致）。
+     */
+    @VisibleForTesting
+    void validateCompanyNotUnderDepartment(String orgType, Long parentId) {
+        if (parentId == null || DeptDO.PARENT_ID_ROOT.equals(parentId)) {
+            return;
+        }
+        if (!OrgTypeEnum.COMPANY.getValue().equals(String.valueOf(orgType))) {
+            return;
+        }
+        DeptDO parentDept = deptMapper.selectById(parentId);
+        if (parentDept == null) {
+            return; // 父不存在由 validateParentDept 处理
+        }
+        if (OrgTypeEnum.DEPARTMENT.getValue().equals(String.valueOf(parentDept.getOrgType()))) {
+            throw exception(DEPT_PARENT_TYPE_INVALID);
         }
     }
 
@@ -246,12 +278,29 @@ public class DeptServiceImpl implements DeptService {
         return deptMapper.selectListByLeaderUserId(id);
     }
 
+    /**
+     * 组织子树缓存读取（代际 cache-aside，闭合 G2-TAIL）。
+     * <p>
+     * 不用 {@code @Cacheable}：其 miss→invoke→put 无法在 put 前校验写代际，
+     * 存在「读旧库后尾随 put」污染窗口。此处：
+     * <ol>
+     *   <li>hit 且 gen 新鲜 → 返回</li>
+     *   <li>miss：记录 loadGen → 读库 → {@link DeptChildrenCacheInvalidator#putIfGeneration}</li>
+     *   <li>若期间写事务 bump gen，则拒绝 put；即使 put 成功，后续 hit 也会因 gen 不匹配拒绝</li>
+     * </ol>
+     */
     @Override
     @DataPermission(enable = false) // 禁用数据权限，避免建立不正确的缓存
-    @Cacheable(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST, key = "#id")
     public Set<Long> getChildDeptIdListFromCache(Long id) {
+        Set<Long> cached = deptChildrenCacheInvalidator.getIfFresh(id);
+        if (cached != null) {
+            return cached;
+        }
+        long loadGen = deptChildrenCacheInvalidator.currentGeneration();
         List<DeptDO> children = getChildDeptList(id);
-        return convertSet(children, DeptDO::getId);
+        Set<Long> ids = convertSet(children, DeptDO::getId);
+        deptChildrenCacheInvalidator.putIfGeneration(id, loadGen, ids);
+        return ids;
     }
 
     @Override

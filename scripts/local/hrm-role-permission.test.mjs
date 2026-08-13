@@ -21,16 +21,8 @@ const organizationMenuIds = [5148, 5149, 5150];
 // 系统管理侧按钮（父链 103→1，get-permission-info 会被 filterDisableMenus 丢掉）
 const systemDeptPermissionMenuIds = [1017, 1018, 1019, 1020];
 // 人力 → 组织管理 下挂的同权按钮（父链完整，前端 auth 可见）
-const hrmDeptPermissionMenuIds = [5259, 5260, 5261, 5262];
-const deptPermissionMenuIds = [...systemDeptPermissionMenuIds, ...hrmDeptPermissionMenuIds];
-const expectedMenuIds = [
-  ...bpmMenuIds,
-  5200,
-  5255,
-  ...hrmMenuIds,
-  ...organizationMenuIds,
-  ...deptPermissionMenuIds,
-].sort((left, right) => left - right);
+// 5259–5262 为 query/create/update/delete；import 由 hrm_menu_open 幂等插入，ID 运行时解析
+const hrmDeptPermissionMenuIdsBase = [5259, 5260, 5261, 5262];
 
 const bpmPermissions = [
   'bpm:process-instance:query',
@@ -82,6 +74,7 @@ const organizationPermissions = [
   'system:dept:create',
   'system:dept:update',
   'system:dept:delete',
+  'system:dept:import',
 ];
 
 const expectedPermissions = [...bpmPermissions, ...hrmPermissions, ...organizationPermissions].sort();
@@ -297,6 +290,34 @@ test('isolated role seed converges to the exact menu and permission contract', (
   assert.match(accountSql, /SIGNAL\s+SQLSTATE\s+'45000'/i, 'account selector failures must use SIGNAL');
   assert.doesNotMatch(accountSql, /ORDER BY\s+`id`\s+LIMIT\s+1/i, 'account selectors must not silently choose the first duplicate');
 
+  // import 按钮 ID 随环境自增；系统管理侧可能另有同 permission 行
+  const importMenuIds = queryColumn(isolatedDatabase, `
+    SELECT id FROM system_menu
+    WHERE deleted = b'0' AND permission = 'system:dept:import'
+    ORDER BY id;
+  `).map(Number);
+  assert.ok(importMenuIds.length >= 1, 'system:dept:import menu must exist after hrm_menu_open');
+
+  const hrmImportMenuId = Number(queryScalar(isolatedDatabase, `
+    SELECT m.id FROM system_menu m
+    INNER JOIN system_menu p ON p.id = m.parent_id
+    WHERE m.deleted = b'0' AND m.permission = 'system:dept:import'
+      AND p.deleted = b'0' AND p.component = 'system/dept/index'
+    ORDER BY m.id LIMIT 1;
+  `));
+  assert.ok(hrmImportMenuId > 0, 'HRM-side system:dept:import button must exist');
+
+  const expectedMenuIds = [
+    ...bpmMenuIds,
+    5200,
+    5255,
+    ...hrmMenuIds,
+    ...organizationMenuIds,
+    ...systemDeptPermissionMenuIds,
+    ...hrmDeptPermissionMenuIdsBase,
+    ...importMenuIds,
+  ].sort((left, right) => left - right);
+
   const menuIds = queryColumn(isolatedDatabase, `
     SELECT m.id
     FROM system_role_menu rm
@@ -307,6 +328,20 @@ test('isolated role seed converges to the exact menu and permission contract', (
     ORDER BY m.id;
   `).map(Number);
   assert.deepEqual(menuIds, expectedMenuIds);
+
+  // finance_admin / business_staff 不得拥有 import（脚本静态断言 + 库内检查）
+  const financeRoleSql = readRepositoryFile('sql/mysql/finance_roles_finance_admin_and_business_staff.sql');
+  assert.doesNotMatch(financeRoleSql, /system:dept:import/, 'finance roles must not grant dept import');
+  const financeImportCount = Number(queryScalar(isolatedDatabase, `
+    SELECT COUNT(*)
+    FROM system_role_menu rm
+    INNER JOIN system_role r ON r.id = rm.role_id
+    INNER JOIN system_menu m ON m.id = rm.menu_id
+    WHERE r.code IN ('finance_admin', 'business_staff')
+      AND r.tenant_id = 1 AND rm.tenant_id = 1 AND rm.deleted = b'0' AND m.deleted = b'0'
+      AND m.permission = 'system:dept:import';
+  `));
+  assert.equal(financeImportCount, 0, 'finance_admin/business_staff must not have system:dept:import');
 
   const hrmRootId = Number(queryScalar(isolatedDatabase, `
     SELECT id

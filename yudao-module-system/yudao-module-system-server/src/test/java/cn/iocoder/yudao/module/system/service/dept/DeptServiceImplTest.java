@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author niudehua
  */
-@Import(DeptServiceImpl.class)
+@Import({DeptServiceImpl.class, DeptMutationLock.class, DeptChildrenCacheInvalidator.class})
 public class DeptServiceImplTest extends BaseDbUnitTest {
 
     @Resource
@@ -368,6 +368,48 @@ public class DeptServiceImplTest extends BaseDbUnitTest {
 
         // 调用, 并断言异常
         assertServiceException(() -> deptService.validateDeptList(ids), DEPT_NOT_ENABLE, deptDO.getName());
+    }
+
+    @Test
+    public void testCreateCompanyUnderDepartmentRejected() {
+        DeptDO parentDept = randomPojo(DeptDO.class, o -> {
+            o.setOrgType("0");
+            o.setFunctionalCurrency(null);
+            o.setParentId(DeptDO.PARENT_ID_ROOT);
+            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        });
+        deptMapper.insert(parentDept);
+
+        DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
+            o.setId(null);
+            o.setParentId(parentDept.getId());
+            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
+            o.setOrgType("1");
+            o.setFunctionalCurrency("CNY");
+        });
+        assertServiceException(() -> deptService.createDept(reqVO), DEPT_PARENT_TYPE_INVALID);
+    }
+
+    @Test
+    public void testCreateCompanyUnderCompanyAllowed() {
+        DeptDO parentCompany = randomPojo(DeptDO.class, o -> {
+            o.setOrgType("1");
+            o.setFunctionalCurrency("CNY");
+            o.setParentId(DeptDO.PARENT_ID_ROOT);
+            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        });
+        deptMapper.insert(parentCompany);
+
+        DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
+            o.setId(null);
+            o.setParentId(parentCompany.getId());
+            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
+            o.setOrgType("1");
+            o.setFunctionalCurrency("USD");
+        });
+        Long id = deptService.createDept(reqVO);
+        assertNotNull(id);
+        assertEquals("USD", deptMapper.selectById(id).getFunctionalCurrency());
     }
 
 }

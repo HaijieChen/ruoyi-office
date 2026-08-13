@@ -10,12 +10,27 @@ import cn.iocoder.yudao.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 public interface RedisKeyConstants {
 
     /**
-     * 指定部门的所有子部门编号数组的缓存
+     * 指定部门的所有子部门编号数组的缓存（<b>遗留命名空间</b>）。
      * <p>
-     * KEY 格式：dept_children_ids:{id}
-     * VALUE 数据类型：String 子部门编号集合
+     * KEY 格式：dept_children_ids:{id}<br>
+     * VALUE：历史版本为 {@code Set&lt;Long&gt;}（{@code @Cacheable} 时代）。
+     * <p>
+     * EXP-86 起<strong>新代码不在本命名空间写入 stamped 类型</strong>；可写入 Long 型 epoch 标记
+     *（{@code __dept_children_v2_epoch__}）供检测旧包 allEntries clear。组织写成功后 clear 本空间
+     * 并写回 epoch。旧包仍可能写入 Set 到部门 id 键。
+     * 新子树值写入 {@link #DEPT_CHILDREN_ID_LIST_V2}（C1 + R2-FINAL-01）。
      */
     String DEPT_CHILDREN_ID_LIST = "dept_children_ids";
+
+    /**
+     * 组织子树缓存 V2（EXP-86+ 代际 cache-aside）。
+     * <p>
+     * KEY 格式：dept_children_ids_v2:{id}<br>
+     * VALUE：{@code DeptChildrenCacheInvalidator.GenerationStampedSet}<br>
+     * 与 {@link #DEPT_CHILDREN_ID_LIST} <strong>命名空间隔离</strong>（C1）。
+     * 旧包写仅清遗留名时，新包靠 legacy epoch 标记缺失失效本空间陈旧命中（R2-FINAL-01）。
+     */
+    String DEPT_CHILDREN_ID_LIST_V2 = "dept_children_ids_v2";
 
     /**
      * 角色的缓存

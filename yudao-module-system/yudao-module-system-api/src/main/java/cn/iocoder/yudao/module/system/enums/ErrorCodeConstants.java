@@ -59,6 +59,24 @@ public interface ErrorCodeConstants {
     ErrorCode DEPT_FUNCTIONAL_CURRENCY_REQUIRED = new ErrorCode(1_002_004_008, "公司节点必须填写记账本位币");
     /** 记账本位币仅允许 CNY/USD/HKD */
     ErrorCode DEPT_FUNCTIONAL_CURRENCY_INVALID = new ErrorCode(1_002_004_009, "记账本位币仅支持 CNY/USD/HKD");
+    /** 公司不能挂在部门下 */
+    ErrorCode DEPT_PARENT_TYPE_INVALID = new ErrorCode(1_002_004_010, "公司不能挂在部门下");
+    /** 组织导入：文件类型 */
+    ErrorCode DEPT_IMPORT_FILE_TYPE = new ErrorCode(1_002_004_011, "仅支持 .xlsx 格式的组织架构导入文件");
+    /** 组织导入：文件过大 */
+    ErrorCode DEPT_IMPORT_FILE_TOO_LARGE = new ErrorCode(1_002_004_012, "导入文件不能超过 2MB");
+    /** 组织导入：行数超限 */
+    ErrorCode DEPT_IMPORT_ROW_LIMIT = new ErrorCode(1_002_004_013, "单次导入最多 1000 行");
+    /** 组织导入：树深超限 */
+    ErrorCode DEPT_IMPORT_DEPTH_LIMIT = new ErrorCode(1_002_004_014, "组织树深度不能超过 20 层");
+    /** 组织导入：租户写锁繁忙 */
+    ErrorCode DEPT_IMPORT_BUSY = new ErrorCode(1_002_004_015, "组织正在变更，请稍后重试");
+    /** 组织导入：预览后文件变更 */
+    ErrorCode DEPT_IMPORT_FILE_CHANGED = new ErrorCode(1_002_004_016, "文件已变更，请重新校验后再导入");
+    /** 组织导入：需要全部数据权限 */
+    ErrorCode DEPT_IMPORT_NO_FULL_DATA_SCOPE = new ErrorCode(1_002_004_017, "整树导入需要全部数据权限");
+    /** 组织导入：空文件 */
+    ErrorCode DEPT_IMPORT_EMPTY = new ErrorCode(1_002_004_018, "导入文件无有效数据行");
 
     // ========== 岗位模块 1-002-005-000 ==========
     ErrorCode POST_NOT_FOUND = new ErrorCode(1_002_005_000, "当前岗位不存在");

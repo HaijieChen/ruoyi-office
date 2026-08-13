@@ -292,7 +292,8 @@ WHERE r.`id` = @hr_admin_role_id
             'system:dept:query',
             'system:dept:create',
             'system:dept:update',
-            'system:dept:delete'
+            'system:dept:delete',
+            'system:dept:import'
         )
         -- 流程办理按钮
      OR m.`permission` IN (
