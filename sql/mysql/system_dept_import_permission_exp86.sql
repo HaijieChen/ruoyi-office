@@ -6,13 +6,15 @@
 --
 -- 前置：hrm_menu_open.sql 已创建组织管理页；system_dept.functional_currency 列已存在（EXP-73）。
 --
--- 部署/回滚（C1 + R2-FINAL-01 缓存，应用侧，无 DDL）：
--- - 滚动发布：允许新旧包写者并存。
+-- 部署/回滚（C1 + R2-FINAL-01 + R2-FINAL-01-TAIL 缓存，应用侧，无 DDL）：
+-- - 滚动发布：允许新旧包写者并存（有证据）。
 --   * 新包读写 dept_children_ids_v2（GenerationStampedSet）+ 代际；
---     在遗留名 dept_children_ids 写入 Long 型 epoch 标记键 __dept_children_v2_epoch__。
---   * 旧包读写 dept_children_ids（Set），@CacheEvict(allEntries) 会清掉 epoch 标记；
---     新包读路径发现标记缺失 → bump 代际并清空 V2 → 拒绝陈旧 V2 命中（旧写→新读闭合）。
---   * 新 stamped 类型绝不写入遗留名 → 旧实例无 SerializationException（C1）。
+--     在遗留名 dept_children_ids 写入 Long 型 epoch 标记键 __dept_children_v2_epoch__
+--     （仅由「新写 bump」或「检测到旧写失效后 onLegacyInvalidation」写入当前 gen）。
+--   * 普通读 putIfGeneration 成功后【禁止】写回 epoch，避免覆盖「末次 GET 与 restore 之间」
+--     的旧包 allEntries clear 信号（R2-FINAL-01-TAIL）。
+--   * 旧包 @CacheEvict(allEntries) 抹掉 epoch；新包 getIfFresh 检测 → bump + 清 V2。
+--   * stamped 绝不写入遗留名（C1）。
 -- - 回滚应用：停新包后仅旧包读遗留名；V2 键可残留至 TTL，旧包不访问。
 -- - 生产需 Redisson（租户写锁 + 代际 AtomicLong）。
 -- - 发布前仍执行本权限脚本 + EXP-73 列预检。

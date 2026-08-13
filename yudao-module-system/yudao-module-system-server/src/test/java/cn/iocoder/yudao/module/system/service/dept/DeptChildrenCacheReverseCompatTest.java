@@ -19,6 +19,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -53,10 +59,13 @@ public class DeptChildrenCacheReverseCompatTest extends BaseDbUnitTest {
     void setUp() {
         TenantContextHolder.setTenantId(1L);
         coordinator.afterLoadBeforePutHook = null;
+        coordinator.afterLastEpochCheckBeforeReturnHook = null;
     }
 
     @AfterEach
     void tearDown() {
+        coordinator.afterLoadBeforePutHook = null;
+        coordinator.afterLastEpochCheckBeforeReturnHook = null;
         TenantContextHolder.clear();
         Cache a = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
         Cache b = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
@@ -123,6 +132,103 @@ public class DeptChildrenCacheReverseCompatTest extends BaseDbUnitTest {
         // getIfFresh 必须因 epoch 破损返回 null，而不是返回 V2 旧集合
         assertNull(coordinator.getIfFresh(parentId),
                 "legacy epoch 破损时不得返回陈旧 V2 命中");
+    }
+
+    /**
+     * R2-FINAL-01-TAIL：
+     * <pre>
+     * 新读 putIfGeneration：末次 epoch GET intact
+     * 旧写：DB + legacy allEntries clear（删 epoch）
+     * 新读：返回（且不得 restore epoch=loadGen）
+     * 后读：不得有效命中陈旧 V2
+     * </pre>
+     */
+    @Test
+    void putSuccessMustNotRestoreEpochOverOldWriteClear() throws Exception {
+        Long parentId = createRoot("R2F01TAIL父");
+        // 先 warm 一次，确保有 epoch；再 clear V2 触发 miss put 路径
+        deptService.getChildDeptIdListFromCache(parentId);
+        long genWarm = coordinator.currentGeneration();
+        assertTrue(coordinator.isLegacyEpochSignalIntact());
+        Cache v2 = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
+        assertNotNull(v2);
+        v2.clear(); // 强制 miss → putIfGeneration
+
+        CountDownLatch readerAtTail = new CountDownLatch(1);
+        CountDownLatch oldWriteDone = new CountDownLatch(1);
+        AtomicReference<Throwable> error = new AtomicReference<>();
+
+        coordinator.afterLastEpochCheckBeforeReturnHook = () -> {
+            try {
+                readerAtTail.countDown();
+                assertTrue(oldWriteDone.await(15, TimeUnit.SECONDS));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        };
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        Future<?> readerFut = pool.submit(() -> {
+            TenantContextHolder.setTenantId(1L);
+            try {
+                // miss → load 空子树（旧写尚未插入）→ put V2；末次 epoch check 后钩子暂停
+                Set<Long> first = deptService.getChildDeptIdListFromCache(parentId);
+                assertNotNull(first);
+                // 返回后：若错误 restore 了 epoch，陈旧 empty V2 会再次被 getIfFresh 命中
+            } catch (Throwable t) {
+                error.set(t);
+            } finally {
+                TenantContextHolder.clear();
+            }
+        });
+
+        Future<?> oldWriterFut = pool.submit(() -> {
+            TenantContextHolder.setTenantId(1L);
+            try {
+                assertTrue(readerAtTail.await(15, TimeUnit.SECONDS));
+                // 旧包：库变更 + 仅 clear legacy（抹 epoch）
+                DeptDO injected = new DeptDO();
+                injected.setName("R2F01TAIL旧包子");
+                injected.setParentId(parentId);
+                injected.setSort(9);
+                injected.setStatus(CommonStatusEnum.ENABLE.getStatus());
+                injected.setOrgType("0");
+                deptMapper.insert(injected);
+                coordinator.simulateOldPackageCacheEvictAllEntries();
+                assertFalse(coordinator.isLegacyEpochSignalIntact());
+            } catch (Throwable t) {
+                error.compareAndSet(null, t);
+            } finally {
+                oldWriteDone.countDown();
+                TenantContextHolder.clear();
+            }
+        });
+
+        readerFut.get(30, TimeUnit.SECONDS);
+        oldWriterFut.get(30, TimeUnit.SECONDS);
+        pool.shutdown();
+        coordinator.afterLastEpochCheckBeforeReturnHook = null;
+
+        if (error.get() != null) {
+            fail(error.get());
+        }
+
+        // 关键 restore 后 epoch 仍破损 → 后读必须 miss 重载，不得命中 put 进去的空 V2
+        assertFalse(coordinator.isLegacyEpochSignalIntact()
+                        && coordinator.currentGeneration() == genWarm
+                        && coordinator.getIfFresh(parentId) != null
+                        && coordinator.getIfFresh(parentId).isEmpty(),
+                "不得出现：restore 掩盖旧写 + 陈旧 empty V2 有效命中");
+
+        Set<Long> after = deptService.getChildDeptIdListFromCache(parentId);
+        assertTrue(after.stream().anyMatch(id -> {
+            DeptDO d = deptMapper.selectById(id);
+            return d != null && "R2F01TAIL旧包子".equals(d.getName());
+        }), "后续读必须看见旧写插入的子节点");
+        assertTrue(coordinator.currentGeneration() > genWarm
+                        || !after.isEmpty(),
+                "应 bump 或至少从库读到新子");
     }
 
     private Long createRoot(String name) {
