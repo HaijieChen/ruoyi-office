@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 /**
- * 付款申请 · BPM 自定义表单「查看」组件（F3 + EXP-87 F1/F6）。
+ * 税金付款 · BPM 自定义表单「查看」组件（F3 + EXP-87 F1/F6）。
  * processInstance/detail 经 formCustomViewPath 加载，
  * props.id = businessKey（付款申请主键）。
  */
@@ -30,17 +30,17 @@ import {
 import dayjs, { type Dayjs } from 'dayjs';
 
 import {
-  getPaymentApplication,
-  recordPayPaymentApplication,
-  updatePaymentAccountingSubject,
-} from '#/api/finance/payment-application';
+  getTaxPayment,
+  recordPayTaxPayment,
+} from '#/api/finance/tax-payment';
+import { updatePaymentAccountingSubject } from '#/api/finance/payment-application';
 import { getCompanyBankAccountSimpleList } from '#/api/finance/company-bank-account';
 import type { DefaultOptionType } from 'ant-design-vue/es/select';
 
 import { getDictOptions } from '@vben/hooks';
 import { FileUpload } from '#/components/upload';
 
-defineOptions({ name: 'FinancePaymentApplicationBpmDetail' });
+defineOptions({ name: 'FinanceTaxPaymentBpmDetail' });
 
 function dictOptions(dictType: string): DefaultOptionType[] {
   return getDictOptions(dictType).map((d) => ({
@@ -199,7 +199,7 @@ async function loadData() {
   }
   loading.value = true;
   try {
-    detail.value = await getPaymentApplication(id);
+    detail.value = await getTaxPayment(id);
     accountingSubject.value = detail.value?.accountingSubject || '';
     payAmount.value = remainingPay.value || Number(detail.value?.applyAmount || 0);
     const entities = payEntityOptions.value;
@@ -208,7 +208,7 @@ async function loadData() {
     await loadAccounts(payEntityCompanyDeptId.value);
   } catch (error) {
     detail.value = null;
-    message.error(error instanceof Error ? error.message : '加载付款详情失败');
+    message.error(error instanceof Error ? error.message : '加载税金付款详情失败');
   } finally {
     loading.value = false;
   }
@@ -258,7 +258,7 @@ async function handleRecordPay() {
   }
   submitting.value = true;
   try {
-    await recordPayPaymentApplication({
+    await recordPayTaxPayment({
       id,
       taskId: tid,
       companyBankAccountId: companyBankAccountId.value,
@@ -289,7 +289,7 @@ async function handleGoResubmit() {
     // ignore
   }
   await router.push({
-    path: '/finance/payment-application',
+    path: '/finance/tax-payment',
     query: { openResubmit: String(id) },
   });
 }
@@ -314,7 +314,7 @@ watch(
     <Spin :spinning="loading">
       <template v-if="detail">
         <div class="mb-4 flex flex-wrap items-center gap-2">
-          <span class="text-base font-medium">付款申请</span>
+          <span class="text-base font-medium">税金付款申请</span>
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>{{ detail.status }}</Tag>
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">

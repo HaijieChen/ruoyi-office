@@ -63,3 +63,12 @@ export function recordPaySalaryPayment(
 ) {
   return requestClient.post<boolean>('/finance/salary-payment/record-pay', data);
 }
+
+export function resubmitSalaryPayment(
+  id: number,
+  data: FinanceSalaryPaymentApi.CreateRequest,
+) {
+  return requestClient.put<boolean>('/finance/salary-payment/resubmit', data, {
+    params: { id },
+  });
+}

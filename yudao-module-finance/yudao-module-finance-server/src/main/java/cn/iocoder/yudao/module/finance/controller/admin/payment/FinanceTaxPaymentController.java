@@ -41,6 +41,15 @@ public class FinanceTaxPaymentController {
         return success(paymentApplicationService.createAndStartTax(reqVO, getLoginUserId()));
     }
 
+    @PutMapping("/resubmit")
+    @Operation(summary = "驳回后重提税金付款（明细重写 + 新流程）")
+    @PreAuthorize("@ss.hasPermission('finance:tax-payment:resubmit')")
+    public CommonResult<Boolean> resubmit(@RequestParam("id") Long id,
+                                          @Valid @RequestBody FinanceTaxPaymentCreateAndStartReqVO reqVO) {
+        paymentApplicationService.resubmitTax(id, reqVO, getLoginUserId());
+        return success(true);
+    }
+
     @GetMapping("/get")
     @Operation(summary = "税金付款详情")
     @PreAuthorize("@ss.hasPermission('finance:tax-payment:query') or @financePaymentAccess.canTaskContextOrOwnerRead(#id)")

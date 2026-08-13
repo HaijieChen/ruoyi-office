@@ -15,6 +15,12 @@ import java.math.BigDecimal;
 @Mapper
 public interface FinancePaymentApplicationMapper extends BaseMapperX<FinancePaymentApplicationDO> {
 
+    /**
+     * EXP-87 F5：支付登记前对申请行加悲观锁，串行化 remaining 校验与明细插入。
+     */
+    @Select("SELECT * FROM finance_payment_application WHERE id = #{id} AND deleted = 0 FOR UPDATE")
+    FinancePaymentApplicationDO selectByIdForUpdate(@Param("id") Long id);
+
     default PageResult<FinancePaymentApplicationDO> selectPage(FinancePaymentApplicationPageReqVO reqVO,
                                                                Long applicantUserIdOrNull) {
         LambdaQueryWrapperX<FinancePaymentApplicationDO> wrapper = new LambdaQueryWrapperX<FinancePaymentApplicationDO>()

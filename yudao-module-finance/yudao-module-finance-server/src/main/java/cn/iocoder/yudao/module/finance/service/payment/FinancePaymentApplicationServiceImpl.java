@@ -326,6 +326,142 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void resubmitSalary(Long id, FinanceSalaryPaymentCreateAndStartReqVO reqVO, Long userId) {
+        FinancePaymentApplicationDO existing = getApplication(id);
+        assertOwner(existing, userId);
+        if (!FinancePaymentApplicationKindEnum.SALARY.getCode().equals(existing.getApplicationKind())) {
+            throw exception(PAYMENT_APPLICATION_KIND_INVALID);
+        }
+        if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
+                || Boolean.TRUE.equals(existing.getVoided())) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        if (!FinancePaymentTimingEnum.contains(reqVO.getPaymentTiming())) {
+            throw exception(PAYMENT_APPLICATION_TIMING_INVALID);
+        }
+        String currency = normalizeCurrency(reqVO.getCurrency());
+        String periodLabel = requirePeriod(reqVO.getPeriodLabel());
+        List<String> evidence = reqVO.getEvidenceFileUrls() == null ? List.of() : reqVO.getEvidenceFileUrls();
+        if (CollUtil.isNotEmpty(evidence)) {
+            validateEvidenceUrls(evidence);
+        }
+        PreparedLines preparedLines = prepareSalaryLines(reqVO.getLines(), currency);
+        Long deptId = resolveApplicantDeptId(userId);
+        String title = "【薪资付款】-" + periodLabel + "-" + preparedLines.applyAmount();
+
+        int claimed = applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                .eq("id", id)
+                .eq("applicant_user_id", userId)
+                .eq("status", FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
+                .eq("application_kind", FinancePaymentApplicationKindEnum.SALARY.getCode())
+                .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
+                .set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .set("voided", Boolean.FALSE)
+                .set("current_node_key", null)
+                .set("current_node_name", null)
+                .set("payment_timing", reqVO.getPaymentTiming())
+                .set("payment_reason", FinancePaymentReasonEnum.SALARY.getCode())
+                .set("period_label", periodLabel)
+                .set("apply_amount", preparedLines.applyAmount())
+                .set("amount_in_words", toAmountInWords(preparedLines.applyAmount()))
+                .set("currency", currency)
+                .set("entity_company_dept_id", preparedLines.primaryEntityDeptId())
+                .set("entity_company_name", preparedLines.primaryEntityName())
+                .set("evidence_file_urls", CollUtil.isEmpty(evidence) ? "[]" : toEvidenceJson(evidence))
+                .set("special_note", trimToNull(reqVO.getSpecialNote()))
+                .set("process_title", title)
+                .set("applicant_dept_id", deptId)
+                .set("accounting_subject", null)
+                .set("actual_pay_date", null)
+                .set("pay_voucher_url", null)
+                .set("erp_voucher_no", null));
+        if (claimed == 0) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        // 清旧支付明细 + 重写薪资明细
+        clearPayLines(id);
+        salaryLineMapper.deleteByApplicationId(id);
+        insertSalaryLines(id, preparedLines.salaryLines());
+
+        FinancePaymentApplicationDO reloaded = getApplication(id);
+        String processInstanceId = startProcess(userId, reloaded,
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY);
+        FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
+        processUpdate.setId(id);
+        processUpdate.setProcessInstanceId(processInstanceId);
+        applicationMapper.updateById(processUpdate);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void resubmitTax(Long id, FinanceTaxPaymentCreateAndStartReqVO reqVO, Long userId) {
+        FinancePaymentApplicationDO existing = getApplication(id);
+        assertOwner(existing, userId);
+        if (!FinancePaymentApplicationKindEnum.TAX.getCode().equals(existing.getApplicationKind())) {
+            throw exception(PAYMENT_APPLICATION_KIND_INVALID);
+        }
+        if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
+                || Boolean.TRUE.equals(existing.getVoided())) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        if (!FinancePaymentTimingEnum.contains(reqVO.getPaymentTiming())) {
+            throw exception(PAYMENT_APPLICATION_TIMING_INVALID);
+        }
+        String currency = normalizeCurrency(reqVO.getCurrency());
+        String periodLabel = requirePeriod(reqVO.getPeriodLabel());
+        if (CollUtil.isEmpty(reqVO.getEvidenceFileUrls())
+                || reqVO.getEvidenceFileUrls().stream().noneMatch(StrUtil::isNotBlank)) {
+            throw exception(PAYMENT_APPLICATION_EVIDENCE_REQUIRED);
+        }
+        validateEvidenceUrls(reqVO.getEvidenceFileUrls());
+        PreparedLines preparedLines = prepareTaxLines(reqVO.getLines(), currency);
+        Long deptId = resolveApplicantDeptId(userId);
+        String title = "【税金付款】-" + periodLabel + "-" + preparedLines.applyAmount();
+
+        int claimed = applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                .eq("id", id)
+                .eq("applicant_user_id", userId)
+                .eq("status", FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
+                .eq("application_kind", FinancePaymentApplicationKindEnum.TAX.getCode())
+                .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
+                .set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .set("voided", Boolean.FALSE)
+                .set("current_node_key", null)
+                .set("current_node_name", null)
+                .set("payment_timing", reqVO.getPaymentTiming())
+                .set("payment_reason", FinancePaymentReasonEnum.TAX.getCode())
+                .set("period_label", periodLabel)
+                .set("apply_amount", preparedLines.applyAmount())
+                .set("amount_in_words", toAmountInWords(preparedLines.applyAmount()))
+                .set("currency", currency)
+                .set("entity_company_dept_id", preparedLines.primaryEntityDeptId())
+                .set("entity_company_name", preparedLines.primaryEntityName())
+                .set("evidence_file_urls", toEvidenceJson(reqVO.getEvidenceFileUrls()))
+                .set("special_note", trimToNull(reqVO.getSpecialNote()))
+                .set("process_title", title)
+                .set("applicant_dept_id", deptId)
+                .set("accounting_subject", null)
+                .set("actual_pay_date", null)
+                .set("pay_voucher_url", null)
+                .set("erp_voucher_no", null));
+        if (claimed == 0) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        clearPayLines(id);
+        taxLineMapper.deleteByApplicationId(id);
+        insertTaxLines(id, preparedLines.taxLines());
+
+        FinancePaymentApplicationDO reloaded = getApplication(id);
+        String processInstanceId = startProcess(userId, reloaded,
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX);
+        FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
+        processUpdate.setId(id);
+        processUpdate.setProcessInstanceId(processInstanceId);
+        applicationMapper.updateById(processUpdate);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void cancel(Long id, Long userId) {
         FinancePaymentApplicationDO application = getApplication(id);
         assertOwner(application, userId);
@@ -539,11 +675,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recordPay(FinancePaymentRecordPayReqVO reqVO, Long userId) {
-        FinancePaymentApplicationDO application = getApplication(reqVO.getId());
-        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
-                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
-            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
-        }
         if (reqVO.getActualPayDate() == null || StrUtil.isBlank(reqVO.getPayVoucherUrl())) {
             throw exception(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED);
         }
@@ -552,6 +683,16 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
         if (!isAcceptableFileUrl(reqVO.getPayVoucherUrl().trim())) {
             throw exception(PAYMENT_APPLICATION_EVIDENCE_URL_INVALID);
+        }
+
+        // EXP-87 F5：悲观锁串行化 remaining 读 + 明细写，防止并发超付
+        FinancePaymentApplicationDO application = applicationMapper.selectByIdForUpdate(reqVO.getId());
+        if (application == null) {
+            throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
+        }
+        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
+                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
         }
 
         // F2：校验办理人/候选人后再写台账
@@ -1197,6 +1338,14 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 line.setTenantId(tenantId);
             }
             taxLineMapper.insert(line);
+        }
+    }
+
+    /** 重提前清除已登记支付明细（逻辑删）。 */
+    private void clearPayLines(Long paymentApplicationId) {
+        List<FinancePaymentPayLineDO> lines = payLineMapper.selectByApplicationId(paymentApplicationId);
+        for (FinancePaymentPayLineDO line : lines) {
+            payLineMapper.deleteById(line.getId());
         }
     }
 

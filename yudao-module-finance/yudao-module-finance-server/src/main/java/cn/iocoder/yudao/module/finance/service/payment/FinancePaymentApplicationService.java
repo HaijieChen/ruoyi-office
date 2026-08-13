@@ -32,6 +32,12 @@ public interface FinancePaymentApplicationService {
     /** 税金付款独立入口 */
     Long createAndStartTax(FinanceTaxPaymentCreateAndStartReqVO reqVO, Long applicantUserId);
 
+    /** 薪资付款驳回后重提：明细重写 + 新 PI + 清支付证据 */
+    void resubmitSalary(Long id, FinanceSalaryPaymentCreateAndStartReqVO reqVO, Long userId);
+
+    /** 税金付款驳回后重提：明细重写 + 新 PI + 清支付证据 */
+    void resubmitTax(Long id, FinanceTaxPaymentCreateAndStartReqVO reqVO, Long userId);
+
     void resubmit(Long id, FinancePaymentApplicationResubmitReqVO reqVO, Long userId);
 
     /**

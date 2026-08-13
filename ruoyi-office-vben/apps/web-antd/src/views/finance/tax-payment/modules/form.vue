@@ -13,7 +13,11 @@ import {
   message,
 } from 'ant-design-vue';
 
-import { createAndStartTaxPayment } from '#/api/finance/tax-payment';
+import {
+  createAndStartTaxPayment,
+  getTaxPayment,
+  resubmitTaxPayment,
+} from '#/api/finance/tax-payment';
 import { getSimpleDeptList } from '#/api/system/dept';
 import { FileUpload } from '#/components/upload';
 
@@ -30,6 +34,7 @@ interface Line {
 }
 
 const form = ref<{
+  id?: number;
   paymentTiming?: string;
   periodLabel?: string;
   currency?: string;
@@ -44,6 +49,10 @@ const form = ref<{
 });
 
 const companyOptions = ref<{ label: string; value: number }[]>([]);
+const isResubmit = computed(() => !!form.value.id);
+const title = computed(() =>
+  isResubmit.value ? '驳回后重提税金付款' : '新建税金付款申请',
+);
 
 onMounted(async () => {
   try {
@@ -77,7 +86,48 @@ const total = computed(() =>
   }, 0),
 );
 
+function parseEvidence(raw?: string | string[]): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const j = JSON.parse(raw);
+    return Array.isArray(j) ? j : [];
+  } catch {
+    return raw ? [raw] : [];
+  }
+}
+
 const [Modal, modalApi] = useVbenModal({
+  async onOpenChange(isOpen: boolean) {
+    if (!isOpen) return;
+    const data = modalApi.getData<{ id?: number }>() || {};
+    if (data.id) {
+      const detail = await getTaxPayment(data.id);
+      form.value = {
+        id: detail.id,
+        paymentTiming: detail.paymentTiming || 'IMMEDIATE',
+        periodLabel: (detail as any).periodLabel,
+        currency: detail.currency || 'CNY',
+        specialNote: detail.specialNote,
+        evidenceFileUrls: parseEvidence(detail.evidenceFileUrls as any),
+        lines: ((detail as any).taxLines || []).map((l: any) => ({
+          entityCompanyDeptId: l.entityCompanyDeptId,
+          vatAmount: Number(l.vatAmount || 0),
+          surchargeAmount: Number(l.surchargeAmount || 0),
+          stampTaxAmount: Number(l.stampTaxAmount || 0),
+          citAmount: Number(l.citAmount || 0),
+        })),
+      };
+      if (!form.value.lines.length) form.value.lines = [{}];
+    } else {
+      form.value = {
+        currency: 'CNY',
+        paymentTiming: 'IMMEDIATE',
+        evidenceFileUrls: [],
+        lines: [{}],
+      };
+    }
+  },
   async onConfirm() {
     if (!form.value.periodLabel) {
       message.error('请填写税款所属期');
@@ -91,23 +141,29 @@ const [Modal, modalApi] = useVbenModal({
       message.error('请为每行选择主体公司');
       return;
     }
+    const payload = {
+      paymentTiming: form.value.paymentTiming || 'IMMEDIATE',
+      periodLabel: form.value.periodLabel!,
+      currency: form.value.currency || 'CNY',
+      specialNote: form.value.specialNote,
+      evidenceFileUrls: form.value.evidenceFileUrls!,
+      lines: form.value.lines.map((l) => ({
+        entityCompanyDeptId: l.entityCompanyDeptId!,
+        vatAmount: Number(l.vatAmount || 0),
+        surchargeAmount: Number(l.surchargeAmount || 0),
+        stampTaxAmount: Number(l.stampTaxAmount || 0),
+        citAmount: Number(l.citAmount || 0),
+      })),
+    };
     modalApi.lock();
     try {
-      await createAndStartTaxPayment({
-        paymentTiming: form.value.paymentTiming || 'IMMEDIATE',
-        periodLabel: form.value.periodLabel!,
-        currency: form.value.currency || 'CNY',
-        specialNote: form.value.specialNote,
-        evidenceFileUrls: form.value.evidenceFileUrls!,
-        lines: form.value.lines.map((l) => ({
-          entityCompanyDeptId: l.entityCompanyDeptId!,
-          vatAmount: Number(l.vatAmount || 0),
-          surchargeAmount: Number(l.surchargeAmount || 0),
-          stampTaxAmount: Number(l.stampTaxAmount || 0),
-          citAmount: Number(l.citAmount || 0),
-        })),
-      });
-      message.success('已提交税金付款申请');
+      if (isResubmit.value && form.value.id) {
+        await resubmitTaxPayment(form.value.id, payload);
+        message.success('已重提税金付款申请');
+      } else {
+        await createAndStartTaxPayment(payload);
+        message.success('已提交税金付款申请');
+      }
       emit('success');
       modalApi.close();
     } finally {
@@ -126,13 +182,10 @@ const [Modal, modalApi] = useVbenModal({
 </script>
 
 <template>
-  <Modal title="新建税金付款申请" class="w-[900px]">
+  <Modal :title="title" class="w-[900px]">
     <Form :label-col="{ span: 5 }" :wrapper-col="{ span: 18 }">
       <Form.Item label="税款所属期" required>
-        <Input
-          v-model:value="form.periodLabel"
-          placeholder="如 2026-Q2"
-        />
+        <Input v-model:value="form.periodLabel" placeholder="如 2026-Q2" />
       </Form.Item>
       <Form.Item label="支付时效" required>
         <Select

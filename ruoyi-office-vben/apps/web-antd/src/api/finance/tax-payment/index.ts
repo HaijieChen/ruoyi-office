@@ -64,3 +64,12 @@ export function recordPayTaxPayment(
 ) {
   return requestClient.post<boolean>('/finance/tax-payment/record-pay', data);
 }
+
+export function resubmitTaxPayment(
+  id: number,
+  data: FinanceTaxPaymentApi.CreateRequest,
+) {
+  return requestClient.put<boolean>('/finance/tax-payment/resubmit', data, {
+    params: { id },
+  });
+}

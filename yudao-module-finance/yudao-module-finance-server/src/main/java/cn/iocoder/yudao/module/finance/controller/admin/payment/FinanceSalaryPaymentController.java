@@ -42,6 +42,15 @@ public class FinanceSalaryPaymentController {
         return success(paymentApplicationService.createAndStartSalary(reqVO, getLoginUserId()));
     }
 
+    @PutMapping("/resubmit")
+    @Operation(summary = "驳回后重提薪资付款（明细重写 + 新流程）")
+    @PreAuthorize("@ss.hasPermission('finance:salary-payment:resubmit')")
+    public CommonResult<Boolean> resubmit(@RequestParam("id") Long id,
+                                          @Valid @RequestBody FinanceSalaryPaymentCreateAndStartReqVO reqVO) {
+        paymentApplicationService.resubmitSalary(id, reqVO, getLoginUserId());
+        return success(true);
+    }
+
     @GetMapping("/get")
     @Operation(summary = "薪资付款详情")
     @PreAuthorize("@ss.hasPermission('finance:salary-payment:query') or @financePaymentAccess.canTaskContextOrOwnerRead(#id)")

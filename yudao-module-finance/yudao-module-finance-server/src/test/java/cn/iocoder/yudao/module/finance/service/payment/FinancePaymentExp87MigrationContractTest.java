@@ -51,6 +51,40 @@ class FinancePaymentExp87MigrationContractTest {
         assertTrue(s.contains("taskCashier"));
     }
 
+    @Test
+    void formViewPathAndPshellCoverSalaryTax() throws Exception {
+        Path sql = findRoot().resolve("sql/mysql/finance_salary_tax_bpm_form_view_path_exp87.sql");
+        assertTrue(Files.exists(sql));
+        String text = Files.readString(sql);
+        assertTrue(text.contains("/finance/salary-payment/detail/index"));
+        assertTrue(text.contains("/finance/tax-payment/detail/index"));
+        Path constants = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/constants.ts");
+        String ts = Files.readString(constants);
+        assertTrue(ts.contains("salary-payment/detail/index"));
+        assertTrue(ts.contains("tax-payment/detail/index"));
+    }
+
+    @Test
+    void payR19CancelGuardCoversSalaryTaxKeys() throws Exception {
+        Path java = findRoot().resolve(
+                "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmProcessInstanceServiceImpl.java");
+        String text = Files.readString(java);
+        assertTrue(text.contains("finance_salary_payment_apply"));
+        assertTrue(text.contains("finance_tax_payment_apply"));
+        assertTrue(text.contains("PAYMENT_DOMAIN_CANCEL_PROCESS_KEYS"));
+    }
+
+    @Test
+    void detailCashierRequiresCompanyBankAccountId() throws Exception {
+        Path detail = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/finance/payment-application/detail/index.vue");
+        String text = Files.readString(detail);
+        assertTrue(text.contains("companyBankAccountId"));
+        assertTrue(text.contains("getCompanyBankAccountSimpleList"));
+        assertTrue(text.contains("payAmount"));
+    }
+
     private static Path findRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null && !Files.isDirectory(current.resolve("sql/mysql"))) {

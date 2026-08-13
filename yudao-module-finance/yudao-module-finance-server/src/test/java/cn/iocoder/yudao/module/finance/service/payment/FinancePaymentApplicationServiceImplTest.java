@@ -97,6 +97,8 @@ class FinancePaymentApplicationServiceImplTest {
         taxLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper.class);
         when(payLineMapper.sumPayAmountByApplicationId(anyLong())).thenReturn(java.math.BigDecimal.ZERO);
         when(payLineMapper.selectByApplicationId(anyLong())).thenReturn(java.util.List.of());
+        // F5：悲观锁读默认委托到 selectById
+        when(mapper.selectByIdForUpdate(anyLong())).thenAnswer(inv -> mapper.selectById(inv.getArgument(0)));
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
@@ -261,6 +263,7 @@ class FinancePaymentApplicationServiceImplTest {
         taxLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper.class);
         when(payLineMapper.sumPayAmountByApplicationId(anyLong())).thenReturn(java.math.BigDecimal.ZERO);
         when(payLineMapper.selectByApplicationId(anyLong())).thenReturn(java.util.List.of());
+        when(mapper.selectByIdForUpdate(anyLong())).thenAnswer(inv -> mapper.selectById(inv.getArgument(0)));
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
@@ -307,6 +310,109 @@ class FinancePaymentApplicationServiceImplTest {
         assertEquals("****1234",
                 cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService
                         .maskAccountNo("6222021234"));
+    }
+
+    @Test
+    void recordPayUsesForUpdateLock() {
+        when(mapper.selectByIdForUpdate(30L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(30L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-30")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .applicationKind("ORDINARY")
+                .build());
+        org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
+        org.flowable.task.api.TaskQuery tq = mock(org.flowable.task.api.TaskQuery.class);
+        org.flowable.task.api.Task task = mock(org.flowable.task.api.Task.class);
+        when(taskProvider.getIfAvailable()).thenReturn(taskService);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId("t-30")).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(task);
+        when(task.getTaskDefinitionKey()).thenReturn("taskCashier");
+        when(task.getProcessInstanceId()).thenReturn("pi-30");
+        when(task.getId()).thenReturn("t-30");
+        when(tq.taskCandidateOrAssigned("1")).thenReturn(tq);
+        when(tq.count()).thenReturn(1L);
+        var account = cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                .accountHolder("甲").accountNo("6222").currency("CNY").status(0).build();
+        when(companyBankAccountService.get(77L)).thenReturn(account);
+        when(companyBankAccountService.requireEnabledForEntityCompany(eq(77L), eq(20L))).thenReturn(account);
+        when(payLineMapper.sumPayAmountByApplicationId(30L)).thenReturn(BigDecimal.ZERO);
+        when(mapper.update(isNull(), any())).thenReturn(1);
+
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(30L);
+        req.setTaskId("t-30");
+        req.setCompanyBankAccountId(77L);
+        req.setActualPayDate(LocalDate.now());
+        req.setPayVoucherUrl("http://voucher");
+        service.recordPay(req, 1L);
+
+        verify(mapper, atLeastOnce()).selectByIdForUpdate(30L);
+        verify(payLineMapper).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
+        verify(taskService).complete("t-30");
+    }
+
+    @Test
+    void resubmitSalaryRequiresRejected() {
+        when(mapper.selectById(40L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(40L)
+                .applicantUserId(1L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .applicationKind("SALARY")
+                .voided(false)
+                .build());
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPeriodLabel("2026-07");
+        req.setCurrency("CNY");
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
+        line.setEntityCompanyDeptId(20L);
+        line.setNetSalaryAmount(new BigDecimal("100.00"));
+        line.setPersonalTaxAmount(BigDecimal.ZERO);
+        line.setSocialInsuranceAmount(BigDecimal.ZERO);
+        req.setLines(List.of(line));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.resubmitSalary(40L, req, 1L));
+        assertEquals(PAYMENT_APPLICATION_STATUS_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void resubmitSalaryOkRewritesAndStartsProcess() {
+        when(mapper.selectById(41L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(41L)
+                .applicantUserId(1L)
+                .status(FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
+                .applicationKind("SALARY")
+                .voided(false)
+                .build());
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        when(payLineMapper.selectByApplicationId(41L)).thenReturn(List.of());
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPeriodLabel("2026-07");
+        req.setCurrency("CNY");
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
+        line.setEntityCompanyDeptId(20L);
+        line.setNetSalaryAmount(new BigDecimal("100.00"));
+        line.setPersonalTaxAmount(new BigDecimal("10.00"));
+        line.setSocialInsuranceAmount(new BigDecimal("20.00"));
+        req.setLines(List.of(line));
+
+        service.resubmitSalary(41L, req, 1L);
+
+        verify(salaryLineMapper).deleteByApplicationId(41L);
+        verify(salaryLineMapper).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO.class));
+        ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
+                ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
+        verify(processInstanceApi).createProcessInstance(eq(1L), bpmCap.capture());
+        assertEquals(FinancePaymentApplicationService.PROCESS_KEY_SALARY,
+                bpmCap.getValue().getProcessDefinitionKey());
     }
 
     @Test

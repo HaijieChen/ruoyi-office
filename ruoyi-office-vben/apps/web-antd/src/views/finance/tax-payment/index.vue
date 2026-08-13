@@ -2,6 +2,9 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { FinanceTaxPaymentApi } from '#/api/finance/tax-payment';
 
+import { onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -10,6 +13,9 @@ import { getTaxPaymentPage } from '#/api/finance/tax-payment';
 import FormModal from './modules/form.vue';
 
 defineOptions({ name: 'FinanceTaxPayment' });
+
+const route = useRoute();
+const router = useRouter();
 
 const [Form, formModalApi] = useVbenModal({
   connectedComponent: FormModal,
@@ -23,6 +29,18 @@ function handleRefresh() {
 function handleCreate() {
   formModalApi.setData({});
   formModalApi.open();
+}
+
+function handleResubmit(row: FinanceTaxPaymentApi.Application) {
+  formModalApi.setData({ id: row.id });
+  formModalApi.open();
+}
+
+function handleDetail(row: FinanceTaxPaymentApi.Application) {
+  router.push({
+    path: '/finance/tax-payment/detail/index',
+    query: { id: String(row.id) },
+  });
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -55,6 +73,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
       { field: 'currency', title: '币种', width: 80 },
       { field: 'status', title: '状态', width: 100 },
       { field: 'createTime', title: '创建时间', minWidth: 160 },
+      {
+        field: 'actions',
+        title: '操作',
+        width: 180,
+        fixed: 'right',
+        slots: { default: 'actions' },
+      },
     ],
     height: 'auto',
     proxyConfig: {
@@ -72,6 +97,14 @@ const [Grid, gridApi] = useVbenVxeGrid({
     toolbarConfig: { refresh: true, search: true },
   } as VxeTableGridOptions,
 });
+
+onMounted(() => {
+  const open = route.query.openResubmit;
+  if (open) {
+    formModalApi.setData({ id: Number(open) });
+    formModalApi.open();
+  }
+});
 </script>
 
 <template>
@@ -87,6 +120,24 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['finance:tax-payment:create'],
               onClick: handleCreate,
+            },
+          ]"
+        />
+      </template>
+      <template #actions="{ row }">
+        <TableAction
+          :actions="[
+            {
+              label: '详情',
+              type: 'link',
+              onClick: handleDetail.bind(null, row),
+            },
+            {
+              label: '重提',
+              type: 'link',
+              auth: ['finance:tax-payment:resubmit'],
+              ifShow: row.status === 'REJECTED',
+              onClick: handleResubmit.bind(null, row),
             },
           ]"
         />
