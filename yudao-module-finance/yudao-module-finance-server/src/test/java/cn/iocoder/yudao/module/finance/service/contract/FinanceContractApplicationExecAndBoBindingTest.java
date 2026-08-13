@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.business.FinanceBusinessOrderServiceImpl;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
@@ -46,7 +47,7 @@ class FinanceContractApplicationExecAndBoBindingTest {
     void setUp() {
         contractMapper = mock(FinanceContractApplicationMapper.class);
         FinanceContractApplicationNoRedisDAO noDao = mock(FinanceContractApplicationNoRedisDAO.class);
-        BpmProcessInstanceApi bpm = mock(BpmProcessInstanceApi.class);
+        FinanceBpmProcessInstanceApi bpm = mock(FinanceBpmProcessInstanceApi.class);
         FinanceCustomerCompanyService customer = mock(FinanceCustomerCompanyService.class);
         ObjectProvider<TaskService> taskProvider = mock(ObjectProvider.class);
         DictDataApi dictDataApi = mock(DictDataApi.class);

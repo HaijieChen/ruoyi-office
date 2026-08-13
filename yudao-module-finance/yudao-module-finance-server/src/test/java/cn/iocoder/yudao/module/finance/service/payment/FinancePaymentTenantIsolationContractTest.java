@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
@@ -48,7 +49,7 @@ class FinancePaymentTenantIsolationContractTest {
     void setUp() {
         mapper = mock(FinancePaymentApplicationMapper.class);
         FinancePaymentApplicationNoRedisDAO noRedisDAO = mock(FinancePaymentApplicationNoRedisDAO.class);
-        BpmProcessInstanceApi processInstanceApi = mock(BpmProcessInstanceApi.class);
+        FinanceBpmProcessInstanceApi processInstanceApi = mock(FinanceBpmProcessInstanceApi.class);
         FinanceCustomerCompanyService customerCompanyService = mock(FinanceCustomerCompanyService.class);
         FinancePaymentPredocService predocService = mock(FinancePaymentPredocService.class);
         FinanceContractApplicationMapper contractMapper = mock(FinanceContractApplicationMapper.class);

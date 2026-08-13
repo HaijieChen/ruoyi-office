@@ -14,7 +14,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import java.util.Collection;
 
-@FeignClient(name = ApiConstants.NAME) // TODO 芋艿：fallbackFactory =
+/**
+ * 基线 BPM 流程实例 Feign 客户端。
+ * <p>
+ * EXP-87 F4：{@code primary=false}，避免与 Finance 专用子客户端
+ * （identity interceptor，primary=true）在 yudao-server 双注册时产生
+ * {@code NoUniqueBeanDefinitionException}；CRM 等模块在仅注册本接口时仍唯一可注入。
+ */
+@FeignClient(name = ApiConstants.NAME, primary = false) // TODO 芋艿：fallbackFactory =
 @Tag(name = "RPC 服务 - 流程实例")
 public interface BpmProcessInstanceApi {
 
