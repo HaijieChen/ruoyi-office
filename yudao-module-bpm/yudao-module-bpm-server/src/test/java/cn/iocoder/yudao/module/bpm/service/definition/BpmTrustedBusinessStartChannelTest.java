@@ -103,7 +103,8 @@ class BpmTrustedBusinessStartChannelTest {
     }
 
     @Test
-    void apiImpl_businessCreate_usesServerDerivedChannel() {
+    void apiImpl_businessCreate_delegatesToServiceByBusiness() {
+        // 身份校验在 Service/Filter 层（见 BpmBusinessStartIdentityBoundaryTest），此处仅委托关系
         BpmProcessInstanceService service = mock(BpmProcessInstanceService.class);
         when(service.createProcessInstanceByBusiness(anyLong(), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn("pi-biz");

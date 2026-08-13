@@ -112,6 +112,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     @Resource
     private BpmProcessStartEligibilityService processStartEligibilityService;
     @Resource
+    private cn.iocoder.yudao.module.bpm.framework.security.BpmBusinessStartCallerGuard businessStartCallerGuard;
+    @Resource
     @Lazy // 避免循环依赖
     private BpmTaskService taskService;
 
@@ -813,7 +815,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     @Override
     @DataPermission(enable = false)
     public String createProcessInstanceByBusiness(Long userId, @Valid BpmProcessInstanceCreateReqDTO createReqDTO) {
-        // 服务端派生可信业务通道；调用方无法通过 DTO 自报
+        // EXP-87 G1：callTrusted 前必须可验证 Finance 服务身份（非“选了路由”即可）
+        businessStartCallerGuard.requireVerifiedFinanceCaller();
         return BpmBusinessStartChannelHolder.callTrusted(
                 () -> createProcessInstance(userId, createReqDTO));
     }
