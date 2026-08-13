@@ -53,7 +53,10 @@ public class DeptChildrenCacheG2Test extends BaseDbUnitTest {
         @Bean
         @Primary
         public CacheManager deptChildrenCacheManager() {
-            return new ConcurrentMapCacheManager(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
+            // V2 为主；遗留名一并注册供 clear 双清
+            return new ConcurrentMapCacheManager(
+                    RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2,
+                    RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
         }
     }
 
@@ -67,9 +70,13 @@ public class DeptChildrenCacheG2Test extends BaseDbUnitTest {
     void clearTenant() {
         cacheCoordinator.afterLoadBeforePutHook = null;
         TenantContextHolder.clear();
-        Cache cache = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
+        Cache cache = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
         if (cache != null) {
             cache.clear();
+        }
+        Cache legacy = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
+        if (legacy != null) {
+            legacy.clear();
         }
     }
 
@@ -280,7 +287,7 @@ public class DeptChildrenCacheG2Test extends BaseDbUnitTest {
     }
 
     private Cache cache() {
-        Cache cache = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
+        Cache cache = cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
         assertNotNull(cache);
         return cache;
     }

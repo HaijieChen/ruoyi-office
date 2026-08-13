@@ -18,17 +18,22 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
 
 /**
- * 组织子树缓存协调器：代际（generation）+ cache-aside，闭合 G2-TAIL。
+ * 组织子树缓存协调器：代际（generation）+ cache-aside（G2-TAIL）+ 命名空间隔离（C1）。
  * <p>
- * 窗口：
- * <pre>
- * R: miss → 读旧库 → [暂停]
- * W: commit + clear
- * R: put 旧快照  // 无代际时会污染缓存
- * </pre>
- * 修复：写成功路径 {@link #bumpGenerationAndEvict()} 递增代际并 clear；
- * 读路径 {@link #getIfFresh}/{@link #putIfGeneration}：仅当加载时的 gen 仍等于当前 gen 才 put；
- * 命中时 gen 不一致视为 miss。即便尾随 put 写入旧 gen 条目，后续 hit 也会拒绝。
+ * <b>C1</b>：带 {@link GenerationStampedSet} 的值只写入
+ * {@link RedisKeyConstants#DEPT_CHILDREN_ID_LIST_V2}，绝不写入遗留
+ * {@link RedisKeyConstants#DEPT_CHILDREN_ID_LIST}。滚动升级时旧实例只访问旧名，
+ * 不会对共享 Redis 中的新类型做反序列化。
+ * <p>
+ * <b>G2-TAIL</b>：写成功 {@link #bumpGenerationAndEvict()}；读路径
+ * {@link #getIfFresh}/{@link #putIfGeneration} 用代际拒绝尾随旧 put。
+ * <p>
+ * 部署/回滚要点：
+ * <ul>
+ *   <li>滚动发布：新旧包可并存；旧包读旧名（Set），新包读写 V2（stamped）。</li>
+ *   <li>回滚应用：停新包后仅旧包读旧名；V2 键可残留至 TTL，旧包不访问，无 SerializationException。</li>
+ *   <li>组织写成功时顺带 clear 旧名，降低滚动窗口内旧实例陈旧 Set 的存活时间。</li>
+ * </ul>
  */
 @Component
 @Slf4j
@@ -46,7 +51,6 @@ public class DeptChildrenCacheInvalidator {
 
     /**
      * 测试钩子：DB 加载完成、尝试 put 之前调用（参数为 loadGeneration）。
-     * 用于 latch 卡点构造 G2-TAIL 竞态。
      */
     @VisibleForTesting
     volatile LongConsumer afterLoadBeforePutHook;
@@ -61,7 +65,7 @@ public class DeptChildrenCacheInvalidator {
     }
 
     /**
-     * 写事务成功提交后：递增代际并清空值缓存。
+     * 写事务成功提交后：递增代际并清空 V2 值缓存；顺带 clear 遗留命名空间。
      * 回滚路径不得调用。
      */
     public void bumpGenerationAndEvict() {
@@ -73,30 +77,29 @@ public class DeptChildrenCacheInvalidator {
             localGeneration.incrementAndGet();
         }
         evictValuesOnly();
-        log.debug("[bumpGenerationAndEvict] gen={} cache cleared", currentGeneration());
+        log.debug("[bumpGenerationAndEvict] gen={} v2+legacy cleared", currentGeneration());
     }
 
-    /**
-     * 兼容旧调用名：等同 {@link #bumpGenerationAndEvict()}。
-     */
+    /** 兼容旧调用名 */
     public void evictNow() {
         bumpGenerationAndEvict();
     }
 
-    /** 仅 clear 值缓存，不改代际（测试辅助） */
+    /**
+     * 清空 V2（本版读写）与遗留命名空间（仅 clear，帮助旧实例 miss）。
+     * 不改代际。
+     */
     public void evictValuesOnly() {
-        Cache cache = valueCache();
-        if (cache != null) {
-            cache.clear();
-        }
+        clearCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
+        // 滚动窗口：旧实例仍用遗留名；组织写后清旧名可促使其重新读库
+        clearCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
     }
 
     /**
-     * 若缓存命中且代际新鲜则返回 ids，否则 null（视为 miss）。
+     * 若 V2 缓存命中且代际新鲜则返回 ids，否则 null（视为 miss）。
      */
-    @SuppressWarnings("unchecked")
     public Set<Long> getIfFresh(Long deptId) {
-        Cache cache = valueCache();
+        Cache cache = valueCacheV2();
         if (cache == null || deptId == null) {
             return null;
         }
@@ -106,7 +109,7 @@ public class DeptChildrenCacheInvalidator {
         }
         Object raw = wrapper.get();
         if (!(raw instanceof GenerationStampedSet stamped)) {
-            // 非法/旧格式条目：丢弃
+            // V2 内非法条目：丢弃（不应出现遗留 Set）
             cache.evict(deptId);
             return null;
         }
@@ -119,7 +122,7 @@ public class DeptChildrenCacheInvalidator {
     }
 
     /**
-     * 仅当 {@code loadGeneration} 仍等于当前代际时写入；否则拒绝（闭合尾随 put）。
+     * 仅当 {@code loadGeneration} 仍等于当前代际时写入 <b>V2</b> 命名空间。
      *
      * @return true 已写入；false 代际已变，未写入
      */
@@ -134,13 +137,12 @@ public class DeptChildrenCacheInvalidator {
                     deptId, loadGeneration, now);
             return false;
         }
-        Cache cache = valueCache();
+        Cache cache = valueCacheV2();
         if (cache == null || deptId == null) {
             return false;
         }
         Set<Long> safe = ids == null ? Collections.emptySet() : Set.copyOf(ids);
         cache.put(deptId, new GenerationStampedSet(loadGeneration, safe));
-        // 写入后再校验一次：若期间代际已变，删掉自己的 put，避免极短窗口残留
         if (currentGeneration() != loadGeneration) {
             cache.evict(deptId);
             return false;
@@ -148,16 +150,37 @@ public class DeptChildrenCacheInvalidator {
         return true;
     }
 
-    private Cache valueCache() {
+    /** 本版读写的缓存名（供测试断言 C1 命名空间） */
+    public static String activeCacheName() {
+        return RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2;
+    }
+
+    /** 遗留缓存名（旧实例 / 回滚包使用） */
+    public static String legacyCacheName() {
+        return RedisKeyConstants.DEPT_CHILDREN_ID_LIST;
+    }
+
+    private Cache valueCacheV2() {
+        return getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2);
+    }
+
+    private void clearCache(String name) {
+        Cache cache = getCache(name);
+        if (cache != null) {
+            cache.clear();
+        }
+    }
+
+    private Cache getCache(String name) {
         CacheManager cacheManager = cacheManagerProvider.getIfAvailable();
         if (cacheManager == null) {
             return null;
         }
-        return cacheManager.getCache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST);
+        return cacheManager.getCache(name);
     }
 
     /**
-     * 缓存值：带代际戳的子部门 id 集合。
+     * 缓存值：带代际戳的子部门 id 集合。仅允许出现在 V2 命名空间。
      */
     public record GenerationStampedSet(long generation, Set<Long> ids) implements Serializable {
         public GenerationStampedSet {

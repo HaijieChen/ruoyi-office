@@ -10,12 +10,26 @@ import cn.iocoder.yudao.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 public interface RedisKeyConstants {
 
     /**
-     * 指定部门的所有子部门编号数组的缓存
+     * 指定部门的所有子部门编号数组的缓存（<b>遗留命名空间</b>）。
      * <p>
-     * KEY 格式：dept_children_ids:{id}
-     * VALUE 数据类型：String 子部门编号集合
+     * KEY 格式：dept_children_ids:{id}<br>
+     * VALUE：历史版本为 {@code Set&lt;Long&gt;}（{@code @Cacheable} 时代）。
+     * <p>
+     * EXP-86 起<strong>新代码不再读写本命名空间中的 stamped 类型</strong>，仅在组织写成功后
+     * 顺带 clear，帮助滚动升级中仍跑旧包的实例失效陈旧 Set。
+     * 新值写入 {@link #DEPT_CHILDREN_ID_LIST_V2}（C1：避免旧实例反序列化新类失败）。
      */
     String DEPT_CHILDREN_ID_LIST = "dept_children_ids";
+
+    /**
+     * 组织子树缓存 V2（EXP-86+ 代际 cache-aside）。
+     * <p>
+     * KEY 格式：dept_children_ids_v2:{id}<br>
+     * VALUE：{@code DeptChildrenCacheInvalidator.GenerationStampedSet}<br>
+     * 与 {@link #DEPT_CHILDREN_ID_LIST} <strong>命名空间隔离</strong>：滚动部署时旧实例只读
+     * 旧名，永不反序列化本空间中的新类型；回滚后新实例停止写本空间，旧实例继续只读旧名。
+     */
+    String DEPT_CHILDREN_ID_LIST_V2 = "dept_children_ids_v2";
 
     /**
      * 角色的缓存

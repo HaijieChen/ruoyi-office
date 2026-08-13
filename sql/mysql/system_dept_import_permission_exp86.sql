@@ -5,6 +5,14 @@
 -- 3) 仅授权 hr_admin；不授予 finance_admin / business_staff
 --
 -- 前置：hrm_menu_open.sql 已创建组织管理页；system_dept.functional_currency 列已存在（EXP-73）。
+--
+-- 部署/回滚（C1 缓存命名空间，应用侧，无 DDL）：
+-- - 滚动发布：可新旧包并存。新包读写 Redis 缓存名 dept_children_ids_v2（GenerationStampedSet）；
+--   旧包继续读写 dept_children_ids（Set）。二者不共享值类型，旧实例不会 SerializationException。
+-- - 组织写成功时新包会顺带 clear 旧名，缩短滚动窗口内旧实例陈旧子树缓存。
+-- - 回滚应用：停新包后仅旧包读 dept_children_ids；v2 键可残留至 TTL，旧包不访问。
+-- - 生产需 Redisson（租户写锁 + 代际 AtomicLong）。
+-- - 发布前仍执行本权限脚本 + EXP-73 列预检。
 
 SET NAMES utf8mb4;
 
