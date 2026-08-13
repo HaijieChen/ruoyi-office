@@ -32,6 +32,7 @@ const form = ref<{
   actualPayDate?: Dayjs;
   payVoucherUrl?: string;
   erpVoucherNo?: string;
+  idempotencyKey?: string;
   entityCompanyDeptId?: number;
   applyAmount?: number;
   paidLineSum?: number;
@@ -117,6 +118,9 @@ const [Modal, modalApi] = useVbenModal({
       id: data.id,
       taskId: data.taskId || '',
       actualPayDate: dayjs(),
+      idempotencyKey:
+        (globalThis.crypto?.randomUUID?.() as string) ||
+        `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     };
     if (data.id) {
       try {
@@ -161,6 +165,7 @@ const [Modal, modalApi] = useVbenModal({
         actualPayDate: form.value.actualPayDate.format('YYYY-MM-DD'),
         payVoucherUrl: form.value.payVoucherUrl,
         erpVoucherNo: form.value.erpVoucherNo,
+        idempotencyKey: form.value.idempotencyKey!,
       });
       message.success('出纳支付已登记');
       emit('success');

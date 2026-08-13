@@ -276,6 +276,7 @@ class FinancePaymentApplicationServiceImplTest {
         req.setCompanyBankAccountId(77L);
         req.setActualPayDate(LocalDate.now());
         req.setPayVoucherUrl("http://voucher");
+        req.setIdempotencyKey("idem-test");
         ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 99L));
         assertEquals(PAYMENT_APPLICATION_TASK_INVALID.getCode(), ex.getCode());
     }
@@ -301,6 +302,7 @@ class FinancePaymentApplicationServiceImplTest {
         req.setTaskId("t1");
         req.setActualPayDate(LocalDate.now());
         req.setPayVoucherUrl("http://voucher");
+        req.setIdempotencyKey("idem-test");
         ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
         assertEquals(PAYMENT_APPLICATION_PAY_ACCOUNT_REQUIRED.getCode(), ex.getCode());
     }
@@ -349,6 +351,7 @@ class FinancePaymentApplicationServiceImplTest {
         req.setCompanyBankAccountId(77L);
         req.setActualPayDate(LocalDate.now());
         req.setPayVoucherUrl("http://voucher");
+        req.setIdempotencyKey("idem-test");
         service.recordPay(req, 1L);
 
         verify(mapper, atLeastOnce()).selectByIdForUpdate(30L);
@@ -448,7 +451,7 @@ class FinancePaymentApplicationServiceImplTest {
 
     @Test
     void rejectBlockedWhenHasPayLines() {
-        when(mapper.selectById(43L)).thenReturn(FinancePaymentApplicationDO.builder()
+        when(mapper.selectByIdForUpdate(43L)).thenReturn(FinancePaymentApplicationDO.builder()
                 .id(43L)
                 .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
                 .processInstanceId("pi-43")
@@ -461,6 +464,27 @@ class FinancePaymentApplicationServiceImplTest {
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.onApprovalOutcome(43L, "REJECTED", "pi-43"));
         assertEquals(PAYMENT_APPLICATION_HAS_PAY_LINES.getCode(), ex.getCode());
+        verify(mapper, atLeastOnce()).selectByIdForUpdate(43L);
+    }
+
+    @Test
+    void recordPayRequiresIdempotencyKey() {
+        when(mapper.selectByIdForUpdate(47L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(47L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-47")
+                .applyAmount(new BigDecimal("10.00"))
+                .currency("CNY")
+                .build());
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(47L);
+        req.setTaskId("t");
+        req.setCompanyBankAccountId(1L);
+        req.setActualPayDate(LocalDate.now());
+        req.setPayVoucherUrl("http://v");
+        // 无 idempotencyKey
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_IDEMPOTENCY_KEY_REQUIRED.getCode(), ex.getCode());
     }
 
     @Test
@@ -498,6 +522,7 @@ class FinancePaymentApplicationServiceImplTest {
         req.setCompanyBankAccountId(88L);
         req.setActualPayDate(LocalDate.now());
         req.setPayVoucherUrl("http://voucher");
+        req.setIdempotencyKey("idem-test");
         ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
         assertEquals(PAYMENT_ACCOUNT_CURRENCY_MISMATCH.getCode(), ex.getCode());
     }

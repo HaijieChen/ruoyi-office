@@ -198,6 +198,9 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         return JsonUtils.toJsonString(map);
     }
 
+    /** 解析失败 fail-closed 占位，禁止把原文写入 access-log / error log */
+    static final String REDACTED_BODY = "{\"__redacted\":true,\"reason\":\"sanitize_failed\"}";
+
     private static String sanitizeJson(String jsonString, String[] sanitizeKeys) {
         if (StrUtil.isEmpty(jsonString)) {
             return null;
@@ -207,9 +210,9 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             sanitizeJson(rootNode, sanitizeKeys);
             return JsonUtils.toJsonString(rootNode);
         } catch (Exception e) {
-            // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.error("[sanitizeJson][脱敏({}) 发生异常]", jsonString, e);
-            return jsonString;
+            // EXP-87 F3：fail-closed — 禁止 return 原文 / 禁止 error log 带 body 原文
+            log.error("[sanitizeJson][脱敏失败，已丢弃 body，length={}]", jsonString.length());
+            return REDACTED_BODY;
         }
     }
 
@@ -223,9 +226,9 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             sanitizeJson(rootNode.get("data"), sanitizeKeys); // 只处理 data 字段，不处理 code、msg 字段，避免错误被脱敏掉
             return JsonUtils.toJsonString(rootNode);
         } catch (Exception e) {
-            // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.error("[sanitizeJson][脱敏({}) 发生异常]", jsonString, e);
-            return jsonString;
+            log.error("[sanitizeJson][响应脱敏失败，已丢弃 body，length={}]",
+                    jsonString != null ? jsonString.length() : 0);
+            return REDACTED_BODY;
         }
     }
 

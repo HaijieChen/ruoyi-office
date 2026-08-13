@@ -93,6 +93,21 @@ class BpmProcessStartEligibilityServiceTest {
     }
 
     @Test
+    void salaryTax_alwaysHiddenAndDeniedFromGenericStart() {
+        // 不依赖权限 stub：有/无权限均拒绝通用直启（须走独立菜单）
+        BpmProcessStartEligibility salary = service.evaluate("finance_salary_payment_apply");
+        BpmProcessStartEligibility tax = service.evaluate("finance_tax_payment_apply");
+        assertFalse(salary.isCanStart());
+        assertFalse(tax.isCanStart());
+        assertTrue(service.shouldHideFromStartList("finance_salary_payment_apply"));
+        assertTrue(service.shouldHideFromStartList("finance_tax_payment_apply"));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.validateStartOrThrow("finance_salary_payment_apply"));
+        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
     void validateStartOrThrow_deniesWithoutPermission() {
         when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
                 .thenReturn(false);

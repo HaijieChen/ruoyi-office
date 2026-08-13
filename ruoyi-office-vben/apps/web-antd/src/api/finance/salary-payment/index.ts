@@ -72,3 +72,16 @@ export function resubmitSalaryPayment(
     params: { id },
   });
 }
+
+/** 财务节点写会计科目（薪资独立路径，禁止走普通 ORDINARY 闭合接口） */
+export function updateSalaryAccountingSubject(
+  id: number,
+  taskId: string,
+  accountingSubject: string,
+) {
+  return requestClient.put<boolean>(
+    '/finance/salary-payment/update-accounting-subject',
+    null,
+    { params: { id, taskId, accountingSubject } },
+  );
+}

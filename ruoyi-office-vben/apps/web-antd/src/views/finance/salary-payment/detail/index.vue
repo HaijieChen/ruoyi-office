@@ -32,8 +32,8 @@ import dayjs, { type Dayjs } from 'dayjs';
 import {
   getSalaryPayment,
   recordPaySalaryPayment,
+  updateSalaryAccountingSubject,
 } from '#/api/finance/salary-payment';
-import { updatePaymentAccountingSubject } from '#/api/finance/payment-application';
 import { getCompanyBankAccountSimpleList } from '#/api/finance/company-bank-account';
 import type { DefaultOptionType } from 'ant-design-vue/es/select';
 
@@ -86,7 +86,18 @@ const accountingSubject = ref('');
 const actualPayDate = ref<Dayjs | undefined>(dayjs());
 const payVoucherUrl = ref('');
 const erpVoucherNo = ref('');
+const idempotencyKey = ref('');
 const companyBankAccountId = ref<number | undefined>();
+// 本笔支付尝试幂等键：生成后直至成功保持稳定
+function ensureIdempotencyKey() {
+  if (!idempotencyKey.value) {
+    idempotencyKey.value =
+      (globalThis.crypto?.randomUUID?.() as string) ||
+      `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+  return idempotencyKey.value;
+}
+
 const payAmount = ref<number | undefined>();
 const payEntityCompanyDeptId = ref<number | undefined>();
 const accountOptions = ref<{ label: string; value: number }[]>([]);
@@ -202,6 +213,7 @@ async function loadData() {
     detail.value = await getSalaryPayment(id);
     accountingSubject.value = detail.value?.accountingSubject || '';
     payAmount.value = remainingPay.value || Number(detail.value?.applyAmount || 0);
+    ensureIdempotencyKey();
     const entities = payEntityOptions.value;
     payEntityCompanyDeptId.value =
       entities[0]?.value ?? detail.value?.entityCompanyDeptId;
@@ -227,7 +239,7 @@ async function handleSaveSubject() {
   }
   submitting.value = true;
   try {
-    await updatePaymentAccountingSubject(id, tid, accountingSubject.value.trim());
+    await updateSalaryAccountingSubject(id, tid, accountingSubject.value.trim());
     message.success('费用科目/性质已保存，可点击底部「通过」完成财务节点');
     await loadData();
   } catch (error) {
@@ -266,12 +278,14 @@ async function handleRecordPay() {
       actualPayDate: actualPayDate.value.format('YYYY-MM-DD'),
       payVoucherUrl: payVoucherUrl.value.trim(),
       erpVoucherNo: erpVoucherNo.value || undefined,
+      idempotencyKey: ensureIdempotencyKey(),
     });
     message.success(
       remainingPay.value - Number(payAmount.value) > 0.001
         ? '本笔支付已登记（尚未足额，可继续登记）'
         : '出纳办结成功',
     );
+    idempotencyKey.value = '';
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '出纳办结失败');

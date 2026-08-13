@@ -86,17 +86,23 @@ class FinancePaymentExp87MigrationContractTest {
     }
 
     @Test
-    void salaryTaxNotInEmbedRegistry() throws Exception {
+    void salaryTaxNotInFrontendCreateShellButBackendDenyListed() throws Exception {
         Path fe = findRoot().resolve(
                 "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/create/embed-registry.ts");
         String ts = Files.readString(fe);
+        // 壳内嵌不注册
         assertFalse(ts.contains("finance_salary_payment_apply:"));
         assertFalse(ts.contains("finance_tax_payment_apply:"));
         Path be = findRoot().resolve(
                 "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmEmbedProcessStartPermissionRegistry.java");
         String java = Files.readString(be);
-        assertFalse(java.contains("\"finance_salary_payment_apply\""));
-        assertFalse(java.contains("\"finance_tax_payment_apply\""));
+        // 后端有权限元数据 + isCreateShellEmbedAllowed 排除
+        assertTrue(java.contains("\"finance_salary_payment_apply\""));
+        assertTrue(java.contains("isCreateShellEmbedAllowed"));
+        Path elig = findRoot().resolve(
+                "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmProcessStartEligibilityServiceImpl.java");
+        String e = Files.readString(elig);
+        assertTrue(e.contains("isMenuOnlyPaymentProcess") || e.contains("finance_salary_payment_apply"));
     }
 
     @Test

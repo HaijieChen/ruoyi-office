@@ -234,6 +234,9 @@ public interface ErrorCodeConstants {
     /** 已有实际支付流水，禁止驳回/重提（支付行不可变） */
     ErrorCode PAYMENT_APPLICATION_HAS_PAY_LINES = new ErrorCode(1_040_006_029,
             "已有实际支付记录，禁止驳回或重提；支付流水不可变，请走作废/冲正流程");
+    /** 支付幂等键必填 */
+    ErrorCode PAYMENT_APPLICATION_IDEMPOTENCY_KEY_REQUIRED = new ErrorCode(1_040_006_030,
+            "支付幂等键不能为空");
 
     // ========== 公司银行账户 1-040-007-000 ==========
     ErrorCode COMPANY_BANK_ACCOUNT_NOT_EXISTS = new ErrorCode(1_040_007_000, "公司银行账户不存在");

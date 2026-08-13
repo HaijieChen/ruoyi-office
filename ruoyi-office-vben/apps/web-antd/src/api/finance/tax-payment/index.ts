@@ -73,3 +73,16 @@ export function resubmitTaxPayment(
     params: { id },
   });
 }
+
+/** 财务节点写会计科目（税金独立路径） */
+export function updateTaxAccountingSubject(
+  id: number,
+  taskId: string,
+  accountingSubject: string,
+) {
+  return requestClient.put<boolean>(
+    '/finance/tax-payment/update-accounting-subject',
+    null,
+    { params: { id, taskId, accountingSubject } },
+  );
+}

@@ -12,6 +12,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -80,6 +82,18 @@ public class FinanceTaxPaymentController {
         FinancePaymentApplicationDO app = paymentApplicationService.getApplication(reqVO.getId());
         assertTax(app);
         paymentApplicationService.recordPay(reqVO, getLoginUserId());
+        return success(true);
+    }
+
+    @PutMapping("/update-accounting-subject")
+    @Operation(summary = "财务主管节点写入会计科目（税金）")
+    @PreAuthorize("@ss.hasPermission('finance:tax-payment:query') or @financePaymentAccess.canTaskContextOrOwnerRead(#id)")
+    public CommonResult<Boolean> updateAccountingSubject(@RequestParam("id") @NotNull Long id,
+                                                         @RequestParam("taskId") @NotEmpty String taskId,
+                                                         @RequestParam("accountingSubject") @NotEmpty String accountingSubject) {
+        FinancePaymentApplicationDO app = paymentApplicationService.getApplication(id);
+        assertTax(app);
+        paymentApplicationService.updateAccountingSubject(id, accountingSubject, taskId, getLoginUserId());
         return success(true);
     }
 

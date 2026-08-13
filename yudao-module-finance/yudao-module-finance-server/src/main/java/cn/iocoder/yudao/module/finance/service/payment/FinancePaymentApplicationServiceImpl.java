@@ -639,7 +639,11 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
 
-        FinancePaymentApplicationDO current = getApplication(appId);
+        // EXP-87 F4：与 recordPay 共享申请行 FOR UPDATE，杜绝 REJECTED+pay_line 竞态
+        FinancePaymentApplicationDO current = applicationMapper.selectByIdForUpdate(appId);
+        if (current == null) {
+            throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
+        }
 
         // F9：旧流程实例延迟终态不得改写重提后的台账（对齐合同 CS-F7）
         if (StrUtil.isNotBlank(processInstanceId)
@@ -659,7 +663,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)) {
             assertCashierEvidencePresent(current);
         }
-        // EXP-87 FINAL：已有实际支付流水禁止驳回（支付行不可变，避免重提破坏台账）
+        // 锁内再判 pay_line，与 recordPay 串行
         if (FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(normalized)
                 && hasPayLines(appId)) {
             throw exception(PAYMENT_APPLICATION_HAS_PAY_LINES);
@@ -679,7 +683,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
         int rows = applicationMapper.update(null, uw);
         if (rows == 0) {
-            FinancePaymentApplicationDO again = getApplication(appId);
+            FinancePaymentApplicationDO again = applicationMapper.selectByIdForUpdate(appId);
+            if (again == null) {
+                return;
+            }
             if (normalized.equals(again.getStatus())) {
                 return; // 并发幂等
             }
@@ -711,15 +718,17 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
         }
 
-        // 幂等优先：同键已落库时，任务可能已 complete，不得先校验 task 导致 TASK_INVALID
+        // 幂等键必填（禁止空键多行）
         String idem = trimToNull(reqVO.getIdempotencyKey());
-        if (idem != null) {
-            FinancePaymentPayLineDO existingLine =
-                    payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
-            if (existingLine != null) {
-                ensureHeaderEvidenceIfFullyPaid(application, reqVO);
-                return;
-            }
+        if (idem == null) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_KEY_REQUIRED);
+        }
+        // 幂等优先：同键已落库时，任务可能已 complete，不得先校验 task 导致 TASK_INVALID
+        FinancePaymentPayLineDO existingLine =
+                payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
+        if (existingLine != null) {
+            ensureHeaderEvidenceIfFullyPaid(application, reqVO);
+            return;
         }
 
         if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())

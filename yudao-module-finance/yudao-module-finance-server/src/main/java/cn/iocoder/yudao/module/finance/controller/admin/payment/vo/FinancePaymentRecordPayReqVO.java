@@ -34,7 +34,8 @@ public class FinancePaymentRecordPayReqVO {
     @Schema(description = "ERP 凭证号（选填）")
     private String erpVoucherNo;
 
-    @Schema(description = "幂等键（可选；同一申请重复提交返回已有明细）")
+    @Schema(description = "幂等键（必填；同一申请+键重复提交返回已有明细）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotEmpty(message = "幂等键不能为空")
     private String idempotencyKey;
 
     @Schema(description = "是否在合计等于申请金额时 complete 出纳任务；默认 true")

@@ -86,6 +86,16 @@ const accountingSubject = ref('');
 const actualPayDate = ref<Dayjs | undefined>(dayjs());
 const payVoucherUrl = ref('');
 const erpVoucherNo = ref('');
+const idempotencyKey = ref('');
+function ensureIdempotencyKey() {
+  if (!idempotencyKey.value) {
+    idempotencyKey.value =
+      (globalThis.crypto?.randomUUID?.() as string) ||
+      `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+  return idempotencyKey.value;
+}
+
 const companyBankAccountId = ref<number | undefined>();
 const payAmount = ref<number | undefined>();
 const payEntityCompanyDeptId = ref<number | undefined>();
@@ -202,6 +212,7 @@ async function loadData() {
     detail.value = await getPaymentApplication(id);
     accountingSubject.value = detail.value?.accountingSubject || '';
     payAmount.value = remainingPay.value || Number(detail.value?.applyAmount || 0);
+    ensureIdempotencyKey();
     const entities = payEntityOptions.value;
     payEntityCompanyDeptId.value =
       entities[0]?.value ?? detail.value?.entityCompanyDeptId;
@@ -266,12 +277,14 @@ async function handleRecordPay() {
       actualPayDate: actualPayDate.value.format('YYYY-MM-DD'),
       payVoucherUrl: payVoucherUrl.value.trim(),
       erpVoucherNo: erpVoucherNo.value || undefined,
+      idempotencyKey: ensureIdempotencyKey(),
     });
     message.success(
       remainingPay.value - Number(payAmount.value) > 0.001
         ? '本笔支付已登记（尚未足额，可继续登记）'
         : '出纳办结成功',
     );
+    idempotencyKey.value = '';
     await loadData();
   } catch (error) {
     message.error(error instanceof Error ? error.message : '出纳办结失败');
