@@ -10,11 +10,9 @@ import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptListReqV
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.dal.mysql.dept.DeptMapper;
-import cn.iocoder.yudao.module.system.dal.redis.RedisKeyConstants;
 import cn.iocoder.yudao.module.system.enums.OrgTypeEnum;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -42,12 +40,13 @@ public class DeptServiceImpl implements DeptService {
     private DeptMapper deptMapper;
     @Resource
     private DeptMutationLock deptMutationLock;
+    @Resource
+    private DeptChildrenCacheInvalidator deptChildrenCacheInvalidator;
 
     /**
-     * 组织写：经 {@link DeptMutationLock}（先锁→事务→commit→afterCommit 清子树缓存→unlock）。
+     * 组织写：经 {@link DeptMutationLock}（先锁→事务→commit→bump gen + clear→unlock）。
      * <p>
-     * 不再使用方法级 {@code @CacheEvict}：嵌套 REQUIRED 时会在外层 commit 前清空缓存，
-     * 引发 G2「并发读回填旧快照」窗口。
+     * 子树缓存用代际 cache-aside（见 {@link #getChildDeptIdListFromCache}），闭合 G2-TAIL 尾随 put。
      */
     @Override
     public Long createDept(DeptSaveReqVO createReqVO) {
@@ -279,12 +278,29 @@ public class DeptServiceImpl implements DeptService {
         return deptMapper.selectListByLeaderUserId(id);
     }
 
+    /**
+     * 组织子树缓存读取（代际 cache-aside，闭合 G2-TAIL）。
+     * <p>
+     * 不用 {@code @Cacheable}：其 miss→invoke→put 无法在 put 前校验写代际，
+     * 存在「读旧库后尾随 put」污染窗口。此处：
+     * <ol>
+     *   <li>hit 且 gen 新鲜 → 返回</li>
+     *   <li>miss：记录 loadGen → 读库 → {@link DeptChildrenCacheInvalidator#putIfGeneration}</li>
+     *   <li>若期间写事务 bump gen，则拒绝 put；即使 put 成功，后续 hit 也会因 gen 不匹配拒绝</li>
+     * </ol>
+     */
     @Override
     @DataPermission(enable = false) // 禁用数据权限，避免建立不正确的缓存
-    @Cacheable(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST, key = "#id")
     public Set<Long> getChildDeptIdListFromCache(Long id) {
+        Set<Long> cached = deptChildrenCacheInvalidator.getIfFresh(id);
+        if (cached != null) {
+            return cached;
+        }
+        long loadGen = deptChildrenCacheInvalidator.currentGeneration();
         List<DeptDO> children = getChildDeptList(id);
-        return convertSet(children, DeptDO::getId);
+        Set<Long> ids = convertSet(children, DeptDO::getId);
+        deptChildrenCacheInvalidator.putIfGeneration(id, loadGen, ids);
+        return ids;
     }
 
     @Override

@@ -27,11 +27,10 @@ import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.DEPT_IMPOR
  * <p>
  * <b>F1</b>：先锁 → 再开事务 → 业务 → commit/rollback → 最后 unlock。
  * <p>
- * <b>G2</b>：仅当本层开启了<strong>新事务</strong>且成功提交后（{@code TransactionTemplate.execute}
- * 正常返回之后、unlock 之前）清空 {@code DEPT_CHILDREN_ID_LIST}。
- * 嵌套 {@code PROPAGATION_REQUIRED} join 外层时 {@code isNewTransaction=false}，
- * 内层返回<strong>不会</strong> evict，避免提交前清缓存被并发读回填旧快照。
- * 回滚抛错时不执行 evict。
+ * <b>G2 / G2-TAIL</b>：仅当本层开启了<strong>新事务</strong>且成功提交后
+ * （{@code TransactionTemplate.execute} 正常返回之后、unlock 之前）
+ * {@link DeptChildrenCacheInvalidator#bumpGenerationAndEvict()}（递增代际 + clear）。
+ * 嵌套 join 不 mid-tx  bump；回滚不 bump。读路径用代际拒绝尾随旧 put。
  */
 @Component
 @Slf4j
@@ -80,9 +79,9 @@ public class DeptMutationLock {
                 return callQuietly(action);
             });
             // 此处 TransactionTemplate 已完成 commit（异常回滚则不会到此）
-            // 仅最外层新事务在成功提交后失效子树缓存（G2）
+            // 仅最外层新事务在成功提交后 bump 代际 + clear（G2 / G2-TAIL）
             if (openedNewTransaction.get()) {
-                deptChildrenCacheInvalidator.evictNow();
+                deptChildrenCacheInvalidator.bumpGenerationAndEvict();
             }
             return result;
         } finally {
