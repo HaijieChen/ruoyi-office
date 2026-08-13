@@ -35,7 +35,7 @@ export function useGridFormSchema(
       label: '所属部门',
       component: 'HelpInput',
       componentProps: {
-        placeholder: '请选择所属部门',
+        placeholder: '请选择部门或公司',
         bind: {
           onClick: () => {
             if (deptSelectModalRef?.value) {
@@ -47,7 +47,7 @@ export function useGridFormSchema(
       dependencies: {
         triggerFields: ['deptName'],
         trigger: (values: any, form: any) => {
-          // 当部门名称被清空时，同时清空部门ID
+          // 当部门/公司名称被清空时，同时清空筛选 ID
           if (!values.deptName || values.deptName === '') {
             form.setFieldValue('deptId', undefined);
           }
