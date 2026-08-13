@@ -20,8 +20,11 @@ import cn.iocoder.yudao.module.hrm.dal.mysql.employee.OnboardingFileClaimMapper;
 import cn.iocoder.yudao.module.hrm.enums.EmployeeStatusEnum;
 import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
+import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -46,6 +49,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 /**
@@ -82,6 +86,30 @@ class EmployeeRosterImportTest {
     private AdminUserApi adminUserApi;
     @Mock
     private ConfigApi configApi;
+
+    private static final String DEPT_NAME = "总经办";
+    private static final Long DEPT_ID = 1001L;
+    private static final Long COMPANY_ID = 100L;
+
+    @BeforeEach
+    void stubDefaultDeptApi() {
+        DeptRespDTO dept = new DeptRespDTO();
+        dept.setId(DEPT_ID);
+        dept.setName(DEPT_NAME);
+        dept.setParentId(COMPANY_ID);
+        dept.setStatus(0);
+        dept.setOrgType("0");
+        lenient().when(deptApi.getSimpleDeptList()).thenReturn(CommonResult.success(List.of(dept)));
+
+        DeptRespDTO company = new DeptRespDTO();
+        company.setId(COMPANY_ID);
+        company.setName("文枢科技");
+        company.setOrgType("1");
+        company.setStatus(0);
+        company.setParentId(0L);
+        lenient().when(deptApi.getDept(DEPT_ID)).thenReturn(CommonResult.success(dept));
+        lenient().when(deptApi.getDept(COMPANY_ID)).thenReturn(CommonResult.success(company));
+    }
 
     @Test
     void importExcelVoHeadersMatchTemplateAttachmentExactly() throws Exception {
@@ -257,6 +285,7 @@ class EmployeeRosterImportTest {
                     .idCard(idCard)
                     .mobile("13900002222")
                     .sex("男")
+                    .deptName(DEPT_NAME)
                     .employeeType(null) // blank
                     .build();
 
@@ -474,6 +503,7 @@ class EmployeeRosterImportTest {
                     .idCard(idCard)
                     .mobile("13900005555")
                     .sex("女")
+                    .deptName(DEPT_NAME)
                     .employeeType(null) // 空白
                     .build();
 
@@ -536,6 +566,122 @@ class EmployeeRosterImportTest {
                 .mobile("13800138000")
                 .sex("男")
                 .employeeType("正式")
+                .deptName(DEPT_NAME)
                 .build();
+    }
+
+    @Test
+    void importBindsDeptIdAndCompanyFromDeptName() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            EmployeeRosterImportExcelVO row = baseRow("110101199001011001", "部门绑定员");
+            when(employeeArchiveMapper.selectByIdCard("110101199001011001")).thenReturn(null);
+            doAnswer(inv -> {
+                EmployeeDO e = inv.getArgument(0);
+                e.setId(201L);
+                return 1;
+            }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
+            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+
+            EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
+            assertEquals(1, resp.getCreateNames().size());
+            assertTrue(resp.getFailureRows().isEmpty());
+
+            ArgumentCaptor<EmployeeDO> cap = ArgumentCaptor.forClass(EmployeeDO.class);
+            verify(employeeArchiveMapper).insert(cap.capture());
+            assertEquals(DEPT_ID, cap.getValue().getDeptId());
+            assertEquals(DEPT_NAME, cap.getValue().getDeptName());
+            assertEquals(COMPANY_ID, cap.getValue().getCompanyId());
+        }
+    }
+
+    @Test
+    void importFailsWhenDeptMissing() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            EmployeeRosterImportExcelVO row = EmployeeRosterImportExcelVO.builder()
+                    .name("无部门员")
+                    .idCard("110101199001011002")
+                    .mobile("13800138001")
+                    .sex("男")
+                    .deptName("  ")
+                    .build();
+
+            EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
+            assertTrue(resp.getCreateNames().isEmpty());
+            assertTrue(resp.getFailureRows().get(3).contains("部门不能为空"));
+            verify(employeeArchiveMapper, never()).insert(any(EmployeeDO.class));
+        }
+    }
+
+    @Test
+    void importFailsWhenDeptNameUnknown() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            EmployeeRosterImportExcelVO row = baseRow("110101199001011003", "未知部门员");
+            row.setDeptName("不存在的部门XYZ");
+
+            EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
+            assertTrue(resp.getCreateNames().isEmpty());
+            String fail = resp.getFailureRows().get(3);
+            assertNotNull(fail);
+            assertTrue(fail.contains("部门不存在") || fail.contains("未启用"));
+            assertTrue(fail.contains("不存在的部门XYZ"));
+            verify(employeeArchiveMapper, never()).insert(any(EmployeeDO.class));
+        }
+    }
+
+    @Test
+    void importFailsWhenDeptNameAmbiguous() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            DeptRespDTO d1 = new DeptRespDTO();
+            d1.setId(11L);
+            d1.setName("研发部");
+            d1.setStatus(0);
+            DeptRespDTO d2 = new DeptRespDTO();
+            d2.setId(12L);
+            d2.setName("研发部");
+            d2.setStatus(0);
+            when(deptApi.getSimpleDeptList()).thenReturn(CommonResult.success(List.of(d1, d2)));
+
+            EmployeeRosterImportExcelVO row = baseRow("110101199001011004", "重名部门员");
+            row.setDeptName("研发部");
+
+            EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
+            assertTrue(resp.getCreateNames().isEmpty());
+            assertTrue(resp.getFailureRows().get(3).contains("多个匹配"));
+        }
+    }
+
+    @Test
+    void getEmployeeArchiveFillsDeptAndCompanyNamesForEdit() {
+        EmployeeDO archive = new EmployeeDO();
+        archive.setId(9L);
+        archive.setName("编辑员");
+        archive.setSex(1);
+        archive.setEmployeeStatus(1);
+        archive.setDeptId(DEPT_ID);
+        archive.setCompanyId(null);
+        archive.setDeptName(null);
+        archive.setCompanyName(null);
+        when(employeeArchiveMapper.selectById(9L)).thenReturn(archive);
+        when(employeeWorkExperienceMapper.selectListByEmployeeId(9L)).thenReturn(List.of());
+        when(employeeEducationMapper.selectListByEmployeeId(9L)).thenReturn(List.of());
+        when(employeeFamilyMapper.selectListByEmployeeId(9L)).thenReturn(List.of());
+        when(employeeContractMapper.selectListByEmployeeId(9L)).thenReturn(List.of());
+        when(attachmentService.getAttachmentListByBusinessInternal(any(), anyLong()))
+                .thenReturn(List.of());
+
+        var resp = employeeService.getEmployeeArchive(9L);
+        assertNotNull(resp);
+        assertEquals(DEPT_ID, resp.getDeptId());
+        assertEquals(DEPT_NAME, resp.getDeptName());
+        assertEquals(COMPANY_ID, resp.getCompanyId());
+        assertEquals("文枢科技", resp.getCompanyName());
     }
 }

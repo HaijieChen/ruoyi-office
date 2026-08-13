@@ -346,6 +346,8 @@ export function useWorkFormSchema(
           }
         },
       },
+      // 导入写库后编辑保存亦须有有效部门展示名（与 deptId 同步）
+      rules: 'required',
     },
     {
       fieldName: 'deptId',

@@ -57,4 +57,8 @@ public interface DeptApi {
     @Operation(summary = "获得启用公司精简列表（orgType=公司）")
     CommonResult<List<DeptRespDTO>> getCompanySimpleList();
 
+    @GetMapping(PREFIX + "/list-all-simple")
+    @Operation(summary = "获得启用部门精简列表", description = "当前租户已启用部门，供花名册导入按名称解析 deptId 等")
+    CommonResult<List<DeptRespDTO>> getSimpleDeptList();
+
 }

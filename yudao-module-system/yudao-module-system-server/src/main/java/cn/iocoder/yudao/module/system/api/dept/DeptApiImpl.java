@@ -54,4 +54,11 @@ public class DeptApiImpl implements DeptApi {
         return success(BeanUtils.toBean(list, DeptRespDTO.class));
     }
 
+    @Override
+    public CommonResult<List<DeptRespDTO>> getSimpleDeptList() {
+        List<DeptDO> list = deptService.getDeptList(
+                new DeptListReqVO().setStatus(CommonStatusEnum.ENABLE.getStatus()));
+        return success(BeanUtils.toBean(list, DeptRespDTO.class));
+    }
+
 }
