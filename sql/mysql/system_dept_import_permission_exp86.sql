@@ -6,11 +6,14 @@
 --
 -- 前置：hrm_menu_open.sql 已创建组织管理页；system_dept.functional_currency 列已存在（EXP-73）。
 --
--- 部署/回滚（C1 缓存命名空间，应用侧，无 DDL）：
--- - 滚动发布：可新旧包并存。新包读写 Redis 缓存名 dept_children_ids_v2（GenerationStampedSet）；
---   旧包继续读写 dept_children_ids（Set）。二者不共享值类型，旧实例不会 SerializationException。
--- - 组织写成功时新包会顺带 clear 旧名，缩短滚动窗口内旧实例陈旧子树缓存。
--- - 回滚应用：停新包后仅旧包读 dept_children_ids；v2 键可残留至 TTL，旧包不访问。
+-- 部署/回滚（C1 + R2-FINAL-01 缓存，应用侧，无 DDL）：
+-- - 滚动发布：允许新旧包写者并存。
+--   * 新包读写 dept_children_ids_v2（GenerationStampedSet）+ 代际；
+--     在遗留名 dept_children_ids 写入 Long 型 epoch 标记键 __dept_children_v2_epoch__。
+--   * 旧包读写 dept_children_ids（Set），@CacheEvict(allEntries) 会清掉 epoch 标记；
+--     新包读路径发现标记缺失 → bump 代际并清空 V2 → 拒绝陈旧 V2 命中（旧写→新读闭合）。
+--   * 新 stamped 类型绝不写入遗留名 → 旧实例无 SerializationException（C1）。
+-- - 回滚应用：停新包后仅旧包读遗留名；V2 键可残留至 TTL，旧包不访问。
 -- - 生产需 Redisson（租户写锁 + 代际 AtomicLong）。
 -- - 发布前仍执行本权限脚本 + EXP-73 列预检。
 

@@ -103,7 +103,12 @@ public class DeptChildrenCacheC1NamespaceTest extends BaseDbUnitTest {
         child.setOrgType("0");
         deptService.createDept(child);
 
-        assertNull(legacy.get(parentId), "写成功应 clear 遗留名，促旧实例 miss 重载");
+        assertNull(legacy.get(parentId), "写成功应 clear 遗留部门键，促旧实例 miss 重载");
+        // epoch 标记会写回遗留命名空间（Long，非 stamped）
+        assertNotNull(legacy.get(DeptChildrenCacheInvalidator.LEGACY_EPOCH_MARKER_KEY),
+                "写成功应恢复 legacy epoch 标记");
+        Object epoch = legacy.get(DeptChildrenCacheInvalidator.LEGACY_EPOCH_MARKER_KEY).get();
+        assertFalse(epoch instanceof DeptChildrenCacheInvalidator.GenerationStampedSet);
         assertNull(cache(RedisKeyConstants.DEPT_CHILDREN_ID_LIST_V2).get(parentId));
     }
 

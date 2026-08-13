@@ -15,9 +15,10 @@ public interface RedisKeyConstants {
      * KEY 格式：dept_children_ids:{id}<br>
      * VALUE：历史版本为 {@code Set&lt;Long&gt;}（{@code @Cacheable} 时代）。
      * <p>
-     * EXP-86 起<strong>新代码不再读写本命名空间中的 stamped 类型</strong>，仅在组织写成功后
-     * 顺带 clear，帮助滚动升级中仍跑旧包的实例失效陈旧 Set。
-     * 新值写入 {@link #DEPT_CHILDREN_ID_LIST_V2}（C1：避免旧实例反序列化新类失败）。
+     * EXP-86 起<strong>新代码不在本命名空间写入 stamped 类型</strong>；可写入 Long 型 epoch 标记
+     *（{@code __dept_children_v2_epoch__}）供检测旧包 allEntries clear。组织写成功后 clear 本空间
+     * 并写回 epoch。旧包仍可能写入 Set 到部门 id 键。
+     * 新子树值写入 {@link #DEPT_CHILDREN_ID_LIST_V2}（C1 + R2-FINAL-01）。
      */
     String DEPT_CHILDREN_ID_LIST = "dept_children_ids";
 
@@ -26,8 +27,8 @@ public interface RedisKeyConstants {
      * <p>
      * KEY 格式：dept_children_ids_v2:{id}<br>
      * VALUE：{@code DeptChildrenCacheInvalidator.GenerationStampedSet}<br>
-     * 与 {@link #DEPT_CHILDREN_ID_LIST} <strong>命名空间隔离</strong>：滚动部署时旧实例只读
-     * 旧名，永不反序列化本空间中的新类型；回滚后新实例停止写本空间，旧实例继续只读旧名。
+     * 与 {@link #DEPT_CHILDREN_ID_LIST} <strong>命名空间隔离</strong>（C1）。
+     * 旧包写仅清遗留名时，新包靠 legacy epoch 标记缺失失效本空间陈旧命中（R2-FINAL-01）。
      */
     String DEPT_CHILDREN_ID_LIST_V2 = "dept_children_ids_v2";
 
