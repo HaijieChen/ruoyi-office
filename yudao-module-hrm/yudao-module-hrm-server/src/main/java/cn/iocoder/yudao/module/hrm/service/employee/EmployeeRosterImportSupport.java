@@ -46,7 +46,7 @@ final class EmployeeRosterImportSupport {
             "正确示例：2024-01-15、2024/01/15、2024.01.15、20240115、2024年1月15日";
     /** 年月字段正确格式说明 */
     static final String YEAR_MONTH_FORMAT_HINT =
-            "正确示例：2024-01、2024/01、202401";
+            "正确示例：2024-01、2024/01、202401；Excel 日期格 2024/1/1 或 2024-01-01 亦可（按年月入库）";
     /** 合同区间正确格式说明 */
     static final String CONTRACT_RANGE_FORMAT_HINT =
             "正确示例：2021/09/03-2024/08/31、2021-09-03~2024-08-31、20210903-无固定期限、2021/09/03-无固定期限";
@@ -102,8 +102,15 @@ final class EmployeeRosterImportSupport {
         if (hf != null) {
             req.setHousingFundEnabled(hf);
         }
-        String ssMonth = normalizeYearMonth(row.getSocialSecurityStartMonth());
-        if (ssMonth != null) {
+        // 参保年月：兼容 Excel 日期格读成 2024-01-01 / 2024/1/1 / 序列化字符串
+        String ssMonthRaw = trim(row.getSocialSecurityStartMonth());
+        if (StrUtil.isNotBlank(ssMonthRaw)) {
+            String ssMonth = normalizeYearMonth(ssMonthRaw);
+            if (ssMonth == null) {
+                throw new IllegalArgumentException(
+                        "参保年月格式无法解析：" + ssMonthRaw + "；" + YEAR_MONTH_FORMAT_HINT
+                                + "；Excel 日期格亦可（如 2024/1/1 → 按 2024-01 入库）");
+            }
             req.setSocialSecurityStartMonth(ssMonth);
         }
         req.setNation(resolveDictOrRaw(DICT_NATION, row.getNation()));
@@ -551,22 +558,91 @@ final class EmployeeRosterImportSupport {
         }
     }
 
+    /**
+     * 归一化参保/出生年月为 yyyy-MM。
+     * <p>
+     * 兼容：
+     * <ul>
+     *   <li>yyyy-MM / yyyy/M / yyyy.MM / yyyy年M月</li>
+     *   <li>yyyyMM（6 位）</li>
+     *   <li>完整日期 yyyy-MM-dd、yyyy/M/d、yyyy年M月d日（取年月）</li>
+     *   <li>带时间后缀 2024-01-01 00:00:00 / 2024-01-01T00:00</li>
+     *   <li>Excel 序列日（纯数字天数，约 1～60000）→ 转本地日期再取年月</li>
+     * </ul>
+     */
     static String normalizeYearMonth(String raw) {
         if (StrUtil.isBlank(raw)) {
             return null;
         }
-        String t = raw.trim().replace('.', '-').replace('/', '-').replace("年", "-").replace("月", "");
+        String original = raw.trim();
+        // 截掉时间部分
+        String t = original;
+        if (t.contains("T")) {
+            t = t.substring(0, t.indexOf('T'));
+        }
+        if (t.contains(" ")) {
+            t = t.substring(0, t.indexOf(' '));
+        }
+        t = t.replace('.', '-').replace('/', '-')
+                .replace("年", "-").replace("月", "-").replace("日", "");
+        // 折叠多余连字符
+        while (t.contains("--")) {
+            t = t.replace("--", "-");
+        }
         if (t.endsWith("-")) {
             t = t.substring(0, t.length() - 1);
         }
+        t = t.trim();
+
+        // yyyy-M / yyyy-MM
         if (t.matches("\\d{4}-\\d{1,2}")) {
             String[] p = t.split("-");
-            return String.format(Locale.ROOT, "%s-%02d", p[0], Integer.parseInt(p[1]));
+            return formatYearMonth(Integer.parseInt(p[0]), Integer.parseInt(p[1]));
         }
+        // yyyy-M-d / yyyy-MM-dd（Excel 日期格常读成完整日）
+        if (t.matches("\\d{4}-\\d{1,2}-\\d{1,2}")) {
+            String[] p = t.split("-");
+            return formatYearMonth(Integer.parseInt(p[0]), Integer.parseInt(p[1]));
+        }
+        // yyyyMM
         if (t.matches("\\d{6}")) {
-            return t.substring(0, 4) + "-" + t.substring(4, 6);
+            return formatYearMonth(Integer.parseInt(t.substring(0, 4)), Integer.parseInt(t.substring(4, 6)));
+        }
+        // yyyyMMdd
+        if (t.matches("\\d{8}")) {
+            return formatYearMonth(Integer.parseInt(t.substring(0, 4)), Integer.parseInt(t.substring(4, 6)));
+        }
+        // Excel 序列日：如 45292 → 2024-01-01
+        if (t.matches("\\d+(\\.\\d+)?")) {
+            try {
+                double serial = Double.parseDouble(t);
+                // Excel 日序列合理范围（1900-01-01 起约 1～60000+）
+                if (serial >= 1 && serial < 100000) {
+                    // EasyExcel/POI 常用 1899-12-30 纪元
+                    LocalDate d = LocalDate.of(1899, 12, 30).plusDays((long) serial);
+                    return formatYearMonth(d.getYear(), d.getMonthValue());
+                }
+            } catch (Exception ignored) {
+                // fallthrough
+            }
+        }
+        // 最后尝试 parseDate 再取年月
+        try {
+            LocalDate d = parseDate(original, "年月");
+            if (d != null) {
+                return formatYearMonth(d.getYear(), d.getMonthValue());
+            }
+        } catch (IllegalArgumentException ignored) {
+            // fallthrough
         }
         return null;
+    }
+
+    private static String formatYearMonth(int year, int month) {
+        if (year < 1900 || year > 2100 || month < 1 || month > 12) {
+            return null;
+        }
+        return String.format(Locale.ROOT, "%04d-%02d", year, month);
     }
 
     private static String normalizeDateText(String t) {
