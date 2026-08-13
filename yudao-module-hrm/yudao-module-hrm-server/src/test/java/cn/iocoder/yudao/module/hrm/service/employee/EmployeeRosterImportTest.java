@@ -361,6 +361,39 @@ class EmployeeRosterImportTest {
     }
 
     @Test
+    void normalizeYearMonthAcceptsFullDatesAndExcelSerial() {
+        // Excel 日期格常被读成完整日或带时间
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("2024-01-01"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("2024/1/1"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("2024.01.01"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("2024年1月1日"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("2024-01-01 00:00:00"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("2024-01-01T00:00:00"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("2024-01"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("202401"));
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("20240101"));
+        // Excel 序列日 2024-01-01 ≈ 45292（1899-12-30 纪元）
+        assertEquals("2024-01", EmployeeRosterImportSupport.normalizeYearMonth("45292"));
+        assertNull(EmployeeRosterImportSupport.normalizeYearMonth("  "));
+        assertNull(EmployeeRosterImportSupport.normalizeYearMonth("not-a-month"));
+    }
+
+    @Test
+    void toSaveReqAcceptsExcelDateCellAsSocialSecurityMonth() {
+        EmployeeRosterImportExcelVO row = EmployeeRosterImportExcelVO.builder()
+                .name("参保日期格")
+                .idCard("110101199001016666")
+                .mobile("13800006666")
+                .sex("男")
+                .socialSecurityEnabled("是")
+                .socialSecurityStartMonth("2024-01-01") // EasyExcel 日期格常见形态
+                .build();
+        EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(row);
+        assertEquals(Boolean.TRUE, req.getSocialSecurityEnabled());
+        assertEquals("2024-01", req.getSocialSecurityStartMonth());
+    }
+
+    @Test
     void compactContractRangeWithOpenEndParses() {
         LocalDate[] se = EmployeeRosterImportSupport.parseDateRange("20210903-无固定期限");
         assertNotNull(se);
