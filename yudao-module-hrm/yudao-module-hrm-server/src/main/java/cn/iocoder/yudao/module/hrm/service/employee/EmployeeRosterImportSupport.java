@@ -346,6 +346,61 @@ final class EmployeeRosterImportSupport {
         return r;
     }
 
+    /**
+     * 导入行失败原因：字段校验类保留原文；SQL/表结构类改写为可读说明，禁止把 MyBatis 堆栈直接回前端。
+     */
+    static String humanizeImportFailure(Throwable ex, String idCard) {
+        if (ex == null) {
+            return "未知错误";
+        }
+        String raw = firstNonBlankMessage(ex);
+        if (isSchemaOrSqlGrammarFailure(ex, raw)) {
+            return "系统数据表结构异常（非 Excel 字段填写错误），请联系管理员检查库表是否已执行花名册字段迁移";
+        }
+        if (StrUtil.isBlank(raw)) {
+            raw = ex.getClass().getSimpleName();
+        }
+        // 截断过长 JDBC/MyBatis 文案，避免整段 SQL 刷屏
+        if (raw.length() > 240) {
+            raw = raw.substring(0, 240) + "…";
+        }
+        return sanitizeReasonForLog(raw, idCard);
+    }
+
+    private static String firstNonBlankMessage(Throwable ex) {
+        Throwable cur = ex;
+        while (cur != null) {
+            if (StrUtil.isNotBlank(cur.getMessage())) {
+                return cur.getMessage().trim();
+            }
+            cur = cur.getCause();
+        }
+        return null;
+    }
+
+    private static boolean isSchemaOrSqlGrammarFailure(Throwable ex, String raw) {
+        String hay = (raw == null ? "" : raw) + " " + walkExceptionNames(ex);
+        String lower = hay.toLowerCase();
+        return lower.contains("unknown column")
+                || lower.contains("bad sql grammar")
+                || lower.contains("sqlsyntaxerrorexception")
+                || lower.contains("error querying database")
+                || lower.contains("doesn't exist")
+                || lower.contains("does not exist");
+    }
+
+    private static String walkExceptionNames(Throwable ex) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = ex;
+        int depth = 0;
+        while (cur != null && depth < 8) {
+            sb.append(cur.getClass().getName()).append(' ');
+            cur = cur.getCause();
+            depth++;
+        }
+        return sb.toString();
+    }
+
     static void applyMarriageChildbearing(EmployeeSaveReqVO req, String summary) {
         if (StrUtil.isBlank(summary)) {
             return;

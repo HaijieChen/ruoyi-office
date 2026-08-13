@@ -334,6 +334,24 @@ class EmployeeRosterImportTest {
     }
 
     @Test
+    void humanizeImportFailureMapsUnknownColumnToSchemaHint() {
+        RuntimeException sql = new RuntimeException(
+                "### Error querying database. Cause: java.sql.SQLSyntaxErrorException: "
+                        + "Unknown column 'emergency_relationship' in 'field list'");
+        String msg = EmployeeRosterImportSupport.humanizeImportFailure(sql, "110101199001011234");
+        assertTrue(msg.contains("系统数据表结构异常"));
+        assertFalse(msg.contains("emergency_relationship"));
+        assertFalse(msg.contains("110101199001011234"));
+    }
+
+    @Test
+    void humanizeImportFailureKeepsFieldValidationMessage() {
+        IllegalArgumentException ex = new IllegalArgumentException("身份证号不能为空");
+        assertEquals("身份证号不能为空",
+                EmployeeRosterImportSupport.humanizeImportFailure(ex, null));
+    }
+
+    @Test
     void concurrentCreateDuplicateKeyFallsBackToUpdate() {
         try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
             spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);

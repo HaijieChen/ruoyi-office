@@ -400,12 +400,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                     resp.getUpdateNames().add(req.getName());
                 }
             } catch (Exception ex) {
-                String reason = ex.getMessage();
-                if (StrUtil.isBlank(reason)) {
-                    reason = ex.getClass().getSimpleName();
-                }
-                String safeReason = EmployeeRosterImportSupport.sanitizeReasonForLog(reason, idCardForMask);
-                log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, safeReason);
+                String safeReason = EmployeeRosterImportSupport.humanizeImportFailure(ex, idCardForMask);
+                log.warn("[importEmployeeRosterList][row={} fail: {}]", excelRowNumber, safeReason, ex);
                 resp.getFailureRows().put(excelRowNumber, safeReason);
             }
         }
