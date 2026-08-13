@@ -34,8 +34,22 @@ final class EmployeeRosterImportSupport {
     private static final String DICT_EMPLOYMENT_FORM = "hrm_employment_form";
     private static final String DICT_CONTRACT_TYPE = "hrm_contract_type";
 
+    /** 带分隔符的起止区间，如 2021/09/03-2024/08/31、2021年9月3日-无固定期限 */
     private static final Pattern DATE_RANGE = Pattern.compile(
             "^\\s*(\\d{4}[-/.年]\\d{1,2}[-/.月]?\\d{0,2}日?)\\s*[-~至到]+\\s*(.+?)\\s*$");
+    /** 紧凑 8 位日起止区间，如 20210903-无固定期限、20210903-20240831 */
+    private static final Pattern DATE_RANGE_COMPACT = Pattern.compile(
+            "^\\s*(\\d{8})\\s*[-~至到]+\\s*(.+?)\\s*$");
+
+    /** 日期字段正确格式说明（用于失败原因，避免用户不知如何改） */
+    static final String DATE_FORMAT_HINT =
+            "正确示例：2024-01-15、2024/01/15、2024.01.15、20240115、2024年1月15日";
+    /** 年月字段正确格式说明 */
+    static final String YEAR_MONTH_FORMAT_HINT =
+            "正确示例：2024-01、2024/01、202401";
+    /** 合同区间正确格式说明 */
+    static final String CONTRACT_RANGE_FORMAT_HINT =
+            "正确示例：2021/09/03-2024/08/31、2021-09-03~2024-08-31、20210903-无固定期限、2021/09/03-无固定期限";
 
     private EmployeeRosterImportSupport() {
     }
@@ -61,7 +75,7 @@ final class EmployeeRosterImportSupport {
         }
         Integer sex = parseSex(row.getSex());
         if (sex == null) {
-            throw new IllegalArgumentException("性别不能为空或无法识别（请填男/女）");
+            throw new IllegalArgumentException("性别不能为空或无法识别（正确示例：男 / 女）");
         }
 
         EmployeeSaveReqVO req = new EmployeeSaveReqVO();
@@ -202,18 +216,31 @@ final class EmployeeRosterImportSupport {
         if (StrUtil.isBlank(range)) {
             return;
         }
-        LocalDate[] se = parseDateRange(range.trim());
-        if (se == null || se[0] == null) {
-            throw new IllegalArgumentException("合同起止日期无法解析：" + range);
+        try {
+            LocalDate[] se = parseDateRange(range.trim());
+            if (se == null || se[0] == null) {
+                throw new IllegalArgumentException(
+                        "合同起止日期无法解析：" + range + "；" + CONTRACT_RANGE_FORMAT_HINT);
+            }
+            EmployeeContractVO c = new EmployeeContractVO();
+            c.setSequenceNo(seq);
+            c.setStartDate(se[0]);
+            c.setEndDate(se[1]);
+            if (StrUtil.isNotBlank(typeHint)) {
+                c.setContractType(resolveDictOrRaw(DICT_CONTRACT_TYPE, typeHint));
+            }
+            list.add(c);
+        } catch (IllegalArgumentException ex) {
+            // 补齐合同区间示例（子解析可能只带了单日示例）
+            String msg = ex.getMessage();
+            if (msg != null && !msg.contains("无固定期限") && !msg.contains("合同起止")) {
+                throw new IllegalArgumentException(msg + "；" + CONTRACT_RANGE_FORMAT_HINT);
+            }
+            if (msg != null && msg.contains("合同起止") && !msg.contains("正确示例")) {
+                throw new IllegalArgumentException(msg + "；" + CONTRACT_RANGE_FORMAT_HINT);
+            }
+            throw ex;
         }
-        EmployeeContractVO c = new EmployeeContractVO();
-        c.setSequenceNo(seq);
-        c.setStartDate(se[0]);
-        c.setEndDate(se[1]);
-        if (StrUtil.isNotBlank(typeHint)) {
-            c.setContractType(resolveDictOrRaw(DICT_CONTRACT_TYPE, typeHint));
-        }
-        list.add(c);
     }
 
     static LocalDate[] parseDateRange(String range) {
@@ -221,14 +248,22 @@ final class EmployeeRosterImportSupport {
             return null;
         }
         String s = range.trim().replace('～', '-').replace('—', '-');
+        // 1) 紧凑 8 位日：20210903-无固定期限 / 20210903-20240831
+        Matcher compact = DATE_RANGE_COMPACT.matcher(s);
+        if (compact.matches()) {
+            LocalDate start = parseDate(compact.group(1), "合同起");
+            LocalDate end = parseOpenEndDate(compact.group(2));
+            return new LocalDate[]{start, end};
+        }
+        // 2) 带分隔符区间
         Matcher m = DATE_RANGE.matcher(s);
         if (m.matches()) {
             LocalDate start = parseDate(m.group(1), "合同起");
             LocalDate end = parseOpenEndDate(m.group(2));
             return new LocalDate[]{start, end};
         }
-        // 仅起始
-        LocalDate only = parseDate(s, "合同日期");
+        // 3) 仅起始日
+        LocalDate only = parseDate(s, "合同起");
         return only == null ? null : new LocalDate[]{only, null};
     }
 
@@ -497,7 +532,7 @@ final class EmployeeRosterImportSupport {
                 // fallthrough
             }
         }
-        throw new IllegalArgumentException(field + "日期格式无法解析：" + raw);
+        throw new IllegalArgumentException(field + "格式无法解析：" + raw + "；" + DATE_FORMAT_HINT);
     }
 
     static LocalDate parseBirthday(String raw) {
@@ -511,7 +546,8 @@ final class EmployeeRosterImportSupport {
             if (ym != null) {
                 return LocalDate.parse(ym + "-01");
             }
-            throw ex;
+            throw new IllegalArgumentException(
+                    "出生年月格式无法解析：" + raw + "；" + YEAR_MONTH_FORMAT_HINT + "；也可填完整日期如 1990-01-15");
         }
     }
 

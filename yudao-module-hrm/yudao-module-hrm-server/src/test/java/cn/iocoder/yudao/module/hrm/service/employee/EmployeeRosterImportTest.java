@@ -352,6 +352,50 @@ class EmployeeRosterImportTest {
     }
 
     @Test
+    void parseDateFailureIncludesCorrectFormatExample() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> EmployeeRosterImportSupport.parseDate("not-a-date", "入职日期"));
+        assertTrue(ex.getMessage().contains("入职日期"));
+        assertTrue(ex.getMessage().contains("正确示例"));
+        assertTrue(ex.getMessage().contains("2024-01-15"));
+    }
+
+    @Test
+    void compactContractRangeWithOpenEndParses() {
+        LocalDate[] se = EmployeeRosterImportSupport.parseDateRange("20210903-无固定期限");
+        assertNotNull(se);
+        assertEquals(LocalDate.of(2021, 9, 3), se[0]);
+        assertNull(se[1]);
+    }
+
+    @Test
+    void toSaveReqAcceptsCompactOpenEndedContractAndReportsExampleOnBadRange() {
+        EmployeeRosterImportExcelVO ok = EmployeeRosterImportExcelVO.builder()
+                .name("合同紧凑")
+                .idCard("110101199001017777")
+                .mobile("13800007777")
+                .sex("男")
+                .contract1Range("20210903-无固定期限")
+                .build();
+        EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(ok);
+        assertEquals(1, req.getContractList().size());
+        assertEquals(LocalDate.of(2021, 9, 3), req.getContractList().get(0).getStartDate());
+        assertNull(req.getContractList().get(0).getEndDate());
+
+        EmployeeRosterImportExcelVO bad = EmployeeRosterImportExcelVO.builder()
+                .name("合同坏")
+                .idCard("110101199001017778")
+                .mobile("13800007778")
+                .sex("女")
+                .contract1Range("完全不是日期")
+                .build();
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> EmployeeRosterImportSupport.toSaveReq(bad));
+        assertTrue(ex.getMessage().contains("正确示例"));
+        assertTrue(ex.getMessage().contains("无固定期限") || ex.getMessage().contains("2021"));
+    }
+
+    @Test
     void concurrentCreateDuplicateKeyFallsBackToUpdate() {
         try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
             spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
