@@ -87,10 +87,16 @@ class FinancePaymentTenantIsolationContractTest {
         FinanceEntityCompanyResolver entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         when(entityCompanyResolver.requireByDeptId(anyLong()))
                 .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(20L, "主体甲", "CNY"));
+        var companyBankAccountService = mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class);
+        var payLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper.class);
+        var salaryLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentSalaryLineMapper.class);
+        var taxLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper.class);
+        when(payLineMapper.sumPayAmountByApplicationId(anyLong())).thenReturn(java.math.BigDecimal.ZERO);
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
-                deptProvider, entityCompanyResolver);
+                deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
+                salaryLineMapper, taxLineMapper);
     }
 
     @AfterEach

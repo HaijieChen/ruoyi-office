@@ -207,6 +207,38 @@ public interface ErrorCodeConstants {
     /** 交易币种仅允许 CNY/USD/HKD */
     ErrorCode PAYMENT_APPLICATION_CURRENCY_INVALID = new ErrorCode(1_040_006_020,
             "币种仅支持 CNY/USD/HKD");
+    /** 出纳支付须选择付款账户 */
+    ErrorCode PAYMENT_APPLICATION_PAY_ACCOUNT_REQUIRED = new ErrorCode(1_040_006_021,
+            "出纳支付须选择付款账户");
+    /** 支付金额无效或超过未付余额 */
+    ErrorCode PAYMENT_APPLICATION_PAY_AMOUNT_INVALID = new ErrorCode(1_040_006_022,
+            "支付金额必须大于 0，且累计支付不得超过申请金额");
+    /** 支付合计未达申请金额，禁止办结 */
+    ErrorCode PAYMENT_APPLICATION_PAY_AMOUNT_INCOMPLETE = new ErrorCode(1_040_006_023,
+            "支付合计须等于申请金额后方可办结");
+    /** 普通付款新单禁止薪资/税金事由 */
+    ErrorCode PAYMENT_APPLICATION_REASON_SALARY_TAX_FORBIDDEN = new ErrorCode(1_040_006_024,
+            "普通付款不可新建薪资/税金事由，请使用独立薪资或税金付款入口");
+    /** 薪资/税金明细为空或校验失败 */
+    ErrorCode PAYMENT_APPLICATION_LINES_INVALID = new ErrorCode(1_040_006_025,
+            "薪资/税金明细不完整或金额校验失败");
+    /** 申请业务类型与操作不匹配 */
+    ErrorCode PAYMENT_APPLICATION_KIND_INVALID = new ErrorCode(1_040_006_026,
+            "付款申请业务类型不匹配");
+    /** V1 一单一币种 */
+    ErrorCode PAYMENT_APPLICATION_MULTI_CURRENCY_FORBIDDEN = new ErrorCode(1_040_006_027,
+            "同一申请仅允许一个币种，跨币种请分单");
+
+    // ========== 公司银行账户 1-040-007-000 ==========
+    ErrorCode COMPANY_BANK_ACCOUNT_NOT_EXISTS = new ErrorCode(1_040_007_000, "公司银行账户不存在");
+    ErrorCode COMPANY_BANK_ACCOUNT_REQUIRED = new ErrorCode(1_040_007_001, "公司银行账户不能为空");
+    ErrorCode COMPANY_BANK_ACCOUNT_DISABLED = new ErrorCode(1_040_007_002, "公司银行账户已停用，不可用于支付");
+    ErrorCode COMPANY_BANK_ACCOUNT_ENTITY_MISMATCH = new ErrorCode(1_040_007_003,
+            "付款账户不属于该主体公司");
+    ErrorCode COMPANY_BANK_ACCOUNT_NO_DUPLICATE = new ErrorCode(1_040_007_004,
+            "同一主体公司下银行账号已存在");
+    ErrorCode COMPANY_BANK_ACCOUNT_STATUS_INVALID = new ErrorCode(1_040_007_005, "公司银行账户状态无效");
+    ErrorCode COMPANY_BANK_ACCOUNT_FIELD_REQUIRED = new ErrorCode(1_040_007_006, "公司银行账户必填字段不完整");
 
     // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
     /** 交易币种仅允许 CNY/USD/HKD */

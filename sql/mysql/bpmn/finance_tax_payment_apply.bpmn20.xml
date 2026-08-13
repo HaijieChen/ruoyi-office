@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  税金付款申请 finance_tax_payment_apply（PAY-P1-3）
+  - 语义：部门负责人 → gateway(applyAmount>5000) → 业务负责人? → 财务主管 → 出纳 → end
+  - 含 BPMNDiagram/DI
+  - 结束：${financePaymentApprovalOutcomeDelegate}
+  - 出纳 complete 前须 recordPay 写支付日/凭证
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://www.iocoder.cn/finance">
+
+  <process id="finance_tax_payment_apply" name="税金付款申请" isExecutable="true">
+
+    <startEvent id="startEvent" name="开始"/>
+
+    <!-- F6：发起人部门负责人 strategy=37 START_USER_DEPT_LEADER，param=部门层级 1 -->
+    <userTask id="taskDeptHead" name="部门负责人审批"
+              flowable:candidateStrategy="37" flowable:candidateParam="1">
+      <extensionElements>
+        <flowable:candidateStrategy>37</flowable:candidateStrategy>
+        <flowable:candidateParam>1</flowable:candidateParam>
+        <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+
+    <exclusiveGateway id="gatewayAmount" name="金额是否大于5000"/>
+
+    <userTask id="taskBizHead" name="公司业务负责人审批"
+              flowable:candidateStrategy="10" flowable:candidateParam="payment_biz_head">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>payment_biz_head</flowable:candidateParam>
+        <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
+      </extensionElements>
+    </userTask>
+
+    <userTask id="taskFinance" name="财务主管审批"
+              flowable:candidateStrategy="10" flowable:candidateParam="payment_finance">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>payment_finance</flowable:candidateParam>
+        <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
+        <!-- F4：complete 前会计科目必填 -->
+        <flowable:taskListener event="complete" delegateExpression="${financePaymentFinanceCompleteGuardListener}"/>
+      </extensionElements>
+    </userTask>
+
+    <userTask id="taskCashier" name="出纳支付"
+              flowable:candidateStrategy="10" flowable:candidateParam="payment_cashier">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>payment_cashier</flowable:candidateParam>
+        <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
+        <!-- F1：complete 前台账须有支付日+凭证；否则拒绝通用 BPM 通过 -->
+        <flowable:taskListener event="complete" delegateExpression="${financePaymentCashierCompleteGuardListener}"/>
+      </extensionElements>
+    </userTask>
+
+    <endEvent id="endEvent" name="结束">
+      <extensionElements>
+        <flowable:executionListener event="end" delegateExpression="${financePaymentApprovalOutcomeDelegate}"/>
+      </extensionElements>
+    </endEvent>
+
+    <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskDeptHead"/>
+    <sequenceFlow id="flow2" sourceRef="taskDeptHead" targetRef="gatewayAmount"/>
+    <sequenceFlow id="flow3" sourceRef="gatewayAmount" targetRef="taskBizHead">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${applyAmount > 5000}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow4" sourceRef="gatewayAmount" targetRef="taskFinance">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${applyAmount <= 5000}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow5" sourceRef="taskBizHead" targetRef="taskFinance"/>
+    <sequenceFlow id="flow6" sourceRef="taskFinance" targetRef="taskCashier"/>
+    <sequenceFlow id="flow7" sourceRef="taskCashier" targetRef="endEvent"/>
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_finance_tax_payment_apply">
+    <bpmndi:BPMNPlane id="BPMNPlane_finance_tax_payment_apply" bpmnElement="finance_tax_payment_apply">
+      <bpmndi:BPMNShape id="shape_startEvent" bpmnElement="startEvent">
+        <omgdc:Bounds x="100" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskDeptHead" bpmnElement="taskDeptHead">
+        <omgdc:Bounds x="180" y="140" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gatewayAmount" bpmnElement="gatewayAmount" isMarkerVisible="true">
+        <omgdc:Bounds x="340" y="155" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskBizHead" bpmnElement="taskBizHead">
+        <omgdc:Bounds x="440" y="40" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskFinance" bpmnElement="taskFinance">
+        <omgdc:Bounds x="620" y="140" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskCashier" bpmnElement="taskCashier">
+        <omgdc:Bounds x="780" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_endEvent" bpmnElement="endEvent">
+        <omgdc:Bounds x="940" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="edge_flow1" bpmnElement="flow1">
+        <omgdi:waypoint x="136" y="180"/><omgdi:waypoint x="180" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow2" bpmnElement="flow2">
+        <omgdi:waypoint x="290" y="180"/><omgdi:waypoint x="340" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow3" bpmnElement="flow3">
+        <omgdi:waypoint x="365" y="155"/><omgdi:waypoint x="365" y="80"/>
+        <omgdi:waypoint x="440" y="80"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow4" bpmnElement="flow4">
+        <omgdi:waypoint x="390" y="180"/><omgdi:waypoint x="620" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow5" bpmnElement="flow5">
+        <omgdi:waypoint x="560" y="80"/><omgdi:waypoint x="675" y="80"/>
+        <omgdi:waypoint x="675" y="140"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow6" bpmnElement="flow6">
+        <omgdi:waypoint x="730" y="180"/><omgdi:waypoint x="780" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow7" bpmnElement="flow7">
+        <omgdi:waypoint x="880" y="180"/><omgdi:waypoint x="940" y="180"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

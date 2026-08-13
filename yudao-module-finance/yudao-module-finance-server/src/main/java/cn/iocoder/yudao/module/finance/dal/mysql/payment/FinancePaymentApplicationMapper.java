@@ -17,7 +17,7 @@ public interface FinancePaymentApplicationMapper extends BaseMapperX<FinancePaym
 
     default PageResult<FinancePaymentApplicationDO> selectPage(FinancePaymentApplicationPageReqVO reqVO,
                                                                Long applicantUserIdOrNull) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<FinancePaymentApplicationDO>()
+        LambdaQueryWrapperX<FinancePaymentApplicationDO> wrapper = new LambdaQueryWrapperX<FinancePaymentApplicationDO>()
                 .likeIfPresent(FinancePaymentApplicationDO::getApplicationNo, reqVO.getApplicationNo())
                 .eqIfPresent(FinancePaymentApplicationDO::getStatus, reqVO.getStatus())
                 .eqIfPresent(FinancePaymentApplicationDO::getPaymentReason, reqVO.getPaymentReason())
@@ -26,7 +26,15 @@ public interface FinancePaymentApplicationMapper extends BaseMapperX<FinancePaym
                 .eqIfPresent(FinancePaymentApplicationDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
                 .eq(applicantUserIdOrNull != null, FinancePaymentApplicationDO::getApplicantUserId,
                         applicantUserIdOrNull)
-                .orderByDesc(FinancePaymentApplicationDO::getId));
+                .orderByDesc(FinancePaymentApplicationDO::getId);
+        // ORDINARY：兼容历史 application_kind 为空
+        if ("ORDINARY".equals(reqVO.getApplicationKind())) {
+            wrapper.and(w -> w.eq(FinancePaymentApplicationDO::getApplicationKind, "ORDINARY")
+                    .or().isNull(FinancePaymentApplicationDO::getApplicationKind));
+        } else {
+            wrapper.eqIfPresent(FinancePaymentApplicationDO::getApplicationKind, reqVO.getApplicationKind());
+        }
+        return selectPage(reqVO, wrapper);
     }
 
     @Select("SELECT COALESCE(SUM(apply_amount), 0) FROM finance_payment_application "

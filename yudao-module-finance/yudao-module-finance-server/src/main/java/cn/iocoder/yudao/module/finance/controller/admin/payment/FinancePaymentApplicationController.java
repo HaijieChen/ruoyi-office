@@ -87,10 +87,14 @@ public class FinancePaymentApplicationController {
     }
 
     @GetMapping("/page")
-    @Operation(summary = "付款申请分页")
+    @Operation(summary = "付款申请分页（默认仅普通付款）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:query')")
     public CommonResult<PageResult<FinancePaymentApplicationRespVO>> page(
             @Valid FinancePaymentApplicationPageReqVO pageReqVO) {
+        // EXP-87：普通入口默认不混入薪资/税金独立单；历史 SALARY/TAX 事由仍属 ORDINARY kind
+        if (pageReqVO.getApplicationKind() == null || pageReqVO.getApplicationKind().isBlank()) {
+            pageReqVO.setApplicationKind("ORDINARY");
+        }
         boolean manageAll = securityFrameworkService.hasPermission(MANAGE_ALL_PERMISSION);
         PageResult<FinancePaymentApplicationDO> page = paymentApplicationService.getApplicationPage(
                 pageReqVO, getLoginUserId(), manageAll);
@@ -132,15 +136,25 @@ public class FinancePaymentApplicationController {
 
     private FinancePaymentApplicationRespVO toResp(FinancePaymentApplicationDO app) {
         FinancePaymentApplicationRespVO vo = BeanUtils.toBean(app, FinancePaymentApplicationRespVO.class);
-        BigDecimal paid = paymentApplicationService.sumPaidByPayee(app.getPayeeCompanyId());
-        vo.setCumulativePaid(paid);
-        // PAID 时 paid 已含本单；PENDING/WAIT_PAY 再加本次
-        if (app.getApplyAmount() != null) {
-            if (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(app.getStatus())) {
-                vo.setCumulativeAfter(paid);
-            } else {
-                vo.setCumulativeAfter(paid.add(app.getApplyAmount()));
+        if (app.getPayeeCompanyId() != null) {
+            BigDecimal paid = paymentApplicationService.sumPaidByPayee(app.getPayeeCompanyId());
+            vo.setCumulativePaid(paid);
+            // PAID 时 paid 已含本单；PENDING/WAIT_PAY 再加本次
+            if (app.getApplyAmount() != null) {
+                if (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(app.getStatus())) {
+                    vo.setCumulativeAfter(paid);
+                } else {
+                    vo.setCumulativeAfter(paid.add(app.getApplyAmount()));
+                }
             }
+        }
+        vo.setPaidLineSum(paymentApplicationService.sumPayLines(app.getId()));
+        vo.setPayLines(paymentApplicationService.listPayLines(app.getId()));
+        if ("SALARY".equals(app.getApplicationKind())) {
+            vo.setSalaryLines(paymentApplicationService.listSalaryLines(app.getId()));
+        }
+        if ("TAX".equals(app.getApplicationKind())) {
+            vo.setTaxLines(paymentApplicationService.listTaxLines(app.getId()));
         }
         return vo;
     }

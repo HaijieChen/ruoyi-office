@@ -51,6 +51,10 @@ class FinancePaymentApplicationServiceImplTest {
     private ObjectProvider<org.flowable.engine.HistoryService> historyProvider;
     private ObjectProvider<cn.iocoder.yudao.module.system.api.dept.DeptApi> deptProvider;
     private FinanceEntityCompanyResolver entityCompanyResolver;
+    private cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService companyBankAccountService;
+    private cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper payLineMapper;
+    private cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentSalaryLineMapper salaryLineMapper;
+    private cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper taxLineMapper;
     private FinancePaymentApplicationServiceImpl service;
 
     @BeforeEach
@@ -87,10 +91,17 @@ class FinancePaymentApplicationServiceImplTest {
         when(entityCompanyResolver.requireByDeptId(20L))
                 .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(20L, "主体甲", "USD"));
 
+        companyBankAccountService = mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class);
+        payLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper.class);
+        salaryLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentSalaryLineMapper.class);
+        taxLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper.class);
+        when(payLineMapper.sumPayAmountByApplicationId(anyLong())).thenReturn(java.math.BigDecimal.ZERO);
+        when(payLineMapper.selectByApplicationId(anyLong())).thenReturn(java.util.List.of());
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
-                deptProvider, entityCompanyResolver);
+                deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
+                salaryLineMapper, taxLineMapper);
         when(noRedisDAO.generate(any(LocalDate.class))).thenReturn("PAY-20260806-1");
         doAnswer(inv -> {
             FinancePaymentApplicationDO a = inv.getArgument(0);
@@ -225,7 +236,10 @@ class FinancePaymentApplicationServiceImplTest {
     void recordPayRejectsWhenNotTaskCandidate() {
         when(mapper.selectById(4L)).thenReturn(FinancePaymentApplicationDO.builder()
                 .id(4L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
-                .processInstanceId("pi-4").build());
+                .processInstanceId("pi-4")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .build());
 
         org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
         org.flowable.task.api.TaskQuery tq = mock(org.flowable.task.api.TaskQuery.class);
@@ -241,18 +255,58 @@ class FinancePaymentApplicationServiceImplTest {
         @SuppressWarnings("unchecked")
         ObjectProvider<org.flowable.engine.TaskService> taskProvider = mock(ObjectProvider.class);
         when(taskProvider.getIfAvailable()).thenReturn(taskService);
+        companyBankAccountService = mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class);
+        payLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper.class);
+        salaryLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentSalaryLineMapper.class);
+        taxLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper.class);
+        when(payLineMapper.sumPayAmountByApplicationId(anyLong())).thenReturn(java.math.BigDecimal.ZERO);
+        when(payLineMapper.selectByApplicationId(anyLong())).thenReturn(java.util.List.of());
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
-                deptProvider, entityCompanyResolver);
+                deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
+                salaryLineMapper, taxLineMapper);
 
         FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
         req.setId(4L);
         req.setTaskId("task-x");
+        req.setCompanyBankAccountId(77L);
         req.setActualPayDate(LocalDate.now());
         req.setPayVoucherUrl("http://voucher");
         ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 99L));
         assertEquals(PAYMENT_APPLICATION_TASK_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void ordinaryCreateRejectsSalaryReason() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setPaymentReason(FinancePaymentReasonEnum.SALARY.getCode());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_REASON_SALARY_TAX_FORBIDDEN.getCode(), ex.getCode());
+    }
+
+    @Test
+    void recordPayRequiresAccount() {
+        when(mapper.selectById(1L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(1L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("p1")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .build());
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(1L);
+        req.setTaskId("t1");
+        req.setActualPayDate(LocalDate.now());
+        req.setPayVoucherUrl("http://voucher");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_PAY_ACCOUNT_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void maskAccountNoKeepsLast4() {
+        assertEquals("****1234",
+                cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService
+                        .maskAccountNo("6222021234"));
     }
 
     @Test

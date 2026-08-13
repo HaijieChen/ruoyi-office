@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Schema(description = "管理后台 - 出纳 recordPay Request VO")
@@ -17,6 +18,13 @@ public class FinancePaymentRecordPayReqVO {
     @NotEmpty(message = "任务 id 不能为空")
     private String taskId;
 
+    @Schema(description = "公司银行账户 id（必选）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "付款账户不能为空")
+    private Long companyBankAccountId;
+
+    @Schema(description = "本笔支付金额；缺省则按剩余未付金额整笔支付")
+    private BigDecimal payAmount;
+
     @NotNull(message = "实际支付日期不能为空")
     private LocalDate actualPayDate;
 
@@ -25,5 +33,11 @@ public class FinancePaymentRecordPayReqVO {
 
     @Schema(description = "ERP 凭证号（选填）")
     private String erpVoucherNo;
+
+    @Schema(description = "幂等键（可选；同一申请重复提交返回已有明细）")
+    private String idempotencyKey;
+
+    @Schema(description = "是否在合计等于申请金额时 complete 出纳任务；默认 true")
+    private Boolean completeWhenFullyPaid;
 
 }

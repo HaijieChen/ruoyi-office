@@ -436,7 +436,12 @@ defineExpose({
       <Form.Item label="付款事由" name="paymentReason" required>
         <Select
           v-model:value="formData.paymentReason"
-          :options="dictOptions('finance_payment_reason')"
+          :options="
+            dictOptions('finance_payment_reason').filter(
+              (o) => o.value !== 'SALARY' && o.value !== 'TAX',
+            )
+          "
+          placeholder="薪资/税金请走独立入口"
         />
       </Form.Item>
       <Form.Item v-if="isPurchase" label="采购实例" required>

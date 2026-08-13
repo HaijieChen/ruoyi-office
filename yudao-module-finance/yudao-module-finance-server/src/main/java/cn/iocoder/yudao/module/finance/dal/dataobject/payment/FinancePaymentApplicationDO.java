@@ -24,16 +24,23 @@ public class FinancePaymentApplicationDO extends TenantBaseDO {
     private String applicationNo;
     private String processInstanceId;
     private String status;
+    /**
+     * 业务类型：ORDINARY / SALARY / TAX。
+     * 默认 ORDINARY 兼容历史单。
+     */
+    private String applicationKind;
     private String currentNodeKey;
     private String currentNodeName;
     private String processTitle;
     private Long applicantUserId;
     private Long applicantDeptId;
-    /** 主体公司组织部门 ID（业务主体，非仅任职部门） */
+    /** 主体公司组织部门 ID（业务主体，非仅任职部门；薪资/税金主单可空，明细行承载） */
     private Long entityCompanyDeptId;
     /** 主体公司名称快照（仅服务端生成） */
     private String entityCompanyName;
     private LocalDate applyDate;
+    /** 薪资期间 / 税款所属期 */
+    private String periodLabel;
     private String paymentTiming;
     private String paymentReason;
     private String purchaseProcessInstanceId;

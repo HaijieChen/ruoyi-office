@@ -12,6 +12,8 @@ public class FinancePaymentApplicationPageReqVO extends PageParam {
 
     private String applicationNo;
     private String status;
+    /** ORDINARY / SALARY / TAX */
+    private String applicationKind;
     private String paymentReason;
     private Long payeeCompanyId;
     private String payeeName;

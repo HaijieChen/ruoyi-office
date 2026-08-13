@@ -15,6 +15,7 @@ public class FinancePaymentApplicationRespVO {
     private String applicationNo;
     private String processInstanceId;
     private String status;
+    private String applicationKind;
     private String currentNodeKey;
     private String currentNodeName;
     private String processTitle;
@@ -23,6 +24,7 @@ public class FinancePaymentApplicationRespVO {
     private Long entityCompanyDeptId;
     private String entityCompanyName;
     private LocalDate applyDate;
+    private String periodLabel;
     private String paymentTiming;
     private String paymentReason;
     private String purchaseProcessInstanceId;
@@ -52,5 +54,13 @@ public class FinancePaymentApplicationRespVO {
     private BigDecimal cumulativePaid;
     /** 本次支付后累计 = cumulativePaid + applyAmount */
     private BigDecimal cumulativeAfter;
+    /** 已登记支付合计 */
+    private BigDecimal paidLineSum;
+    /** 支付明细 */
+    private java.util.List<FinancePaymentPayLineRespVO> payLines;
+    /** 薪资明细（applicationKind=SALARY） */
+    private java.util.List<FinancePaymentSalaryLineRespVO> salaryLines;
+    /** 税金明细（applicationKind=TAX） */
+    private java.util.List<FinancePaymentTaxLineRespVO> taxLines;
 
 }
