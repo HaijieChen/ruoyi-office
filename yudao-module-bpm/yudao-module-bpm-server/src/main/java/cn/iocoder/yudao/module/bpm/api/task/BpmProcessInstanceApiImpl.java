@@ -27,9 +27,16 @@ public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
 
     @Override
     public CommonResult<String> createProcessInstance(Long userId, @Valid BpmProcessInstanceCreateReqDTO reqDTO) {
+        // 通用 RPC：服务端不置可信通道；薪税 key 恒 deny（即使 body 夹带任何伪造字段）
         return success(processInstanceService.createProcessInstance(userId, reqDTO));
     }
 
+    @Override
+    public CommonResult<String> createProcessInstanceByBusiness(Long userId,
+                                                               @Valid BpmProcessInstanceCreateReqDTO reqDTO) {
+        // 可信业务通道：信任由服务端 ThreadLocal 派生，非 DTO
+        return success(processInstanceService.createProcessInstanceByBusiness(userId, reqDTO));
+    }
 
     @Override
     public CommonResult<String> submitProcessInstance(Long userId, @Valid BpmProcessInstanceCreateReqDTO reqDTO) {

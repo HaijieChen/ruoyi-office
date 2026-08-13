@@ -119,6 +119,7 @@ class FinancePaymentApplicationServiceImplTest {
         CommonResult<String> pi = mock(CommonResult.class);
         when(pi.getCheckedData()).thenReturn("proc-1");
         when(processInstanceApi.createProcessInstance(anyLong(), any())).thenReturn(pi);
+        when(processInstanceApi.createProcessInstanceByBusiness(anyLong(), any())).thenReturn(pi);
     }
 
     private FinancePaymentApplicationCreateAndStartReqVO baseReq() {
@@ -144,7 +145,7 @@ class FinancePaymentApplicationServiceImplTest {
         verify(mapper).insert(cap.capture());
         assertEquals(FinancePaymentApplicationStatusEnum.PENDING.getStatus(), cap.getValue().getStatus());
         assertEquals("供应商甲", cap.getValue().getPayeeName());
-        verify(processInstanceApi).createProcessInstance(eq(1L), any());
+        verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), any());
     }
 
     @Test
@@ -416,10 +417,9 @@ class FinancePaymentApplicationServiceImplTest {
         verify(payLineMapper, never()).deleteById(any());
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
-        verify(processInstanceApi).createProcessInstance(eq(1L), bpmCap.capture());
+        verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
         assertEquals(FinancePaymentApplicationService.PROCESS_KEY_SALARY,
                 bpmCap.getValue().getProcessDefinitionKey());
-        assertEquals(Boolean.TRUE, bpmCap.getValue().getTrustedBusinessStart());
     }
 
     @Test
@@ -631,7 +631,7 @@ class FinancePaymentApplicationServiceImplTest {
     }
 
     @Test
-    void createAndStartSalarySetsTrustedBusinessStartChannel() {
+    void createAndStartSalaryUsesBusinessChannelApi() {
         cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO req =
                 new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO();
         req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
@@ -649,14 +649,13 @@ class FinancePaymentApplicationServiceImplTest {
         assertEquals(100L, id);
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
-        verify(processInstanceApi).createProcessInstance(eq(1L), bpmCap.capture());
+        verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
         assertEquals(FinancePaymentApplicationService.PROCESS_KEY_SALARY,
                 bpmCap.getValue().getProcessDefinitionKey());
-        assertEquals(Boolean.TRUE, bpmCap.getValue().getTrustedBusinessStart());
     }
 
     @Test
-    void createAndStartTaxSetsTrustedBusinessStartChannel() {
+    void createAndStartTaxUsesBusinessChannelApi() {
         cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceTaxPaymentCreateAndStartReqVO req =
                 new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceTaxPaymentCreateAndStartReqVO();
         req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
@@ -673,14 +672,13 @@ class FinancePaymentApplicationServiceImplTest {
         assertEquals(100L, id);
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
-        verify(processInstanceApi).createProcessInstance(eq(1L), bpmCap.capture());
+        verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
         assertEquals(FinancePaymentApplicationService.PROCESS_KEY_TAX,
                 bpmCap.getValue().getProcessDefinitionKey());
-        assertEquals(Boolean.TRUE, bpmCap.getValue().getTrustedBusinessStart());
     }
 
     @Test
-    void resubmitSalarySetsTrustedBusinessStartChannel() {
+    void resubmitSalaryUsesBusinessChannelApi() {
         when(mapper.selectById(50L)).thenReturn(FinancePaymentApplicationDO.builder()
                 .id(50L)
                 .applicantUserId(1L)
@@ -706,8 +704,7 @@ class FinancePaymentApplicationServiceImplTest {
         service.resubmitSalary(50L, req, 1L);
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
-        verify(processInstanceApi).createProcessInstance(eq(1L), bpmCap.capture());
-        assertEquals(Boolean.TRUE, bpmCap.getValue().getTrustedBusinessStart());
+        verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
     }
 
     @Test
@@ -737,7 +734,7 @@ class FinancePaymentApplicationServiceImplTest {
 
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
-        verify(processInstanceApi).createProcessInstance(eq(1L), bpmCap.capture());
+        verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
         Map<String, Object> vars = bpmCap.getValue().getVariables();
         assertEquals(20L, vars.get(BpmProcessVariableConstants.COMPANY_ID));
         assertEquals("主体甲", vars.get(BpmProcessVariableConstants.COMPANY_NAME));
@@ -1104,6 +1101,79 @@ class FinancePaymentApplicationServiceImplTest {
 
         assertThrows(ServiceException.class, () -> service.cancel(18L, 1L));
         verify(mapper, never()).update(isNull(), any());
+    }
+
+    /**
+     * G3：同键首次显式部分支付后，另有支付使「剩余」变化，再省略金额重放 → 归一化金额变化 → 冲突。
+     */
+    @Test
+    void recordPayIdempotentOmitAmountAfterRemainingChangedConflicts() {
+        LocalDate payDate = LocalDate.of(2026, 8, 10);
+        when(mapper.selectByIdForUpdate(60L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(60L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-60")
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .build());
+        // 本幂等键对应首次显式 50；另有 30 已付 → 排除本行后剩余 = 70；省略金额归一化为 70 ≠ 50
+        when(payLineMapper.selectByAppAndIdempotencyKey(60L, "idem-partial")).thenReturn(
+                cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.builder()
+                        .id(1L).paymentApplicationId(60L).idempotencyKey("idem-partial")
+                        .companyBankAccountId(7L)
+                        .payAmount(new BigDecimal("50.00"))
+                        .actualPayDate(payDate)
+                        .payVoucherUrl("http://v-partial")
+                        .build());
+        when(payLineMapper.sumPayAmountByApplicationId(60L)).thenReturn(new BigDecimal("80.00"));
+
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(60L);
+        req.setTaskId("t-60");
+        req.setCompanyBankAccountId(7L);
+        req.setIdempotencyKey("idem-partial");
+        req.setActualPayDate(payDate);
+        req.setPayVoucherUrl("http://v-partial");
+        // 省略 payAmount
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT.getCode(), ex.getCode());
+    }
+
+    /**
+     * G3：同键同归一化载荷（省略金额且剩余语义未变）重放成功。
+     */
+    @Test
+    void recordPayIdempotentOmitAmountSameNormalizedReplayOk() {
+        LocalDate payDate = LocalDate.of(2026, 8, 10);
+        when(mapper.selectByIdForUpdate(61L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(61L)
+                .status(FinancePaymentApplicationStatusEnum.PAID.getStatus())
+                .processInstanceId("pi-61")
+                .applyAmount(new BigDecimal("100.00"))
+                .actualPayDate(payDate)
+                .payVoucherUrl("http://v-full")
+                .currency("CNY")
+                .build());
+        // 仅本行付清 100；省略金额 → remainingIfThisAbsent = 100
+        when(payLineMapper.selectByAppAndIdempotencyKey(61L, "idem-full")).thenReturn(
+                cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.builder()
+                        .id(2L).paymentApplicationId(61L).idempotencyKey("idem-full")
+                        .companyBankAccountId(7L)
+                        .payAmount(new BigDecimal("100.00"))
+                        .actualPayDate(payDate)
+                        .payVoucherUrl("http://v-full")
+                        .build());
+        when(payLineMapper.sumPayAmountByApplicationId(61L)).thenReturn(new BigDecimal("100.00"));
+
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(61L);
+        req.setTaskId("gone");
+        req.setCompanyBankAccountId(7L);
+        req.setIdempotencyKey("idem-full");
+        req.setActualPayDate(payDate);
+        req.setPayVoucherUrl("http://v-full");
+        assertDoesNotThrow(() -> service.recordPay(req, 1L));
+        verify(payLineMapper, never()).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
     }
 
 }

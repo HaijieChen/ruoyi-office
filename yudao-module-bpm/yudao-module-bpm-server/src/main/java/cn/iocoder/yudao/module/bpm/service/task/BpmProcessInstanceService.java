@@ -134,6 +134,12 @@ public interface BpmProcessInstanceService {
     String createProcessInstance(Long userId, @Valid BpmProcessInstanceCreateReqDTO createReqDTO);
 
     /**
+     * 创建流程实例（可信业务通道，服务端派生信任）。
+     * 用于 Finance 薪税等菜单专属流程；通用 RPC/HTTP create 不得调用此方法语义。
+     */
+    String createProcessInstanceByBusiness(Long userId, @Valid BpmProcessInstanceCreateReqDTO createReqDTO);
+
+    /**
      * 智能提交流程实例
      * 如果流程实例不存在则创建新的流程实例，如果流程实例存在则审批发起人任务
      *

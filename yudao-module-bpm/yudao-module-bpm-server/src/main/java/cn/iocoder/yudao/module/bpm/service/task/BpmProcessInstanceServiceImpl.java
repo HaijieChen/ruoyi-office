@@ -16,6 +16,7 @@ import cn.iocoder.yudao.framework.common.util.object.ObjectUtils;
 import cn.iocoder.yudao.framework.common.util.object.PageUtils;
 import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.bpm.service.definition.BpmBusinessStartChannelHolder;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.model.BpmModelMetaInfoVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.model.simple.BpmSimpleModelNodeVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.instance.*;
@@ -789,7 +790,7 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         // 获得流程定义
         ProcessDefinition definition = processDefinitionService
                 .getProcessDefinition(createReqVO.getProcessDefinitionId());
-        // 通用 HTTP 入口：非可信通道
+        // 通用 HTTP 入口：非可信通道（信任永不来自请求体）
         return createProcessInstance0(userId, definition, createReqVO.getVariables(), null,
                 createReqVO.getStartUserSelectAssignees(), false);
     }
@@ -801,12 +802,20 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
             // 获得流程定义
             ProcessDefinition definition = processDefinitionService
                     .getActiveProcessDefinition(createReqDTO.getProcessDefinitionKey());
-            boolean trusted = Boolean.TRUE.equals(createReqDTO.getTrustedBusinessStart());
-            // 发起流程（可信标记仅内部 RPC DTO 可带）
+            // 通用 RPC：信任仅来自服务端 ThreadLocal（本路径不置位 → 薪税 hide+deny）
+            boolean trusted = BpmBusinessStartChannelHolder.isTrustedBusinessStart();
             return createProcessInstance0(userId, definition, createReqDTO.getVariables(),
                     createReqDTO.getBusinessKey(),
                     createReqDTO.getStartUserSelectAssignees(), trusted);
         });
+    }
+
+    @Override
+    @DataPermission(enable = false)
+    public String createProcessInstanceByBusiness(Long userId, @Valid BpmProcessInstanceCreateReqDTO createReqDTO) {
+        // 服务端派生可信业务通道；调用方无法通过 DTO 自报
+        return BpmBusinessStartChannelHolder.callTrusted(
+                () -> createProcessInstance(userId, createReqDTO));
     }
 
     @Override
@@ -853,7 +862,7 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
                 ProcessDefinition definition = processDefinitionService
                         .getActiveProcessDefinition(createReqDTO.getProcessDefinitionKey());
-                boolean trusted = Boolean.TRUE.equals(createReqDTO.getTrustedBusinessStart());
+                boolean trusted = BpmBusinessStartChannelHolder.isTrustedBusinessStart();
                 return createProcessInstance0(userId, definition, createReqDTO.getVariables(),
                         createReqDTO.getBusinessKey(),
                         createReqDTO.getStartUserSelectAssignees(), trusted);

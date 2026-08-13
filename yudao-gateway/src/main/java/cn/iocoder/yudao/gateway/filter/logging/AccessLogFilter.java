@@ -4,6 +4,7 @@ import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.json.JSONUtil;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
+import cn.iocoder.yudao.framework.common.util.json.SensitiveJsonSanitizer;
 import cn.iocoder.yudao.gateway.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.gateway.util.WebFrameworkUtils;
 import com.alibaba.nacos.common.utils.StringUtils;
@@ -82,12 +83,15 @@ public class AccessLogFilter implements GlobalFilter, Ordered {
             values.put("schema", gatewayLog.getSchema());
             values.put("requestUrl", gatewayLog.getRequestUrl());
             values.put("queryParams", gatewayLog.getQueryParams().toSingleValueMap());
-            values.put("requestBody", JsonUtils.isJson(gatewayLog.getRequestBody()) ? // 保证 body 的展示好看
-                    JSONUtil.parse(gatewayLog.getRequestBody()) : gatewayLog.getRequestBody());
+            // EXP-87 G2：网关 access log 与 app 侧共用 fail-closed 脱敏
+            String sanitizedReqBody = SensitiveJsonSanitizer.sanitizeOrRedact(gatewayLog.getRequestBody());
+            values.put("requestBody", JsonUtils.isJson(sanitizedReqBody) ?
+                    JSONUtil.parse(sanitizedReqBody) : sanitizedReqBody);
             values.put("requestHeaders", JsonUtils.toJsonString(gatewayLog.getRequestHeaders().toSingleValueMap()));
             values.put("userIp", gatewayLog.getUserIp());
-            values.put("responseBody", JsonUtils.isJson(gatewayLog.getResponseBody()) ? // 保证 body 的展示好看
-                    JSONUtil.parse(gatewayLog.getResponseBody()) : gatewayLog.getResponseBody());
+            String sanitizedRespBody = SensitiveJsonSanitizer.sanitizeOrRedact(gatewayLog.getResponseBody());
+            values.put("responseBody", JsonUtils.isJson(sanitizedRespBody) ?
+                    JSONUtil.parse(sanitizedRespBody) : sanitizedRespBody);
             values.put("responseHeaders", gatewayLog.getResponseHeaders() != null ?
                     JsonUtils.toJsonString(gatewayLog.getResponseHeaders().toSingleValueMap()) : null);
             values.put("httpStatus", gatewayLog.getHttpStatus());

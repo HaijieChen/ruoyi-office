@@ -12,6 +12,7 @@ import cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.collection.SetUtils;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
+import cn.iocoder.yudao.framework.common.util.json.SensitiveJsonSanitizer;
 import cn.iocoder.yudao.framework.common.util.monitor.TracerUtils;
 import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.yudao.framework.web.core.util.WebFrameworkUtils;
@@ -396,9 +397,14 @@ public class GlobalExceptionHandler {
         errorLog.setTraceId(TracerUtils.getTraceId());
         errorLog.setApplicationName(applicationName);
         errorLog.setRequestUrl(request.getRequestURI());
+        // EXP-87 G2：error-log 落库 body 必须脱敏 fail-closed，禁止 accountNo 原文
+        String rawBody = ServletUtils.getBody(request);
+        String sanitizedBody = SensitiveJsonSanitizer.sanitize(rawBody);
+        String sanitizedQuery = SensitiveJsonSanitizer.sanitize(
+                JsonUtils.toJsonString(ServletUtils.getParamMap(request)));
         Map<String, Object> requestParams = MapUtil.<String, Object>builder()
-                .put("query", ServletUtils.getParamMap(request))
-                .put("body", ServletUtils.getBody(request)).build();
+                .put("query", sanitizedQuery)
+                .put("body", sanitizedBody).build();
         errorLog.setRequestParams(JsonUtils.toJsonString(requestParams));
         errorLog.setRequestMethod(request.getMethod());
         errorLog.setUserAgent(ServletUtils.getUserAgent(request));

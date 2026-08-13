@@ -24,11 +24,14 @@ class ApiAccessLogSanitizeTest {
         Method m = ApiAccessLogFilter.class.getDeclaredMethod(
                 "sanitizeJson", String.class, String[].class);
         m.setAccessible(true);
-        String input = "{\"accountNo\":\"622200011122\",\"name\":\"ok\"}";
+        // 真实公司银行账户 create body
+        String input = "{\"entityCompanyDeptId\":20,\"accountName\":\"基本户\","
+                + "\"accountNo\":\"6222000111223344\",\"currency\":\"CNY\"}";
         String out = (String) m.invoke(null, input, new String[]{});
         assertNotNull(out);
-        assertFalse(out.contains("622200011122"));
-        assertTrue(out.contains("ok") || out.contains("name"));
+        assertFalse(out.contains("6222000111223344"));
+        assertFalse(out.contains("accountNo"));
+        assertTrue(out.contains("基本户") || out.contains("accountName"));
     }
 
     @Test

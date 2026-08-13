@@ -2,23 +2,28 @@ package cn.iocoder.yudao.module.bpm.service.definition;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
+import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApiImpl;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants;
+import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
- * EXP-87 G1：Finance 可信业务通道 vs 通用 BPM 直启 分离。
+ * EXP-87 G1：服务端派生可信业务通道 vs 通用 HTTP/RPC 边界。
  * <p>
- * 使用真实 {@link BpmProcessStartEligibilityServiceImpl}（不 mock 启动校验），
- * 按 Finance 领域服务发出的 CreateReqDTO（trustedBusinessStart=true）评估薪税 key。
+ * - 线路 DTO 无 trusted 字段；信任仅 ThreadLocal
+ * - 通用 createProcessInstance：薪税恒 deny
+ * - createProcessInstanceByBusiness：服务端置位后按业务权限放行
  */
 @ExtendWith(MockitoExtension.class)
 class BpmTrustedBusinessStartChannelTest {
@@ -36,65 +41,88 @@ class BpmTrustedBusinessStartChannelTest {
         eligibility = new BpmProcessStartEligibilityServiceImpl(securityFrameworkService);
     }
 
-    /** 模拟 Finance startProcess 发出的 DTO */
-    private static BpmProcessInstanceCreateReqDTO financeTrustedDto(String processKey) {
-        return new BpmProcessInstanceCreateReqDTO()
-                .setProcessDefinitionKey(processKey)
-                .setBusinessKey("100")
-                .setTrustedBusinessStart(true);
-    }
-
-    /** 模拟通用 /bpm/process-instance/create 或未带标记的内部调用 */
-    private static BpmProcessInstanceCreateReqDTO genericDto(String processKey) {
-        return new BpmProcessInstanceCreateReqDTO()
-                .setProcessDefinitionKey(processKey)
-                .setBusinessKey("100")
-                .setTrustedBusinessStart(false);
-    }
-
-    /**
-     * createProcessInstance0 使用的校验路径：
-     * validateStartOrThrow(key, Boolean.TRUE.equals(dto.getTrustedBusinessStart()))
-     */
-    private void validateAsCreateProcessInstance0(BpmProcessInstanceCreateReqDTO dto) {
-        boolean trusted = Boolean.TRUE.equals(dto.getTrustedBusinessStart());
-        eligibility.validateStartOrThrow(dto.getProcessDefinitionKey(), trusted);
+    @Test
+    void genericRpcCreate_salaryKey_denied_evenIfCallerWantsTrust() {
+        // 通用通道：ThreadLocal 未置位 → 恒 deny（DTO 也无法自报）
+        assertFalse(BpmBusinessStartChannelHolder.isTrustedBusinessStart());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> eligibility.validateStartOrThrow(SALARY_KEY,
+                        BpmBusinessStartChannelHolder.isTrustedBusinessStart()));
+        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
     }
 
     @Test
-    void financeSalaryCreateDto_withPermission_passesRealEligibility() {
+    void businessChannel_withPermission_passesRealEligibility() {
         when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
                 .thenReturn(true);
-        assertDoesNotThrow(() -> validateAsCreateProcessInstance0(financeTrustedDto(SALARY_KEY)));
+        assertDoesNotThrow(() -> BpmBusinessStartChannelHolder.callTrusted(() -> {
+            eligibility.validateStartOrThrow(SALARY_KEY, BpmBusinessStartChannelHolder.isTrustedBusinessStart());
+            return null;
+        }));
+        // finally 清理
+        assertFalse(BpmBusinessStartChannelHolder.isTrustedBusinessStart());
     }
 
     @Test
-    void financeTaxResubmitDto_withPermission_passesRealEligibility() {
+    void businessChannel_tax_withPermission_passes() {
         when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
                 .thenReturn(true);
-        assertDoesNotThrow(() -> validateAsCreateProcessInstance0(financeTrustedDto(TAX_KEY)));
+        assertDoesNotThrow(() -> BpmBusinessStartChannelHolder.callTrusted(() -> {
+            eligibility.validateStartOrThrow(TAX_KEY, true);
+            return null;
+        }));
     }
 
     @Test
-    void genericBpmCreate_salaryKey_deniedRegardlessOfPermission() {
-        // 通用通道：恒 deny（不查 hasPermission）
-        ServiceException ex = assertThrows(ServiceException.class,
-                () -> validateAsCreateProcessInstance0(genericDto(SALARY_KEY)));
-        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
-        // null trusted 同样按通用
-        BpmProcessInstanceCreateReqDTO nullTrusted = new BpmProcessInstanceCreateReqDTO()
-                .setProcessDefinitionKey(SALARY_KEY)
-                .setBusinessKey("1");
-        assertThrows(ServiceException.class, () -> validateAsCreateProcessInstance0(nullTrusted));
-    }
-
-    @Test
-    void financeTrusted_withoutPermission_stillDenied() {
+    void businessChannel_withoutPermission_stillDenied() {
         when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
                 .thenReturn(false);
         ServiceException ex = assertThrows(ServiceException.class,
-                () -> validateAsCreateProcessInstance0(financeTrustedDto(SALARY_KEY)));
+                () -> BpmBusinessStartChannelHolder.callTrusted(() -> {
+                    eligibility.validateStartOrThrow(SALARY_KEY, true);
+                    return null;
+                }));
         assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void apiImpl_genericCreate_neverElevatesTrust_delegatesToService() {
+        BpmProcessInstanceService service = mock(BpmProcessInstanceService.class);
+        when(service.createProcessInstance(anyLong(), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn("pi-generic");
+        BpmProcessInstanceApiImpl api = new BpmProcessInstanceApiImpl();
+        ReflectionTestUtils.setField(api, "processInstanceService", service);
+
+        BpmProcessInstanceCreateReqDTO dto = new BpmProcessInstanceCreateReqDTO()
+                .setProcessDefinitionKey(SALARY_KEY)
+                .setBusinessKey("1");
+        api.createProcessInstance(1L, dto);
+        // 通用入口走 createProcessInstance，不走 ByBusiness
+        verify(service).createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class));
+        verify(service, never()).createProcessInstanceByBusiness(anyLong(), any(BpmProcessInstanceCreateReqDTO.class));
+    }
+
+    @Test
+    void apiImpl_businessCreate_usesServerDerivedChannel() {
+        BpmProcessInstanceService service = mock(BpmProcessInstanceService.class);
+        when(service.createProcessInstanceByBusiness(anyLong(), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn("pi-biz");
+        BpmProcessInstanceApiImpl api = new BpmProcessInstanceApiImpl();
+        ReflectionTestUtils.setField(api, "processInstanceService", service);
+
+        BpmProcessInstanceCreateReqDTO dto = new BpmProcessInstanceCreateReqDTO()
+                .setProcessDefinitionKey(SALARY_KEY)
+                .setBusinessKey("1");
+        api.createProcessInstanceByBusiness(1L, dto);
+        verify(service).createProcessInstanceByBusiness(eq(1L), any(BpmProcessInstanceCreateReqDTO.class));
+        verify(service, never()).createProcessInstance(anyLong(), any(BpmProcessInstanceCreateReqDTO.class));
+    }
+
+    @Test
+    void dtoHasNoTrustedBusinessStartField() {
+        // 线路 DTO 禁止自报：反射确认无该字段
+        assertThrows(NoSuchFieldException.class,
+                () -> BpmProcessInstanceCreateReqDTO.class.getDeclaredField("trustedBusinessStart"));
     }
 
     @Test

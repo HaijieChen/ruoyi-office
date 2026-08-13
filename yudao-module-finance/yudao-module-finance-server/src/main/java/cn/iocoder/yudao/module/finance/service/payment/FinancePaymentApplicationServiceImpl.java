@@ -727,8 +727,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         FinancePaymentPayLineDO existingLine =
                 payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
         if (existingLine != null) {
-            // EXP-87 G3：同键必须比对规范化指纹；不一致冲突，禁止静默当成功
-            assertIdempotentPayLineMatches(existingLine, reqVO);
+            // EXP-87 G3：同键比对规范化指纹（缺省金额归一化为「若无本行时的剩余未付」）；金额始终参与
+            assertIdempotentPayLineMatches(existingLine, reqVO, application);
             ensureHeaderEvidenceIfFullyPaid(application, reqVO);
             return;
         }
@@ -1053,14 +1053,13 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (StrUtil.isNotBlank(application.getEntityCompanyName())) {
             variables.put(BpmProcessVariableConstants.COMPANY_NAME, application.getEntityCompanyName());
         }
-        // EXP-87 G1：Finance 领域服务走可信业务通道；薪税通用 BPM 直启仍 hide+deny
-        return processInstanceApi.createProcessInstance(userId,
+        // EXP-87 G1：Finance 走可信业务通道 API（服务端派生信任，DTO 无可信标志）
+        return processInstanceApi.createProcessInstanceByBusiness(userId,
                         new BpmProcessInstanceCreateReqDTO()
                                 .setProcessDefinitionKey(processDefinitionKey)
                                 .setBusinessKey(String.valueOf(application.getId()))
                                 .setVariables(variables)
-                                .setStartUserSelectAssignees(startUserSelectAssignees)
-                                .setTrustedBusinessStart(true))
+                                .setStartUserSelectAssignees(startUserSelectAssignees))
                 .getCheckedData();
     }
 
@@ -1203,12 +1202,12 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
     /**
      * EXP-87 G3：同 idempotencyKey 命中已有 pay_line 时，比对规范化指纹。
-     * 指纹字段：账户 / 金额 / 支付日 / 凭证 URL / ERP 凭证号。
-     * 请求 payAmount 为空表示「按剩余整笔」——与已落库金额比对时，仅当请求显式给了金额才比金额，
-     * 但账户/日期/凭证/ERP 必须一致；若显式金额与落库不一致则冲突。
+     * 指纹：账户 / 金额 / 支付日 / 凭证 URL / ERP。
+     * 缺省 payAmount 归一化为「排除本幂等行后的剩余未付金额」（契约语义），金额始终参与比对。
      */
-    private static void assertIdempotentPayLineMatches(FinancePaymentPayLineDO existing,
-                                                       FinancePaymentRecordPayReqVO reqVO) {
+    private void assertIdempotentPayLineMatches(FinancePaymentPayLineDO existing,
+                                                FinancePaymentRecordPayReqVO reqVO,
+                                                FinancePaymentApplicationDO application) {
         if (!Objects.equals(existing.getCompanyBankAccountId(), reqVO.getCompanyBankAccountId())) {
             throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
         }
@@ -1225,15 +1224,40 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (!Objects.equals(existingErp, reqErp)) {
             throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
         }
-        if (reqVO.getPayAmount() != null) {
-            BigDecimal reqAmount = normalizePayAmount(reqVO.getPayAmount());
-            BigDecimal existingAmount = existing.getPayAmount() != null
-                    ? existing.getPayAmount().setScale(AMOUNT_SCALE, RoundingMode.UNNECESSARY)
-                    : null;
-            if (existingAmount == null || reqAmount.compareTo(existingAmount) != 0) {
-                throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
-            }
+        BigDecimal existingAmount = existing.getPayAmount() != null
+                ? existing.getPayAmount().setScale(AMOUNT_SCALE, RoundingMode.HALF_UP)
+                : null;
+        BigDecimal resolvedReqAmount = resolveIdempotentPayAmount(reqVO, application, existing);
+        if (existingAmount == null || resolvedReqAmount.compareTo(existingAmount) != 0) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
         }
+    }
+
+    /**
+     * 归一化幂等比对金额：显式 payAmount 用 normalize；缺省则 = 申请金额 −（全量已付 − 本行金额）。
+     */
+    private BigDecimal resolveIdempotentPayAmount(FinancePaymentRecordPayReqVO reqVO,
+                                                  FinancePaymentApplicationDO application,
+                                                  FinancePaymentPayLineDO existing) {
+        if (reqVO.getPayAmount() != null) {
+            return normalizePayAmount(reqVO.getPayAmount());
+        }
+        BigDecimal apply = application.getApplyAmount() != null
+                ? application.getApplyAmount().setScale(AMOUNT_SCALE, RoundingMode.HALF_UP)
+                : ZERO;
+        BigDecimal totalPaid = sumPayLines(application.getId());
+        BigDecimal existingAmt = existing.getPayAmount() != null
+                ? existing.getPayAmount().setScale(AMOUNT_SCALE, RoundingMode.HALF_UP)
+                : ZERO;
+        BigDecimal otherPaid = totalPaid.subtract(existingAmt);
+        if (otherPaid.compareTo(ZERO) < 0) {
+            otherPaid = ZERO;
+        }
+        BigDecimal remainingIfThisAbsent = apply.subtract(otherPaid);
+        if (remainingIfThisAbsent.compareTo(ZERO) < 0) {
+            remainingIfThisAbsent = ZERO;
+        }
+        return remainingIfThisAbsent.setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
     }
 
     /** 足额时补写头证据；幂等重试不依赖 task 是否仍 active。 */

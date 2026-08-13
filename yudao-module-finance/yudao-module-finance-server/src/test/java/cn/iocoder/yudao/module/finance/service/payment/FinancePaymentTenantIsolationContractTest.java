@@ -83,6 +83,7 @@ class FinancePaymentTenantIsolationContractTest {
         CommonResult<String> pi = mock(CommonResult.class);
         when(pi.getCheckedData()).thenReturn("proc-t");
         when(processInstanceApi.createProcessInstance(anyLong(), any())).thenReturn(pi);
+        when(processInstanceApi.createProcessInstanceByBusiness(anyLong(), any())).thenReturn(pi);
 
         FinanceEntityCompanyResolver entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         when(entityCompanyResolver.requireByDeptId(anyLong()))
