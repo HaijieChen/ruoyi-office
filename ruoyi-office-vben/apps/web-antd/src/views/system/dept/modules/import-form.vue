@@ -173,6 +173,11 @@ function csvEscape(value: string) {
   return value;
 }
 
+/** 同行多字段错误时 rowNumber 会碰撞，用 rowNumber+field+code 唯一化 */
+function errorRowKey(record: SystemDeptImportApi.ImportError) {
+  return `${record.rowNumber ?? ''}|${record.field ?? ''}|${record.code ?? ''}`;
+}
+
 const confirmLabel = computed(() => {
   if (!preview.value) {
     return validating.value ? '校验中…' : '校验预览';
@@ -231,7 +236,7 @@ const confirmLabel = computed(() => {
             :columns="errorColumns"
             :pagination="false"
             size="small"
-            row-key="rowNumber"
+            :row-key="errorRowKey"
             data-testid="dept-import-error-table"
           />
         </template>

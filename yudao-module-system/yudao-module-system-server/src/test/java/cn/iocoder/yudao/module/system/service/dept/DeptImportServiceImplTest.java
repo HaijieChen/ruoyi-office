@@ -3,15 +3,18 @@ package cn.iocoder.yudao.module.system.service.dept;
 import cn.idev.excel.FastExcelFactory;
 import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.test.core.ut.BaseDbUnitTest;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportExcelVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
+import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.dal.mysql.dept.DeptMapper;
 import cn.iocoder.yudao.module.system.service.permission.PermissionService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
@@ -22,6 +25,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import jakarta.annotation.Resource;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 import static cn.iocoder.yudao.framework.test.core.util.AssertUtils.assertServiceException;
@@ -42,6 +51,10 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
     @Resource
     private DeptImportService deptImportService;
     @Resource
+    private DeptImportServiceImpl deptImportServiceImpl;
+    @Resource
+    private DeptService deptService;
+    @Resource
     private DeptMapper deptMapper;
 
     @MockitoBean
@@ -51,6 +64,7 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
 
     @BeforeEach
     void stubPermissionAndUser() {
+        TenantContextHolder.setTenantId(1L);
         when(permissionService.getDeptDataPermission(anyLong()))
                 .thenReturn(new DeptDataPermissionRespDTO().setAll(true));
         AdminUserDO leader = new AdminUserDO();
@@ -58,6 +72,13 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
         leader.setUsername("leader1");
         leader.setStatus(CommonStatusEnum.ENABLE.getStatus());
         when(adminUserService.getUserByUsername("leader1")).thenReturn(leader);
+        deptImportServiceImpl.afterEachCreateForTest = null;
+    }
+
+    @AfterEach
+    void clearTenantAndHook() {
+        deptImportServiceImpl.afterEachCreateForTest = null;
+        TenantContextHolder.clear();
     }
 
     @Test
@@ -214,6 +235,147 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
             assertFalse(preview.getCanCommit());
             assertTrue(preview.getErrors().stream().anyMatch(e -> "PATH_DUPLICATE".equals(e.getCode())));
         }
+    }
+
+    @Test
+    void nthCreateFailureRollsBackEntireBatch() throws Exception {
+        // 3 行待创建；第 2 次 create 成功后注入失败 → 整批 0 行
+        List<DeptImportExcelVO> rows = List.of(
+                row("回滚公司", "", "公司", "0", "启用", "CNY", null),
+                row("回滚部门A", "回滚公司", "部门", "1", "启用", null, null),
+                row("回滚部门B", "回滚公司", "部门", "2", "启用", null, null)
+        );
+        byte[] bytes = writeExcel(rows);
+        try (MockedStatic<?> login = mockLogin()) {
+            DeptImportRespVO preview = deptImportService.validateImport(xlsxFile(bytes));
+            assertTrue(preview.getCanCommit(), () -> String.valueOf(preview.getErrors()));
+            assertEquals(3, preview.getCreateCount());
+
+            deptImportServiceImpl.afterEachCreateForTest = createdCount -> {
+                if (createdCount == 2) {
+                    throw new IllegalStateException("injected failure on 2nd create");
+                }
+            };
+            long before = deptMapper.selectList(new DeptListReqVO()).size();
+            assertThrows(IllegalStateException.class,
+                    () -> deptImportService.importDepts(xlsxFile(bytes), preview.getFileDigest()));
+            long after = deptMapper.selectList(new DeptListReqVO()).size();
+            assertEquals(before, after, "第 N 次 create 失败后数据库应无本批任何新增");
+            assertTrue(deptMapper.selectList(new DeptListReqVO()).stream()
+                    .noneMatch(d -> "回滚公司".equals(d.getName()) || "回滚部门A".equals(d.getName())));
+        }
+    }
+
+    @Test
+    void concurrentImportSamePathNoDuplicate() throws Exception {
+        List<DeptImportExcelVO> rows = List.of(
+                row("并发根组织", "", "公司", "0", "启用", "CNY", null)
+        );
+        byte[] bytes = writeExcel(rows);
+        String digest;
+        try (MockedStatic<?> login = mockLogin()) {
+            digest = deptImportService.validateImport(xlsxFile(bytes)).getFileDigest();
+        }
+
+        int threads = 2;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch go = new CountDownLatch(1);
+        AtomicInteger ok = new AtomicInteger();
+        AtomicInteger failed = new AtomicInteger();
+
+        for (int i = 0; i < threads; i++) {
+            final String d = digest;
+            pool.submit(() -> {
+                TenantContextHolder.setTenantId(1L);
+                try (MockedStatic<?> login = mockLogin()) {
+                    ready.countDown();
+                    go.await(10, TimeUnit.SECONDS);
+                    try {
+                        DeptImportRespVO r = deptImportService.importDepts(xlsxFile(bytes), d);
+                        if (Boolean.TRUE.equals(r.getCanCommit())) {
+                            ok.incrementAndGet();
+                        } else {
+                            failed.incrementAndGet();
+                        }
+                    } catch (Exception ex) {
+                        failed.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    failed.incrementAndGet();
+                } finally {
+                    TenantContextHolder.clear();
+                }
+            });
+        }
+        assertTrue(ready.await(10, TimeUnit.SECONDS));
+        go.countDown();
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(30, TimeUnit.SECONDS));
+
+        long sameName = deptMapper.selectList(new DeptListReqVO()).stream()
+                .filter(d -> "并发根组织".equals(d.getName()))
+                .count();
+        assertEquals(1L, sameName, "双并发 import 同路径不得产生重复节点 ok=" + ok + " failed=" + failed);
+        assertTrue(ok.get() >= 1, "至少一笔 import 应成功");
+    }
+
+    @Test
+    void concurrentImportAndCreateSamePathNoDuplicate() throws Exception {
+        String name = "混并发组织";
+        List<DeptImportExcelVO> rows = List.of(
+                row(name, "", "部门", "0", "启用", null, null)
+        );
+        byte[] bytes = writeExcel(rows);
+        String digest;
+        try (MockedStatic<?> login = mockLogin()) {
+            digest = deptImportService.validateImport(xlsxFile(bytes)).getFileDigest();
+        }
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch go = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        Future<?> importFut = pool.submit(() -> {
+            TenantContextHolder.setTenantId(1L);
+            try (MockedStatic<?> login = mockLogin()) {
+                ready.countDown();
+                go.await(10, TimeUnit.SECONDS);
+                deptImportService.importDepts(xlsxFile(bytes), digest);
+            } catch (Exception ignored) {
+                // 可能与 create 竞争导致名称重复异常，由最终行数断言
+            } finally {
+                TenantContextHolder.clear();
+            }
+        });
+        Future<?> createFut = pool.submit(() -> {
+            TenantContextHolder.setTenantId(1L);
+            try {
+                ready.countDown();
+                go.await(10, TimeUnit.SECONDS);
+                DeptSaveReqVO req = new DeptSaveReqVO();
+                req.setName(name);
+                req.setParentId(DeptDO.PARENT_ID_ROOT);
+                req.setSort(0);
+                req.setStatus(CommonStatusEnum.ENABLE.getStatus());
+                req.setOrgType("0");
+                deptService.createDept(req);
+            } catch (Exception ignored) {
+                // 与 import 竞争时可能 DEPT_NAME_DUPLICATE
+            } finally {
+                TenantContextHolder.clear();
+            }
+        });
+        assertTrue(ready.await(10, TimeUnit.SECONDS));
+        go.countDown();
+        importFut.get(30, TimeUnit.SECONDS);
+        createFut.get(30, TimeUnit.SECONDS);
+        pool.shutdown();
+
+        long sameName = deptMapper.selectList(new DeptListReqVO()).stream()
+                .filter(d -> name.equals(d.getName()))
+                .count();
+        assertEquals(1L, sameName, "import 与手工 create 并发同路径不得重复");
     }
 
     private static MockedStatic<?> mockLogin() {

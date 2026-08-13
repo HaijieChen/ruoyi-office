@@ -16,10 +16,10 @@ import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.enums.OrgTypeEnum;
 import cn.iocoder.yudao.module.system.service.permission.PermissionService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
+import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.IntConsumer;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -74,6 +75,13 @@ public class DeptImportServiceImpl implements DeptImportService {
     @Resource
     private AdminUserService adminUserService;
 
+    /**
+     * 测试钩子：每成功 create 一次后回调，参数为本次导入内已创建个数（从 1 起）。
+     * 用于故障注入验证整批回滚；生产路径保持 null。
+     */
+    @VisibleForTesting
+    volatile IntConsumer afterEachCreateForTest;
+
     @Override
     @DataPermission(enable = false)
     public DeptImportRespVO validateImport(MultipartFile file) {
@@ -85,13 +93,15 @@ public class DeptImportServiceImpl implements DeptImportService {
 
     @Override
     @DataPermission(enable = false)
-    @Transactional(rollbackFor = Exception.class)
     public DeptImportRespVO importDepts(MultipartFile file, String expectedDigest) {
+        // 解析/摘要/权限门禁在锁外：无写库；失败无需占锁
         ParsedFile parsed = parseFile(file);
         if (StrUtil.isBlank(expectedDigest) || !parsed.digest().equalsIgnoreCase(expectedDigest.trim())) {
             throw exception(DEPT_IMPORT_FILE_CHANGED);
         }
         assertFullDataScope();
+        // F1 闭合：先锁后开事务（DeptMutationLock.execute = lock → TX → work → commit → unlock）
+        // 不再使用方法级 @Transactional，避免「方法返回 unlock 后 Spring 才 commit」
         return deptMutationLock.execute(() -> {
             ValidationResult result = validateRows(parsed.rows(), parsed.digest());
             if (!result.errors().isEmpty()) {
@@ -113,9 +123,14 @@ public class DeptImportServiceImpl implements DeptImportService {
                 createReq.setLeaderUserId(row.leaderUserId());
                 createReq.setPhone(row.phone());
                 createReq.setEmail(row.email());
+                // createDept 内 reentrant 锁 + REQUIRED 事务，挂到本层同一事务
                 Long id = deptService.createDept(createReq);
                 // 供后续子节点解析文件内新建父路径
                 result.createdPathIds().put(row.orgPath(), id);
+                IntConsumer hook = afterEachCreateForTest;
+                if (hook != null) {
+                    hook.accept(result.createdPathIds().size());
+                }
             }
             log.info("[importDepts] tenant import done digest={} total={} create={} skip={}",
                     parsed.digest(), result.totalRows(), toCreate.size(), result.skipCount());
