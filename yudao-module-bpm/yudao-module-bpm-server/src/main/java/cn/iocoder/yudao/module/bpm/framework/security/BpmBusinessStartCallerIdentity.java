@@ -61,16 +61,36 @@ public final class BpmBusinessStartCallerIdentity {
         return verifyHeaders(
                 request.getHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME),
                 request.getHeader(RpcServiceIdentityConstants.HEADER_SERVICE_TOKEN),
-                properties.getSecret().trim());
+                properties.getSecret().trim(),
+                resolveAudience(request));
     }
 
+    /**
+     * 校验 Header；audience 必须绑定 create-by-business（防跨路由重放）。
+     */
     public static boolean verifyHeaders(String serviceName, String token, String secret) {
+        return verifyHeaders(serviceName, token, secret,
+                RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS);
+    }
+
+    public static boolean verifyHeaders(String serviceName, String token, String secret, String audience) {
         if (!RpcServiceIdentityConstants.FINANCE_SERVER.equals(StrUtil.trim(serviceName))) {
             return false;
         }
         if (!RpcServiceIdentitySecretValidator.isStrongSecret(secret)) {
             return false;
         }
-        return RpcServiceIdentityTokens.verify(serviceName.trim(), token, secret.trim());
+        if (StrUtil.isBlank(audience)) {
+            return false;
+        }
+        return RpcServiceIdentityTokens.verify(serviceName.trim(), audience.trim(), token, secret.trim());
+    }
+
+    /**
+     * 本 Guard/Filter 仅服务于 create-by-business；验签 audience 固定为该 privileged 路径。
+     * （令牌若绑定其他路径 audience 一律失败，实现跨路由防重放。）
+     */
+    private static String resolveAudience(HttpServletRequest request) {
+        return RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS;
     }
 }

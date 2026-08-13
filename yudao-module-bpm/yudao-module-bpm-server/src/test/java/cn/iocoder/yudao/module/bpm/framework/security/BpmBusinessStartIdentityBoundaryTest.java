@@ -94,7 +94,7 @@ class BpmBusinessStartIdentityBoundaryTest {
 
     @Test
     void filter_nonFinanceServiceName_returns403() throws Exception {
-        String token = RpcServiceIdentityTokens.sign("crm-server", SECRET);
+        String token = RpcServiceIdentityTokens.sign("crm-server", RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS, SECRET);
         MockHttpServletRequest req = new MockHttpServletRequest("POST",
                 "/rpc-api/bpm/process-instance/create-by-business");
         req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME, "crm-server");
@@ -106,7 +106,7 @@ class BpmBusinessStartIdentityBoundaryTest {
 
     @Test
     void filter_validFinanceIdentity_continuesAndSetsAuthority() throws Exception {
-        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, SECRET);
+        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS, SECRET);
         MockHttpServletRequest req = new MockHttpServletRequest("POST",
                 "/rpc-api/bpm/process-instance/create-by-business");
         req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
@@ -142,7 +142,7 @@ class BpmBusinessStartIdentityBoundaryTest {
 
     @Test
     void guard_validFinanceHeader_allows() {
-        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, SECRET);
+        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS, SECRET);
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
                 RpcServiceIdentityConstants.FINANCE_SERVER);
@@ -167,7 +167,7 @@ class BpmBusinessStartIdentityBoundaryTest {
 
     @Test
     void service_createByBusiness_withFinanceIdentity_entersTrustedChannel() {
-        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, SECRET);
+        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS, SECRET);
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
                 RpcServiceIdentityConstants.FINANCE_SERVER);
@@ -201,7 +201,7 @@ class BpmBusinessStartIdentityBoundaryTest {
     void financeIdentity_plusTrustedChannel_salaryAllowedWithPermission() {
         when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
                 .thenReturn(true);
-        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, SECRET);
+        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS, SECRET);
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
                 RpcServiceIdentityConstants.FINANCE_SERVER);
@@ -233,7 +233,7 @@ class BpmBusinessStartIdentityBoundaryTest {
     @Test
     void filter_validFinanceWithInjectedStrongSecret_success_forgedStill403() throws Exception {
         // 合法
-        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, SECRET);
+        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, RpcServiceIdentityConstants.AUDIENCE_BPM_CREATE_BY_BUSINESS, SECRET);
         MockHttpServletRequest ok = new MockHttpServletRequest("POST",
                 "/rpc-api/bpm/process-instance/create-by-business");
         ok.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
@@ -253,5 +253,21 @@ class BpmBusinessStartIdentityBoundaryTest {
         MockHttpServletResponse badResp = new MockHttpServletResponse();
         filter.doFilter(bad, badResp, (r, s) -> fail("forged must not continue"));
         assertEquals(403, badResp.getStatus());
+    }
+
+    @Test
+    void filter_tokenCapturedFromOtherRoute_cannotAuthorizeCreateByBusiness() throws Exception {
+        // 从 generic create 路由截获的合法 HMAC 不得授权 privileged 路径
+        String otherAudience = "POST /rpc-api/bpm/process-instance/create";
+        String replayToken = RpcServiceIdentityTokens.sign(
+                RpcServiceIdentityConstants.FINANCE_SERVER, otherAudience, SECRET);
+        MockHttpServletRequest req = new MockHttpServletRequest("POST",
+                "/rpc-api/bpm/process-instance/create-by-business");
+        req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
+                RpcServiceIdentityConstants.FINANCE_SERVER);
+        req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_TOKEN, replayToken);
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        filter.doFilter(req, resp, (r, s) -> fail("replay token must not continue"));
+        assertEquals(403, resp.getStatus());
     }
 }
