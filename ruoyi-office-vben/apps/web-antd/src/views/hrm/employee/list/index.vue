@@ -307,8 +307,12 @@ onActivated(() => {
         />
       </template>
     </Grid>
-    <!-- 部门选择弹窗 -->
-    <DeptSelectModal ref="deptSelectModalRef" @select="handleDeptSelect" />
+    <!-- 部门/公司选择弹窗（列表筛选允许选公司，后端展开为公司下员工） -->
+    <DeptSelectModal
+      ref="deptSelectModalRef"
+      :allow-company="true"
+      @select="handleDeptSelect"
+    />
     <ImportModalComp @success="onRefresh" />
   </Page>
 </template>

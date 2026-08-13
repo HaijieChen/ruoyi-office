@@ -330,6 +330,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public PageResult<EmployeeRespVO> getEmployeeArchivePage(EmployeePageReqVO pageReqVO) {
+        expandOrgFilterIfCompany(pageReqVO);
         PageResult<EmployeeDO> pageResult = employeeArchiveMapper.selectPage(pageReqVO);
         return buildEmployeeRespPage(pageResult);
     }
@@ -485,8 +486,47 @@ public class EmployeeServiceImpl implements EmployeeService {
         return SpringUtil.getBean(getClass());
     }
 
+    /**
+     * 列表/导出：若筛选节点是公司（orgType=1），展开为「companyId 匹配 或 deptId 落在公司子树」。
+     * 普通部门保持精确 deptId 匹配（原语义）。
+     */
+    void expandOrgFilterIfCompany(EmployeePageReqVO req) {
+        if (req == null || req.getDeptId() == null) {
+            return;
+        }
+        // 已由调用方预展开则跳过
+        if (CollUtil.isNotEmpty(req.getDeptIds()) || req.getCompanyId() != null) {
+            return;
+        }
+        CommonResult<DeptRespDTO> result = deptApi.getDept(req.getDeptId());
+        if (result == null || !result.isSuccess() || result.getData() == null) {
+            return;
+        }
+        DeptRespDTO node = result.getData();
+        // 非公司：保持 eq(deptId)
+        if (!"1".equals(node.getOrgType())) {
+            return;
+        }
+        Long companyId = req.getDeptId();
+        LinkedHashSet<Long> deptIds = new LinkedHashSet<>();
+        deptIds.add(companyId);
+        CommonResult<List<DeptRespDTO>> children = deptApi.getChildDeptList(companyId);
+        if (children != null && children.isSuccess() && CollUtil.isNotEmpty(children.getData())) {
+            for (DeptRespDTO d : children.getData()) {
+                if (d != null && d.getId() != null) {
+                    deptIds.add(d.getId());
+                }
+            }
+        }
+        req.setCompanyId(companyId);
+        req.setDeptIds(deptIds);
+        // 清空精确 deptId，改由 deptIds/companyId 条件生效
+        req.setDeptId(null);
+    }
+
     @Override
     public List<EmployeeRosterExportVO> getEmployeeRosterExportList(EmployeePageReqVO pageReqVO) {
+        expandOrgFilterIfCompany(pageReqVO);
         pageReqVO.setPageSize(cn.iocoder.yudao.framework.common.pojo.PageParam.PAGE_SIZE_NONE);
         List<EmployeeDO> employees = employeeArchiveMapper.selectPage(pageReqVO).getList();
         if (CollUtil.isEmpty(employees)) {

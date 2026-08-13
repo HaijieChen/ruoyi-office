@@ -18,14 +18,36 @@ import org.apache.ibatis.annotations.Mapper;
 public interface EmployeeMapper extends BaseMapperX<EmployeeDO> {
 
     default PageResult<EmployeeDO> selectPage(EmployeePageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<EmployeeDO>()
+        LambdaQueryWrapperX<EmployeeDO> wrapper = new LambdaQueryWrapperX<EmployeeDO>()
                 .likeIfPresent(EmployeeDO::getEmployeeNo, reqVO.getEmployeeNo())
                 .likeIfPresent(EmployeeDO::getName, reqVO.getName())
-                .eqIfPresent(EmployeeDO::getDeptId, reqVO.getDeptId())
                 .eqIfPresent(EmployeeDO::getEmployeeStatus, reqVO.getEmployeeStatus())
                 .betweenIfPresent(EmployeeDO::getEntryDate, reqVO.getEntryDate())
-                .betweenIfPresent(EmployeeDO::getCreateTime, reqVO.getCreateTime())
-                .orderByDesc(EmployeeDO::getId));
+                .betweenIfPresent(EmployeeDO::getCreateTime, reqVO.getCreateTime());
+        // 组织过滤：部门 = 精确 deptId；公司 = companyId 或 deptId 落在公司子树
+        applyOrgFilter(wrapper, reqVO);
+        wrapper.orderByDesc(EmployeeDO::getId);
+        return selectPage(reqVO, wrapper);
+    }
+
+    /**
+     * 列表/导出组织筛选：
+     * <ul>
+     *   <li>deptIds + companyId：公司节点展开（company_id 匹配 或 dept_id ∈ 子树）</li>
+     *   <li>仅 deptId：普通部门精确匹配（原语义）</li>
+     * </ul>
+     */
+    static void applyOrgFilter(LambdaQueryWrapperX<EmployeeDO> wrapper, EmployeePageReqVO reqVO) {
+        if (reqVO.getDeptIds() != null && !reqVO.getDeptIds().isEmpty()
+                && reqVO.getCompanyId() != null) {
+            wrapper.and(w -> w.in(EmployeeDO::getDeptId, reqVO.getDeptIds())
+                    .or()
+                    .eq(EmployeeDO::getCompanyId, reqVO.getCompanyId()));
+        } else if (reqVO.getDeptIds() != null && !reqVO.getDeptIds().isEmpty()) {
+            wrapper.in(EmployeeDO::getDeptId, reqVO.getDeptIds());
+        } else {
+            wrapper.eqIfPresent(EmployeeDO::getDeptId, reqVO.getDeptId());
+        }
     }
 
     /**
