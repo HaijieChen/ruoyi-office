@@ -36,7 +36,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BpmBusinessStartIdentityBoundaryTest {
 
-    private static final String SECRET = "unit-test-rpc-secret";
+    /** 测试注入的强密钥（≥24，非黑名单）；非源码默认值 */
+    private static final String SECRET = "prod-injected-rpc-service-identity-key-9f3a";
     private static final String SALARY_KEY = "finance_salary_payment_apply";
 
     private RpcServiceIdentityProperties properties;
@@ -211,5 +212,46 @@ class BpmBusinessStartIdentityBoundaryTest {
             eligibility.validateStartOrThrow(SALARY_KEY, true);
             return null;
         }));
+    }
+
+    @Test
+    void filter_withWeakOrMissingServerSecret_rejectsEvenWithForgedIdentityHeaders() throws Exception {
+        RpcServiceIdentityProperties weak = new RpcServiceIdentityProperties();
+        weak.setEnabled(true);
+        weak.setSecret("yudao-rpc-service-identity-dev-only");
+        BpmBusinessStartIdentityFilter weakFilter = new BpmBusinessStartIdentityFilter(weak);
+        MockHttpServletRequest req = new MockHttpServletRequest("POST",
+                "/rpc-api/bpm/process-instance/create-by-business");
+        req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
+                RpcServiceIdentityConstants.FINANCE_SERVER);
+        req.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_TOKEN, "anything");
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        weakFilter.doFilter(req, resp, (r, s) -> fail("must not continue with weak secret"));
+        assertEquals(403, resp.getStatus());
+    }
+
+    @Test
+    void filter_validFinanceWithInjectedStrongSecret_success_forgedStill403() throws Exception {
+        // 合法
+        String token = RpcServiceIdentityTokens.sign(RpcServiceIdentityConstants.FINANCE_SERVER, SECRET);
+        MockHttpServletRequest ok = new MockHttpServletRequest("POST",
+                "/rpc-api/bpm/process-instance/create-by-business");
+        ok.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
+                RpcServiceIdentityConstants.FINANCE_SERVER);
+        ok.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_TOKEN, token);
+        MockHttpServletResponse okResp = new MockHttpServletResponse();
+        final boolean[] continued = {false};
+        filter.doFilter(ok, okResp, (r, s) -> continued[0] = true);
+        assertTrue(continued[0]);
+
+        // 伪造
+        MockHttpServletRequest bad = new MockHttpServletRequest("POST",
+                "/rpc-api/bpm/process-instance/create-by-business");
+        bad.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME,
+                RpcServiceIdentityConstants.FINANCE_SERVER);
+        bad.addHeader(RpcServiceIdentityConstants.HEADER_SERVICE_TOKEN, "forged");
+        MockHttpServletResponse badResp = new MockHttpServletResponse();
+        filter.doFilter(bad, badResp, (r, s) -> fail("forged must not continue"));
+        assertEquals(403, badResp.getStatus());
     }
 }

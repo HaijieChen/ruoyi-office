@@ -15,10 +15,13 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class FinanceRpcServiceIdentityRequestInterceptorTest {
 
+    private static final String STRONG_SECRET = "prod-injected-rpc-service-identity-key-9f3a";
+
     @Test
     void apply_attachesVerifiableFinanceIdentity() {
         RpcServiceIdentityProperties props = new RpcServiceIdentityProperties();
-        props.setSecret("finance-out-secret");
+        props.setEnabled(true);
+        props.setSecret(STRONG_SECRET);
         FinanceRpcServiceIdentityRequestInterceptor interceptor =
                 new FinanceRpcServiceIdentityRequestInterceptor(props);
         RequestTemplate template = new RequestTemplate();
@@ -31,6 +34,26 @@ class FinanceRpcServiceIdentityRequestInterceptorTest {
         String name = names.iterator().next();
         String token = tokens.iterator().next();
         assertEquals(RpcServiceIdentityConstants.FINANCE_SERVER, name);
-        assertTrue(RpcServiceIdentityTokens.verify(name, token, "finance-out-secret"));
+        assertTrue(RpcServiceIdentityTokens.verify(name, token, STRONG_SECRET));
+    }
+
+    @Test
+    void apply_withMissingSecret_failsClosed() {
+        RpcServiceIdentityProperties props = new RpcServiceIdentityProperties();
+        props.setEnabled(true);
+        props.setSecret(null);
+        FinanceRpcServiceIdentityRequestInterceptor interceptor =
+                new FinanceRpcServiceIdentityRequestInterceptor(props);
+        assertThrows(IllegalStateException.class, () -> interceptor.apply(new RequestTemplate()));
+    }
+
+    @Test
+    void apply_withBlacklistedDevDefault_failsClosed() {
+        RpcServiceIdentityProperties props = new RpcServiceIdentityProperties();
+        props.setEnabled(true);
+        props.setSecret("yudao-rpc-service-identity-dev-only");
+        FinanceRpcServiceIdentityRequestInterceptor interceptor =
+                new FinanceRpcServiceIdentityRequestInterceptor(props);
+        assertThrows(IllegalStateException.class, () -> interceptor.apply(new RequestTemplate()));
     }
 }

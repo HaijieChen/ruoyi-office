@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.util.rpc.RpcServiceIdentityConstants;
 import cn.iocoder.yudao.framework.common.util.rpc.RpcServiceIdentityTokens;
 import cn.iocoder.yudao.framework.security.config.RpcServiceIdentityProperties;
+import cn.iocoder.yudao.framework.security.config.RpcServiceIdentitySecretValidator;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -48,8 +49,8 @@ public final class BpmBusinessStartCallerIdentity {
     }
 
     public static boolean verifyRequestHeaders(RpcServiceIdentityProperties properties) {
-        if (properties == null || StrUtil.isBlank(properties.getSecret())) {
-            return false;
+        if (properties == null || !RpcServiceIdentitySecretValidator.isStrongSecret(properties.getSecret())) {
+            return false; // F1：弱/空密钥一律拒绝校验通过（fail-closed）
         }
         ServletRequestAttributes attrs =
                 (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
@@ -60,13 +61,16 @@ public final class BpmBusinessStartCallerIdentity {
         return verifyHeaders(
                 request.getHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME),
                 request.getHeader(RpcServiceIdentityConstants.HEADER_SERVICE_TOKEN),
-                properties.getSecret());
+                properties.getSecret().trim());
     }
 
     public static boolean verifyHeaders(String serviceName, String token, String secret) {
         if (!RpcServiceIdentityConstants.FINANCE_SERVER.equals(StrUtil.trim(serviceName))) {
             return false;
         }
-        return RpcServiceIdentityTokens.verify(serviceName.trim(), token, secret);
+        if (!RpcServiceIdentitySecretValidator.isStrongSecret(secret)) {
+            return false;
+        }
+        return RpcServiceIdentityTokens.verify(serviceName.trim(), token, secret.trim());
     }
 }

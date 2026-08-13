@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.common.util.rpc.RpcServiceIdentityConstants;
 import cn.iocoder.yudao.framework.security.config.RpcServiceIdentityProperties;
+import cn.iocoder.yudao.framework.security.config.RpcServiceIdentitySecretValidator;
 import cn.iocoder.yudao.module.bpm.enums.ApiConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -50,6 +51,13 @@ public class BpmBusinessStartIdentityFilter extends OncePerRequestFilter {
             writeJson(response, HttpServletResponse.SC_FORBIDDEN,
                     GlobalErrorCodeConstants.FORBIDDEN.getCode(),
                     "可信业务启动通道已关闭");
+            return;
+        }
+        // F1：运行时再次 fail-closed（防御配置热更/错误注入弱密钥）
+        if (!RpcServiceIdentitySecretValidator.isStrongSecret(properties.getSecret())) {
+            writeJson(response, HttpServletResponse.SC_FORBIDDEN,
+                    GlobalErrorCodeConstants.FORBIDDEN.getCode(),
+                    "RPC 服务身份密钥未配置或不合规，create-by-business 拒绝服务");
             return;
         }
         String serviceName = request.getHeader(RpcServiceIdentityConstants.HEADER_SERVICE_NAME);
