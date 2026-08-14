@@ -16,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,16 +24,17 @@ import org.springframework.test.context.TestPropertySource;
 
 import java.lang.reflect.Constructor;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
- * EXP-87：单体无 OpenFeign 时，本地 {@link FinanceBpmProcessInstanceApi} 必须可注入
- * （复现 test 环境 APPLICATION FAILED：缺少 FinanceBpmProcessInstanceApi Bean）。
+ * EXP-87：单体 Local 模式 — Finance 精确子类型可注入；父类型保持基线。
  */
 @SpringBootTest(classes = FinanceBpmProcessInstanceApiLocalMonolithSpringTest.TestApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -43,6 +45,8 @@ import static org.mockito.Mockito.*;
         "spring.cloud.config.import-check.enabled=false",
         "spring.cloud.nacos.config.enabled=false",
         "spring.cloud.nacos.discovery.enabled=false",
+        // finance-server 测试 CP 含 OpenFeign，强制 local 模拟 monorepo
+        "yudao.rpc.finance-bpm.api-mode=local",
         "yudao.rpc.service-identity.enabled=true",
         "yudao.rpc.service-identity.secret=prod-injected-rpc-service-identity-key-9f3a"
 })
@@ -52,8 +56,9 @@ class FinanceBpmProcessInstanceApiLocalMonolithSpringTest {
     @Import(FinanceBpmLocalApiConfiguration.class)
     @EnableConfigurationProperties(RpcServiceIdentityProperties.class)
     static class TestApp {
-        /** 模拟同 JVM 的 BpmProcessInstanceApiImpl（@RestController） */
+        /** 模拟同 JVM 基线 BpmProcessInstanceApiImpl（@Primary） */
         @Bean
+        @Primary
         BpmProcessInstanceApi bpmProcessInstanceApiRestController() {
             return mock(BpmProcessInstanceApi.class);
         }
@@ -65,15 +70,26 @@ class FinanceBpmProcessInstanceApiLocalMonolithSpringTest {
     @Autowired
     private FinanceBpmProcessInstanceApi financeBpmProcessInstanceApi;
 
-    /** 同 JVM RestController 模拟；勿注入父类型（@Primary 本地适配器会抢占） */
     @Autowired
     @Qualifier("bpmProcessInstanceApiRestController")
-    private BpmProcessInstanceApi bpmProcessInstanceApi;
+    private BpmProcessInstanceApi baselineByName;
 
     @Test
     void monolithContextProvidesFinanceBpmProcessInstanceApiBean() {
         assertNotNull(applicationContext.getBean(FinanceBpmProcessInstanceApi.class));
         assertTrue(financeBpmProcessInstanceApi instanceof FinanceBpmProcessInstanceApiLocalImpl);
+        Map<String, FinanceBpmProcessInstanceApi> all =
+                applicationContext.getBeansOfType(FinanceBpmProcessInstanceApi.class);
+        assertEquals(1, all.size(), "local mode must register exactly one Finance bean: " + all.keySet());
+    }
+
+    @Test
+    void parentTypeResolvesToBaselineNotFinanceAdapter() {
+        BpmProcessInstanceApi byParent = applicationContext.getBean(BpmProcessInstanceApi.class);
+        assertSame(baselineByName, byParent,
+                "parent BpmProcessInstanceApi must be baseline @Primary, not Finance local adapter");
+        assertFalse(byParent instanceof FinanceBpmProcessInstanceApi,
+                "parent type must not select Finance adapter");
     }
 
     @Test
@@ -83,14 +99,13 @@ class FinanceBpmProcessInstanceApiLocalMonolithSpringTest {
         Class<?>[] params = ctors[0].getParameterTypes();
         assertTrue(Arrays.asList(params).contains(FinanceBpmProcessInstanceApi.class),
                 "Invoice ctor must require FinanceBpmProcessInstanceApi: " + Arrays.toString(params));
-        // 容器中类型可解析
         assertDoesNotThrow(() -> applicationContext.getBean(FinanceBpmProcessInstanceApi.class));
     }
 
     @Test
     void createByBusinessElevatesFinanceAuthorityForDelegate() {
         AtomicReference<Boolean> sawAuthority = new AtomicReference<>(false);
-        when(bpmProcessInstanceApi.createProcessInstanceByBusiness(anyLong(), any()))
+        when(baselineByName.createProcessInstanceByBusiness(anyLong(), any()))
                 .thenAnswer(inv -> {
                     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                     boolean has = auth != null && auth.getAuthorities().stream()
@@ -105,6 +120,25 @@ class FinanceBpmProcessInstanceApiLocalMonolithSpringTest {
         assertEquals("pi-1", result.getData());
         assertTrue(Boolean.TRUE.equals(sawAuthority.get()),
                 "local adapter must elevate FINANCE authority before create-by-business");
-        verify(bpmProcessInstanceApi).createProcessInstanceByBusiness(eq(1L), any());
+        verify(baselineByName).createProcessInstanceByBusiness(eq(1L), any());
+    }
+
+    @Test
+    void parentTypeCreateByBusinessDoesNotElevateFinanceAuthority() {
+        AtomicReference<Boolean> sawAuthority = new AtomicReference<>(false);
+        when(baselineByName.createProcessInstanceByBusiness(anyLong(), any()))
+                .thenAnswer(inv -> {
+                    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                    boolean has = auth != null && auth.getAuthorities().stream()
+                            .map(GrantedAuthority::getAuthority)
+                            .anyMatch(RpcServiceIdentityConstants.AUTHORITY_FINANCE_SERVER::equals);
+                    sawAuthority.set(has);
+                    return CommonResult.success("pi-baseline");
+                });
+
+        BpmProcessInstanceApi parent = applicationContext.getBean(BpmProcessInstanceApi.class);
+        parent.createProcessInstanceByBusiness(1L, new BpmProcessInstanceCreateReqDTO());
+        assertFalse(Boolean.TRUE.equals(sawAuthority.get()),
+                "non-Finance parent-type caller must NOT receive Finance authority elevation");
     }
 }

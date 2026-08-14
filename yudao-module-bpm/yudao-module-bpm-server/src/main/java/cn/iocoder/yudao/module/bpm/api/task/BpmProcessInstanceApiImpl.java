@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.instance.BpmProcessInstanceCancelReqVO;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceService;
+import org.springframework.context.annotation.Primary;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -14,11 +15,15 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 
 /**
  * Flowable 流程实例 Api 实现类
+ * <p>
+ * EXP-87：{@code @Primary} 保证 monorepo 下父类型 {@link BpmProcessInstanceApi} 注入
+ * 解析到本基线实现，而非 Finance 专用本地适配器（防 privileged 通道越权）。
  *
  * @author 宇擎源码
  * @author jason
  */
 @RestController
+@Primary
 @Validated
 public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
 
