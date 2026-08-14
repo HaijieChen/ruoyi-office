@@ -16,6 +16,9 @@ import cn.iocoder.yudao.module.system.service.mfa.store.MyBatisMfaFactorStore;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,6 +42,8 @@ public class MfaSlice4PersistenceDbTest extends BaseDbUnitTest {
     private MfaFactorMapper factorMapper;
     @Resource
     private MfaSecretCipher secretCipher;
+    @Resource
+    private DataSource dataSource;
 
     @Test
     void flow_casComplete_persisted() {
@@ -78,6 +83,47 @@ public class MfaSlice4PersistenceDbTest extends BaseDbUnitTest {
                 .type("TOTP").status("PENDING").secretCiphertext("x").keyId("test-k1")
                 .build();
         assertThrows(Exception.class, () -> factorMapper.insert(dup));
+    }
+
+    @Test
+    void factorKey_legacyCollision_backfillThenUnique() {
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate.execute("DROP TABLE IF EXISTS mfa_fk_probe");
+        jdbcTemplate.execute("""
+                CREATE TABLE mfa_fk_probe (
+                  id bigint NOT NULL,
+                  tenant_id bigint NOT NULL,
+                  user_id bigint NOT NULL,
+                  factor_key varchar(64),
+                  deleted bit NOT NULL DEFAULT FALSE,
+                  PRIMARY KEY (id)
+                )
+                """);
+        jdbcTemplate.update("INSERT INTO mfa_fk_probe(id,tenant_id,user_id,factor_key) VALUES (1,1,1,'')");
+        jdbcTemplate.update("INSERT INTO mfa_fk_probe(id,tenant_id,user_id,factor_key) VALUES (2,1,1,'legacy-1')");
+        jdbcTemplate.update("""
+                UPDATE mfa_fk_probe
+                SET factor_key = CONCAT('legacy-', id, '-', REPLACE(CAST(RANDOM_UUID() AS VARCHAR), '-', ''))
+                WHERE factor_key IS NULL OR TRIM(factor_key) = ''
+                """);
+        jdbcTemplate.update("""
+                UPDATE mfa_fk_probe t
+                SET factor_key = CONCAT(factor_key, '-d', id)
+                WHERE id IN (
+                  SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY tenant_id, user_id, factor_key ORDER BY id) rn
+                    FROM mfa_fk_probe
+                  ) x WHERE rn > 1
+                )
+                """);
+        jdbcTemplate.execute(
+                "ALTER TABLE mfa_fk_probe ADD CONSTRAINT uk_mfa_fk_probe UNIQUE (tenant_id, user_id, factor_key)");
+        var keys = jdbcTemplate.queryForList("SELECT factor_key FROM mfa_fk_probe ORDER BY id", String.class);
+        assertEquals(2, keys.size());
+        assertNotEquals(keys.get(0), keys.get(1));
+        assertNotEquals("legacy-1", keys.get(0));
+        assertEquals("legacy-1", keys.get(1));
+        jdbcTemplate.execute("DROP TABLE IF EXISTS mfa_fk_probe");
     }
 
     @Test

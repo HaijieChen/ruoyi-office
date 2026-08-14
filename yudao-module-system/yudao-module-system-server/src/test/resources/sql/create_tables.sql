@@ -726,6 +726,7 @@ CREATE TABLE IF NOT EXISTS "system_mfa_enroll_saga" (
     "totp_step" bigint,
     "expected_epoch" bigint NOT NULL DEFAULT 0,
     "access_token" varchar,
+    "refresh_token" varchar,
     "state" varchar NOT NULL,
     "creator" varchar DEFAULT '',
     "create_time" datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,

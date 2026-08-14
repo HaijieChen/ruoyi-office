@@ -25,5 +25,6 @@ public class MfaEnrollSagaDO extends BaseDO {
     private Long totpStep;
     private Long expectedEpoch;
     private String accessToken;
+    private String refreshToken;
     private String state;
 }

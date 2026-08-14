@@ -35,9 +35,9 @@ SET @sql := (
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 安全回填：用主键生成唯一 key，禁止统一写成 ''
+-- 安全回填：禁止写成空串；带 UUID 后缀，避免与已有 legacy-{id} 碰撞
 UPDATE `system_mfa_factor`
-SET `factor_key` = CONCAT('legacy-', `id`)
+SET `factor_key` = CONCAT('legacy-', `id`, '-', REPLACE(UUID(), '-', ''))
 WHERE `factor_key` IS NULL OR TRIM(`factor_key`) = '';
 
 -- 去掉旧非唯一索引（若存在）

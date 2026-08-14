@@ -17,10 +17,21 @@ public interface MfaEnrollSagaStore {
     void clear();
 
     record Record(String flowTokenHash, Long tenantId, Long userId, String factorId,
-                  Long totpStep, long expectedEpoch, String accessToken, String state) {
-        public Record withState(String newState, String token) {
+                  Long totpStep, long expectedEpoch, String accessToken, String refreshToken,
+                  String state) {
+        public Record withState(String newState) {
             return new Record(flowTokenHash, tenantId, userId, factorId, totpStep, expectedEpoch,
-                    token == null ? accessToken : token, newState);
+                    accessToken, refreshToken, newState);
+        }
+
+        public Record cleared(String newState) {
+            return new Record(flowTokenHash, tenantId, userId, factorId, totpStep, expectedEpoch,
+                    null, null, newState);
+        }
+
+        public Record issued(String access, String refresh) {
+            return new Record(flowTokenHash, tenantId, userId, factorId, totpStep, expectedEpoch,
+                    access, refresh, TOKEN_ISSUED);
         }
     }
 }

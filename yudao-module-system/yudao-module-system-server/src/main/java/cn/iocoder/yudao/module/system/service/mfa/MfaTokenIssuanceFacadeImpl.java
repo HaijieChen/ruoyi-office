@@ -339,39 +339,63 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
         String flowHash = MfaAuthFlowServiceImpl.sha256Hex(rawEnrollmentFlowToken);
         var sagaStore = enrollSaga();
         var existing = sagaStore.get(flowHash);
-        if (existing != null && MfaEnrollSagaStore.COMPENSATE_TOKEN.equals(existing.state())
-                && existing.accessToken() != null) {
-            tryRevokeToken(existing.accessToken());
-            sagaStore.upsert(existing.withState(MfaEnrollSagaStore.VERIFIED, null));
+        if (existing != null && MfaEnrollSagaStore.COMPENSATE_TOKEN.equals(existing.state())) {
+            if (!tryRevokeToken(existing.accessToken())) {
+                throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+            }
+            existing = existing.cleared(MfaEnrollSagaStore.VERIFIED);
+            sagaStore.upsert(existing);
         }
-        sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
-                totpStep, expectedEpoch, existing == null ? null : existing.accessToken(),
-                MfaEnrollSagaStore.VERIFIED));
 
         MfaIssuanceResult issued;
-        try {
+        if (existing != null && MfaEnrollSagaStore.TOKEN_ISSUED.equals(existing.state())
+                && existing.accessToken() != null) {
+            issued = reuseIssuedToken(existing);
+            if (issued == null) {
+                existing = existing.cleared(MfaEnrollSagaStore.VERIFIED);
+                sagaStore.upsert(existing);
+            }
+        } else {
+            issued = null;
+        }
+        if (issued == null) {
             issued = allowWithDecision(flow.getUserId(), flow.getTenantId(),
                     clientId != null ? clientId : flow.getClientId(),
                     scopes, List.of("totp", "enroll"), policy, expectedEpoch);
-        } catch (RuntimeException ex) {
-            throw ex;
+            String access = issued.getAccessToken() == null ? null : issued.getAccessToken().getAccessToken();
+            String refresh = issued.getAccessToken() == null ? null : issued.getAccessToken().getRefreshToken();
+            sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
+                    totpStep, expectedEpoch, access, refresh, MfaEnrollSagaStore.TOKEN_ISSUED));
         }
         String access = issued.getAccessToken() == null ? null : issued.getAccessToken().getAccessToken();
-        sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
-                totpStep, expectedEpoch, access, MfaEnrollSagaStore.TOKEN_ISSUED));
+        String refresh = issued.getAccessToken() == null ? null : issued.getAccessToken().getRefreshToken();
         try {
             enrollmentCommitter().commit(tenantId, flow.getUserId(), factorId, totpStep,
                     rawEnrollmentFlowToken, expectedEpoch);
             sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
-                    totpStep, expectedEpoch, access, MfaEnrollSagaStore.COMMITTED));
+                    totpStep, expectedEpoch, access, refresh, MfaEnrollSagaStore.COMMITTED));
         } catch (RuntimeException ex) {
             boolean revoked = tryRevokeToken(access);
             sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
-                    totpStep, expectedEpoch, access,
+                    totpStep, expectedEpoch,
+                    revoked ? null : access, revoked ? null : refresh,
                     revoked ? MfaEnrollSagaStore.VERIFIED : MfaEnrollSagaStore.COMPENSATE_TOKEN));
             throw ex;
         }
         return issued;
+    }
+
+    private MfaIssuanceResult reuseIssuedToken(MfaEnrollSagaStore.Record saga) {
+        OAuth2AccessTokenDO token = oauth2TokenService.getAccessToken(saga.accessToken());
+        if (token == null) {
+            return null;
+        }
+        return MfaIssuanceResult.builder()
+                .outcome(MfaIssuanceOutcome.ALLOWED)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED)
+                .accessToken(token)
+                .loginResp(toAuthenticatedResp(token))
+                .build();
     }
 
     private boolean tryRevokeToken(String accessToken) {

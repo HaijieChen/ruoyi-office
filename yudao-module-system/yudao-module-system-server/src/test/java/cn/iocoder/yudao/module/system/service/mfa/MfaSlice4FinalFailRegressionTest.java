@@ -141,6 +141,48 @@ public class MfaSlice4FinalFailRegressionTest extends BaseMockitoUnitTest {
     }
 
     @Test
+    void fs401_tokenIssuedRetry_doesNotIssueSecondToken() {
+        policyControl.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
+        policyControl.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));
+        String flowToken = startEnrollment(10L);
+        AuthMfaEnrollmentTotpStartRespVO start = startTotp(flowToken, 10L);
+        String hash = MfaAuthFlowServiceImpl.sha256Hex(flowToken);
+        OAuth2AccessTokenDO existingTok = token(10L);
+        existingTok.setAccessToken("issued-once");
+        existingTok.setRefreshToken("refresh-once");
+        InMemoryMfaEnrollSagaStore.shared().upsert(new MfaEnrollSagaStore.Record(
+                hash, 1L, 10L, start.getFactorId(), 1L, 1L,
+                "issued-once", "refresh-once", MfaEnrollSagaStore.TOKEN_ISSUED));
+        when(oauth2TokenService.getAccessToken("issued-once")).thenReturn(existingTok);
+
+        AuthLoginRespVO loggedIn = authService.mfaEnrollmentTotpConfirm(
+                confirmReq(flowToken, start, totp(start.getSecretManual())));
+        assertEquals("issued-once", loggedIn.getAccessToken());
+        assertEquals(MfaEnrollSagaStore.COMMITTED, InMemoryMfaEnrollSagaStore.shared().get(hash).state());
+        verify(oauth2TokenService, never()).createAccessToken(anyLong(), anyInt(), anyString(), any());
+    }
+
+    @Test
+    void fs401_compensateRevokeStillFailing_neverCommitted() {
+        policyControl.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
+        policyControl.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));
+        String flowToken = startEnrollment(10L);
+        AuthMfaEnrollmentTotpStartRespVO start = startTotp(flowToken, 10L);
+        String hash = MfaAuthFlowServiceImpl.sha256Hex(flowToken);
+        InMemoryMfaEnrollSagaStore.shared().upsert(new MfaEnrollSagaStore.Record(
+                hash, 1L, 10L, start.getFactorId(), 1L, 1L,
+                "orphan-token", "orphan-refresh", MfaEnrollSagaStore.COMPENSATE_TOKEN));
+        doThrow(new RuntimeException("revoke still failing")).when(oauth2TokenService)
+                .removeAccessToken("orphan-token");
+
+        assertThrows(Exception.class, () -> authService.mfaEnrollmentTotpConfirm(
+                confirmReq(flowToken, start, totp(start.getSecretManual()))));
+        assertEquals(MfaEnrollSagaStore.COMPENSATE_TOKEN, InMemoryMfaEnrollSagaStore.shared().get(hash).state());
+        assertEquals("orphan-token", InMemoryMfaEnrollSagaStore.shared().get(hash).accessToken());
+        verify(oauth2TokenService, never()).createAccessToken(anyLong(), anyInt(), anyString(), any());
+    }
+
+    @Test
     void fs402_cipher_aesGcm_roundTripAndRejectPlainDev() {
         MfaSecretCipherImpl cipher = MfaSecretCipherImpl.forTests("k1");
         String ct = cipher.encrypt("super-secret");
@@ -164,12 +206,14 @@ public class MfaSlice4FinalFailRegressionTest extends BaseMockitoUnitTest {
                 .secretOrDestination("x")
                 .lastUsedStep(-1L)
                 .build()));
-        Path sql = findFix1Sql();
+        Path sql = findFix2Sql();
         assertNotNull(sql);
         String text = Files.readString(sql);
-        assertTrue(text.contains("CONCAT('legacy-', `id`)"));
+        assertTrue(text.contains("REPLACE(UUID()"));
+        assertTrue(text.contains("ROW_NUMBER()"));
         assertTrue(text.contains("uk_mfa_factor_tenant_user_key"));
         assertTrue(text.contains("UNIQUE KEY"));
+        assertFalse(text.contains("SET `factor_key` = CONCAT('legacy-', `id`)"));
         assertFalse(text.contains("SET `factor_key` = ''"));
     }
 
@@ -231,14 +275,14 @@ public class MfaSlice4FinalFailRegressionTest extends BaseMockitoUnitTest {
         }
     }
 
-    private static Path findFix1Sql() {
+    private static Path findFix2Sql() {
         Path cwd = Path.of("").toAbsolutePath();
         for (int i = 0; i < 8; i++) {
-            Path hit = cwd.resolve("sql/mysql/system_mfa_v3_slice4_fix1.sql");
+            Path hit = cwd.resolve("sql/mysql/system_mfa_v3_slice4_fix2.sql");
             if (Files.isRegularFile(hit)) {
                 return hit;
             }
-            hit = cwd.resolve("oa/sql/mysql/system_mfa_v3_slice4_fix1.sql");
+            hit = cwd.resolve("oa/sql/mysql/system_mfa_v3_slice4_fix2.sql");
             if (Files.isRegularFile(hit)) {
                 return hit;
             }

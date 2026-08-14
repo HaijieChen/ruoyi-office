@@ -21,6 +21,7 @@ public class MyBatisMfaEnrollSagaStore implements MfaEnrollSagaStore {
                 .totpStep(record.totpStep())
                 .expectedEpoch(record.expectedEpoch())
                 .accessToken(record.accessToken())
+                .refreshToken(record.refreshToken())
                 .state(record.state())
                 .build();
         MfaEnrollSagaDO existing = mapper.selectById(record.flowTokenHash());
@@ -39,7 +40,7 @@ public class MyBatisMfaEnrollSagaStore implements MfaEnrollSagaStore {
         }
         return new Record(d.getFlowTokenHash(), d.getTenantId(), d.getUserId(), d.getFactorId(),
                 d.getTotpStep(), d.getExpectedEpoch() == null ? 0L : d.getExpectedEpoch(),
-                d.getAccessToken(), d.getState());
+                d.getAccessToken(), d.getRefreshToken(), d.getState());
     }
 
     @Override
