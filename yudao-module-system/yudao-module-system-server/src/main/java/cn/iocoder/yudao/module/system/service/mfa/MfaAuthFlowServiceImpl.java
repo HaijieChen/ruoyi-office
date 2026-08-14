@@ -5,7 +5,10 @@ import cn.iocoder.yudao.module.system.service.mfa.enums.MfaFlowTokenClass;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaAuthFlowRecord;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuedFlow;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaPolicySnapshot;
+import cn.iocoder.yudao.module.system.service.mfa.store.InMemoryMfaAuthFlowStore;
+import cn.iocoder.yudao.module.system.service.mfa.store.MfaAuthFlowStore;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaLockOrder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -17,26 +20,27 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Auth flow 权威（切片 2 修复）：
- * <ul>
- *   <li>进程内共享 ConcurrentHashMap（多 Spring bean / 同 JVM 多实例构造共享同一 store）</li>
- *   <li>state 使用 AtomicReference CAS 完成 ACTIVE→COMPLETED</li>
- *   <li>生产多节点应替换为 MySQL 行锁 + CAS（见 system_mfa_v3_slice2_flow.sql）</li>
- * </ul>
+ * Auth flow 权威（切片 4）：存储可切换；CAS 由 store 执行。
  */
 @Service
 public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
-    /** 同 JVM 共享；跨 JVM 由 DB 实现承接 */
-    private static final ConcurrentHashMap<String, StoredFlow> SHARED = new ConcurrentHashMap<>();
+
+    private final MfaAuthFlowStore store;
+
+    public MfaAuthFlowServiceImpl() {
+        this(InMemoryMfaAuthFlowStore.shared());
+    }
+
+    @Autowired
+    public MfaAuthFlowServiceImpl(MfaAuthFlowStore store) {
+        this.store = store == null ? InMemoryMfaAuthFlowStore.shared() : store;
+    }
 
     @Override
     public MfaIssuedFlow issue(MfaFlowTokenClass tokenClass, Long userId, Long tenantId, String clientId,
@@ -78,7 +82,7 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
                 .expiresAt(now.plusSeconds(ttlSeconds))
                 .createdAt(now)
                 .build();
-        SHARED.put(hash, new StoredFlow(record, new AtomicReference<>(MfaAuthFlowState.ACTIVE)));
+        store.insert(record);
         return MfaIssuedFlow.builder()
                 .flowId(record.getId())
                 .flowToken(raw)
@@ -93,23 +97,20 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
             return null;
         }
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FLOW_OR_DECISION_OR_CODE));
-        StoredFlow stored = SHARED.get(sha256Hex(rawFlowToken));
-        if (stored == null) {
+        MfaAuthFlowRecord record = store.getByTokenHash(sha256Hex(rawFlowToken));
+        if (record == null) {
             return null;
         }
         Instant now = Instant.now();
-        MfaAuthFlowState st = stored.state.get();
-        if (st != MfaAuthFlowState.ACTIVE) {
+        if (record.getState() != MfaAuthFlowState.ACTIVE) {
             return null;
         }
-        if (stored.record.isExpired(now)) {
-            stored.state.compareAndSet(MfaAuthFlowState.ACTIVE, MfaAuthFlowState.EXPIRED);
-            stored.record.setState(MfaAuthFlowState.EXPIRED);
+        if (record.isExpired(now)) {
+            store.casState(record.getFlowTokenHash(), MfaAuthFlowState.ACTIVE, MfaAuthFlowState.EXPIRED);
+            record.setState(MfaAuthFlowState.EXPIRED);
             return null;
         }
-        // 返回防御拷贝语义：state 以 AtomicReference 为准
-        stored.record.setState(st);
-        return stored.record;
+        return record;
     }
 
     @Override
@@ -118,21 +119,15 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
             return false;
         }
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FLOW_OR_DECISION_OR_CODE));
-        StoredFlow stored = SHARED.get(sha256Hex(rawFlowToken));
-        if (stored == null) {
+        MfaAuthFlowRecord record = store.getByTokenHash(sha256Hex(rawFlowToken));
+        if (record == null) {
             return false;
         }
-        if (stored.record.isExpired(Instant.now())) {
-            stored.state.compareAndSet(MfaAuthFlowState.ACTIVE, MfaAuthFlowState.EXPIRED);
-            stored.record.setState(MfaAuthFlowState.EXPIRED);
+        if (record.isExpired(Instant.now())) {
+            store.casState(record.getFlowTokenHash(), MfaAuthFlowState.ACTIVE, MfaAuthFlowState.EXPIRED);
             return false;
         }
-        // 真实 CAS：仅 ACTIVE→COMPLETED
-        if (!stored.state.compareAndSet(MfaAuthFlowState.ACTIVE, MfaAuthFlowState.COMPLETED)) {
-            return false;
-        }
-        stored.record.setState(MfaAuthFlowState.COMPLETED);
-        return true;
+        return store.casState(record.getFlowTokenHash(), MfaAuthFlowState.ACTIVE, MfaAuthFlowState.COMPLETED);
     }
 
     @Override
@@ -140,16 +135,15 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
         if (rawFlowToken == null || rawFlowToken.isBlank()) {
             return;
         }
-        StoredFlow stored = SHARED.get(sha256Hex(rawFlowToken));
-        if (stored != null) {
-            stored.state.set(MfaAuthFlowState.REVOKED);
-            stored.record.setState(MfaAuthFlowState.REVOKED);
+        MfaAuthFlowRecord record = store.getByTokenHash(sha256Hex(rawFlowToken));
+        if (record != null) {
+            store.casState(record.getFlowTokenHash(), record.getState(), MfaAuthFlowState.REVOKED);
         }
     }
 
     @Override
     public void clear() {
-        SHARED.clear();
+        store.clear();
     }
 
     public static String sha256Hex(String raw) {
@@ -160,8 +154,5 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }
-    }
-
-    private record StoredFlow(MfaAuthFlowRecord record, AtomicReference<MfaAuthFlowState> state) {
     }
 }

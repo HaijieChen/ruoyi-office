@@ -34,3 +34,5 @@ DELETE FROM "system_notify_message";
 DELETE FROM "system_mfa_control_state";
 DELETE FROM "system_mfa_tenant_policy";
 DELETE FROM "system_mfa_user_assurance";
+DELETE FROM "system_mfa_auth_flow";
+DELETE FROM "system_mfa_factor";

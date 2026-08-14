@@ -6,7 +6,7 @@ import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp;
 import java.util.List;
 
 /**
- * 因子通道（切片 2/3）：挑战发送、校验、TOTP 绑定。
+ * 因子通道（切片 2/4）：挑战发送、校验、TOTP 绑定。
  * <p>
  * 不负责策略决策；不默认启用 OPTIONAL/REQUIRED。
  */
@@ -32,9 +32,26 @@ public interface MfaFactorService {
     MfaPendingTotp startPendingTotp(Long tenantId, Long userId, String accountName);
 
     /**
-     * 首次正确 TOTP 后 PENDING→ACTIVE。
+     * 校验 PENDING TOTP，不改变 status / last_used_step。失败返回 null。
+     */
+    Long matchPendingTotpStep(Long tenantId, Long userId, String factorId, String code);
+
+    /**
+     * PENDING→ACTIVE CAS；可选写入 lastUsedStep。
+     */
+    boolean tryActivatePendingFactor(Long tenantId, Long userId, String factorId, Long lastUsedStep);
+
+    /**
+     * ACTIVE→PENDING 补偿（Token / complete 失败回滚）。
+     */
+    boolean revertFactorToPending(Long tenantId, Long userId, String factorId);
+
+    /**
+     * 兼容：match + activate（不可用于 Token 签发前）。
      */
     boolean activatePendingTotp(Long tenantId, Long userId, String factorId, String code);
+
+    String peekFactorStatus(Long tenantId, Long userId, String factorId);
 
     void clear();
 }

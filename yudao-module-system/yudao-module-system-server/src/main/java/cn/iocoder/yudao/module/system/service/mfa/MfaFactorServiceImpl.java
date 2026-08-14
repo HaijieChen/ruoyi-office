@@ -1,9 +1,15 @@
 package cn.iocoder.yudao.module.system.service.mfa;
 
+import cn.iocoder.yudao.module.system.service.mfa.delivery.MfaChallengeDelivery;
+import cn.iocoder.yudao.module.system.service.mfa.delivery.StubMfaChallengeDelivery;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaAuthFlowRecord;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorBinding;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorView;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp;
+import cn.iocoder.yudao.module.system.service.mfa.store.InMemoryMfaFactorStore;
+import cn.iocoder.yudao.module.system.service.mfa.store.MfaFactorStore;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaLockOrder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
@@ -16,16 +22,13 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 因子通道实现（切片 3）：allowlist、TOTP last_used_step、PENDING→ACTIVE 绑定。
- * 存储为进程内权威可切换边界（生产可换 DB）。
+ * 因子通道（切片 4）：PENDING 直到签发成功；SMS/EMAIL 走可插拔投递。
  */
 @Service
 public class MfaFactorServiceImpl implements MfaFactorService {
@@ -37,11 +40,21 @@ public class MfaFactorServiceImpl implements MfaFactorService {
     private static final String STATUS_PENDING = "PENDING";
 
     private final MfaAuthFlowService authFlowService;
-    private final Map<String, FactorBinding> factors = new ConcurrentHashMap<>();
-    private final Map<String, DeliveryCode> deliveryCodes = new ConcurrentHashMap<>();
+    private final MfaFactorStore factorStore;
+    private final MfaChallengeDelivery challengeDelivery;
+    private final ConcurrentHashMap<String, DeliveryCode> deliveryCodes = new ConcurrentHashMap<>();
 
     public MfaFactorServiceImpl(MfaAuthFlowService authFlowService) {
+        this(authFlowService, InMemoryMfaFactorStore.shared(), new StubMfaChallengeDelivery());
+    }
+
+    @Autowired
+    public MfaFactorServiceImpl(MfaAuthFlowService authFlowService,
+                                MfaFactorStore factorStore,
+                                MfaChallengeDelivery challengeDelivery) {
         this.authFlowService = authFlowService;
+        this.factorStore = factorStore == null ? InMemoryMfaFactorStore.shared() : factorStore;
+        this.challengeDelivery = challengeDelivery == null ? new StubMfaChallengeDelivery() : challengeDelivery;
     }
 
     @Override
@@ -56,10 +69,11 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         MfaAuthFlowRecord flow = requireActiveFlow(rawFlowToken);
         requireActionAllowed(flow, "send");
         requireFactorAllowed(flow, factorId);
-        FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type, STATUS_ACTIVE);
+        MfaFactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type, STATUS_ACTIVE);
         String code = String.format("%06d", RANDOM.nextInt(1_000_000));
         String key = deliveryKey(MfaAuthFlowServiceImpl.sha256Hex(rawFlowToken), factorId);
-        deliveryCodes.put(key, new DeliveryCode(code, Instant.now().plusSeconds(OTP_TTL_SECONDS), binding.type));
+        deliveryCodes.put(key, new DeliveryCode(code, Instant.now().plusSeconds(OTP_TTL_SECONDS), binding.getType()));
+        challengeDelivery.deliver(type, binding.getSecretOrDestination(), code);
     }
 
     @Override
@@ -74,10 +88,14 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         MfaAuthFlowRecord flow = requireActiveFlow(rawFlowToken);
         requireActionAllowed(flow, "verify");
         requireFactorAllowed(flow, factorId);
-        FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type, STATUS_ACTIVE);
+        MfaFactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type, STATUS_ACTIVE);
 
         if ("TOTP".equals(type)) {
-            return verifyTotpWithReplayGuard(binding, code.trim(), Instant.now());
+            Long step = matchTotpStep(binding, code.trim(), Instant.now());
+            if (step == null) {
+                return false;
+            }
+            return factorStore.claimTotpStep(flow.getTenantId(), flow.getUserId(), factorId, step);
         }
         String key = deliveryKey(MfaAuthFlowServiceImpl.sha256Hex(rawFlowToken), factorId);
         DeliveryCode dc = deliveryCodes.get(key);
@@ -98,24 +116,28 @@ public class MfaFactorServiceImpl implements MfaFactorService {
     public void registerActiveFactor(Long tenantId, Long userId, String factorId, String factorType,
                                      String secretOrDestination) {
         String type = normalizeType(factorType);
-        factors.put(factorKey(tenantId, userId, factorId),
-                new FactorBinding(factorId, type, STATUS_ACTIVE, secretOrDestination, "Authenticator",
-                        null, new AtomicLong(-1L)));
+        factorStore.save(tenantId, userId, MfaFactorBinding.builder()
+                .factorId(factorId)
+                .type(type)
+                .status(STATUS_ACTIVE)
+                .secretOrDestination(secretOrDestination)
+                .label("Authenticator")
+                .masked(null)
+                .lastUsedStep(-1L)
+                .build());
     }
 
     @Override
     public List<MfaFactorView> listActiveFactors(Long tenantId, Long userId) {
         List<MfaFactorView> out = new ArrayList<>();
-        String prefix = tenantId + ":" + userId + ":";
-        for (Map.Entry<String, FactorBinding> e : factors.entrySet()) {
-            if (e.getKey().startsWith(prefix) && STATUS_ACTIVE.equals(e.getValue().status)) {
-                FactorBinding b = e.getValue();
+        for (MfaFactorBinding b : factorStore.listByUser(tenantId, userId)) {
+            if (STATUS_ACTIVE.equals(b.getStatus())) {
                 out.add(MfaFactorView.builder()
-                        .id(b.factorId)
-                        .type(b.type)
-                        .status(b.status)
-                        .label(b.label)
-                        .maskedTarget(b.masked)
+                        .id(b.getFactorId())
+                        .type(b.getType())
+                        .status(b.getStatus())
+                        .label(b.getLabel())
+                        .maskedTarget(b.getMasked())
                         .build());
             }
         }
@@ -129,8 +151,8 @@ public class MfaFactorServiceImpl implements MfaFactorService {
 
     @Override
     public String resolveFactorType(Long tenantId, Long userId, String factorId) {
-        FactorBinding b = factors.get(factorKey(tenantId, userId, factorId));
-        return b == null ? null : b.type;
+        MfaFactorBinding b = factorStore.get(tenantId, userId, factorId);
+        return b == null ? null : b.getType();
     }
 
     @Override
@@ -146,9 +168,15 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         String otpauth = "otpauth://totp/OA:" + label
                 + "?secret=" + secret
                 + "&issuer=OA&algorithm=SHA1&digits=6&period=30";
-        factors.put(factorKey(tenantId, userId, factorId),
-                new FactorBinding(factorId, "TOTP", STATUS_PENDING, secret, "Authenticator",
-                        null, new AtomicLong(-1L)));
+        factorStore.save(tenantId, userId, MfaFactorBinding.builder()
+                .factorId(factorId)
+                .type("TOTP")
+                .status(STATUS_PENDING)
+                .secretOrDestination(secret)
+                .label("Authenticator")
+                .masked(null)
+                .lastUsedStep(-1L)
+                .build());
         return MfaPendingTotp.builder()
                 .factorId(factorId)
                 .secretManual(secret)
@@ -157,30 +185,57 @@ public class MfaFactorServiceImpl implements MfaFactorService {
     }
 
     @Override
-    public boolean activatePendingTotp(Long tenantId, Long userId, String factorId, String code) {
+    public Long matchPendingTotpStep(Long tenantId, Long userId, String factorId, String code) {
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FACTOR));
-        FactorBinding binding = factors.get(factorKey(tenantId, userId, factorId));
-        if (binding == null || !"TOTP".equals(binding.type) || !STATUS_PENDING.equals(binding.status)) {
+        MfaFactorBinding binding = factorStore.get(tenantId, userId, factorId);
+        if (binding == null || !"TOTP".equals(binding.getType()) || !STATUS_PENDING.equals(binding.getStatus())) {
+            return null;
+        }
+        return matchTotpStep(binding, code == null ? "" : code.trim(), Instant.now());
+    }
+
+    @Override
+    public boolean tryActivatePendingFactor(Long tenantId, Long userId, String factorId, Long lastUsedStep) {
+        MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FACTOR));
+        return factorStore.casStatus(tenantId, userId, factorId, STATUS_PENDING, STATUS_ACTIVE, lastUsedStep);
+    }
+
+    @Override
+    public boolean revertFactorToPending(Long tenantId, Long userId, String factorId) {
+        return factorStore.casStatus(tenantId, userId, factorId, STATUS_ACTIVE, STATUS_PENDING, null);
+    }
+
+    @Override
+    public boolean activatePendingTotp(Long tenantId, Long userId, String factorId, String code) {
+        Long step = matchPendingTotpStep(tenantId, userId, factorId, code);
+        if (step == null) {
             return false;
         }
-        if (!verifyTotpWithReplayGuard(binding, code == null ? "" : code.trim(), Instant.now())) {
-            return false;
-        }
-        factors.put(factorKey(tenantId, userId, factorId),
-                new FactorBinding(binding.factorId, binding.type, STATUS_ACTIVE, binding.secretOrDestination,
-                        binding.label, binding.masked, binding.lastUsedStep));
-        return true;
+        return tryActivatePendingFactor(tenantId, userId, factorId, step);
+    }
+
+    @Override
+    public String peekFactorStatus(Long tenantId, Long userId, String factorId) {
+        MfaFactorBinding b = factorStore.get(tenantId, userId, factorId);
+        return b == null ? null : b.getStatus();
     }
 
     @Override
     public void clear() {
-        factors.clear();
+        factorStore.clear();
         deliveryCodes.clear();
+        if (challengeDelivery instanceof StubMfaChallengeDelivery stub) {
+            stub.clear();
+        }
     }
 
     public String peekDeliveryCodeForTest(String rawFlowToken, String factorId) {
         DeliveryCode dc = deliveryCodes.get(deliveryKey(MfaAuthFlowServiceImpl.sha256Hex(rawFlowToken), factorId));
         return dc == null ? null : dc.code;
+    }
+
+    public MfaChallengeDelivery challengeDelivery() {
+        return challengeDelivery;
     }
 
     private static void requireActionAllowed(MfaAuthFlowRecord flow, String action) {
@@ -209,9 +264,9 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return flow;
     }
 
-    private FactorBinding requireBinding(Long tenantId, Long userId, String factorId, String type, String status) {
-        FactorBinding b = factors.get(factorKey(tenantId, userId, factorId));
-        if (b == null || !b.type.equals(type) || !status.equals(b.status)) {
+    private MfaFactorBinding requireBinding(Long tenantId, Long userId, String factorId, String type, String status) {
+        MfaFactorBinding b = factorStore.get(tenantId, userId, factorId);
+        if (b == null || !b.getType().equals(type) || !status.equals(b.getStatus())) {
             throw new IllegalStateException("factor not registered: " + factorId);
         }
         return b;
@@ -226,35 +281,18 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return t;
     }
 
-    private static String factorKey(Long tenantId, Long userId, String factorId) {
-        return tenantId + ":" + userId + ":" + factorId;
-    }
-
     private static String deliveryKey(String flowHash, String factorId) {
         return flowHash + ":" + factorId;
     }
 
-    private static boolean verifyTotpWithReplayGuard(FactorBinding binding, String code, Instant now) {
+    private static Long matchTotpStep(MfaFactorBinding binding, String code, Instant now) {
         long step = now.getEpochSecond() / 30L;
-        Long matchedStep = null;
         for (long s = step - 1; s <= step + 1; s++) {
-            if (constantTimeEquals(hotp(binding.secretOrDestination, s), code)) {
-                matchedStep = s;
-                break;
+            if (constantTimeEquals(hotp(binding.getSecretOrDestination(), s), code)) {
+                return s;
             }
         }
-        if (matchedStep == null) {
-            return false;
-        }
-        while (true) {
-            long prev = binding.lastUsedStep.get();
-            if (matchedStep <= prev) {
-                return false;
-            }
-            if (binding.lastUsedStep.compareAndSet(prev, matchedStep)) {
-                return true;
-            }
-        }
+        return null;
     }
 
     private static String hotp(String secret, long counter) {
@@ -282,10 +320,6 @@ public class MfaFactorServiceImpl implements MfaFactorService {
             r |= a.charAt(i) ^ b.charAt(i);
         }
         return r == 0;
-    }
-
-    private record FactorBinding(String factorId, String type, String status, String secretOrDestination,
-                                 String label, String masked, AtomicLong lastUsedStep) {
     }
 
     private record DeliveryCode(String code, Instant expiresAt, String type) {

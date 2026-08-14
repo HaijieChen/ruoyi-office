@@ -325,26 +325,47 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
         if (flow.getAssuranceEpoch() != assurance.getAssuranceEpoch()) {
             throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
         }
-        if (!factorService.activatePendingTotp(tenantId, flow.getUserId(), factorId, code)) {
+        // 切片 4：先校验 PENDING TOTP（不落 ACTIVE），Token 成功后再 CAS 激活
+        Long totpStep = factorService.matchPendingTotpStep(tenantId, flow.getUserId(), factorId, code);
+        if (totpStep == null) {
             throw exception(MFA_FACTOR_VERIFY_FAILED);
         }
-        // 因子激活同事务语义：推进 assurance
-        long newEpoch = assuranceAuthority.bumpAssuranceEpoch(tenantId, flow.getUserId(),
-                cn.iocoder.yudao.module.system.service.mfa.enums.MfaEnrollmentState.COMPLETED, true);
+        long expectedEpoch = assurance.getAssuranceEpoch() + 1;
 
         MfaIssuanceResult issued;
         try {
             issued = allowWithDecision(flow.getUserId(), flow.getTenantId(),
                     clientId != null ? clientId : flow.getClientId(),
-                    scopes, List.of("totp", "enroll"), policy, newEpoch);
+                    scopes, List.of("totp", "enroll"), policy, expectedEpoch);
         } catch (RuntimeException ex) {
+            // 因子仍 PENDING，confirm 可重试
             throw ex;
         }
+        if (!factorService.tryActivatePendingFactor(tenantId, flow.getUserId(), factorId, totpStep)) {
+            if (issued.getAccessToken() != null) {
+                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
+            }
+            throw exception(MFA_FACTOR_VERIFY_FAILED);
+        }
         if (!authFlowService.tryComplete(rawEnrollmentFlowToken)) {
+            factorService.revertFactorToPending(tenantId, flow.getUserId(), factorId);
             if (issued.getAccessToken() != null) {
                 oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
             }
             throw exception(MFA_FLOW_INVALID);
+        }
+        try {
+            long newEpoch = assuranceAuthority.bumpAssuranceEpoch(tenantId, flow.getUserId(),
+                    cn.iocoder.yudao.module.system.service.mfa.enums.MfaEnrollmentState.COMPLETED, true);
+            if (newEpoch != expectedEpoch && issued.getAccessToken() != null) {
+                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
+                throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+            }
+        } catch (RuntimeException ex) {
+            if (issued.getAccessToken() != null) {
+                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
+            }
+            throw ex;
         }
         return issued;
     }
