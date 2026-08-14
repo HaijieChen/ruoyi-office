@@ -148,7 +148,7 @@ public class MfaSlice1Fix4FailRegressionTest extends BaseMockitoUnitTest {
         assertTrue(sql.contains("IFNULL(c.legacy_global_merged, 0) = 0"),
                 "merge only when not consumed");
         assertTrue(sql.contains("REQUIRED") && sql.contains("OPTIONAL")
-                        && sql.contains("AND NOT"),
+                        && (sql.contains("AND NOT") || sql.contains("NOT IN")),
                 "mode downgrade guard required");
         assertTrue(sql.contains("GROUP_CONCAT") && sql.contains("ORDER BY"));
         // seed-only resign: armed_at IS NULL + epoch 0

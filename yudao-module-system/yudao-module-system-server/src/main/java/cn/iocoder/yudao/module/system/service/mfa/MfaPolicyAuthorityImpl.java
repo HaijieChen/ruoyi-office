@@ -234,29 +234,28 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
             throw new IllegalArgumentException("global mode cannot be INHERIT");
         }
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.GLOBAL_POLICY));
-        Set<String> factors = allowedFactors == null ? Collections.emptySet() : allowedFactors;
+        // F-R5-03：写前 typed factor 白名单；非法不落库
+        Set<String> factors = requireTypedFactors(allowedFactors);
 
         MfaControlStateDO control = store.getControlState();
-        // 受控 global repair：允许从 DEGRADED 用显式合法 mode 修复；写前仍校验 epoch 单调
         long base = control == null || control.getGlobalPolicyEpoch() == null ? 0L : control.getGlobalPolicyEpoch();
         if (base < 0) {
             throw new IllegalStateException("control epoch corrupt; refuse global confirm");
         }
         long next = nextEpoch(base);
 
-        MfaLifecycleState lifecycle = control == null ? MfaLifecycleState.UNINITIALIZED
-                : resolveLifecycleStrict(control);
-        if (lifecycle == null || lifecycle == MfaLifecycleState.DEGRADED_CLOSED) {
-            lifecycle = mode.isNonOff() ? MfaLifecycleState.ARMED : MfaLifecycleState.UNINITIALIZED;
-        } else if (lifecycle == MfaLifecycleState.ARMED) {
-            // keep ARMED
-        } else if (mode.isNonOff()) {
+        // F-R5-01：ARMED 永久单调——一旦 armed_at / lifecycle=ARMED / 非 OFF 历史存在，
+        // 显式 OFF 修复只能写 ARMED+OFF，不得清 armed_at 或回落 UNINITIALIZED
+        boolean irreversibleArmed = hasIrreversibleArmedEvidence(control);
+        MfaLifecycleState lifecycle;
+        LocalDateTime armedAt;
+        if (irreversibleArmed || mode.isNonOff()) {
             lifecycle = MfaLifecycleState.ARMED;
+            armedAt = control != null && control.getArmedAt() != null
+                    ? control.getArmedAt() : LocalDateTime.now();
         } else {
             lifecycle = MfaLifecycleState.UNINITIALIZED;
-        }
-        if (control != null && MfaLifecycleState.ARMED.name().equals(control.getLifecycleState())) {
-            lifecycle = MfaLifecycleState.ARMED;
+            armedAt = null;
         }
 
         long minAccepted = control == null || control.getGlobalMinAcceptedEpoch() == null
@@ -271,6 +270,10 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
                 minAccepted = next;
             }
         }
+        // ARMED+OFF 时 min 不得被清零到小于既有值
+        if (lifecycle == MfaLifecycleState.ARMED && minAccepted < 0) {
+            minAccepted = 0L;
+        }
 
         String checksum = MfaChecksumUtil.computeControl(
                 lifecycle.name(), mode.name(), factors, next, minAccepted);
@@ -282,12 +285,9 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
                 .globalAllowedFactors(String.join(",", factors))
                 .globalPolicyEpoch(next)
                 .globalMinAcceptedEpoch(minAccepted)
-                .armedAt(lifecycle == MfaLifecycleState.ARMED
-                        ? (control != null && control.getArmedAt() != null
-                        ? control.getArmedAt() : LocalDateTime.now())
-                        : null)
-                .checksum(checksum)
+                .armedAt(armedAt)
                 // F-R4-02/03：应用写即表示 v3 权威已接管，禁止后续 legacy 回写
+                .checksum(checksum)
                 .legacyGlobalMerged(true)
                 .build();
         store.saveControlState(nextState);
@@ -302,6 +302,8 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         Objects.requireNonNull(mode, "mode");
         MfaLockOrder.requireValidOrder(List.of(
                 MfaLockOrder.Resource.GLOBAL_POLICY, MfaLockOrder.Resource.TENANT_POLICY));
+        // F-R5-03：写前 typed factor；非法不推进 epoch、不落 tenant/control
+        Set<String> factors = requireTypedFactors(allowedFactors);
 
         // F-R2-01：tenant 写不得修复/降级损坏的 global control
         // 仅允许：真正空库（无 control 且无已确认非 OFF）或 control 已完整可用 / clean UNINITIALIZED
@@ -331,7 +333,6 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         Set<String> globalFactors = cleanEmpty || cleanUninitialized
                 ? Collections.emptySet()
                 : parseFactors(control != null ? control.getGlobalAllowedFactors() : null);
-        Set<String> factors = allowedFactors == null ? Collections.emptySet() : allowedFactors;
 
         long base = cleanEmpty ? 0L : tuple.getGlobalPolicyEpoch();
         if (base < 0) {
@@ -339,12 +340,17 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         }
         long nextGlobal = nextEpoch(base);
 
-        // 任一已确认非 OFF（含本事务 tenant）或已 ARMED → 保持/进入 ARMED
+        // 任一已确认非 OFF / 已 ARMED 证据 → 保持/进入 ARMED（F-R5-01 单调）
         boolean arm = mode.isNonOff()
                 || globalMode.isNonOff()
                 || controlUsableArmedOrOff
+                || hasIrreversibleArmedEvidence(control)
                 || hasConfirmedNonOffTenants();
         MfaLifecycleState nextLifecycle = arm ? MfaLifecycleState.ARMED : MfaLifecycleState.UNINITIALIZED;
+        LocalDateTime armedAt = nextLifecycle == MfaLifecycleState.ARMED
+                ? (control != null && control.getArmedAt() != null
+                ? control.getArmedAt() : LocalDateTime.now())
+                : null;
 
         long minAccepted = cleanEmpty || cleanUninitialized ? 0L : tuple.getGlobalMinAcceptedEpoch();
         if (minAccepted < 0) {
@@ -363,10 +369,7 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
                 .globalAllowedFactors(String.join(",", globalFactors))
                 .globalPolicyEpoch(nextGlobal)
                 .globalMinAcceptedEpoch(minAccepted)
-                .armedAt(nextLifecycle == MfaLifecycleState.ARMED
-                        ? (control != null && control.getArmedAt() != null
-                        ? control.getArmedAt() : LocalDateTime.now())
-                        : null)
+                .armedAt(armedAt)
                 .checksum(controlChecksum)
                 .legacyGlobalMerged(true)
                 .build();
@@ -460,6 +463,48 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
             }
         }
         return true;
+    }
+
+    /**
+     * F-R5-03：写前 canonicalize + 白名单；非法立即拒绝（不落库）。
+     */
+    private static Set<String> requireTypedFactors(Set<String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> out = new LinkedHashSet<>();
+        for (String f : raw) {
+            if (f == null || f.isBlank()) {
+                throw new IllegalArgumentException("factor type blank");
+            }
+            String n = f.trim().toUpperCase(java.util.Locale.ROOT);
+            if (!POLICY_FACTOR_TYPES.contains(n)) {
+                throw new IllegalArgumentException("unknown factor type: " + f);
+            }
+            out.add(n);
+        }
+        return out;
+    }
+
+    /**
+     * F-R5-01：不可逆 ARMED 证据——armed_at、lifecycle 字符串 ARMED、或已确认非 OFF 策略。
+     * 存在任一证据时，global/tenant 写不得回落 UNINITIALIZED 或清除 armed_at。
+     */
+    private boolean hasIrreversibleArmedEvidence(MfaControlStateDO control) {
+        if (control != null) {
+            if (control.getArmedAt() != null) {
+                return true;
+            }
+            if (control.getLifecycleState() != null
+                    && MfaLifecycleState.ARMED.name().equalsIgnoreCase(control.getLifecycleState().trim())) {
+                return true;
+            }
+            MfaMode m = control.getGlobalMode() == null ? null : MfaMode.parseStrict(control.getGlobalMode());
+            if (m != null && m.isNonOff()) {
+                return true;
+            }
+        }
+        return hasConfirmedNonOffTenants();
     }
 
     private static long rawEpochOrZero(MfaControlStateDO control) {

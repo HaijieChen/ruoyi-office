@@ -171,7 +171,9 @@ SET @sql := IF(@has_legacy_global > 0,
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 将 confirmed legacy global 翻译进 control（仅当尚未消费，且不构成 mode 降级）
+-- 将 confirmed legacy global 翻译进 control
+-- F-R5-02：仅可证明的 seed 或 v2-OFF→legacy-非OFF 升级路径一次性消费；
+--   禁止同 mode 改写 factors / 重签已有或损坏 v3（含 merged 默认 0 的 REQUIRED 行）
 SET @sql := IF(@has_legacy_global > 0,
   'UPDATE `system_mfa_control_state` c
    INNER JOIN `system_mfa_global_policy` g
@@ -204,6 +206,7 @@ SET @sql := IF(@has_legacy_global > 0,
        END,
      c.armed_at = CASE
          WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'') AND c.armed_at IS NULL THEN NOW()
+         WHEN c.armed_at IS NOT NULL THEN c.armed_at
          ELSE c.armed_at
        END,
      c.checksum = LOWER(SHA2(CONCAT(
@@ -238,15 +241,22 @@ SET @sql := IF(@has_legacy_global > 0,
    WHERE c.id = 1
      AND IFNULL(c.legacy_global_merged, 0) = 0
      AND IFNULL(c.global_policy_epoch, 0) <= IFNULL(g.policy_version, 0)
-     -- F-R4-03：禁止用更弱 legacy mode 覆盖 control 已有非 OFF（含损坏 nonhex REQUIRED）
-     AND NOT (
-       UPPER(IFNULL(c.global_mode, ''OFF'')) = ''REQUIRED''
-       AND UPPER(TRIM(g.mode)) IN (''OFF'', ''OPTIONAL'', ''INHERIT'')
+     -- F-R5-02：仅 seed 或 control 仍为 OFF 且 legacy 为非 OFF（v2 首迁升级）才允许翻译
+     AND (
+       (
+         IFNULL(c.lifecycle_state, '''') = ''UNINITIALIZED''
+         AND UPPER(IFNULL(c.global_mode, ''OFF'')) = ''OFF''
+         AND IFNULL(c.global_policy_epoch, 0) = 0
+         AND IFNULL(c.global_min_accepted_epoch, 0) = 0
+         AND c.armed_at IS NULL
+       )
+       OR (
+         UPPER(IFNULL(c.global_mode, ''OFF'')) = ''OFF''
+         AND UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'')
+       )
      )
-     AND NOT (
-       UPPER(IFNULL(c.global_mode, ''OFF'')) = ''OPTIONAL''
-       AND UPPER(TRIM(g.mode)) IN (''OFF'', ''INHERIT'')
-     )',
+     -- F-R4-03 / F-R5-02：禁止 mode 降级；禁止同 mode 覆写 factors（control 已是非 OFF 则完全不合并）
+     AND UPPER(IFNULL(c.global_mode, ''OFF'')) NOT IN (''OPTIONAL'', ''REQUIRED'')',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 

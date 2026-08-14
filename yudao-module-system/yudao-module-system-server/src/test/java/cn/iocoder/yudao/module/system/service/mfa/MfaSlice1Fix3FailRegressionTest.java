@@ -149,7 +149,7 @@ public class MfaSlice1Fix3FailRegressionTest extends BaseMockitoUnitTest {
         assertTrue(sql.contains("GROUP_CONCAT") && sql.contains("ORDER BY"),
                 "must sort factors for canonical checksum");
         assertTrue(sql.contains("OPTIONAL") && sql.contains("REQUIRED")
-                        && (sql.contains("NOT (") || sql.contains("AND NOT")),
+                        && (sql.contains("NOT IN") || sql.contains("AND NOT") || sql.contains("NOT (")),
                 "must refuse stale legacy OFF overwrite of non-OFF control");
         assertTrue(sql.contains("global_policy_epoch")
                         && sql.contains("policy_version"),
