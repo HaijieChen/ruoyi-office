@@ -43,6 +43,7 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         try {
             MfaControlStateDO control = store.getControlState();
             // F-S1-01：control 缺失时仍须扫描已确认策略；存在非 OFF 则 closed，不得 usable OFF
+            // 仅「行真正缺失」可合成 clean UNINITIALIZED；持久化行必须完整校验
             if (control == null) {
                 if (hasConfirmedNonOffTenants()) {
                     return MfaControlTuple.degraded(0L, "missing-control-with-confirmed-non-off-policy");
@@ -51,40 +52,40 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
             }
             MfaLifecycleState lifecycle = resolveLifecycle(control);
             if (lifecycle == MfaLifecycleState.DEGRADED_CLOSED) {
-                return MfaControlTuple.degraded(nz(control.getGlobalPolicyEpoch()), "lifecycle-illegal");
+                return MfaControlTuple.degraded(rawEpochOrZero(control), "lifecycle-illegal");
+            }
+
+            // F-R3-01：持久化 control（含 UNINITIALIZED）一律校验 mode/epoch/min/checksum，
+            // 禁止把损坏行折叠为 usable OFF / epoch=0
+            MfaMode mode = parsePersistedMode(control);
+            if (mode == null || mode == MfaMode.INHERIT) {
+                return MfaControlTuple.degraded(rawEpochOrZero(control),
+                        "global-mode-illegal:" + control.getGlobalMode());
             }
             if (lifecycle == MfaLifecycleState.UNINITIALIZED) {
-                if (hasConfirmedNonOff(control)) {
-                    return MfaControlTuple.degraded(nz(control.getGlobalPolicyEpoch()), "uninitialized-but-non-off-present");
+                if (mode.isNonOff() || hasConfirmedNonOffTenants()) {
+                    return MfaControlTuple.degraded(rawEpochOrZero(control), "uninitialized-but-non-off-present");
                 }
-                // F-S1-01：UNINITIALIZED 下非法 global_mode 不得回落 OFF
-                if (control.getGlobalMode() != null && !control.getGlobalMode().isBlank()) {
-                    MfaMode modeProbe = MfaMode.parseStrict(control.getGlobalMode());
-                    if (modeProbe == null || modeProbe == MfaMode.INHERIT) {
-                        return MfaControlTuple.degraded(nz(control.getGlobalPolicyEpoch()),
-                                "uninitialized-global-mode-illegal:" + control.getGlobalMode());
-                    }
+                // UNINITIALIZED 仅允许 OFF
+                if (mode != MfaMode.OFF) {
+                    return MfaControlTuple.degraded(rawEpochOrZero(control), "uninitialized-mode-not-off");
                 }
-                return MfaControlTuple.uninitializedOff();
             }
-            MfaMode mode = MfaMode.parseStrict(control.getGlobalMode());
-            if (mode == null || mode == MfaMode.INHERIT) {
-                return MfaControlTuple.degraded(nz(control.getGlobalPolicyEpoch()), "global-mode-illegal");
-            }
-            Set<String> factors = parseFactors(control.getGlobalAllowedFactors());
-            long epoch = nz(control.getGlobalPolicyEpoch());
-            long min = nz(control.getGlobalMinAcceptedEpoch());
-            // F-R2-04：负 epoch / min 不一致 → closed
+
+            long epoch = control.getGlobalPolicyEpoch() == null ? 0L : control.getGlobalPolicyEpoch();
+            long min = control.getGlobalMinAcceptedEpoch() == null ? 0L : control.getGlobalMinAcceptedEpoch();
+            // F-R2-04 / F-R3-01：负 epoch / min 不一致 → closed（含 UNINITIALIZED 行）
             if (epoch < 0 || min < 0 || min > epoch) {
                 return MfaControlTuple.degraded(epoch < 0 ? 0L : epoch, "epoch-invalid");
             }
+            Set<String> factors = parseFactors(control.getGlobalAllowedFactors());
             String expected = MfaChecksumUtil.computeControl(
                     lifecycle.name(), mode.name(), factors, epoch, min);
             if (control.getChecksum() == null || !control.getChecksum().equals(expected)) {
                 return MfaControlTuple.degraded(epoch, "control-checksum-mismatch");
             }
             return MfaControlTuple.builder()
-                    .lifecycleState(MfaLifecycleState.ARMED)
+                    .lifecycleState(lifecycle)
                     .globalMode(mode)
                     .globalPolicyEpoch(epoch)
                     .globalMinAcceptedEpoch(min)
@@ -411,6 +412,22 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         } catch (Exception ex) {
             return MfaLifecycleState.DEGRADED_CLOSED;
         }
+    }
+
+    /** 持久化 mode：空白按 OFF；非法返回 null（不得猜 OFF）。 */
+    private static MfaMode parsePersistedMode(MfaControlStateDO control) {
+        if (control.getGlobalMode() == null || control.getGlobalMode().isBlank()) {
+            return MfaMode.OFF;
+        }
+        return MfaMode.parseStrict(control.getGlobalMode());
+    }
+
+    private static long rawEpochOrZero(MfaControlStateDO control) {
+        if (control == null || control.getGlobalPolicyEpoch() == null) {
+            return 0L;
+        }
+        long e = control.getGlobalPolicyEpoch();
+        return e < 0 ? 0L : e;
     }
 
     private static long nz(Long v) {

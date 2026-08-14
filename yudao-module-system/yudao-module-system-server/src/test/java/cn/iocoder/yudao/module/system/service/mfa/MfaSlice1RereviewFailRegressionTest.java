@@ -138,7 +138,7 @@ public class MfaSlice1RereviewFailRegressionTest extends BaseMockitoUnitTest {
         assertEquals(MfaLifecycleState.DEGRADED_CLOSED, t.getLifecycleState());
     }
 
-    /** F-R2-03: 迁移脚本含 legacy global 语义合并与 checksum 重算 */
+    /** F-R2-03: 迁移脚本含 legacy global 语义合并与 checksum 重算（F-R3 加强门闩） */
     @Test
     void fr203_migrationMergesLegacyGlobalPolicy() throws Exception {
         Path p = findMigrationSql();
@@ -150,6 +150,10 @@ public class MfaSlice1RereviewFailRegressionTest extends BaseMockitoUnitTest {
                 || sql.contains("system_mfa_global_policy` g"));
         assertTrue(sql.contains("SHA2("), "must recompute checksum");
         assertTrue(sql.contains("confirmed"));
+        assertTrue(sql.contains("GROUP_CONCAT") && sql.contains("ORDER BY"),
+                "canonical factor order for Java parity");
+        assertTrue(sql.contains("^[0-9a-f]{64}$") || sql.contains("NOT REGEXP"),
+                "one-shot consume gate");
         assertFalse(sql.contains("可手工合并"), "must not rely on manual merge comment only");
     }
 

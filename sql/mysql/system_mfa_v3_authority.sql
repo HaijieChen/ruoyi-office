@@ -141,29 +141,47 @@ SET @sql := IF(@has_tpv > 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ========== 3) 自旁路/v2 system_mfa_global_policy 语义合并到 control_state ==========
--- 可重复：仅当 legacy 表存在且有 confirmed 行时执行；不删除 legacy 表。
+-- 单向/可重放：legacy 仅在 control 尚未成为 v3 权威时一次性消费；
+-- 不得用 stale legacy OFF 覆盖已更新的 v3 REQUIRED/OPTIONAL（F-R3-02）。
+-- 不删除 legacy 表（只读档案）。
 -- checksum 与 Java MfaChecksumUtil.computeControl 一致：
---   SHA2(lifecycle|mode|factors|epoch|min, 256) 小写 hex
+--   SHA2(lifecycle|mode|sortedFactors|epoch|min, 256) 小写 hex
+--   factors：按字典序排序、去空白空项后逗号拼接（F-R3-03）
 
 SET @has_legacy_global := (
   SELECT COUNT(*) FROM information_schema.TABLES
   WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'system_mfa_global_policy'
 );
 
--- 确保 control 单例行存在（合并前置）
+-- 确保 control 单例行存在（合并前置）；占位 checksum 非 hex，允许后续一次性消费
 SET @sql := IF(@has_legacy_global > 0,
   'INSERT IGNORE INTO `system_mfa_control_state` (`id`, `lifecycle_state`, `global_mode`, `global_policy_epoch`, `global_min_accepted_epoch`, `checksum`)
    VALUES (1, ''UNINITIALIZED'', ''OFF'', 0, 0, ''uninitialized-off'')',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 将 confirmed legacy global 行翻译进 control（mode/factors/epoch/min/lifecycle/checksum）
+-- 将 confirmed legacy global 行翻译进 control（仅当 control 仍为未消费/种子态）
+-- 门闩：checksum 非 64hex，或 seed(UNINITIALIZED+OFF+epoch0+min0)；
+-- 且 control.epoch 不得大于 legacy.policy_version（已前进的 v3 写入绝不回写）
 SET @sql := IF(@has_legacy_global > 0,
   'UPDATE `system_mfa_control_state` c
-   INNER JOIN `system_mfa_global_policy` g ON g.id = 1 AND IFNULL(g.confirmed, 0) = 1 AND IFNULL(g.deleted, 0) = 0
+   INNER JOIN `system_mfa_global_policy` g
+     ON g.id = 1 AND IFNULL(g.confirmed, 0) = 1 AND IFNULL(g.deleted, 0) = 0
    SET
      c.global_mode = UPPER(TRIM(g.mode)),
-     c.global_allowed_factors = g.allowed_factors,
+     c.global_allowed_factors = (
+       CASE
+         WHEN g.allowed_factors IS NULL OR TRIM(g.allowed_factors) = '''' THEN ''''
+         ELSE (
+           SELECT GROUP_CONCAT(DISTINCT TRIM(jt.f) ORDER BY TRIM(jt.f) SEPARATOR '','')
+           FROM JSON_TABLE(
+             CONCAT(''["'', REPLACE(REPLACE(TRIM(g.allowed_factors), ''"'', ''''), '','', ''","''), ''"]''),
+             ''$[*]'' COLUMNS (f VARCHAR(64) PATH ''$'')
+           ) AS jt
+           WHERE TRIM(jt.f) <> ''''
+         )
+       END
+     ),
      c.global_policy_epoch = GREATEST(IFNULL(c.global_policy_epoch, 0), IFNULL(g.policy_version, 0)),
      c.global_min_accepted_epoch = CASE
          WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'')
@@ -185,23 +203,80 @@ SET @sql := IF(@has_legacy_global > 0,
            WHEN c.lifecycle_state = ''ARMED'' THEN ''ARMED''
            ELSE ''UNINITIALIZED''
          END,
-         ''|'', UPPER(TRIM(g.mode)), ''|'', IFNULL(g.allowed_factors, ''''), ''|'',
+         ''|'', UPPER(TRIM(g.mode)), ''|'',
+         (
+           CASE
+             WHEN g.allowed_factors IS NULL OR TRIM(g.allowed_factors) = '''' THEN ''''
+             ELSE (
+               SELECT GROUP_CONCAT(DISTINCT TRIM(jt2.f) ORDER BY TRIM(jt2.f) SEPARATOR '','')
+               FROM JSON_TABLE(
+                 CONCAT(''["'', REPLACE(REPLACE(TRIM(g.allowed_factors), ''"'', ''''), '','', ''","''), ''"]''),
+                 ''$[*]'' COLUMNS (f VARCHAR(64) PATH ''$'')
+               ) AS jt2
+               WHERE TRIM(jt2.f) <> ''''
+             )
+           END
+         ),
+         ''|'',
          GREATEST(IFNULL(c.global_policy_epoch, 0), IFNULL(g.policy_version, 0)), ''|'',
          CASE
            WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'')
              THEN GREATEST(IFNULL(c.global_min_accepted_epoch, 0), IFNULL(g.policy_version, 0))
            ELSE IFNULL(c.global_min_accepted_epoch, 0)
          END
-       ), 256))',
+       ), 256))
+   WHERE c.id = 1
+     AND IFNULL(c.global_policy_epoch, 0) <= IFNULL(g.policy_version, 0)
+     AND (
+       c.checksum IS NULL
+       OR c.checksum NOT REGEXP ''^[0-9a-f]{64}$''
+       OR (
+         IFNULL(c.lifecycle_state, ''UNINITIALIZED'') = ''UNINITIALIZED''
+         AND UPPER(IFNULL(c.global_mode, ''OFF'')) = ''OFF''
+         AND IFNULL(c.global_policy_epoch, 0) = 0
+         AND IFNULL(c.global_min_accepted_epoch, 0) = 0
+       )
+     )
+     -- F-R3-02：已是合法 v3 非 OFF 权威时，禁止被 stale legacy OFF 覆盖
+     AND NOT (
+       c.checksum REGEXP ''^[0-9a-f]{64}$''
+       AND UPPER(IFNULL(c.global_mode, ''OFF'')) IN (''OPTIONAL'', ''REQUIRED'')
+     )',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 对已合并但 checksum 仍为 legacy 占位串的 control 行，按当前列重算（幂等）
+-- 对 checksum 仍为非 hex 占位串的 control 行：按当前列 + canonical 因子序重算（幂等，不改 mode）
 UPDATE `system_mfa_control_state` c
-SET c.checksum = LOWER(SHA2(CONCAT(
+SET
+  c.global_allowed_factors = (
+    CASE
+      WHEN c.global_allowed_factors IS NULL OR TRIM(c.global_allowed_factors) = '' THEN ''
+      ELSE (
+        SELECT GROUP_CONCAT(DISTINCT TRIM(jt.f) ORDER BY TRIM(jt.f) SEPARATOR ',')
+        FROM JSON_TABLE(
+          CONCAT('["', REPLACE(REPLACE(TRIM(c.global_allowed_factors), '"', ''), ',', '","'), '"]'),
+          '$[*]' COLUMNS (f VARCHAR(64) PATH '$')
+        ) AS jt
+        WHERE TRIM(jt.f) <> ''
+      )
+    END
+  ),
+  c.checksum = LOWER(SHA2(CONCAT(
     IFNULL(c.lifecycle_state, 'UNINITIALIZED'), '|',
     IFNULL(c.global_mode, 'OFF'), '|',
-    IFNULL(c.global_allowed_factors, ''), '|',
+    (
+      CASE
+        WHEN c.global_allowed_factors IS NULL OR TRIM(c.global_allowed_factors) = '' THEN ''
+        ELSE (
+          SELECT GROUP_CONCAT(DISTINCT TRIM(jt3.f) ORDER BY TRIM(jt3.f) SEPARATOR ',')
+          FROM JSON_TABLE(
+            CONCAT('["', REPLACE(REPLACE(TRIM(c.global_allowed_factors), '"', ''), ',', '","'), '"]'),
+            '$[*]' COLUMNS (f VARCHAR(64) PATH '$')
+          ) AS jt3
+          WHERE TRIM(jt3.f) <> ''
+        )
+      END
+    ), '|',
     IFNULL(c.global_policy_epoch, 0), '|',
     IFNULL(c.global_min_accepted_epoch, 0)
   ), 256))
@@ -210,4 +285,4 @@ WHERE c.id = 1
   AND c.checksum NOT REGEXP '^[0-9a-f]{64}$';
 
 -- 部署后：不默认插入 REQUIRED；空库仍由应用按 UNINITIALIZED 处理。
--- legacy system_mfa_global_policy 保留只读档案，新代码不再读写。
+-- legacy system_mfa_global_policy 保留只读档案，新代码不再读写；重放不得降级已生效 v3 权威。
