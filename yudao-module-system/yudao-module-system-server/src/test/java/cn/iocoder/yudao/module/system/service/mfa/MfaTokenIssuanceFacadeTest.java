@@ -9,7 +9,6 @@ import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuancePath;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaLoginStatus;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaMode;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
-import cn.iocoder.yudao.module.system.service.mfa.support.MfaChallengeHandleStore;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
 import org.junit.jupiter.api.AfterEach;
@@ -20,6 +19,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -33,7 +33,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * 切片 1：默认 OFF 兼容与 Facade 基础门闩（完整线性化在切片 2）。
+ * 切片 1/2：默认 OFF 兼容与 Facade 门闩；challenge 使用 flowToken。
  */
 public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
 
@@ -43,37 +43,49 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
     private OAuth2TokenService oauth2TokenService;
     @Mock
     private MfaUserFactorProbe userFactorProbe;
+
     @Spy
-    private MfaChallengeHandleStore challengeHandleStore = new MfaChallengeHandleStore();
+    private MfaAuthFlowServiceImpl authFlowService = new MfaAuthFlowServiceImpl();
+    @Spy
+    private MfaFactorServiceImpl factorService = new MfaFactorServiceImpl(authFlowService);
+
+    private InMemoryMfaAuthorityStore store;
+    private MfaAssuranceAuthorityImpl assuranceAuthority;
+    private MfaPolicyControlServiceImpl realPolicy;
 
     @InjectMocks
     private MfaTokenIssuanceFacadeImpl facade;
 
-    private InMemoryMfaAuthorityStore store;
-    private MfaPolicyControlServiceImpl realPolicy;
-
     @BeforeEach
     void setUp() {
         store = new InMemoryMfaAuthorityStore();
+        assuranceAuthority = new MfaAssuranceAuthorityImpl(store);
         realPolicy = new MfaPolicyControlServiceImpl(new MfaPolicyAuthorityImpl(store));
+        ReflectionTestUtils.setField(facade, "assuranceAuthority", assuranceAuthority);
+        ReflectionTestUtils.setField(facade, "authFlowService", authFlowService);
+        ReflectionTestUtils.setField(facade, "factorService", factorService);
         lenient().when(policyControlService.resolveEffectivePolicy(any())).thenAnswer(inv ->
                 realPolicy.resolveEffectivePolicy(inv.getArgument(0)));
         lenient().when(userFactorProbe.isEnrollmentComplete(any(), any())).thenReturn(true);
         lenient().when(userFactorProbe.hasEligibleActiveFactor(any(), any())).thenReturn(false);
         lenient().when(userFactorProbe.isUserMfaEnabled(any(), any())).thenReturn(false);
         MfaIssuanceGuard.clear();
+        authFlowService.clear();
+        factorService.clear();
     }
 
     @AfterEach
     void tearDown() {
         MfaIssuanceGuard.clear();
-        challengeHandleStore.clear();
+        authFlowService.clear();
+        factorService.clear();
     }
 
     private OAuth2AccessTokenDO tokenFor(Long userId) {
         OAuth2AccessTokenDO t = new OAuth2AccessTokenDO();
         t.setUserId(userId);
         t.setUserType(UserTypeEnum.ADMIN.getValue());
+        t.setTenantId(1L);
         t.setAccessToken("access-" + userId);
         t.setRefreshToken("refresh-" + userId);
         t.setExpiresTime(LocalDateTime.now().plusHours(1));
@@ -100,7 +112,6 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
     })
     void off_interactiveAllowed(MfaIssuancePath path) {
         stubCreateIssuesToken();
-        // ARMED 后缺租户会 closed：OFF 默认用 null tenant（global only）
         MfaIssuanceResult result = facade.issueAfterPrimaryAuth(
                 path, 10L, null, UserTypeEnum.ADMIN.getValue(), "default", null, List.of("pwd"));
         assertEquals(MfaIssuanceOutcome.ALLOWED, result.getOutcome());
@@ -109,9 +120,8 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
     }
 
     @Test
-    void requiredChallengeZeroToken() {
+    void requiredChallengeZeroToken_usesFlowTokenNotChallengeAlias() {
         realPolicy.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
-        // ARMED+REQUIRED 且无租户行 → closed；为测试需 MFA 路径，先补租户
         realPolicy.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));
         when(userFactorProbe.hasEligibleActiveFactor(any(), any())).thenReturn(true);
         when(userFactorProbe.isEnrollmentComplete(any(), any())).thenReturn(true);
@@ -122,6 +132,9 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
 
         assertEquals(MfaIssuanceOutcome.CHALLENGE, result.getOutcome());
         assertFalse(result.hasAccessOrRefreshToken());
+        assertNotNull(result.getLoginResp().getFlowToken());
+        assertEquals("PRE_AUTH", result.getLoginResp().getTokenClass());
+        assertNull(result.getLoginResp().getChallengeToken());
         verify(oauth2TokenService, never()).createAccessToken(anyLong(), anyInt(), anyString(), any());
     }
 
@@ -149,7 +162,49 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
     @Test
     void internalAdminCreateRejected() {
         ServiceException ex = assertThrows(ServiceException.class, () ->
-                facade.rejectInternalAdminCreate(99L, UserTypeEnum.ADMIN.getValue()));
+                facade.rejectInternalAdminCreate(1L, UserTypeEnum.ADMIN.getValue()));
         assertEquals(MFA_ADMIN_DIRECT_ISSUE_FORBIDDEN.getCode(), ex.getCode());
+    }
+
+    @Test
+    void completeChallengeAndIssue_totpSuccess() {
+        realPolicy.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
+        realPolicy.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));
+        when(userFactorProbe.hasEligibleActiveFactor(any(), any())).thenReturn(true);
+        when(userFactorProbe.isEnrollmentComplete(any(), any())).thenReturn(true);
+        stubCreateIssuesToken();
+
+        MfaIssuanceResult challenge = facade.issueAfterPrimaryAuth(
+                MfaIssuancePath.LOGIN_PASSWORD, 10L, 1L, UserTypeEnum.ADMIN.getValue(),
+                "default", null, List.of("pwd"));
+        String flowToken = challenge.getLoginResp().getFlowToken();
+        factorService.registerActiveFactor(1L, 10L, "f1", "TOTP", "test-secret");
+
+        // generate valid TOTP via same algorithm as service
+        String code = currentTotp("test-secret");
+        MfaIssuanceResult issued = facade.completeChallengeAndIssue(
+                flowToken, "f1", "TOTP", code, "default", List.of("read"));
+        assertEquals(MfaIssuanceOutcome.ALLOWED, issued.getOutcome());
+        assertTrue(issued.hasAccessOrRefreshToken());
+        // one-time consume
+        assertThrows(ServiceException.class, () ->
+                facade.completeChallengeAndIssue(flowToken, "f1", "TOTP", code, "default", List.of("read")));
+    }
+
+    private static String currentTotp(String secret) {
+        try {
+            long step = java.time.Instant.now().getEpochSecond() / 30L;
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA1");
+            mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA1"));
+            byte[] hash = mac.doFinal(java.nio.ByteBuffer.allocate(8).putLong(step).array());
+            int offset = hash[hash.length - 1] & 0x0f;
+            int binary = ((hash[offset] & 0x7f) << 24)
+                    | ((hash[offset + 1] & 0xff) << 16)
+                    | ((hash[offset + 2] & 0xff) << 8)
+                    | (hash[offset + 3] & 0xff);
+            return String.format("%06d", binary % 1_000_000);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

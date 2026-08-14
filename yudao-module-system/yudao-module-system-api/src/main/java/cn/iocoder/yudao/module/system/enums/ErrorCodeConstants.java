@@ -26,6 +26,9 @@ public interface ErrorCodeConstants {
     ErrorCode MFA_ADMIN_DIRECT_ISSUE_FORBIDDEN = new ErrorCode(1_002_030_004, "禁止绕过 MFA 门禁直接签发管理员 Token");
     ErrorCode MFA_ISSUANCE_DECISION_INVALID = new ErrorCode(1_002_030_005, "签发决策无效或已消费");
     ErrorCode MFA_TOKEN_CLASS_FORBIDDEN = new ErrorCode(1_002_030_006, "当前凭证不可访问业务接口");
+    ErrorCode MFA_FLOW_INVALID = new ErrorCode(1_002_030_007, "MFA 流程令牌无效、已过期或已消费");
+    ErrorCode MFA_FACTOR_VERIFY_FAILED = new ErrorCode(1_002_030_008, "MFA 因子校验失败");
+    ErrorCode MFA_SESSION_REJECTED = new ErrorCode(1_002_030_009, "会话未通过 MFA 门禁校验");
 
     // ========== 菜单模块 1-002-001-000 ==========
     ErrorCode MENU_NAME_DUPLICATE = new ErrorCode(1_002_001_000, "已经存在该名字的菜单");

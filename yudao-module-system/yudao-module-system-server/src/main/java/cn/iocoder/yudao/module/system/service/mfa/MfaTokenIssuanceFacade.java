@@ -7,7 +7,7 @@ import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
 import java.util.List;
 
 /**
- * 唯一 ADMIN 用户态 Token 签发出口（ADR-MFA-v2 §1–§2 / ②）。
+ * 唯一 ADMIN 用户态 Token 签发出口（ADR-MFA-v3 §6.2 T_issue / 切片 2）。
  */
 public interface MfaTokenIssuanceFacade {
 
@@ -41,4 +41,10 @@ public interface MfaTokenIssuanceFacade {
      */
     MfaIssuanceResult rejectInternalAdminCreate(Long userId, Integer userType);
 
+    /**
+     * 切片 2：PRE_AUTH/ENROLLMENT 挑战验证成功后的 T_issue 路径。
+     * 校验 flow + 因子 → CAS 消费 flow → 签发 access/refresh。
+     */
+    MfaIssuanceResult completeChallengeAndIssue(String rawFlowToken, String factorId, String factorType,
+                                                String code, String clientId, List<String> scopes);
 }

@@ -32,7 +32,18 @@ public class AuthLoginRespVO {
     @Schema(description = "过期时间（access token 或 challenge）")
     private LocalDateTime expiresTime;
 
-    @Schema(description = "MFA/绑定挑战句柄（非业务 Bearer）")
+    @Schema(description = "Canonical flowToken（PRE_AUTH/ENROLLMENT/RECOVERY；非业务 Bearer）",
+            example = "dGhpcy1pcy1ub3QtYS1yZWFsLXRva2Vu")
+    private String flowToken;
+
+    @Schema(description = "flow tokenClass：PRE_AUTH / ENROLLMENT / RECOVERY", example = "PRE_AUTH")
+    private String tokenClass;
+
+    /**
+     * @deprecated ADR-MFA-v3 废止别名；服务端不再写入。请使用 {@link #flowToken}。
+     */
+    @Deprecated
+    @Schema(description = "已废弃：请使用 flowToken", deprecated = true)
     private String challengeToken;
 
     @Schema(description = "挑战过期秒数", example = "300")
