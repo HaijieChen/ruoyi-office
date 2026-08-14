@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
@@ -48,7 +49,7 @@ class FinancePaymentTenantIsolationContractTest {
     void setUp() {
         mapper = mock(FinancePaymentApplicationMapper.class);
         FinancePaymentApplicationNoRedisDAO noRedisDAO = mock(FinancePaymentApplicationNoRedisDAO.class);
-        BpmProcessInstanceApi processInstanceApi = mock(BpmProcessInstanceApi.class);
+        FinanceBpmProcessInstanceApi processInstanceApi = mock(FinanceBpmProcessInstanceApi.class);
         FinanceCustomerCompanyService customerCompanyService = mock(FinanceCustomerCompanyService.class);
         FinancePaymentPredocService predocService = mock(FinancePaymentPredocService.class);
         FinanceContractApplicationMapper contractMapper = mock(FinanceContractApplicationMapper.class);
@@ -83,14 +84,21 @@ class FinancePaymentTenantIsolationContractTest {
         CommonResult<String> pi = mock(CommonResult.class);
         when(pi.getCheckedData()).thenReturn("proc-t");
         when(processInstanceApi.createProcessInstance(anyLong(), any())).thenReturn(pi);
+        when(processInstanceApi.createProcessInstanceByBusiness(anyLong(), any())).thenReturn(pi);
 
         FinanceEntityCompanyResolver entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         when(entityCompanyResolver.requireByDeptId(anyLong()))
                 .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(20L, "主体甲", "CNY"));
+        var companyBankAccountService = mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class);
+        var payLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper.class);
+        var salaryLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentSalaryLineMapper.class);
+        var taxLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper.class);
+        when(payLineMapper.sumPayAmountByApplicationId(anyLong())).thenReturn(java.math.BigDecimal.ZERO);
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
-                deptProvider, entityCompanyResolver);
+                deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
+                salaryLineMapper, taxLineMapper);
     }
 
     @AfterEach

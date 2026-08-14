@@ -39,4 +39,7 @@ public class BpmProcessInstanceCreateReqDTO {
     @Schema(description = "任务审批信息")
     private BpmTaskApproveReqDTO taskApproveReqDTO;
 
+    // EXP-87 G1：禁止线路 DTO 自报信任。可信业务通道由 BPM 服务端 ThreadLocal 派生
+    // （见 createProcessInstanceByBusiness），通用 create 永不置位。
+
 }

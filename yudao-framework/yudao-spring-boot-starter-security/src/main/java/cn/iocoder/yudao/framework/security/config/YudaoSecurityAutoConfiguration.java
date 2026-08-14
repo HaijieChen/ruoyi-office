@@ -31,7 +31,8 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  */
 @AutoConfiguration
 @AutoConfigureOrder(-1) // 目的：先于 Spring Security 自动配置，避免一键改包后，org.* 基础包无法生效
-@EnableConfigurationProperties(SecurityProperties.class)
+@EnableConfigurationProperties({SecurityProperties.class, RpcServiceIdentityProperties.class})
+@org.springframework.context.annotation.Import(RpcServiceIdentityBootstrapValidator.class)
 public class YudaoSecurityAutoConfiguration {
 
     @Resource

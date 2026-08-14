@@ -7,6 +7,8 @@ export const FINANCE_APPROVAL_PSHELL_VIEW_PATHS = [
   '/finance/contract-application/info/index',
   '/finance/invoice-application/info/index',
   '/finance/payment-application/detail/index',
+  '/finance/salary-payment/detail/index',
+  '/finance/tax-payment/detail/index',
 ] as const;
 
 export function isFinanceApprovalPShellViewPath(

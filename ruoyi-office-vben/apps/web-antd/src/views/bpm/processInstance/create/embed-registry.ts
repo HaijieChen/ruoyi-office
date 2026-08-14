@@ -4,6 +4,9 @@ import type { Component } from 'vue';
  * CUSTOM 流程在「通用发起」壳内嵌的业务表单注册表。
  * key = processDefinition.key（与后端 PROCESS_KEY 一致）。
  * catalog 不再 router.push(formCustomCreatePath)。
+ *
+ * EXP-87：finance_salary_payment_apply / finance_tax_payment_apply **不注册壳内嵌**，
+ * 后端仍登记权限并 deny 通用直启 / 目录隐藏；仅走独立菜单 API 发起。
  */
 export const CREATE_SHELL_EMBED_REGISTRY: Record<
   string,

@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.service.contract;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationPageReqVO;
@@ -40,7 +41,7 @@ class FinanceContractApplicationServiceImplTest {
 
     private FinanceContractApplicationMapper applicationMapper;
     private FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
-    private BpmProcessInstanceApi processInstanceApi;
+    private FinanceBpmProcessInstanceApi processInstanceApi;
     private FinanceCustomerCompanyService customerCompanyService;
     private FinanceEntityCompanyResolver entityCompanyResolver;
     private ObjectProvider<TaskService> taskServiceProvider;
@@ -51,7 +52,7 @@ class FinanceContractApplicationServiceImplTest {
     void setUp() {
         applicationMapper = mock(FinanceContractApplicationMapper.class);
         applicationNoRedisDAO = mock(FinanceContractApplicationNoRedisDAO.class);
-        processInstanceApi = mock(BpmProcessInstanceApi.class);
+        processInstanceApi = mock(FinanceBpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
         entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         taskServiceProvider = mock(ObjectProvider.class);

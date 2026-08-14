@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.service.invoice;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
@@ -49,7 +50,7 @@ class FinanceInvoiceApplicationServiceImplTest {
     private FinanceInvoiceApplicationFileMapper fileMapper;
     private FinanceBusinessOrderMapper businessOrderMapper;
     private FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
-    private BpmProcessInstanceApi processInstanceApi;
+    private FinanceBpmProcessInstanceApi processInstanceApi;
     private FinanceCustomerCompanyService customerCompanyService;
     private DictDataApi dictDataApi;
     private FinanceInvoiceApplicationServiceImpl service;
@@ -61,7 +62,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         fileMapper = mock(FinanceInvoiceApplicationFileMapper.class);
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
         applicationNoRedisDAO = mock(FinanceInvoiceApplicationNoRedisDAO.class);
-        processInstanceApi = mock(BpmProcessInstanceApi.class);
+        processInstanceApi = mock(FinanceBpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
         dictDataApi = mock(DictDataApi.class);
         cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver entityCompanyResolver =

@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCreateAndStartReqVO;
@@ -81,7 +82,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                                                 FinanceInvoiceApplicationFileMapper fileMapper,
                                                 FinanceBusinessOrderMapper businessOrderMapper,
                                                 FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO,
-                                                BpmProcessInstanceApi processInstanceApi,
+                                                // EXP-87 F4：必须注入带 identity interceptor 的 Finance 专用 BPM 客户端
+                                                FinanceBpmProcessInstanceApi processInstanceApi,
                                                 FinanceCustomerCompanyService customerCompanyService,
                                                 FinanceEntityCompanyResolver entityCompanyResolver,
                                                 DictDataApi dictDataApi) {

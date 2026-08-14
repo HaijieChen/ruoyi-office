@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.framework.bpm;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
@@ -46,7 +47,7 @@ class FinancePaymentTerminalMainPathEvidenceTest {
     void setUp() {
         mapper = mock(FinancePaymentApplicationMapper.class);
         FinancePaymentApplicationNoRedisDAO noRedisDAO = mock(FinancePaymentApplicationNoRedisDAO.class);
-        BpmProcessInstanceApi processInstanceApi = mock(BpmProcessInstanceApi.class);
+        FinanceBpmProcessInstanceApi processInstanceApi = mock(FinanceBpmProcessInstanceApi.class);
         FinanceCustomerCompanyService customerCompanyService = mock(FinanceCustomerCompanyService.class);
         FinancePaymentPredocService predocService = mock(FinancePaymentPredocService.class);
         FinanceContractApplicationMapper contractMapper = mock(FinanceContractApplicationMapper.class);
@@ -63,10 +64,17 @@ class FinancePaymentTerminalMainPathEvidenceTest {
         when(deptProvider.getIfAvailable()).thenReturn(null);
 
         FinanceEntityCompanyResolver entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
+        var companyBankAccountService = mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class);
+        var payLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper.class);
+        var salaryLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentSalaryLineMapper.class);
+        var taxLineMapper = mock(cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper.class);
+        when(payLineMapper.sumPayAmountByApplicationId(anyLong())).thenReturn(java.math.BigDecimal.ZERO);
+        when(payLineMapper.selectByApplicationId(anyLong())).thenReturn(java.util.List.of());
         service = new FinancePaymentApplicationServiceImpl(
                 mapper, noRedisDAO, processInstanceApi, customerCompanyService,
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
-                deptProvider, entityCompanyResolver);
+                deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
+                salaryLineMapper, taxLineMapper);
         delegate = new FinancePaymentApprovalOutcomeDelegate();
         ReflectionTestUtils.setField(delegate, "paymentApplicationService", service);
 
@@ -76,9 +84,19 @@ class FinancePaymentTerminalMainPathEvidenceTest {
                 .status(ledgerStatus.get())
                 .processInstanceId("pi-main")
                 .build());
+        // F4：终态与 recordPay 共用 FOR UPDATE
+        when(mapper.selectByIdForUpdate(42L)).thenAnswer(inv -> FinancePaymentApplicationDO.builder()
+                .id(42L)
+                .status(ledgerStatus.get())
+                .processInstanceId("pi-main")
+                .build());
         when(mapper.update(isNull(), any(UpdateWrapper.class))).thenAnswer(inv -> {
-            // 真实 service 在 REJECT 路径会 set status
-            ledgerStatus.set(FinancePaymentApplicationStatusEnum.REJECTED.getStatus());
+            // 真实 service 在 REJECT/CANCEL 路径会 set status；测试分别断言
+            String cur = ledgerStatus.get();
+            if (FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(cur)) {
+                // 由调用方随后断言具体终态；默认写 REJECTED，cancel 用例会改 captor
+                ledgerStatus.set(FinancePaymentApplicationStatusEnum.REJECTED.getStatus());
+            }
             return 1;
         });
     }

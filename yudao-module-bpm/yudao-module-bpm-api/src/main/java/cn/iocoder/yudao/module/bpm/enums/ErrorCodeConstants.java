@@ -44,6 +44,9 @@ public interface ErrorCodeConstants {
     ErrorCode PROCESS_INSTANCE_START_USER_CAN_START = new ErrorCode(1_009_004_005, "发起流程失败，你没有权限发起该流程");
     /** 嵌入式流程业务发起权限不足或配置缺失；msg 参数为友好文案 */
     ErrorCode PROCESS_INSTANCE_START_PERMISSION_DENIED = new ErrorCode(1_009_004_011, "{}");
+    /** EXP-87 G1：create-by-business 调用方非可验证 Finance 服务身份 */
+    ErrorCode PROCESS_INSTANCE_BUSINESS_START_CALLER_FORBIDDEN = new ErrorCode(1_009_004_012,
+            "仅允许 Finance 服务经可信业务通道发起，调用方身份未通过校验");
     ErrorCode PROCESS_INSTANCE_CANCEL_FAIL_NOT_ALLOW = new ErrorCode(1_009_004_005, "流程取消失败，该流程不允许取消");
     ErrorCode PROCESS_INSTANCE_CANCEL_FAIL_ACTIVE_TASK_FORBIDDEN = new ErrorCode(1_009_004_009,
             "流程取消失败，当前活动任务已进入禁止取消的节点");

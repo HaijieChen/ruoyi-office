@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.util.json.SensitiveJsonSanitizer;
 import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.yudao.framework.common.util.spring.SpringUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,15 +42,20 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
             request.setAttribute(ATTRIBUTE_HANDLER_METHOD, handlerMethod);
         }
 
-        // 打印 request 日志
+        // 打印 request 日志（非 prod）：body 必须脱敏，禁止 accountNo 原文
         if (!SpringUtils.isProd()) {
             Map<String, String> queryString = ServletUtils.getParamMap(request);
             String requestBody = ServletUtils.isJsonRequest(request) ? ServletUtils.getBody(request) : null;
-            if (CollUtil.isEmpty(queryString) && StrUtil.isEmpty(requestBody)) {
+            String sanitizedBody = StrUtil.isNotEmpty(requestBody)
+                    ? SensitiveJsonSanitizer.sanitize(requestBody) : null;
+            String sanitizedQuery = CollUtil.isEmpty(queryString) ? null
+                    : SensitiveJsonSanitizer.sanitize(
+                    cn.iocoder.yudao.framework.common.util.json.JsonUtils.toJsonString(queryString));
+            if (StrUtil.isEmpty(sanitizedBody) && StrUtil.isEmpty(sanitizedQuery)) {
                 log.info("[preHandle][开始请求 URL({}) 无参数]", request.getRequestURI());
             } else {
                 log.info("[preHandle][开始请求 URL({}) 参数({})]", request.getRequestURI(),
-                        StrUtil.blankToDefault(requestBody, queryString.toString()));
+                        StrUtil.blankToDefault(sanitizedBody, sanitizedQuery));
             }
             // 计时
             StopWatch stopWatch = new StopWatch();

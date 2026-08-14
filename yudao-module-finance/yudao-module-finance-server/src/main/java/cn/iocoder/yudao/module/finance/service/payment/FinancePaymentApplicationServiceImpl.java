@@ -7,22 +7,40 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
+import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationResubmitReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentPayLineRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentRecordPayReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineRespVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentTaxLineReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentTaxLineRespVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceTaxPaymentCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentTaxLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentSalaryLineMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentTaxLineMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinancePaymentApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationKindEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
 import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
+import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
@@ -84,10 +102,15 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private final DictDataApi dictDataApi;
     private final ObjectProvider<DeptApi> deptApiProvider;
     private final FinanceEntityCompanyResolver entityCompanyResolver;
+    private final FinanceCompanyBankAccountService companyBankAccountService;
+    private final FinancePaymentPayLineMapper payLineMapper;
+    private final FinancePaymentSalaryLineMapper salaryLineMapper;
+    private final FinancePaymentTaxLineMapper taxLineMapper;
 
     public FinancePaymentApplicationServiceImpl(FinancePaymentApplicationMapper applicationMapper,
                                                 FinancePaymentApplicationNoRedisDAO applicationNoRedisDAO,
-                                                BpmProcessInstanceApi processInstanceApi,
+                                                // EXP-87 F4：必须注入带 identity interceptor 的 Finance 专用 BPM 客户端
+                                                FinanceBpmProcessInstanceApi processInstanceApi,
                                                 FinanceCustomerCompanyService customerCompanyService,
                                                 FinancePaymentPredocService paymentPredocService,
                                                 FinanceContractApplicationMapper contractApplicationMapper,
@@ -96,7 +119,11 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                                                 AdminUserApi adminUserApi,
                                                 DictDataApi dictDataApi,
                                                 ObjectProvider<DeptApi> deptApiProvider,
-                                                FinanceEntityCompanyResolver entityCompanyResolver) {
+                                                FinanceEntityCompanyResolver entityCompanyResolver,
+                                                FinanceCompanyBankAccountService companyBankAccountService,
+                                                FinancePaymentPayLineMapper payLineMapper,
+                                                FinancePaymentSalaryLineMapper salaryLineMapper,
+                                                FinancePaymentTaxLineMapper taxLineMapper) {
         this.applicationMapper = applicationMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
@@ -109,6 +136,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         this.dictDataApi = dictDataApi;
         this.deptApiProvider = deptApiProvider;
         this.entityCompanyResolver = entityCompanyResolver;
+        this.companyBankAccountService = companyBankAccountService;
+        this.payLineMapper = payLineMapper;
+        this.salaryLineMapper = salaryLineMapper;
+        this.taxLineMapper = taxLineMapper;
     }
 
     @Override
@@ -120,6 +151,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         FinancePaymentApplicationDO application = prepared.toDoBuilder()
                 .applicationNo(applicationNo)
                 .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .applicationKind(FinancePaymentApplicationKindEnum.ORDINARY.getCode())
                 .voided(Boolean.FALSE)
                 .applyDate(LocalDate.now())
                 .build();
@@ -127,7 +159,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         applyCurrentTenantId(application);
         applicationMapper.insert(application);
 
-        String processInstanceId = startProcess(applicantUserId, application, reqVO);
+        String processInstanceId = startProcess(applicantUserId, application,
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY);
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(application.getId());
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -140,6 +173,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     public void resubmit(Long id, FinancePaymentApplicationResubmitReqVO reqVO, Long userId) {
         FinancePaymentApplicationDO existing = getApplication(id);
         assertOwner(existing, userId);
+        assertOrdinaryKind(existing);
+        assertNoPayLines(id);
         if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
                 || Boolean.TRUE.equals(existing.getVoided())) {
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
@@ -152,7 +187,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .eq("applicant_user_id", userId)
                 .eq("status", FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
                 .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
+                .and(w -> w.eq("application_kind", FinancePaymentApplicationKindEnum.ORDINARY.getCode())
+                        .or().isNull("application_kind"))
                 .set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .set("application_kind", FinancePaymentApplicationKindEnum.ORDINARY.getCode())
                 .set("voided", Boolean.FALSE)
                 .set("current_node_key", null)
                 .set("current_node_name", null)
@@ -189,7 +227,241 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
 
         FinancePaymentApplicationDO reloaded = getApplication(id);
-        String processInstanceId = startProcess(userId, reloaded, reqVO);
+        String processInstanceId = startProcess(userId, reloaded, reqVO.getStartUserSelectAssignees(), PROCESS_KEY);
+        FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
+        processUpdate.setId(id);
+        processUpdate.setProcessInstanceId(processInstanceId);
+        applicationMapper.updateById(processUpdate);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createAndStartSalary(FinanceSalaryPaymentCreateAndStartReqVO reqVO, Long applicantUserId) {
+        if (!FinancePaymentTimingEnum.contains(reqVO.getPaymentTiming())) {
+            throw exception(PAYMENT_APPLICATION_TIMING_INVALID);
+        }
+        String currency = normalizeCurrency(reqVO.getCurrency());
+        String periodLabel = requirePeriod(reqVO.getPeriodLabel());
+        List<String> evidence = reqVO.getEvidenceFileUrls() == null ? List.of() : reqVO.getEvidenceFileUrls();
+        if (CollUtil.isNotEmpty(evidence)) {
+            validateEvidenceUrls(evidence);
+        }
+        PreparedLines preparedLines = prepareSalaryLines(reqVO.getLines(), currency);
+        Long deptId = resolveApplicantDeptId(applicantUserId);
+        String title = "【薪资付款】-" + periodLabel + "-" + preparedLines.applyAmount();
+        String applicationNo = applicationNoRedisDAO.generate(LocalDate.now());
+        FinancePaymentApplicationDO application = FinancePaymentApplicationDO.builder()
+                .applicationNo(applicationNo)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .applicationKind(FinancePaymentApplicationKindEnum.SALARY.getCode())
+                .voided(Boolean.FALSE)
+                .applyDate(LocalDate.now())
+                .periodLabel(periodLabel)
+                .paymentTiming(reqVO.getPaymentTiming())
+                .paymentReason(FinancePaymentReasonEnum.SALARY.getCode())
+                .applyAmount(preparedLines.applyAmount())
+                .amountInWords(toAmountInWords(preparedLines.applyAmount()))
+                .currency(currency)
+                .entityCompanyDeptId(preparedLines.primaryEntityDeptId())
+                .entityCompanyName(preparedLines.primaryEntityName())
+                .evidenceFileUrls(CollUtil.isEmpty(evidence) ? "[]" : toEvidenceJson(evidence))
+                .specialNote(trimToNull(reqVO.getSpecialNote()))
+                .processTitle(title)
+                .applicantUserId(applicantUserId)
+                .applicantDeptId(deptId)
+                .build();
+        applyCurrentTenantId(application);
+        applicationMapper.insert(application);
+        insertSalaryLines(application.getId(), preparedLines.salaryLines());
+        String processInstanceId = startProcess(applicantUserId, application,
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY);
+        FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
+        processUpdate.setId(application.getId());
+        processUpdate.setProcessInstanceId(processInstanceId);
+        applicationMapper.updateById(processUpdate);
+        return application.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createAndStartTax(FinanceTaxPaymentCreateAndStartReqVO reqVO, Long applicantUserId) {
+        if (!FinancePaymentTimingEnum.contains(reqVO.getPaymentTiming())) {
+            throw exception(PAYMENT_APPLICATION_TIMING_INVALID);
+        }
+        String currency = normalizeCurrency(reqVO.getCurrency());
+        String periodLabel = requirePeriod(reqVO.getPeriodLabel());
+        if (CollUtil.isEmpty(reqVO.getEvidenceFileUrls())
+                || reqVO.getEvidenceFileUrls().stream().noneMatch(StrUtil::isNotBlank)) {
+            throw exception(PAYMENT_APPLICATION_EVIDENCE_REQUIRED);
+        }
+        validateEvidenceUrls(reqVO.getEvidenceFileUrls());
+        PreparedLines preparedLines = prepareTaxLines(reqVO.getLines(), currency);
+        Long deptId = resolveApplicantDeptId(applicantUserId);
+        String title = "【税金付款】-" + periodLabel + "-" + preparedLines.applyAmount();
+        String applicationNo = applicationNoRedisDAO.generate(LocalDate.now());
+        FinancePaymentApplicationDO application = FinancePaymentApplicationDO.builder()
+                .applicationNo(applicationNo)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .applicationKind(FinancePaymentApplicationKindEnum.TAX.getCode())
+                .voided(Boolean.FALSE)
+                .applyDate(LocalDate.now())
+                .periodLabel(periodLabel)
+                .paymentTiming(reqVO.getPaymentTiming())
+                .paymentReason(FinancePaymentReasonEnum.TAX.getCode())
+                .applyAmount(preparedLines.applyAmount())
+                .amountInWords(toAmountInWords(preparedLines.applyAmount()))
+                .currency(currency)
+                .entityCompanyDeptId(preparedLines.primaryEntityDeptId())
+                .entityCompanyName(preparedLines.primaryEntityName())
+                .evidenceFileUrls(toEvidenceJson(reqVO.getEvidenceFileUrls()))
+                .specialNote(trimToNull(reqVO.getSpecialNote()))
+                .processTitle(title)
+                .applicantUserId(applicantUserId)
+                .applicantDeptId(deptId)
+                .build();
+        applyCurrentTenantId(application);
+        applicationMapper.insert(application);
+        insertTaxLines(application.getId(), preparedLines.taxLines());
+        String processInstanceId = startProcess(applicantUserId, application,
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX);
+        FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
+        processUpdate.setId(application.getId());
+        processUpdate.setProcessInstanceId(processInstanceId);
+        applicationMapper.updateById(processUpdate);
+        return application.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void resubmitSalary(Long id, FinanceSalaryPaymentCreateAndStartReqVO reqVO, Long userId) {
+        FinancePaymentApplicationDO existing = getApplication(id);
+        assertOwner(existing, userId);
+        if (!FinancePaymentApplicationKindEnum.SALARY.getCode().equals(existing.getApplicationKind())) {
+            throw exception(PAYMENT_APPLICATION_KIND_INVALID);
+        }
+        // 支付流水不可变：有任一 pay_line 禁止重提
+        assertNoPayLines(id);
+        if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
+                || Boolean.TRUE.equals(existing.getVoided())) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        if (!FinancePaymentTimingEnum.contains(reqVO.getPaymentTiming())) {
+            throw exception(PAYMENT_APPLICATION_TIMING_INVALID);
+        }
+        String currency = normalizeCurrency(reqVO.getCurrency());
+        String periodLabel = requirePeriod(reqVO.getPeriodLabel());
+        List<String> evidence = reqVO.getEvidenceFileUrls() == null ? List.of() : reqVO.getEvidenceFileUrls();
+        if (CollUtil.isNotEmpty(evidence)) {
+            validateEvidenceUrls(evidence);
+        }
+        PreparedLines preparedLines = prepareSalaryLines(reqVO.getLines(), currency);
+        Long deptId = resolveApplicantDeptId(userId);
+        String title = "【薪资付款】-" + periodLabel + "-" + preparedLines.applyAmount();
+
+        int claimed = applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                .eq("id", id)
+                .eq("applicant_user_id", userId)
+                .eq("status", FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
+                .eq("application_kind", FinancePaymentApplicationKindEnum.SALARY.getCode())
+                .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
+                .set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .set("voided", Boolean.FALSE)
+                .set("current_node_key", null)
+                .set("current_node_name", null)
+                .set("payment_timing", reqVO.getPaymentTiming())
+                .set("payment_reason", FinancePaymentReasonEnum.SALARY.getCode())
+                .set("period_label", periodLabel)
+                .set("apply_amount", preparedLines.applyAmount())
+                .set("amount_in_words", toAmountInWords(preparedLines.applyAmount()))
+                .set("currency", currency)
+                .set("entity_company_dept_id", preparedLines.primaryEntityDeptId())
+                .set("entity_company_name", preparedLines.primaryEntityName())
+                .set("evidence_file_urls", CollUtil.isEmpty(evidence) ? "[]" : toEvidenceJson(evidence))
+                .set("special_note", trimToNull(reqVO.getSpecialNote()))
+                .set("process_title", title)
+                .set("applicant_dept_id", deptId)
+                .set("accounting_subject", null)
+                .set("actual_pay_date", null)
+                .set("pay_voucher_url", null)
+                .set("erp_voucher_no", null));
+        if (claimed == 0) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        // 业务明细可重写；支付流水不可变（此处已 assertNoPayLines）
+        salaryLineMapper.deleteByApplicationId(id);
+        insertSalaryLines(id, preparedLines.salaryLines());
+
+        FinancePaymentApplicationDO reloaded = getApplication(id);
+        String processInstanceId = startProcess(userId, reloaded,
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY);
+        FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
+        processUpdate.setId(id);
+        processUpdate.setProcessInstanceId(processInstanceId);
+        applicationMapper.updateById(processUpdate);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void resubmitTax(Long id, FinanceTaxPaymentCreateAndStartReqVO reqVO, Long userId) {
+        FinancePaymentApplicationDO existing = getApplication(id);
+        assertOwner(existing, userId);
+        if (!FinancePaymentApplicationKindEnum.TAX.getCode().equals(existing.getApplicationKind())) {
+            throw exception(PAYMENT_APPLICATION_KIND_INVALID);
+        }
+        assertNoPayLines(id);
+        if (!FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(existing.getStatus())
+                || Boolean.TRUE.equals(existing.getVoided())) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        if (!FinancePaymentTimingEnum.contains(reqVO.getPaymentTiming())) {
+            throw exception(PAYMENT_APPLICATION_TIMING_INVALID);
+        }
+        String currency = normalizeCurrency(reqVO.getCurrency());
+        String periodLabel = requirePeriod(reqVO.getPeriodLabel());
+        if (CollUtil.isEmpty(reqVO.getEvidenceFileUrls())
+                || reqVO.getEvidenceFileUrls().stream().noneMatch(StrUtil::isNotBlank)) {
+            throw exception(PAYMENT_APPLICATION_EVIDENCE_REQUIRED);
+        }
+        validateEvidenceUrls(reqVO.getEvidenceFileUrls());
+        PreparedLines preparedLines = prepareTaxLines(reqVO.getLines(), currency);
+        Long deptId = resolveApplicantDeptId(userId);
+        String title = "【税金付款】-" + periodLabel + "-" + preparedLines.applyAmount();
+
+        int claimed = applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                .eq("id", id)
+                .eq("applicant_user_id", userId)
+                .eq("status", FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
+                .eq("application_kind", FinancePaymentApplicationKindEnum.TAX.getCode())
+                .and(w -> w.eq("voided", Boolean.FALSE).or().isNull("voided"))
+                .set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .set("voided", Boolean.FALSE)
+                .set("current_node_key", null)
+                .set("current_node_name", null)
+                .set("payment_timing", reqVO.getPaymentTiming())
+                .set("payment_reason", FinancePaymentReasonEnum.TAX.getCode())
+                .set("period_label", periodLabel)
+                .set("apply_amount", preparedLines.applyAmount())
+                .set("amount_in_words", toAmountInWords(preparedLines.applyAmount()))
+                .set("currency", currency)
+                .set("entity_company_dept_id", preparedLines.primaryEntityDeptId())
+                .set("entity_company_name", preparedLines.primaryEntityName())
+                .set("evidence_file_urls", toEvidenceJson(reqVO.getEvidenceFileUrls()))
+                .set("special_note", trimToNull(reqVO.getSpecialNote()))
+                .set("process_title", title)
+                .set("applicant_dept_id", deptId)
+                .set("accounting_subject", null)
+                .set("actual_pay_date", null)
+                .set("pay_voucher_url", null)
+                .set("erp_voucher_no", null));
+        if (claimed == 0) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+        taxLineMapper.deleteByApplicationId(id);
+        insertTaxLines(id, preparedLines.taxLines());
+
+        FinancePaymentApplicationDO reloaded = getApplication(id);
+        String processInstanceId = startProcess(userId, reloaded,
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX);
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(id);
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -297,6 +569,15 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         throw exception(PAYMENT_APPLICATION_ACCESS_DENIED);
     }
 
+    /**
+     * 普通付款读路径类型闭合：仅 ORDINARY（历史 null 视为 ORDINARY）。
+     */
+    public FinancePaymentApplicationDO getOrdinaryApplicationForRead(Long id, Long userId, boolean manageAll) {
+        FinancePaymentApplicationDO application = getApplicationForRead(id, userId, manageAll);
+        assertOrdinaryKind(application);
+        return application;
+    }
+
     @Override
     public boolean canAccessDetail(Long id, Long userId) {
         if (id == null || userId == null) {
@@ -360,7 +641,11 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
 
-        FinancePaymentApplicationDO current = getApplication(appId);
+        // EXP-87 F4：与 recordPay 共享申请行 FOR UPDATE，杜绝 REJECTED+pay_line 竞态
+        FinancePaymentApplicationDO current = applicationMapper.selectByIdForUpdate(appId);
+        if (current == null) {
+            throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
+        }
 
         // F9：旧流程实例延迟终态不得改写重提后的台账（对齐合同 CS-F7）
         if (StrUtil.isNotBlank(processInstanceId)
@@ -380,6 +665,11 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)) {
             assertCashierEvidencePresent(current);
         }
+        // 锁内再判 pay_line，与 recordPay 串行
+        if (FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(normalized)
+                && hasPayLines(appId)) {
+            throw exception(PAYMENT_APPLICATION_HAS_PAY_LINES);
+        }
 
         UpdateWrapper<FinancePaymentApplicationDO> uw = new UpdateWrapper<FinancePaymentApplicationDO>()
                 .eq("id", appId)
@@ -395,7 +685,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
         int rows = applicationMapper.update(null, uw);
         if (rows == 0) {
-            FinancePaymentApplicationDO again = getApplication(appId);
+            FinancePaymentApplicationDO again = applicationMapper.selectByIdForUpdate(appId);
+            if (again == null) {
+                return;
+            }
             if (normalized.equals(again.getStatus())) {
                 return; // 并发幂等
             }
@@ -411,40 +704,145 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recordPay(FinancePaymentRecordPayReqVO reqVO, Long userId) {
-        FinancePaymentApplicationDO application = getApplication(reqVO.getId());
-        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
-                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
-            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
-        }
         if (reqVO.getActualPayDate() == null || StrUtil.isBlank(reqVO.getPayVoucherUrl())) {
             throw exception(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED);
+        }
+        if (reqVO.getCompanyBankAccountId() == null) {
+            throw exception(PAYMENT_APPLICATION_PAY_ACCOUNT_REQUIRED);
         }
         if (!isAcceptableFileUrl(reqVO.getPayVoucherUrl().trim())) {
             throw exception(PAYMENT_APPLICATION_EVIDENCE_URL_INVALID);
         }
 
-        // F2：校验办理人/候选人后再写台账
-        Task task = requireCashierTask(reqVO.getTaskId(), application, userId);
+        // EXP-87 F5：悲观锁串行化 remaining 读 + 明细写，防止并发超付
+        FinancePaymentApplicationDO application = applicationMapper.selectByIdForUpdate(reqVO.getId());
+        if (application == null) {
+            throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
+        }
 
-        int updated = applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
-                .eq("id", application.getId())
-                .in("status",
-                        FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
-                        FinancePaymentApplicationStatusEnum.PENDING.getStatus())
-                .eq("process_instance_id", application.getProcessInstanceId())
-                .set("actual_pay_date", reqVO.getActualPayDate())
-                .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
-                .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null)));
-        if (updated == 0) {
+        // 幂等键必填（禁止空键多行）
+        String idem = trimToNull(reqVO.getIdempotencyKey());
+        if (idem == null) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_KEY_REQUIRED);
+        }
+        // 幂等优先：同键已落库时，任务可能已 complete，不得先校验 task 导致 TASK_INVALID
+        FinancePaymentPayLineDO existingLine =
+                payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
+        if (existingLine != null) {
+            // EXP-87 G3：同键比对规范化指纹（缺省金额归一化为「若无本行时的剩余未付」）；金额始终参与
+            assertIdempotentPayLineMatches(existingLine, reqVO, application);
+            ensureHeaderEvidenceIfFullyPaid(application, reqVO);
+            return;
+        }
+
+        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
+                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
+            // 已足额且终态：无新键时也视为幂等成功
+            BigDecimal paid = sumPayLines(application.getId());
+            if (application.getApplyAmount() != null
+                    && paid.compareTo(application.getApplyAmount()) == 0
+                    && (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(application.getStatus())
+                    || application.getActualPayDate() != null)) {
+                return;
+            }
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
         }
 
-        TaskService taskService = taskServiceProvider.getIfAvailable();
-        if (taskService == null) {
-            throw exception(PAYMENT_APPLICATION_TASK_INVALID);
+        // F2：新支付须校验办理人/候选人
+        Task task = requireCashierTask(reqVO.getTaskId(), application, userId);
+
+        // 账户归属主体：普通付款用单头主体；薪资/税金可用账户所属主体（须在明细主体集合内）
+        Long entityForAccount = resolvePayEntityCompanyDeptId(application, reqVO.getCompanyBankAccountId());
+        FinanceCompanyBankAccountDO account = companyBankAccountService
+                .requireEnabledForEntityCompany(reqVO.getCompanyBankAccountId(), entityForAccount);
+        assertAccountCurrencyMatchesApplication(application, account);
+
+        BigDecimal alreadyPaid = sumPayLines(application.getId());
+        BigDecimal remaining = application.getApplyAmount().subtract(alreadyPaid);
+        if (remaining.compareTo(ZERO) <= 0) {
+            // 已足额：幂等办结（任务仍有效时 complete）
+            maybeCompleteCashier(application, task, reqVO);
+            return;
         }
-        taskService.complete(task.getId());
-        // 终态 PAID 由 end Delegate / Listener 写入；此处不提前标 PAID 以免流程失败半状态
+
+        BigDecimal payAmount = reqVO.getPayAmount() != null
+                ? normalizePayAmount(reqVO.getPayAmount())
+                : remaining.setScale(AMOUNT_SCALE, RoundingMode.UNNECESSARY);
+        if (payAmount.compareTo(ZERO) <= 0 || payAmount.compareTo(remaining) > 0) {
+            throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
+        }
+
+        FinancePaymentPayLineDO line = FinancePaymentPayLineDO.builder()
+                .paymentApplicationId(application.getId())
+                .companyBankAccountId(account.getId())
+                .entityCompanyDeptId(account.getEntityCompanyDeptId())
+                .accountNameSnapshot(account.getAccountName())
+                .bankNameSnapshot(account.getBankName())
+                .accountHolderSnapshot(account.getAccountHolder())
+                .accountNoSnapshot(account.getAccountNo())
+                .accountNoMaskedSnapshot(FinanceCompanyBankAccountService.maskAccountNo(account.getAccountNo()))
+                .currencySnapshot(account.getCurrency())
+                .payAmount(payAmount)
+                .actualPayDate(reqVO.getActualPayDate())
+                .payVoucherUrl(reqVO.getPayVoucherUrl().trim())
+                .erpVoucherNo(trimToNull(reqVO.getErpVoucherNo()))
+                .idempotencyKey(idem)
+                .build();
+        applyCurrentTenantId(line);
+        payLineMapper.insert(line);
+
+        BigDecimal newSum = alreadyPaid.add(payAmount);
+        if (newSum.compareTo(application.getApplyAmount()) == 0) {
+            // 写申请头证据字段（兼容 F1 / 历史详情展示）
+            int updated = applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                    .eq("id", application.getId())
+                    .in("status",
+                            FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
+                            FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                    .eq("process_instance_id", application.getProcessInstanceId())
+                    .set("actual_pay_date", reqVO.getActualPayDate())
+                    .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
+                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null)));
+            if (updated == 0) {
+                throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+            }
+            boolean complete = reqVO.getCompleteWhenFullyPaid() == null || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
+            if (complete) {
+                completeCashierTask(task);
+            }
+        } else if (newSum.compareTo(application.getApplyAmount()) > 0) {
+            throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
+        }
+        // 未足额：仅落支付明细，不 complete（允许多笔）
+    }
+
+    @Override
+    public List<FinancePaymentPayLineRespVO> listPayLines(Long paymentApplicationId) {
+        return payLineMapper.selectByApplicationId(paymentApplicationId).stream()
+                .map(line -> {
+                    FinancePaymentPayLineRespVO vo = BeanUtils.toBean(line, FinancePaymentPayLineRespVO.class);
+                    // 对外不回传完整账号快照
+                    return vo;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<FinancePaymentSalaryLineRespVO> listSalaryLines(Long paymentApplicationId) {
+        return BeanUtils.toBean(salaryLineMapper.selectByApplicationId(paymentApplicationId),
+                FinancePaymentSalaryLineRespVO.class);
+    }
+
+    @Override
+    public List<FinancePaymentTaxLineRespVO> listTaxLines(Long paymentApplicationId) {
+        return BeanUtils.toBean(taxLineMapper.selectByApplicationId(paymentApplicationId),
+                FinancePaymentTaxLineRespVO.class);
+    }
+
+    @Override
+    public BigDecimal sumPayLines(Long paymentApplicationId) {
+        BigDecimal sum = payLineMapper.sumPayAmountByApplicationId(paymentApplicationId);
+        return sum != null ? sum : ZERO;
     }
 
     @Override
@@ -479,9 +877,17 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .set("accounting_subject", subject));
     }
 
-    private static void assertCashierEvidencePresent(FinancePaymentApplicationDO application) {
+    private void assertCashierEvidencePresent(FinancePaymentApplicationDO application) {
         if (application.getActualPayDate() == null || StrUtil.isBlank(application.getPayVoucherUrl())) {
             throw exception(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED);
+        }
+        // EXP-87：支付合计须等于批准金额
+        if (application.getApplyAmount() != null) {
+            BigDecimal paid = sumPayLines(application.getId());
+            // 历史单可能无 pay_line，仅头字段有证据时放行
+            if (paid.compareTo(ZERO) > 0 && paid.compareTo(application.getApplyAmount()) != 0) {
+                throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INCOMPLETE);
+            }
         }
     }
 
@@ -518,6 +924,11 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
         if (!FinancePaymentReasonEnum.contains(reqVO.getPaymentReason())) {
             throw exception(PAYMENT_APPLICATION_REASON_INVALID);
+        }
+        // EXP-87：普通付款新单禁止 SALARY/TAX，请走独立入口
+        if (FinancePaymentReasonEnum.SALARY.getCode().equals(reqVO.getPaymentReason())
+                || FinancePaymentReasonEnum.TAX.getCode().equals(reqVO.getPaymentReason())) {
+            throw exception(PAYMENT_APPLICATION_REASON_SALARY_TAX_FORBIDDEN);
         }
         BigDecimal applyAmount = normalizeApplyAmount(reqVO.getApplyAmount());
         if (CollUtil.isEmpty(reqVO.getEvidenceFileUrls())
@@ -625,13 +1036,15 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     }
 
     private String startProcess(Long userId, FinancePaymentApplicationDO application,
-                                FinancePaymentApplicationCreateAndStartReqVO reqVO) {
+                                Map<String, List<Long>> startUserSelectAssignees,
+                                String processDefinitionKey) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("paymentApplicationId", application.getId());
         variables.put("applicationNo", application.getApplicationNo());
         variables.put("applyAmount", application.getApplyAmount());
         variables.put("payeeName", application.getPayeeName());
         variables.put("paymentReason", application.getPaymentReason());
+        variables.put("applicationKind", application.getApplicationKind());
         variables.put("applicantUserId", application.getApplicantUserId());
         variables.put("paymentTiming", application.getPaymentTiming());
         variables.put("currency", application.getCurrency());
@@ -642,12 +1055,13 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (StrUtil.isNotBlank(application.getEntityCompanyName())) {
             variables.put(BpmProcessVariableConstants.COMPANY_NAME, application.getEntityCompanyName());
         }
-        return processInstanceApi.createProcessInstance(userId,
+        // EXP-87 G1：Finance 走可信业务通道 API（服务端派生信任，DTO 无可信标志）
+        return processInstanceApi.createProcessInstanceByBusiness(userId,
                         new BpmProcessInstanceCreateReqDTO()
-                                .setProcessDefinitionKey(PROCESS_KEY)
+                                .setProcessDefinitionKey(processDefinitionKey)
                                 .setBusinessKey(String.valueOf(application.getId()))
                                 .setVariables(variables)
-                                .setStartUserSelectAssignees(reqVO.getStartUserSelectAssignees()))
+                                .setStartUserSelectAssignees(startUserSelectAssignees))
                 .getCheckedData();
     }
 
@@ -766,6 +1180,316 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (tenantId != null) {
             application.setTenantId(tenantId);
         }
+    }
+
+    private static void applyCurrentTenantId(FinancePaymentPayLineDO line) {
+        Long tenantId = TenantContextHolder.getTenantId();
+        if (tenantId != null) {
+            line.setTenantId(tenantId);
+        }
+    }
+
+    private void maybeCompleteCashier(FinancePaymentApplicationDO application, Task task,
+                                      FinancePaymentRecordPayReqVO reqVO) {
+        ensureHeaderEvidenceIfFullyPaid(application, reqVO);
+        BigDecimal sum = sumPayLines(application.getId());
+        if (application.getApplyAmount() != null && sum.compareTo(application.getApplyAmount()) == 0) {
+            boolean complete = reqVO.getCompleteWhenFullyPaid() == null
+                    || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
+            if (complete && task != null) {
+                completeCashierTask(task);
+            }
+        }
+    }
+
+    /**
+     * EXP-87 G3：同 idempotencyKey 命中已有 pay_line 时，比对规范化指纹。
+     * 指纹：账户 / 金额 / 支付日 / 凭证 URL / ERP。
+     * 缺省 payAmount 归一化为「排除本幂等行后的剩余未付金额」（契约语义），金额始终参与比对。
+     */
+    private void assertIdempotentPayLineMatches(FinancePaymentPayLineDO existing,
+                                                FinancePaymentRecordPayReqVO reqVO,
+                                                FinancePaymentApplicationDO application) {
+        if (!Objects.equals(existing.getCompanyBankAccountId(), reqVO.getCompanyBankAccountId())) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        if (!Objects.equals(existing.getActualPayDate(), reqVO.getActualPayDate())) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        String reqVoucher = reqVO.getPayVoucherUrl() != null ? reqVO.getPayVoucherUrl().trim() : null;
+        String existingVoucher = existing.getPayVoucherUrl() != null ? existing.getPayVoucherUrl().trim() : null;
+        if (!Objects.equals(existingVoucher, reqVoucher)) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        String reqErp = trimToNull(reqVO.getErpVoucherNo());
+        String existingErp = trimToNull(existing.getErpVoucherNo());
+        if (!Objects.equals(existingErp, reqErp)) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+        BigDecimal existingAmount = existing.getPayAmount() != null
+                ? existing.getPayAmount().setScale(AMOUNT_SCALE, RoundingMode.HALF_UP)
+                : null;
+        BigDecimal resolvedReqAmount = resolveIdempotentPayAmount(reqVO, application, existing);
+        if (existingAmount == null || resolvedReqAmount.compareTo(existingAmount) != 0) {
+            throw exception(PAYMENT_APPLICATION_IDEMPOTENCY_CONFLICT);
+        }
+    }
+
+    /**
+     * 归一化幂等比对金额：显式 payAmount 用 normalize；缺省则 = 申请金额 −（全量已付 − 本行金额）。
+     */
+    private BigDecimal resolveIdempotentPayAmount(FinancePaymentRecordPayReqVO reqVO,
+                                                  FinancePaymentApplicationDO application,
+                                                  FinancePaymentPayLineDO existing) {
+        if (reqVO.getPayAmount() != null) {
+            return normalizePayAmount(reqVO.getPayAmount());
+        }
+        BigDecimal apply = application.getApplyAmount() != null
+                ? application.getApplyAmount().setScale(AMOUNT_SCALE, RoundingMode.HALF_UP)
+                : ZERO;
+        BigDecimal totalPaid = sumPayLines(application.getId());
+        BigDecimal existingAmt = existing.getPayAmount() != null
+                ? existing.getPayAmount().setScale(AMOUNT_SCALE, RoundingMode.HALF_UP)
+                : ZERO;
+        BigDecimal otherPaid = totalPaid.subtract(existingAmt);
+        if (otherPaid.compareTo(ZERO) < 0) {
+            otherPaid = ZERO;
+        }
+        BigDecimal remainingIfThisAbsent = apply.subtract(otherPaid);
+        if (remainingIfThisAbsent.compareTo(ZERO) < 0) {
+            remainingIfThisAbsent = ZERO;
+        }
+        return remainingIfThisAbsent.setScale(AMOUNT_SCALE, RoundingMode.HALF_UP);
+    }
+
+    /** 足额时补写头证据；幂等重试不依赖 task 是否仍 active。 */
+    private void ensureHeaderEvidenceIfFullyPaid(FinancePaymentApplicationDO application,
+                                                 FinancePaymentRecordPayReqVO reqVO) {
+        BigDecimal sum = sumPayLines(application.getId());
+        if (application.getApplyAmount() == null || sum.compareTo(application.getApplyAmount()) != 0) {
+            return;
+        }
+        if (application.getActualPayDate() == null || StrUtil.isBlank(application.getPayVoucherUrl())) {
+            applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                    .eq("id", application.getId())
+                    .set("actual_pay_date", reqVO.getActualPayDate())
+                    .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
+                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null)));
+        }
+    }
+
+    private static void assertAccountCurrencyMatchesApplication(FinancePaymentApplicationDO application,
+                                                                FinanceCompanyBankAccountDO account) {
+        if (application.getCurrency() == null || account.getCurrency() == null) {
+            return;
+        }
+        if (!application.getCurrency().trim().equalsIgnoreCase(account.getCurrency().trim())) {
+            throw exception(PAYMENT_ACCOUNT_CURRENCY_MISMATCH);
+        }
+    }
+
+    private static void assertOrdinaryKind(FinancePaymentApplicationDO application) {
+        String kind = StrUtil.blankToDefault(application.getApplicationKind(),
+                FinancePaymentApplicationKindEnum.ORDINARY.getCode());
+        if (!FinancePaymentApplicationKindEnum.ORDINARY.getCode().equals(kind)) {
+            throw exception(PAYMENT_APPLICATION_KIND_INVALID);
+        }
+    }
+
+    private void assertNoPayLines(Long paymentApplicationId) {
+        if (hasPayLines(paymentApplicationId)) {
+            throw exception(PAYMENT_APPLICATION_HAS_PAY_LINES);
+        }
+    }
+
+    private boolean hasPayLines(Long paymentApplicationId) {
+        List<FinancePaymentPayLineDO> lines = payLineMapper.selectByApplicationId(paymentApplicationId);
+        return CollUtil.isNotEmpty(lines);
+    }
+
+    private void completeCashierTask(Task task) {
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            throw exception(PAYMENT_APPLICATION_TASK_INVALID);
+        }
+        taskService.complete(task.getId());
+    }
+
+    /**
+     * 解析本笔支付使用的主体公司：
+     * - 普通付款：必须与申请单头主体一致；
+     * - 薪资/税金：账户所属主体须出现在对应明细中。
+     */
+    private Long resolvePayEntityCompanyDeptId(FinancePaymentApplicationDO application, Long companyBankAccountId) {
+        FinanceCompanyBankAccountDO account = companyBankAccountService.get(companyBankAccountId);
+        if (account == null) {
+            throw exception(COMPANY_BANK_ACCOUNT_NOT_EXISTS);
+        }
+        String kind = StrUtil.blankToDefault(application.getApplicationKind(),
+                FinancePaymentApplicationKindEnum.ORDINARY.getCode());
+        if (FinancePaymentApplicationKindEnum.ORDINARY.getCode().equals(kind)) {
+            return application.getEntityCompanyDeptId();
+        }
+        if (FinancePaymentApplicationKindEnum.SALARY.getCode().equals(kind)) {
+            boolean hit = salaryLineMapper.selectByApplicationId(application.getId()).stream()
+                    .anyMatch(l -> Objects.equals(l.getEntityCompanyDeptId(), account.getEntityCompanyDeptId()));
+            if (!hit) {
+                throw exception(COMPANY_BANK_ACCOUNT_ENTITY_MISMATCH);
+            }
+            return account.getEntityCompanyDeptId();
+        }
+        if (FinancePaymentApplicationKindEnum.TAX.getCode().equals(kind)) {
+            boolean hit = taxLineMapper.selectByApplicationId(application.getId()).stream()
+                    .anyMatch(l -> Objects.equals(l.getEntityCompanyDeptId(), account.getEntityCompanyDeptId()));
+            if (!hit) {
+                throw exception(COMPANY_BANK_ACCOUNT_ENTITY_MISMATCH);
+            }
+            return account.getEntityCompanyDeptId();
+        }
+        return application.getEntityCompanyDeptId();
+    }
+
+    private static BigDecimal normalizePayAmount(BigDecimal amount) {
+        if (amount == null || amount.compareTo(ZERO) <= 0) {
+            throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
+        }
+        if (amount.scale() > AMOUNT_SCALE) {
+            throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
+        }
+        return amount.setScale(AMOUNT_SCALE, RoundingMode.UNNECESSARY);
+    }
+
+    private static String requirePeriod(String periodLabel) {
+        if (StrUtil.isBlank(periodLabel)) {
+            throw exception(PAYMENT_APPLICATION_FIELD_REQUIRED);
+        }
+        return periodLabel.trim();
+    }
+
+    private static BigDecimal nonNeg(BigDecimal amount) {
+        if (amount == null) {
+            return ZERO;
+        }
+        if (amount.compareTo(ZERO) < 0) {
+            throw exception(PAYMENT_APPLICATION_LINES_INVALID);
+        }
+        if (amount.scale() > AMOUNT_SCALE) {
+            throw exception(PAYMENT_APPLICATION_LINES_INVALID);
+        }
+        return amount.setScale(AMOUNT_SCALE, RoundingMode.UNNECESSARY);
+    }
+
+    private PreparedLines prepareSalaryLines(List<FinancePaymentSalaryLineReqVO> lines, String currency) {
+        if (CollUtil.isEmpty(lines)) {
+            throw exception(PAYMENT_APPLICATION_LINES_INVALID);
+        }
+        List<FinancePaymentSalaryLineDO> result = new java.util.ArrayList<>();
+        BigDecimal total = ZERO;
+        Long primaryDeptId = null;
+        String primaryName = null;
+        int sort = 0;
+        for (FinancePaymentSalaryLineReqVO line : lines) {
+            FinanceEntityCompanyResolver.ResolvedCompany company =
+                    entityCompanyResolver.requireByDeptId(line.getEntityCompanyDeptId());
+            BigDecimal net = nonNeg(line.getNetSalaryAmount());
+            BigDecimal tax = nonNeg(line.getPersonalTaxAmount());
+            BigDecimal social = nonNeg(line.getSocialInsuranceAmount());
+            BigDecimal lineTotal = net.add(tax).add(social);
+            if (lineTotal.compareTo(ZERO) <= 0) {
+                throw exception(PAYMENT_APPLICATION_LINES_INVALID);
+            }
+            result.add(FinancePaymentSalaryLineDO.builder()
+                    .entityCompanyDeptId(company.deptId())
+                    .entityCompanyName(company.name())
+                    .netSalaryAmount(net)
+                    .personalTaxAmount(tax)
+                    .socialInsuranceAmount(social)
+                    .currency(currency)
+                    .lineTotal(lineTotal)
+                    .sort(sort++)
+                    .build());
+            total = total.add(lineTotal);
+            if (primaryDeptId == null) {
+                primaryDeptId = company.deptId();
+                primaryName = company.name();
+            }
+        }
+        return new PreparedLines(total, primaryDeptId, primaryName, result, null);
+    }
+
+    private PreparedLines prepareTaxLines(List<FinancePaymentTaxLineReqVO> lines, String currency) {
+        if (CollUtil.isEmpty(lines)) {
+            throw exception(PAYMENT_APPLICATION_LINES_INVALID);
+        }
+        List<FinancePaymentTaxLineDO> result = new java.util.ArrayList<>();
+        BigDecimal total = ZERO;
+        Long primaryDeptId = null;
+        String primaryName = null;
+        int sort = 0;
+        for (FinancePaymentTaxLineReqVO line : lines) {
+            FinanceEntityCompanyResolver.ResolvedCompany company =
+                    entityCompanyResolver.requireByDeptId(line.getEntityCompanyDeptId());
+            BigDecimal vat = nonNeg(line.getVatAmount());
+            BigDecimal surcharge = nonNeg(line.getSurchargeAmount());
+            BigDecimal stamp = nonNeg(line.getStampTaxAmount());
+            BigDecimal cit = nonNeg(line.getCitAmount());
+            BigDecimal lineTotal = vat.add(surcharge).add(stamp).add(cit);
+            if (lineTotal.compareTo(ZERO) <= 0) {
+                throw exception(PAYMENT_APPLICATION_LINES_INVALID);
+            }
+            result.add(FinancePaymentTaxLineDO.builder()
+                    .entityCompanyDeptId(company.deptId())
+                    .entityCompanyName(company.name())
+                    .vatAmount(vat)
+                    .surchargeAmount(surcharge)
+                    .stampTaxAmount(stamp)
+                    .citAmount(cit)
+                    .currency(currency)
+                    .lineTotal(lineTotal)
+                    .sort(sort++)
+                    .build());
+            total = total.add(lineTotal);
+            if (primaryDeptId == null) {
+                primaryDeptId = company.deptId();
+                primaryName = company.name();
+            }
+        }
+        return new PreparedLines(total, primaryDeptId, primaryName, null, result);
+    }
+
+    private void insertSalaryLines(Long appId, List<FinancePaymentSalaryLineDO> lines) {
+        if (lines == null) {
+            return;
+        }
+        for (FinancePaymentSalaryLineDO line : lines) {
+            line.setPaymentApplicationId(appId);
+            Long tenantId = TenantContextHolder.getTenantId();
+            if (tenantId != null) {
+                line.setTenantId(tenantId);
+            }
+            salaryLineMapper.insert(line);
+        }
+    }
+
+    private void insertTaxLines(Long appId, List<FinancePaymentTaxLineDO> lines) {
+        if (lines == null) {
+            return;
+        }
+        for (FinancePaymentTaxLineDO line : lines) {
+            line.setPaymentApplicationId(appId);
+            Long tenantId = TenantContextHolder.getTenantId();
+            if (tenantId != null) {
+                line.setTenantId(tenantId);
+            }
+            taxLineMapper.insert(line);
+        }
+    }
+
+    private record PreparedLines(BigDecimal applyAmount,
+                                 Long primaryEntityDeptId,
+                                 String primaryEntityName,
+                                 List<FinancePaymentSalaryLineDO> salaryLines,
+                                 List<FinancePaymentTaxLineDO> taxLines) {
     }
 
     private static void validateEvidenceUrls(List<String> urls) {

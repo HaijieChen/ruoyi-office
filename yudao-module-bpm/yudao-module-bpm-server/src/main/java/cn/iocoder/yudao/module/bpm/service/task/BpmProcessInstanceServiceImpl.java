@@ -16,6 +16,7 @@ import cn.iocoder.yudao.framework.common.util.object.ObjectUtils;
 import cn.iocoder.yudao.framework.common.util.object.PageUtils;
 import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.bpm.service.definition.BpmBusinessStartChannelHolder;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.model.BpmModelMetaInfoVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.model.simple.BpmSimpleModelNodeVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.instance.*;
@@ -110,6 +111,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     private BpmProcessDefinitionService processDefinitionService;
     @Resource
     private BpmProcessStartEligibilityService processStartEligibilityService;
+    @Resource
+    private cn.iocoder.yudao.module.bpm.framework.security.BpmBusinessStartCallerGuard businessStartCallerGuard;
     @Resource
     @Lazy // 避免循环依赖
     private BpmTaskService taskService;
@@ -789,9 +792,9 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         // 获得流程定义
         ProcessDefinition definition = processDefinitionService
                 .getProcessDefinition(createReqVO.getProcessDefinitionId());
-        // 发起流程
+        // 通用 HTTP 入口：非可信通道（信任永不来自请求体）
         return createProcessInstance0(userId, definition, createReqVO.getVariables(), null,
-                createReqVO.getStartUserSelectAssignees());
+                createReqVO.getStartUserSelectAssignees(), false);
     }
 
     @Override
@@ -801,11 +804,21 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
             // 获得流程定义
             ProcessDefinition definition = processDefinitionService
                     .getActiveProcessDefinition(createReqDTO.getProcessDefinitionKey());
-            // 发起流程
+            // 通用 RPC：信任仅来自服务端 ThreadLocal（本路径不置位 → 薪税 hide+deny）
+            boolean trusted = BpmBusinessStartChannelHolder.isTrustedBusinessStart();
             return createProcessInstance0(userId, definition, createReqDTO.getVariables(),
                     createReqDTO.getBusinessKey(),
-                    createReqDTO.getStartUserSelectAssignees());
+                    createReqDTO.getStartUserSelectAssignees(), trusted);
         });
+    }
+
+    @Override
+    @DataPermission(enable = false)
+    public String createProcessInstanceByBusiness(Long userId, @Valid BpmProcessInstanceCreateReqDTO createReqDTO) {
+        // EXP-87 G1：callTrusted 前必须可验证 Finance 服务身份（非“选了路由”即可）
+        businessStartCallerGuard.requireVerifiedFinanceCaller();
+        return BpmBusinessStartChannelHolder.callTrusted(
+                () -> createProcessInstance(userId, createReqDTO));
     }
 
     @Override
@@ -852,9 +865,10 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
                 ProcessDefinition definition = processDefinitionService
                         .getActiveProcessDefinition(createReqDTO.getProcessDefinitionKey());
+                boolean trusted = BpmBusinessStartChannelHolder.isTrustedBusinessStart();
                 return createProcessInstance0(userId, definition, createReqDTO.getVariables(),
                         createReqDTO.getBusinessKey(),
-                        createReqDTO.getStartUserSelectAssignees());
+                        createReqDTO.getStartUserSelectAssignees(), trusted);
             }
         });
     }
@@ -955,7 +969,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
     private String createProcessInstance0(Long userId, ProcessDefinition definition,
                                           Map<String, Object> variables, String businessKey,
-                                          Map<String, List<Long>> startUserSelectAssignees) {
+                                          Map<String, List<Long>> startUserSelectAssignees,
+                                          boolean trustedBusinessStart) {
         // 1.1 校验流程定义
         if (definition == null) {
             throw exception(PROCESS_DEFINITION_NOT_EXISTS);
@@ -972,8 +987,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         if (!processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId)) {
             throw exception(PROCESS_INSTANCE_START_USER_CAN_START);
         }
-        // 1.2.1 嵌入式业务表单：业务 create 权限（与列表 canStart 同一评估）
-        processStartEligibilityService.validateStartOrThrow(definition.getKey());
+        // 1.2.1 嵌入式业务表单：业务 create 权限（通用恒 deny 薪税；可信业务通道可过）
+        processStartEligibilityService.validateStartOrThrow(definition.getKey(), trustedBusinessStart);
         // 1.3 校验发起人自选审批人
         validateStartUserSelectAssignees(userId, definition, startUserSelectAssignees, variables);
 
@@ -1108,10 +1123,14 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     }
 
     /**
-     * PAY-R19：付款申请须走 finance 领域 cancel（同步落账），禁止 HTTP 通用 start-user 取消绕过。
-     * 与 finance 模块常量对齐，BPM 侧不依赖 finance 模块。
+     * PAY-R19：付款/薪资付款/税金付款须走 finance 领域 cancel（同步落账），
+     * 禁止 HTTP 通用 start-user 取消绕过。BPM 侧不依赖 finance 模块，key 与
+     * {@code FinancePaymentApplicationService.PROCESS_KEY*} 对齐。
      */
-    private static final String PAYMENT_PROCESS_DEFINITION_KEY = "finance_payment_apply";
+    private static final java.util.Set<String> PAYMENT_DOMAIN_CANCEL_PROCESS_KEYS = java.util.Set.of(
+            "finance_payment_apply",
+            "finance_salary_payment_apply",
+            "finance_tax_payment_apply");
 
     @Override
     @DataPermission(enable = false) // 关闭数据权限，避免查询不到用户数据。相关案例：https://gitee.com/zhijiantianya/yudao-cloud/issues/ID1UYA
@@ -1132,9 +1151,9 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         if (!Objects.equals(instance.getStartUserId(), String.valueOf(userId))) {
             throw exception(PROCESS_INSTANCE_CANCEL_FAIL_NOT_SELF);
         }
-        // PAY-R19：付款申请禁止通用发起人取消（Controller 直调 forbidden=null）。
+        // PAY-R19：付款类（普通/薪资/税金）禁止通用发起人取消（Controller 直调 forbidden=null）。
         // 仅允许 finance 领域路径经 Feign 传入非空禁止集（至少含 taskCashier）后取消。
-        if (PAYMENT_PROCESS_DEFINITION_KEY.equals(instance.getProcessDefinitionKey())
+        if (PAYMENT_DOMAIN_CANCEL_PROCESS_KEYS.contains(instance.getProcessDefinitionKey())
                 && CollUtil.isEmpty(forbiddenTaskDefinitionKeys)) {
             throw exception(PROCESS_INSTANCE_CANCEL_FAIL_USE_PAYMENT_DOMAIN);
         }

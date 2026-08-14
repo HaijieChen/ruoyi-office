@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationPageReqVO;
@@ -73,7 +74,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     public FinanceContractApplicationServiceImpl(FinanceContractApplicationMapper applicationMapper,
                                                  FinanceContractApplicationNoRedisDAO applicationNoRedisDAO,
-                                                 BpmProcessInstanceApi processInstanceApi,
+                                                 // EXP-87 F4：必须注入带 identity interceptor 的 Finance 专用 BPM 客户端
+                                                 FinanceBpmProcessInstanceApi processInstanceApi,
                                                  FinanceCustomerCompanyService customerCompanyService,
                                                  FinanceEntityCompanyResolver entityCompanyResolver,
                                                  ObjectProvider<TaskService> taskServiceProvider,

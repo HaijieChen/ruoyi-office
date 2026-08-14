@@ -100,9 +100,15 @@ export namespace FinancePaymentApplicationApi {
   export interface RecordPayRequest {
     id: number;
     taskId: string;
+    /** 公司银行账户 id */
+    companyBankAccountId: number;
+    /** 本笔金额；缺省按剩余未付 */
+    payAmount?: number;
     actualPayDate: string;
     payVoucherUrl: string;
     erpVoucherNo?: string;
+    /** 幂等键（必填；同一支付尝试内稳定复用） */
+    idempotencyKey: string;
   }
 }
 
