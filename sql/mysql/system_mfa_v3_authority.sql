@@ -140,7 +140,74 @@ SET @sql := IF(@has_tpv > 0,
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 旁路 v2 global_policy 表：若存在且 control 仍为默认 epoch 0，可手工合并；此处不自动删除旁路表。
--- 旧表 system_mfa_global_policy 保留只读档案，新代码不再读写。
+-- ========== 3) 自旁路/v2 system_mfa_global_policy 语义合并到 control_state ==========
+-- 可重复：仅当 legacy 表存在且有 confirmed 行时执行；不删除 legacy 表。
+-- checksum 与 Java MfaChecksumUtil.computeControl 一致：
+--   SHA2(lifecycle|mode|factors|epoch|min, 256) 小写 hex
 
--- 部署后默认：不插入 ARMED/REQUIRED 行；空 control 行由应用按 UNINITIALIZED 处理。
+SET @has_legacy_global := (
+  SELECT COUNT(*) FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'system_mfa_global_policy'
+);
+
+-- 确保 control 单例行存在（合并前置）
+SET @sql := IF(@has_legacy_global > 0,
+  'INSERT IGNORE INTO `system_mfa_control_state` (`id`, `lifecycle_state`, `global_mode`, `global_policy_epoch`, `global_min_accepted_epoch`, `checksum`)
+   VALUES (1, ''UNINITIALIZED'', ''OFF'', 0, 0, ''uninitialized-off'')',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 将 confirmed legacy global 行翻译进 control（mode/factors/epoch/min/lifecycle/checksum）
+SET @sql := IF(@has_legacy_global > 0,
+  'UPDATE `system_mfa_control_state` c
+   INNER JOIN `system_mfa_global_policy` g ON g.id = 1 AND IFNULL(g.confirmed, 0) = 1 AND IFNULL(g.deleted, 0) = 0
+   SET
+     c.global_mode = UPPER(TRIM(g.mode)),
+     c.global_allowed_factors = g.allowed_factors,
+     c.global_policy_epoch = GREATEST(IFNULL(c.global_policy_epoch, 0), IFNULL(g.policy_version, 0)),
+     c.global_min_accepted_epoch = CASE
+         WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'')
+           THEN GREATEST(IFNULL(c.global_min_accepted_epoch, 0), IFNULL(g.policy_version, 0))
+         ELSE IFNULL(c.global_min_accepted_epoch, 0)
+       END,
+     c.lifecycle_state = CASE
+         WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'') THEN ''ARMED''
+         WHEN c.lifecycle_state = ''ARMED'' THEN ''ARMED''
+         ELSE ''UNINITIALIZED''
+       END,
+     c.armed_at = CASE
+         WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'') AND c.armed_at IS NULL THEN NOW()
+         ELSE c.armed_at
+       END,
+     c.checksum = LOWER(SHA2(CONCAT(
+         CASE
+           WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'') THEN ''ARMED''
+           WHEN c.lifecycle_state = ''ARMED'' THEN ''ARMED''
+           ELSE ''UNINITIALIZED''
+         END,
+         ''|'', UPPER(TRIM(g.mode)), ''|'', IFNULL(g.allowed_factors, ''''), ''|'',
+         GREATEST(IFNULL(c.global_policy_epoch, 0), IFNULL(g.policy_version, 0)), ''|'',
+         CASE
+           WHEN UPPER(TRIM(g.mode)) IN (''OPTIONAL'', ''REQUIRED'')
+             THEN GREATEST(IFNULL(c.global_min_accepted_epoch, 0), IFNULL(g.policy_version, 0))
+           ELSE IFNULL(c.global_min_accepted_epoch, 0)
+         END
+       ), 256))',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 对已合并但 checksum 仍为 legacy 占位串的 control 行，按当前列重算（幂等）
+UPDATE `system_mfa_control_state` c
+SET c.checksum = LOWER(SHA2(CONCAT(
+    IFNULL(c.lifecycle_state, 'UNINITIALIZED'), '|',
+    IFNULL(c.global_mode, 'OFF'), '|',
+    IFNULL(c.global_allowed_factors, ''), '|',
+    IFNULL(c.global_policy_epoch, 0), '|',
+    IFNULL(c.global_min_accepted_epoch, 0)
+  ), 256))
+WHERE c.id = 1
+  AND c.checksum IS NOT NULL
+  AND c.checksum NOT REGEXP '^[0-9a-f]{64}$';
+
+-- 部署后：不默认插入 REQUIRED；空库仍由应用按 UNINITIALIZED 处理。
+-- legacy system_mfa_global_policy 保留只读档案，新代码不再读写。

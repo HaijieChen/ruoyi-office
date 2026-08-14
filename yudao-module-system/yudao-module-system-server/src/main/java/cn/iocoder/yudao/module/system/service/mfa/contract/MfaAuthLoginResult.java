@@ -8,17 +8,28 @@ import lombok.Getter;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * ADR-MFA-v3 §7 canonical 判别式登录结果。
  * <p>
  * 仅允许工厂方法构造；禁止公开 builder 构造非法联合。
  * 禁止旧别名字段 challengeToken / preAuthToken / enrollmentToken / recoveryToken。
+ * <p>
+ * TTL 上限：PRE_AUTH ≤ 300s；ENROLLMENT/RECOVERY ≤ 600s。
+ * Factor type 封闭：TOTP / SMS / EMAIL / BACKUP_CODE。
  */
 @Getter
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public final class MfaAuthLoginResult {
+
+    public static final int PRE_AUTH_MAX_TTL_SECONDS = 300;
+    public static final int ENROLLMENT_MAX_TTL_SECONDS = 600;
+    public static final int RECOVERY_MAX_TTL_SECONDS = 600;
+
+    private static final Set<String> FACTOR_TYPES = Set.of("TOTP", "SMS", "EMAIL", "BACKUP_CODE");
 
     private final MfaLoginStatus loginStatus;
     private final String accessToken;
@@ -36,7 +47,7 @@ public final class MfaAuthLoginResult {
         private final List<FactorRef> factors;
 
         /**
-         * @param expiresIn 必须 &gt; 0
+         * @param expiresIn 必须 &gt; 0 且不超过 tokenClass 上限
          */
         public static FlowPayload of(String flowToken, MfaFlowTokenClass tokenClass, int expiresIn,
                                      List<String> allowedActions, List<FactorRef> factors) {
@@ -49,6 +60,18 @@ public final class MfaAuthLoginResult {
             if (expiresIn <= 0) {
                 throw new IllegalArgumentException("expiresIn must be positive");
             }
+            int max = maxTtlSeconds(tokenClass);
+            if (expiresIn > max) {
+                throw new IllegalArgumentException(
+                        "expiresIn " + expiresIn + " exceeds max " + max + " for " + tokenClass);
+            }
+            if (factors != null) {
+                for (FactorRef f : factors) {
+                    if (f == null) {
+                        throw new IllegalArgumentException("factor entry null");
+                    }
+                }
+            }
             return new FlowPayload(
                     flowToken,
                     tokenClass,
@@ -59,6 +82,14 @@ public final class MfaAuthLoginResult {
 
         public static FlowPayload of(String flowToken, MfaFlowTokenClass tokenClass, int expiresIn) {
             return of(flowToken, tokenClass, expiresIn, null, null);
+        }
+
+        public static int maxTtlSeconds(MfaFlowTokenClass tokenClass) {
+            return switch (tokenClass) {
+                case PRE_AUTH -> PRE_AUTH_MAX_TTL_SECONDS;
+                case ENROLLMENT -> ENROLLMENT_MAX_TTL_SECONDS;
+                case RECOVERY -> RECOVERY_MAX_TTL_SECONDS;
+            };
         }
     }
 
@@ -77,7 +108,11 @@ public final class MfaAuthLoginResult {
             if (type == null || type.isBlank()) {
                 throw new IllegalArgumentException("factor type required");
             }
-            return new FactorRef(id, type, label, maskedTarget);
+            String normalized = type.trim().toUpperCase(Locale.ROOT);
+            if (!FACTOR_TYPES.contains(normalized)) {
+                throw new IllegalArgumentException("unknown factor type: " + type);
+            }
+            return new FactorRef(id, normalized, label, maskedTarget);
         }
     }
 

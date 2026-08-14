@@ -74,6 +74,10 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
             Set<String> factors = parseFactors(control.getGlobalAllowedFactors());
             long epoch = nz(control.getGlobalPolicyEpoch());
             long min = nz(control.getGlobalMinAcceptedEpoch());
+            // F-R2-04：负 epoch / min 不一致 → closed
+            if (epoch < 0 || min < 0 || min > epoch) {
+                return MfaControlTuple.degraded(epoch < 0 ? 0L : epoch, "epoch-invalid");
+            }
             String expected = MfaChecksumUtil.computeControl(
                     lifecycle.name(), mode.name(), factors, epoch, min);
             if (control.getChecksum() == null || !control.getChecksum().equals(expected)) {
@@ -212,12 +216,16 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         Set<String> factors = allowedFactors == null ? Collections.emptySet() : allowedFactors;
 
         MfaControlStateDO control = store.getControlState();
+        // 受控 global repair：允许从 DEGRADED 用显式合法 mode 修复；写前仍校验 epoch 单调
         long base = control == null || control.getGlobalPolicyEpoch() == null ? 0L : control.getGlobalPolicyEpoch();
-        long next = base + 1;
+        if (base < 0) {
+            throw new IllegalStateException("control epoch corrupt; refuse global confirm");
+        }
+        long next = nextEpoch(base);
 
         MfaLifecycleState lifecycle = resolveLifecycle(control);
         if (lifecycle == MfaLifecycleState.DEGRADED_CLOSED) {
-            lifecycle = MfaLifecycleState.ARMED;
+            lifecycle = MfaLifecycleState.ARMED; // 显式合法写修复
         } else if (lifecycle == MfaLifecycleState.ARMED) {
             // keep
         } else if (mode.isNonOff()) {
@@ -231,6 +239,9 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
 
         long minAccepted = control == null || control.getGlobalMinAcceptedEpoch() == null
                 ? 0L : control.getGlobalMinAcceptedEpoch();
+        if (minAccepted < 0) {
+            minAccepted = 0L;
+        }
         // 变严：提高 min_accepted
         if (mode == MfaMode.REQUIRED || mode == MfaMode.OPTIONAL) {
             MfaMode prev = control == null ? null : MfaMode.parseStrict(control.getGlobalMode());
@@ -268,34 +279,53 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         MfaLockOrder.requireValidOrder(List.of(
                 MfaLockOrder.Resource.GLOBAL_POLICY, MfaLockOrder.Resource.TENANT_POLICY));
 
-        // F-S1-03：tenant-first 非 OFF 必须在同事务写 ARMED + epoch，禁止半状态
+        // F-R2-01：tenant 写不得修复/降级损坏的 global control
+        // 仅允许：真正空库（无 control 且无已确认非 OFF）或 control 已完整可用 / clean UNINITIALIZED
         MfaControlStateDO control = store.getControlState();
-        MfaMode globalMode = control == null ? MfaMode.OFF : MfaMode.parseStrict(control.getGlobalMode());
+        MfaControlTuple tuple = readControlTuple();
+        boolean cleanEmpty = control == null && !hasConfirmedNonOffTenants();
+        boolean cleanUninitialized = tuple.isUsable()
+                && tuple.getLifecycleState() == MfaLifecycleState.UNINITIALIZED;
+        boolean controlUsableArmedOrOff = tuple.isUsable()
+                && tuple.getLifecycleState() == MfaLifecycleState.ARMED;
+        if (!cleanEmpty && !cleanUninitialized && !controlUsableArmedOrOff) {
+            throw new IllegalStateException(
+                    "cannot confirm tenant policy while control plane unusable: "
+                            + tuple.getUnusableReason());
+        }
+
+        MfaMode globalMode = cleanEmpty || cleanUninitialized
+                ? MfaMode.OFF
+                : tuple.getGlobalMode();
         if (globalMode == null) {
-            // 损坏/非法 global mode：可修复为 OFF 并 ARMED（若 tenant 非 OFF）
-            globalMode = MfaMode.OFF;
+            throw new IllegalStateException("global mode missing on usable control");
         }
         if (globalMode == MfaMode.REQUIRED && mode != MfaMode.REQUIRED && mode != MfaMode.INHERIT) {
             throw new IllegalArgumentException("global REQUIRED forbids tenant downgrade");
         }
 
-        Set<String> globalFactors = control == null
+        Set<String> globalFactors = cleanEmpty || cleanUninitialized
                 ? Collections.emptySet()
-                : parseFactors(control.getGlobalAllowedFactors());
+                : parseFactors(control != null ? control.getGlobalAllowedFactors() : null);
         Set<String> factors = allowedFactors == null ? Collections.emptySet() : allowedFactors;
 
-        long base = control == null || control.getGlobalPolicyEpoch() == null ? 0L : control.getGlobalPolicyEpoch();
-        long nextGlobal = base + 1;
+        long base = cleanEmpty ? 0L : tuple.getGlobalPolicyEpoch();
+        if (base < 0) {
+            throw new IllegalStateException("control epoch corrupt; refuse tenant confirm");
+        }
+        long nextGlobal = nextEpoch(base);
 
         // 任一已确认非 OFF（含本事务 tenant）或已 ARMED → 保持/进入 ARMED
         boolean arm = mode.isNonOff()
                 || globalMode.isNonOff()
-                || (control != null && MfaLifecycleState.ARMED.name().equals(control.getLifecycleState()))
+                || controlUsableArmedOrOff
                 || hasConfirmedNonOffTenants();
         MfaLifecycleState nextLifecycle = arm ? MfaLifecycleState.ARMED : MfaLifecycleState.UNINITIALIZED;
 
-        long minAccepted = control == null || control.getGlobalMinAcceptedEpoch() == null
-                ? 0L : control.getGlobalMinAcceptedEpoch();
+        long minAccepted = cleanEmpty || cleanUninitialized ? 0L : tuple.getGlobalMinAcceptedEpoch();
+        if (minAccepted < 0) {
+            throw new IllegalStateException("control min epoch corrupt");
+        }
         if (mode.isNonOff() || globalMode.isNonOff()) {
             minAccepted = Math.max(minAccepted, nextGlobal);
         }
@@ -385,6 +415,17 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
 
     private static long nz(Long v) {
         return v == null ? 0L : v;
+    }
+
+    /** F-R2-04：checked increment，禁止绕回负值 */
+    private static long nextEpoch(long current) {
+        if (current < 0) {
+            throw new IllegalStateException("epoch negative");
+        }
+        if (current == Long.MAX_VALUE) {
+            throw new IllegalStateException("epoch overflow");
+        }
+        return current + 1;
     }
 
     private static String cacheKey(long epoch, Long tenantId) {
