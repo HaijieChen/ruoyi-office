@@ -10,30 +10,38 @@ import java.util.Collections;
 import java.util.Set;
 
 /**
- * 策略缓存快照：必须含 lifecycleState + policyVersion + mode + allowedFactors + checksum + loadedAt。
- * <p>
- * 禁止缓存裸 mode。
+ * 策略缓存快照（ADR-MFA-v3 §4.3）：禁止裸 mode。
+ * 含 lifecycleState / globalPolicyEpoch / tenantPolicyEpoch / mode / allowedFactors / checksum / loadedAt。
  */
 @Value
 @Builder
 public class MfaPolicySnapshot {
 
     MfaLifecycleState lifecycleState;
-    long policyVersion;
+    long globalPolicyEpoch;
+    long tenantPolicyEpoch;
+    long globalMinAcceptedEpoch;
+    long tenantMinAcceptedEpoch;
     MfaMode mode;
     @Builder.Default
     Set<String> allowedFactors = Collections.emptySet();
     String checksum;
     Instant loadedAt;
-    /** 是否为安全可读的业务策略（false 时不得签发） */
     boolean usable;
-    /** 不可用原因（仅审计） */
     String unusableReason;
 
-    public static MfaPolicySnapshot degraded(long policyVersion, String reason) {
+    /** 兼容旧测试字段名 */
+    public long getPolicyVersion() {
+        return globalPolicyEpoch;
+    }
+
+    public static MfaPolicySnapshot degraded(long epoch, String reason) {
         return MfaPolicySnapshot.builder()
                 .lifecycleState(MfaLifecycleState.DEGRADED_CLOSED)
-                .policyVersion(policyVersion)
+                .globalPolicyEpoch(epoch)
+                .tenantPolicyEpoch(epoch)
+                .globalMinAcceptedEpoch(epoch)
+                .tenantMinAcceptedEpoch(epoch)
                 .mode(null)
                 .allowedFactors(Collections.emptySet())
                 .checksum(null)
@@ -46,7 +54,10 @@ public class MfaPolicySnapshot {
     public static MfaPolicySnapshot uninitializedOff() {
         return MfaPolicySnapshot.builder()
                 .lifecycleState(MfaLifecycleState.UNINITIALIZED)
-                .policyVersion(0L)
+                .globalPolicyEpoch(0L)
+                .tenantPolicyEpoch(0L)
+                .globalMinAcceptedEpoch(0L)
+                .tenantMinAcceptedEpoch(0L)
                 .mode(MfaMode.OFF)
                 .allowedFactors(Collections.emptySet())
                 .checksum("uninitialized-off")
@@ -54,5 +65,4 @@ public class MfaPolicySnapshot {
                 .usable(true)
                 .build();
     }
-
 }

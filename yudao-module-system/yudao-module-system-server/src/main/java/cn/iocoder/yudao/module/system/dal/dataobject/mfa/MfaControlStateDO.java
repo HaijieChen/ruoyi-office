@@ -10,7 +10,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 /**
- * MFA 控制面单例状态（ADR-MFA-v2 §4）：system_mfa_control_state，id 固定为 1。
+ * MFA 控制面单例（ADR-MFA-v3 §5）：全局策略权威并入本表。
  */
 @TableName("system_mfa_control_state")
 @KeySequence("system_mfa_control_state_seq")
@@ -27,14 +27,13 @@ public class MfaControlStateDO extends BaseDO {
 
     @TableId
     private Long id;
-    /**
-     * 生命周期：UNINITIALIZED / ARMED / DEGRADED_CLOSED
-     */
+    /** UNINITIALIZED / ARMED / DEGRADED_CLOSED */
     private String lifecycleState;
-    /**
-     * 全局策略版本门闩（单调递增）
-     */
-    private Long policyVersion;
+    /** OFF / OPTIONAL / REQUIRED */
+    private String globalMode;
+    private String globalAllowedFactors;
+    private Long globalPolicyEpoch;
+    private Long globalMinAcceptedEpoch;
     private LocalDateTime armedAt;
     private String checksum;
 

@@ -1,30 +1,48 @@
 package cn.iocoder.yudao.module.system.service.mfa.enums;
 
 /**
- * R-01 骨架：Token 类别。仅 {@link #ACCESS} 可作为业务 Bearer。
+ * ADR-MFA-v3 tokenClass 契约。
  * <p>
- * challenge / enrollment / recovery 句柄不得当作业务 Authorization。
+ * 仅 {@link #ACCESS} 可作为业务 Bearer；flow 类见 {@link MfaFlowTokenClass}。
+ * 禁止输出/接受 challengeToken、preAuthToken、enrollmentToken、recoveryToken 别名。
  */
 public enum MfaTokenClass {
 
-    /** 正常业务会话 access token */
     ACCESS,
-    /** 预认证 MFA challenge 句柄 */
     PRE_AUTH,
-    /** 绑定 enrollment 句柄 */
     ENROLLMENT,
-    /** 备份码恢复会话（限权，无 refresh） */
     RECOVERY;
 
     public boolean isBusinessBearer() {
         return this == ACCESS;
     }
 
-    /**
-     * 默认拒绝：未知或非 ACCESS 均不可访问业务 API。
-     */
     public static boolean allowsBusinessApi(MfaTokenClass tokenClass) {
         return tokenClass != null && tokenClass.isBusinessBearer();
     }
 
+    public static boolean isFlowClass(MfaTokenClass tokenClass) {
+        return tokenClass == PRE_AUTH || tokenClass == ENROLLMENT || tokenClass == RECOVERY;
+    }
+
+    /**
+     * 拒绝旧别名：服务端不识别 challengeToken 等字段名对应的 class。
+     */
+    public static MfaTokenClass parseCanonical(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String n = raw.trim().toUpperCase();
+        // 明确拒绝旧别名
+        if ("CHALLENGE".equals(n) || "PREAUTH".equals(n) || "PRE_AUTH_TOKEN".equals(n)
+                || "ENROLLMENT_TOKEN".equals(n) || "RECOVERY_TOKEN".equals(n)
+                || "CHALLENGE_TOKEN".equals(n)) {
+            return null;
+        }
+        try {
+            return MfaTokenClass.valueOf(n);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
 }

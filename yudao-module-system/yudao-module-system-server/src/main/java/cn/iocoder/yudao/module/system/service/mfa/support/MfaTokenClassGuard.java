@@ -23,11 +23,8 @@ public final class MfaTokenClassGuard {
             // 历史 access token 无声明：兼容放行；challenge 句柄不会进入 OAuth access 校验
             return true;
         }
-        try {
-            return MfaTokenClass.allowsBusinessApi(MfaTokenClass.valueOf(tokenClassRaw.trim()));
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
+        MfaTokenClass parsed = MfaTokenClass.parseCanonical(tokenClassRaw);
+        return MfaTokenClass.allowsBusinessApi(parsed);
     }
 
     /**

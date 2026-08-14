@@ -19,5 +19,4 @@ public class MfaConfiguration {
     public MfaChallengeHandleStore mfaChallengeHandleStore() {
         return new MfaChallengeHandleStore();
     }
-
 }

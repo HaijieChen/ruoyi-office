@@ -8,17 +8,17 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 策略 checksum：mode + allowedFactors + policyVersion。
+ * 策略 checksum：mode + allowedFactors + epoch。
  */
 public final class MfaChecksumUtil {
 
     private MfaChecksumUtil() {
     }
 
-    public static String compute(String mode, Set<String> allowedFactors, long policyVersion) {
+    public static String compute(String mode, Set<String> allowedFactors, long epoch) {
         String factors = allowedFactors == null ? "" :
                 allowedFactors.stream().sorted().collect(Collectors.joining(","));
-        String material = (mode == null ? "null" : mode) + "|" + factors + "|" + policyVersion;
+        String material = (mode == null ? "null" : mode) + "|" + factors + "|" + epoch;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(material.getBytes(StandardCharsets.UTF_8));
@@ -28,4 +28,17 @@ public final class MfaChecksumUtil {
         }
     }
 
+    public static String computeControl(String lifecycle, String mode, Set<String> factors,
+                                        long policyEpoch, long minAcceptedEpoch) {
+        String material = lifecycle + "|" + mode + "|" +
+                (factors == null ? "" : factors.stream().sorted().collect(Collectors.joining(",")))
+                + "|" + policyEpoch + "|" + minAcceptedEpoch;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(material.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
 }

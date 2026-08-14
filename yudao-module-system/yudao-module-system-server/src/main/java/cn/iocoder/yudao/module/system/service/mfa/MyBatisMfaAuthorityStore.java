@@ -1,29 +1,28 @@
 package cn.iocoder.yudao.module.system.service.mfa;
 
 import cn.iocoder.yudao.module.system.dal.dataobject.mfa.MfaControlStateDO;
-import cn.iocoder.yudao.module.system.dal.dataobject.mfa.MfaGlobalPolicyDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.mfa.MfaTenantPolicyDO;
+import cn.iocoder.yudao.module.system.dal.dataobject.mfa.MfaUserAssuranceDO;
 import cn.iocoder.yudao.module.system.dal.mysql.mfa.MfaControlStateMapper;
-import cn.iocoder.yudao.module.system.dal.mysql.mfa.MfaGlobalPolicyMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.mfa.MfaTenantPolicyMapper;
+import cn.iocoder.yudao.module.system.dal.mysql.mfa.MfaUserAssuranceMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 主库强一致策略存储。
+ * 主库权威存储（ADR-MFA-v3 切片 1）。
  */
 @Repository
-public class MyBatisMfaPolicyStore implements MfaPolicyStore {
+public class MyBatisMfaAuthorityStore implements MfaAuthorityStore {
 
     @Resource
     private MfaControlStateMapper controlStateMapper;
     @Resource
-    private MfaGlobalPolicyMapper globalPolicyMapper;
-    @Resource
     private MfaTenantPolicyMapper tenantPolicyMapper;
+    @Resource
+    private MfaUserAssuranceMapper userAssuranceMapper;
 
     @Override
     public MfaControlStateDO getControlState() {
@@ -36,20 +35,6 @@ public class MyBatisMfaPolicyStore implements MfaPolicyStore {
             controlStateMapper.insert(state);
         } else {
             controlStateMapper.updateById(state);
-        }
-    }
-
-    @Override
-    public MfaGlobalPolicyDO getGlobalPolicy() {
-        return globalPolicyMapper.selectSingleton();
-    }
-
-    @Override
-    public void saveGlobalPolicy(MfaGlobalPolicyDO policy) {
-        if (globalPolicyMapper.selectById(policy.getId()) == null) {
-            globalPolicyMapper.insert(policy);
-        } else {
-            globalPolicyMapper.updateById(policy);
         }
     }
 
@@ -70,21 +55,24 @@ public class MyBatisMfaPolicyStore implements MfaPolicyStore {
     }
 
     @Override
-    public List<ConfirmedPolicyProbe> scanConfirmedPolicies() {
-        List<ConfirmedPolicyProbe> probes = new ArrayList<>();
-        MfaGlobalPolicyDO global = globalPolicyMapper.selectSingleton();
-        if (global != null && Boolean.TRUE.equals(global.getConfirmed())) {
-            probes.add(new ConfirmedPolicyProbe("global", global.getMode(),
-                    global.getPolicyVersion(), global.getChecksum(), true));
-        }
-        List<MfaTenantPolicyDO> tenants = tenantPolicyMapper.selectAllConfirmed();
-        if (tenants != null) {
-            for (MfaTenantPolicyDO t : tenants) {
-                probes.add(new ConfirmedPolicyProbe("tenant:" + t.getTenantId(), t.getMode(),
-                        t.getPolicyVersion(), t.getChecksum(), true));
-            }
-        }
-        return probes;
+    public List<MfaTenantPolicyDO> listConfirmedTenantPolicies() {
+        return tenantPolicyMapper.selectAllConfirmed();
     }
 
+    @Override
+    public MfaUserAssuranceDO getUserAssurance(Long tenantId, Long userId) {
+        return userAssuranceMapper.selectByTenantAndUser(tenantId, userId);
+    }
+
+    @Override
+    public void saveUserAssurance(MfaUserAssuranceDO assurance) {
+        MfaUserAssuranceDO existing = userAssuranceMapper.selectByTenantAndUser(
+                assurance.getTenantId(), assurance.getUserId());
+        if (existing == null) {
+            userAssuranceMapper.insert(assurance);
+        } else {
+            assurance.setId(existing.getId());
+            userAssuranceMapper.updateById(assurance);
+        }
+    }
 }
