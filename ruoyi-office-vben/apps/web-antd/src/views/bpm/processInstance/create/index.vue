@@ -26,9 +26,7 @@ import {
 } from '#/api/bpm/definition';
 import { getProcessInstance } from '#/api/bpm/processInstance';
 
-import {
-  resolveCreateShellRedirectPath,
-} from './embed-registry';
+import { resolveCreateShellRedirectPath } from './embed-registry';
 import ProcessDefinitionDetail from './modules/form.vue';
 
 defineOptions({ name: 'BpmProcessInstanceCreate' });
@@ -167,8 +165,7 @@ async function handleSelect(
     // 无 create 时后端已从列表剔除；仍防御 canStart=false
     if (row.canStart === false) {
       message.warning(
-        row.cannotStartReason ||
-          '无发起权限，请联系管理员分配对应业务角色',
+        row.cannotStartReason || '无发起权限，请联系管理员分配对应业务角色',
       );
       return;
     }

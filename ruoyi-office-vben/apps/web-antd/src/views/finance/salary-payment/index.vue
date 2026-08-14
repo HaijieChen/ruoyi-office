@@ -34,7 +34,7 @@ function handleCreate() {
 /** 统一发起目录 / 深链：?openCreate=1 打开新建 */
 function shouldOpenCreateFromQuery() {
   const raw = route.query.openCreate;
-  if (raw == null) return false;
+  if (raw === undefined || raw === null) return false;
   const v = Array.isArray(raw) ? raw[0] : raw;
   return v === '1' || v === 'true' || v === 'create';
 }

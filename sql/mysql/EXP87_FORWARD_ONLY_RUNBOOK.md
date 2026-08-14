@@ -109,6 +109,6 @@ WHERE deleted = b'0'
 - [ ] 全库/Flowable 备份路径与 SHA256 已登记  
 - [ ] 预发完成一次 restore 演练（含 ACT_RE_* 校验 SQL）  
 - [ ] BPM path SQL 在定义部署后执行  
-- [ ] 有 create 权限时统一目录展示薪税两 key，点击跳转业务入口  
-- [ ] 通用 createProcessInstance 对薪税 key 仍拒绝  
+- [ ] 有 create 权限时统一目录展示薪税两 key，点击跳转业务入口
+- [ ] 通用 createProcessInstance 对薪税 key 仍拒绝
 - [ ] 回滚决策人与窗口已确认  

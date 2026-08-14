@@ -39,7 +39,9 @@ export function isCreateShellEmbedRegistered(key?: null | string): boolean {
   return !!key && key in CREATE_SHELL_EMBED_REGISTRY;
 }
 
-export function resolveCreateShellRedirectPath(key?: null | string): string | undefined {
+export function resolveCreateShellRedirectPath(
+  key?: null | string,
+): string | undefined {
   if (!key) return undefined;
   return CREATE_SHELL_REDIRECT_REGISTRY[key];
 }
