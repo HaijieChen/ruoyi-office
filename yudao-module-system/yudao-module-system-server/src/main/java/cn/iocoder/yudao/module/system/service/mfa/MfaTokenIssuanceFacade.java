@@ -42,9 +42,21 @@ public interface MfaTokenIssuanceFacade {
     MfaIssuanceResult rejectInternalAdminCreate(Long userId, Integer userType);
 
     /**
-     * 切片 2：PRE_AUTH/ENROLLMENT 挑战验证成功后的 T_issue 路径。
-     * 校验 flow + 因子 → CAS 消费 flow → 签发 access/refresh。
+     * 切片 2：PRE_AUTH 挑战验证成功后的 T_issue 路径。
+     * 校验 flow + 因子 → 签发 Token → CAS 消费 flow。
      */
     MfaIssuanceResult completeChallengeAndIssue(String rawFlowToken, String factorId, String factorType,
                                                 String code, String clientId, List<String> scopes);
+
+    /**
+     * 切片 3：ENROLLMENT flow 上启动 TOTP 绑定（secret 仅返回一次）。
+     */
+    cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp startTotpEnrollment(
+            String rawEnrollmentFlowToken, String accountName);
+
+    /**
+     * 切片 3：ENROLLMENT 确认 TOTP → ACTIVE + assurance++ + 签发 Token。
+     */
+    MfaIssuanceResult completeTotpEnrollmentAndIssue(String rawEnrollmentFlowToken, String factorId,
+                                                     String code, String clientId, List<String> scopes);
 }

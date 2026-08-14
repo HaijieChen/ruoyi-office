@@ -16,6 +16,8 @@ import cn.iocoder.yudao.module.system.enums.sms.SmsSceneEnum;
 import cn.iocoder.yudao.module.system.enums.social.SocialTypeEnum;
 import cn.iocoder.yudao.module.system.service.logger.LoginLogService;
 import cn.iocoder.yudao.module.system.service.member.MemberService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaAuthFlowService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaFactorService;
 import cn.iocoder.yudao.module.system.service.mfa.MfaTokenIssuanceFacade;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuanceOutcome;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaLoginStatus;
@@ -64,6 +66,10 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
     private OAuth2TokenService oauth2TokenService;
     @MockitoBean
     private MfaTokenIssuanceFacade mfaTokenIssuanceFacade;
+    @MockitoBean
+    private MfaAuthFlowService mfaAuthFlowService;
+    @MockitoBean
+    private MfaFactorService mfaFactorService;
     @MockitoBean
     private MemberService memberService;
     @MockitoBean

@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.system.service.mfa;
 
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaAuthFlowRecord;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorView;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaLockOrder;
 import org.springframework.stereotype.Service;
 
@@ -10,15 +12,20 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 切片 2 因子通道（修复 F-S2-04）：allowlist + TOTP last_used_step 防重放。
+ * 因子通道实现（切片 3）：allowlist、TOTP last_used_step、PENDING→ACTIVE 绑定。
+ * 存储为进程内权威可切换边界（生产可换 DB）。
  */
 @Service
 public class MfaFactorServiceImpl implements MfaFactorService {
@@ -26,9 +33,10 @@ public class MfaFactorServiceImpl implements MfaFactorService {
     private static final Set<String> TYPES = Set.of("TOTP", "SMS", "EMAIL");
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int OTP_TTL_SECONDS = 300;
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_PENDING = "PENDING";
 
     private final MfaAuthFlowService authFlowService;
-
     private final Map<String, FactorBinding> factors = new ConcurrentHashMap<>();
     private final Map<String, DeliveryCode> deliveryCodes = new ConcurrentHashMap<>();
 
@@ -38,7 +46,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
 
     @Override
     public void sendChallengeCode(String rawFlowToken, String factorId, String factorType) {
-        MfaLockOrder.requireValidOrder(java.util.List.of(
+        MfaLockOrder.requireValidOrder(List.of(
                 MfaLockOrder.Resource.FACTOR,
                 MfaLockOrder.Resource.FLOW_OR_DECISION_OR_CODE));
         String type = normalizeType(factorType);
@@ -48,7 +56,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         MfaAuthFlowRecord flow = requireActiveFlow(rawFlowToken);
         requireActionAllowed(flow, "send");
         requireFactorAllowed(flow, factorId);
-        FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type);
+        FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type, STATUS_ACTIVE);
         String code = String.format("%06d", RANDOM.nextInt(1_000_000));
         String key = deliveryKey(MfaAuthFlowServiceImpl.sha256Hex(rawFlowToken), factorId);
         deliveryCodes.put(key, new DeliveryCode(code, Instant.now().plusSeconds(OTP_TTL_SECONDS), binding.type));
@@ -56,7 +64,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
 
     @Override
     public boolean verifyChallengeCode(String rawFlowToken, String factorId, String factorType, String code) {
-        MfaLockOrder.requireValidOrder(java.util.List.of(
+        MfaLockOrder.requireValidOrder(List.of(
                 MfaLockOrder.Resource.FACTOR,
                 MfaLockOrder.Resource.FLOW_OR_DECISION_OR_CODE));
         if (code == null || code.isBlank()) {
@@ -66,7 +74,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         MfaAuthFlowRecord flow = requireActiveFlow(rawFlowToken);
         requireActionAllowed(flow, "verify");
         requireFactorAllowed(flow, factorId);
-        FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type);
+        FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type, STATUS_ACTIVE);
 
         if ("TOTP".equals(type)) {
             return verifyTotpWithReplayGuard(binding, code.trim(), Instant.now());
@@ -91,7 +99,77 @@ public class MfaFactorServiceImpl implements MfaFactorService {
                                      String secretOrDestination) {
         String type = normalizeType(factorType);
         factors.put(factorKey(tenantId, userId, factorId),
-                new FactorBinding(factorId, type, secretOrDestination, new AtomicLong(-1L)));
+                new FactorBinding(factorId, type, STATUS_ACTIVE, secretOrDestination, "Authenticator",
+                        null, new AtomicLong(-1L)));
+    }
+
+    @Override
+    public List<MfaFactorView> listActiveFactors(Long tenantId, Long userId) {
+        List<MfaFactorView> out = new ArrayList<>();
+        String prefix = tenantId + ":" + userId + ":";
+        for (Map.Entry<String, FactorBinding> e : factors.entrySet()) {
+            if (e.getKey().startsWith(prefix) && STATUS_ACTIVE.equals(e.getValue().status)) {
+                FactorBinding b = e.getValue();
+                out.add(MfaFactorView.builder()
+                        .id(b.factorId)
+                        .type(b.type)
+                        .status(b.status)
+                        .label(b.label)
+                        .maskedTarget(b.masked)
+                        .build());
+            }
+        }
+        return out;
+    }
+
+    @Override
+    public boolean hasActiveFactor(Long tenantId, Long userId) {
+        return !listActiveFactors(tenantId, userId).isEmpty();
+    }
+
+    @Override
+    public String resolveFactorType(Long tenantId, Long userId, String factorId) {
+        FactorBinding b = factors.get(factorKey(tenantId, userId, factorId));
+        return b == null ? null : b.type;
+    }
+
+    @Override
+    public MfaPendingTotp startPendingTotp(Long tenantId, Long userId, String accountName) {
+        MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FACTOR));
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(userId, "userId");
+        byte[] secretBytes = new byte[20];
+        RANDOM.nextBytes(secretBytes);
+        String secret = Base64.getUrlEncoder().withoutPadding().encodeToString(secretBytes);
+        String factorId = "totp-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String label = accountName == null ? ("user-" + userId) : accountName;
+        String otpauth = "otpauth://totp/OA:" + label
+                + "?secret=" + secret
+                + "&issuer=OA&algorithm=SHA1&digits=6&period=30";
+        factors.put(factorKey(tenantId, userId, factorId),
+                new FactorBinding(factorId, "TOTP", STATUS_PENDING, secret, "Authenticator",
+                        null, new AtomicLong(-1L)));
+        return MfaPendingTotp.builder()
+                .factorId(factorId)
+                .secretManual(secret)
+                .otpauthUri(otpauth)
+                .build();
+    }
+
+    @Override
+    public boolean activatePendingTotp(Long tenantId, Long userId, String factorId, String code) {
+        MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FACTOR));
+        FactorBinding binding = factors.get(factorKey(tenantId, userId, factorId));
+        if (binding == null || !"TOTP".equals(binding.type) || !STATUS_PENDING.equals(binding.status)) {
+            return false;
+        }
+        if (!verifyTotpWithReplayGuard(binding, code == null ? "" : code.trim(), Instant.now())) {
+            return false;
+        }
+        factors.put(factorKey(tenantId, userId, factorId),
+                new FactorBinding(binding.factorId, binding.type, STATUS_ACTIVE, binding.secretOrDestination,
+                        binding.label, binding.masked, binding.lastUsedStep));
+        return true;
     }
 
     @Override
@@ -107,7 +185,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
 
     private static void requireActionAllowed(MfaAuthFlowRecord flow, String action) {
         if (flow.getAllowedActions() == null || flow.getAllowedActions().isEmpty()) {
-            return; // 空 = 不限制（仅测试便利）；生产应显式 allowlist
+            return;
         }
         if (!flow.getAllowedActions().contains(action)) {
             throw new IllegalStateException("action not allowed on flow: " + action);
@@ -131,9 +209,9 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return flow;
     }
 
-    private FactorBinding requireBinding(Long tenantId, Long userId, String factorId, String type) {
+    private FactorBinding requireBinding(Long tenantId, Long userId, String factorId, String type, String status) {
         FactorBinding b = factors.get(factorKey(tenantId, userId, factorId));
-        if (b == null || !b.type.equals(type)) {
+        if (b == null || !b.type.equals(type) || !status.equals(b.status)) {
             throw new IllegalStateException("factor not registered: " + factorId);
         }
         return b;
@@ -156,9 +234,6 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return flowHash + ":" + factorId;
     }
 
-    /**
-     * TOTP 校验 + last_used_step CAS：同一 step 不可跨 flow 重放。
-     */
     private static boolean verifyTotpWithReplayGuard(FactorBinding binding, String code, Instant now) {
         long step = now.getEpochSecond() / 30L;
         Long matchedStep = null;
@@ -174,7 +249,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         while (true) {
             long prev = binding.lastUsedStep.get();
             if (matchedStep <= prev) {
-                return false; // 重放
+                return false;
             }
             if (binding.lastUsedStep.compareAndSet(prev, matchedStep)) {
                 return true;
@@ -192,8 +267,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
                     | ((hash[offset + 1] & 0xff) << 16)
                     | ((hash[offset + 2] & 0xff) << 8)
                     | (hash[offset + 3] & 0xff);
-            int otp = binary % 1_000_000;
-            return String.format("%06d", otp);
+            return String.format("%06d", binary % 1_000_000);
         } catch (Exception e) {
             throw new IllegalStateException("TOTP failed", e);
         }
@@ -210,8 +284,8 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return r == 0;
     }
 
-    private record FactorBinding(String factorId, String type, String secretOrDestination,
-                                 AtomicLong lastUsedStep) {
+    private record FactorBinding(String factorId, String type, String status, String secretOrDestination,
+                                 String label, String masked, AtomicLong lastUsedStep) {
     }
 
     private record DeliveryCode(String code, Instant expiresAt, String type) {

@@ -84,4 +84,18 @@ public interface AdminAuthService {
      */
     void resetPassword(AuthResetPasswordReqVO reqVO);
 
+    // ========== MFA 切片 3 ==========
+
+    /** PRE_AUTH：发送 SMS/EMAIL 挑战码 */
+    void mfaSendCode(AuthMfaCodeSendReqVO reqVO);
+
+    /** PRE_AUTH：校验因子并签发 access/refresh */
+    AuthLoginRespVO mfaVerify(AuthMfaVerifyReqVO reqVO);
+
+    /** ENROLLMENT：开始 TOTP 绑定 */
+    AuthMfaEnrollmentTotpStartRespVO mfaEnrollmentTotpStart(AuthMfaEnrollmentTotpStartReqVO reqVO);
+
+    /** ENROLLMENT：确认 TOTP 并签发 */
+    AuthLoginRespVO mfaEnrollmentTotpConfirm(AuthMfaEnrollmentTotpConfirmReqVO reqVO);
+
 }

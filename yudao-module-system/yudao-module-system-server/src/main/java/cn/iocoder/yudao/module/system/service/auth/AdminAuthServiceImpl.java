@@ -23,9 +23,13 @@ import cn.iocoder.yudao.module.system.enums.oauth2.OAuth2ClientConstants;
 import cn.iocoder.yudao.module.system.enums.sms.SmsSceneEnum;
 import cn.iocoder.yudao.module.system.service.logger.LoginLogService;
 import cn.iocoder.yudao.module.system.service.member.MemberService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaAuthFlowService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaFactorService;
 import cn.iocoder.yudao.module.system.service.mfa.MfaTokenIssuanceFacade;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuancePath;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaAuthFlowRecord;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
 import cn.iocoder.yudao.module.system.service.social.SocialUserService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
@@ -65,6 +69,10 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private OAuth2TokenService oauth2TokenService;
     @Resource
     private MfaTokenIssuanceFacade mfaTokenIssuanceFacade;
+    @Resource
+    private MfaAuthFlowService mfaAuthFlowService;
+    @Resource
+    private MfaFactorService mfaFactorService;
     @Resource
     private SocialUserService socialUserService;
     @Resource
@@ -238,6 +246,72 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     public AuthLoginRespVO refreshToken(String refreshToken) {
         MfaIssuanceResult result = mfaTokenIssuanceFacade.refresh(
                 MfaIssuancePath.REFRESH_TOKEN, refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT);
+        if (result.getLoginResp() != null) {
+            return result.getLoginResp();
+        }
+        return BeanUtils.toBean(result.getAccessToken(), AuthLoginRespVO.class);
+    }
+
+    // ========== MFA 切片 3 HTTP 业务 ==========
+
+    @Override
+    public void mfaSendCode(AuthMfaCodeSendReqVO reqVO) {
+        MfaAuthFlowRecord flow = mfaAuthFlowService.resolveActive(reqVO.getFlowToken());
+        if (flow == null) {
+            throw exception(MFA_FLOW_INVALID);
+        }
+        String type = mfaFactorService.resolveFactorType(flow.getTenantId(), flow.getUserId(), reqVO.getFactorId());
+        if (type == null) {
+            throw exception(MFA_FACTOR_VERIFY_FAILED);
+        }
+        try {
+            mfaFactorService.sendChallengeCode(reqVO.getFlowToken(), reqVO.getFactorId(), type);
+        } catch (IllegalStateException | IllegalArgumentException ex) {
+            throw exception(MFA_FACTOR_VERIFY_FAILED);
+        }
+    }
+
+    @Override
+    public AuthLoginRespVO mfaVerify(AuthMfaVerifyReqVO reqVO) {
+        MfaAuthFlowRecord flow = mfaAuthFlowService.resolveActive(reqVO.getFlowToken());
+        if (flow == null) {
+            throw exception(MFA_FLOW_INVALID);
+        }
+        String type = mfaFactorService.resolveFactorType(flow.getTenantId(), flow.getUserId(), reqVO.getFactorId());
+        if (type == null) {
+            throw exception(MFA_FACTOR_VERIFY_FAILED);
+        }
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.completeChallengeAndIssue(
+                reqVO.getFlowToken(), reqVO.getFactorId(), type, reqVO.getCode(),
+                OAuth2ClientConstants.CLIENT_ID_DEFAULT, null);
+        if (result.getLoginResp() != null) {
+            return result.getLoginResp();
+        }
+        return BeanUtils.toBean(result.getAccessToken(), AuthLoginRespVO.class);
+    }
+
+    @Override
+    public AuthMfaEnrollmentTotpStartRespVO mfaEnrollmentTotpStart(AuthMfaEnrollmentTotpStartReqVO reqVO) {
+        MfaAuthFlowRecord flow = mfaAuthFlowService.resolveActive(reqVO.getFlowToken());
+        if (flow == null) {
+            throw exception(MFA_FLOW_INVALID);
+        }
+        AdminUserDO user = userService.getUser(flow.getUserId());
+        String account = user != null ? user.getUsername() : ("user-" + flow.getUserId());
+        MfaPendingTotp pending = mfaTokenIssuanceFacade.startTotpEnrollment(reqVO.getFlowToken(), account);
+        return AuthMfaEnrollmentTotpStartRespVO.builder()
+                .factorId(pending.getFactorId())
+                .otpauthUri(pending.getOtpauthUri())
+                .secretManual(pending.getSecretManual())
+                .flowToken(reqVO.getFlowToken())
+                .build();
+    }
+
+    @Override
+    public AuthLoginRespVO mfaEnrollmentTotpConfirm(AuthMfaEnrollmentTotpConfirmReqVO reqVO) {
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.completeTotpEnrollmentAndIssue(
+                reqVO.getFlowToken(), reqVO.getFactorId(), reqVO.getCode(),
+                OAuth2ClientConstants.CLIENT_ID_DEFAULT, null);
         if (result.getLoginResp() != null) {
             return result.getLoginResp();
         }
