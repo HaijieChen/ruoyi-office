@@ -42,7 +42,11 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.GLOBAL_POLICY));
         try {
             MfaControlStateDO control = store.getControlState();
+            // F-S1-01：control 缺失时仍须扫描已确认策略；存在非 OFF 则 closed，不得 usable OFF
             if (control == null) {
+                if (hasConfirmedNonOffTenants()) {
+                    return MfaControlTuple.degraded(0L, "missing-control-with-confirmed-non-off-policy");
+                }
                 return MfaControlTuple.uninitializedOff();
             }
             MfaLifecycleState lifecycle = resolveLifecycle(control);
@@ -52,6 +56,14 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
             if (lifecycle == MfaLifecycleState.UNINITIALIZED) {
                 if (hasConfirmedNonOff(control)) {
                     return MfaControlTuple.degraded(nz(control.getGlobalPolicyEpoch()), "uninitialized-but-non-off-present");
+                }
+                // F-S1-01：UNINITIALIZED 下非法 global_mode 不得回落 OFF
+                if (control.getGlobalMode() != null && !control.getGlobalMode().isBlank()) {
+                    MfaMode modeProbe = MfaMode.parseStrict(control.getGlobalMode());
+                    if (modeProbe == null || modeProbe == MfaMode.INHERIT) {
+                        return MfaControlTuple.degraded(nz(control.getGlobalPolicyEpoch()),
+                                "uninitialized-global-mode-illegal:" + control.getGlobalMode());
+                    }
                 }
                 return MfaControlTuple.uninitializedOff();
             }
@@ -256,29 +268,63 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         MfaLockOrder.requireValidOrder(List.of(
                 MfaLockOrder.Resource.GLOBAL_POLICY, MfaLockOrder.Resource.TENANT_POLICY));
 
-        MfaPolicySnapshot global = resolveEffectivePolicy(null);
-        if (!global.isUsable() || global.getLifecycleState() == MfaLifecycleState.DEGRADED_CLOSED) {
-            throw new IllegalStateException("cannot update tenant policy while control plane closed");
+        // F-S1-03：tenant-first 非 OFF 必须在同事务写 ARMED + epoch，禁止半状态
+        MfaControlStateDO control = store.getControlState();
+        MfaMode globalMode = control == null ? MfaMode.OFF : MfaMode.parseStrict(control.getGlobalMode());
+        if (globalMode == null) {
+            // 损坏/非法 global mode：可修复为 OFF 并 ARMED（若 tenant 非 OFF）
+            globalMode = MfaMode.OFF;
         }
-        if (global.getMode() == MfaMode.REQUIRED && mode != MfaMode.REQUIRED && mode != MfaMode.INHERIT) {
+        if (globalMode == MfaMode.REQUIRED && mode != MfaMode.REQUIRED && mode != MfaMode.INHERIT) {
             throw new IllegalArgumentException("global REQUIRED forbids tenant downgrade");
         }
 
-        // 推进 global epoch，保持门闩一致（切片 1 简化：与租户同事务递增）
-        long nextGlobal = confirmGlobalPolicy(
-                global.getMode() == null ? MfaMode.OFF : global.getMode(),
-                global.getAllowedFactors());
-
+        Set<String> globalFactors = control == null
+                ? Collections.emptySet()
+                : parseFactors(control.getGlobalAllowedFactors());
         Set<String> factors = allowedFactors == null ? Collections.emptySet() : allowedFactors;
-        long minAccepted = nextGlobal;
-        String checksum = MfaChecksumUtil.compute(mode.name(), factors, nextGlobal);
+
+        long base = control == null || control.getGlobalPolicyEpoch() == null ? 0L : control.getGlobalPolicyEpoch();
+        long nextGlobal = base + 1;
+
+        // 任一已确认非 OFF（含本事务 tenant）或已 ARMED → 保持/进入 ARMED
+        boolean arm = mode.isNonOff()
+                || globalMode.isNonOff()
+                || (control != null && MfaLifecycleState.ARMED.name().equals(control.getLifecycleState()))
+                || hasConfirmedNonOffTenants();
+        MfaLifecycleState nextLifecycle = arm ? MfaLifecycleState.ARMED : MfaLifecycleState.UNINITIALIZED;
+
+        long minAccepted = control == null || control.getGlobalMinAcceptedEpoch() == null
+                ? 0L : control.getGlobalMinAcceptedEpoch();
+        if (mode.isNonOff() || globalMode.isNonOff()) {
+            minAccepted = Math.max(minAccepted, nextGlobal);
+        }
+
+        String controlChecksum = MfaChecksumUtil.computeControl(
+                nextLifecycle.name(), globalMode.name(), globalFactors, nextGlobal, minAccepted);
+        MfaControlStateDO nextState = MfaControlStateDO.builder()
+                .id(MfaControlStateDO.SINGLETON_ID)
+                .lifecycleState(nextLifecycle.name())
+                .globalMode(globalMode.name())
+                .globalAllowedFactors(String.join(",", globalFactors))
+                .globalPolicyEpoch(nextGlobal)
+                .globalMinAcceptedEpoch(minAccepted)
+                .armedAt(nextLifecycle == MfaLifecycleState.ARMED
+                        ? (control != null && control.getArmedAt() != null
+                        ? control.getArmedAt() : LocalDateTime.now())
+                        : null)
+                .checksum(controlChecksum)
+                .build();
+        store.saveControlState(nextState);
+
+        String tenantChecksum = MfaChecksumUtil.compute(mode.name(), factors, nextGlobal);
         MfaTenantPolicyDO policy = MfaTenantPolicyDO.builder()
                 .tenantId(tenantId)
                 .mode(mode.name())
                 .allowedFactors(String.join(",", factors))
                 .policyEpoch(nextGlobal)
-                .minAcceptedEpoch(minAccepted)
-                .checksum(checksum)
+                .minAcceptedEpoch(nextGlobal)
+                .checksum(tenantChecksum)
                 .confirmed(true)
                 .build();
         store.saveTenantPolicy(policy);
@@ -298,12 +344,27 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
     }
 
     private boolean hasConfirmedNonOff(MfaControlStateDO control) {
-        MfaMode mode = MfaMode.parseStrict(control.getGlobalMode());
-        if (mode != null && mode.isNonOff()) {
-            return true;
+        if (control != null) {
+            MfaMode mode = MfaMode.parseStrict(control.getGlobalMode());
+            // 非法 mode 也视为“不能证明 OFF”
+            if (control.getGlobalMode() != null && !control.getGlobalMode().isBlank()
+                    && (mode == null || mode == MfaMode.INHERIT)) {
+                return true;
+            }
+            if (mode != null && mode.isNonOff()) {
+                return true;
+            }
         }
+        return hasConfirmedNonOffTenants();
+    }
+
+    private boolean hasConfirmedNonOffTenants() {
         for (MfaTenantPolicyDO t : store.listConfirmedTenantPolicies()) {
+            if (!Boolean.TRUE.equals(t.getConfirmed())) {
+                continue;
+            }
             MfaMode tm = MfaMode.parseStrict(t.getMode());
+            // 非法 tenant mode 或非 OFF → 不能证明安全 OFF
             if (tm == null || tm.isNonOff()) {
                 return true;
             }

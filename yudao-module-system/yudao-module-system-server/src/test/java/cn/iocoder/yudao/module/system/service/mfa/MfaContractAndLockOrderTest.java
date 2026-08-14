@@ -58,11 +58,7 @@ public class MfaContractAndLockOrderTest extends BaseMockitoUnitTest {
 
         MfaAuthLoginResult flow = MfaAuthLoginResult.mfaFlow(
                 MfaLoginStatus.MFA_REQUIRED,
-                MfaAuthLoginResult.FlowPayload.builder()
-                        .flowToken("opaque-flow")
-                        .tokenClass(MfaFlowTokenClass.PRE_AUTH)
-                        .expiresIn(300)
-                        .build());
+                MfaAuthLoginResult.FlowPayload.of("opaque-flow", MfaFlowTokenClass.PRE_AUTH, 300));
         assertFalse(flow.hasAccessOrRefreshToken());
         assertNull(flow.getAccessToken());
         assertNull(flow.getRefreshToken());
@@ -74,7 +70,6 @@ public class MfaContractAndLockOrderTest extends BaseMockitoUnitTest {
     void authLoginResult_rejectsAuthenticatedAsFlow() {
         assertThrows(IllegalArgumentException.class, () ->
                 MfaAuthLoginResult.mfaFlow(MfaLoginStatus.AUTHENTICATED,
-                        MfaAuthLoginResult.FlowPayload.builder()
-                                .flowToken("x").tokenClass(MfaFlowTokenClass.PRE_AUTH).expiresIn(1).build()));
+                        MfaAuthLoginResult.FlowPayload.of("x", MfaFlowTokenClass.PRE_AUTH, 1)));
     }
 }

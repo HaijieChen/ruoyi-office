@@ -15,6 +15,8 @@ import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.MFA_POLICY
 
 /**
  * Assurance Authority（ADR-MFA-v3 §5 切片 1）。
+ * <p>
+ * F-S1-04：损坏行 fail-closed，不得猜 epoch=0 / NONE。
  */
 @Service
 public class MfaAssuranceAuthorityImpl implements MfaAssuranceAuthority {
@@ -35,14 +37,13 @@ public class MfaAssuranceAuthorityImpl implements MfaAssuranceAuthority {
         if (row == null) {
             return null;
         }
-        return toView(row);
+        return toViewStrict(row);
     }
 
     @Override
     public MfaUserAssuranceView requireAssuranceForAdmin(Long tenantId, Long userId) {
         MfaUserAssuranceView view = getAssurance(tenantId, userId);
         if (view == null) {
-            // 缺行不得按 epoch=0 猜测
             throw exception(MFA_POLICY_UNAVAILABLE);
         }
         return view;
@@ -55,7 +56,8 @@ public class MfaAssuranceAuthorityImpl implements MfaAssuranceAuthority {
         Objects.requireNonNull(userId, "userId");
         MfaUserAssuranceDO existing = store.getUserAssurance(tenantId, userId);
         if (existing != null) {
-            return toView(existing);
+            // 已存在则严格解析；损坏不得 bootstrap 掩盖
+            return toViewStrict(existing);
         }
         MfaUserAssuranceDO row = MfaUserAssuranceDO.builder()
                 .tenantId(tenantId)
@@ -65,7 +67,7 @@ public class MfaAssuranceAuthorityImpl implements MfaAssuranceAuthority {
                 .assuranceEpoch(0L)
                 .build();
         store.saveUserAssurance(row);
-        return toView(row);
+        return toViewStrict(row);
     }
 
     @Override
@@ -80,7 +82,13 @@ public class MfaAssuranceAuthorityImpl implements MfaAssuranceAuthority {
         if (row == null) {
             throw exception(MFA_POLICY_UNAVAILABLE);
         }
-        long next = (row.getAssuranceEpoch() == null ? 0L : row.getAssuranceEpoch()) + 1;
+        // 先严格校验当前行
+        toViewStrict(row);
+        long current = row.getAssuranceEpoch();
+        if (current == Long.MAX_VALUE) {
+            throw exception(MFA_POLICY_UNAVAILABLE);
+        }
+        long next = current + 1;
         row.setAssuranceEpoch(next);
         if (newEnrollmentState != null) {
             row.setEnrollmentState(newEnrollmentState.name());
@@ -92,10 +100,19 @@ public class MfaAssuranceAuthorityImpl implements MfaAssuranceAuthority {
         return next;
     }
 
-    private static MfaUserAssuranceView toView(MfaUserAssuranceDO row) {
+    /**
+     * 严格视图：未知 enrollment / null 或负 epoch / 缺主键 → fail-closed。
+     */
+    private static MfaUserAssuranceView toViewStrict(MfaUserAssuranceDO row) {
+        if (row.getTenantId() == null || row.getUserId() == null) {
+            throw exception(MFA_POLICY_UNAVAILABLE);
+        }
         MfaEnrollmentState es = MfaEnrollmentState.parseStrict(row.getEnrollmentState());
         if (es == null) {
-            es = MfaEnrollmentState.NONE;
+            throw exception(MFA_POLICY_UNAVAILABLE);
+        }
+        if (row.getAssuranceEpoch() == null || row.getAssuranceEpoch() < 0) {
+            throw exception(MFA_POLICY_UNAVAILABLE);
         }
         return MfaUserAssuranceView.builder()
                 .tenantId(row.getTenantId())
@@ -103,7 +120,7 @@ public class MfaAssuranceAuthorityImpl implements MfaAssuranceAuthority {
                 .enabled(Boolean.TRUE.equals(row.getEnabled()))
                 .enrollmentState(es)
                 .preferredFactorId(row.getPreferredFactorId())
-                .assuranceEpoch(row.getAssuranceEpoch() == null ? 0L : row.getAssuranceEpoch())
+                .assuranceEpoch(row.getAssuranceEpoch())
                 .build();
     }
 }
