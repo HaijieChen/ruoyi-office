@@ -36,5 +36,10 @@ public class MfaControlStateDO extends BaseDO {
     private Long globalMinAcceptedEpoch;
     private LocalDateTime armedAt;
     private String checksum;
+    /**
+     * v2 {@code system_mfa_global_policy} 是否已消费进本 control（F-R4-02/03）。
+     * 一旦为 true，迁移脚本不得再按 legacy 回写。
+     */
+    private Boolean legacyGlobalMerged;
 
 }

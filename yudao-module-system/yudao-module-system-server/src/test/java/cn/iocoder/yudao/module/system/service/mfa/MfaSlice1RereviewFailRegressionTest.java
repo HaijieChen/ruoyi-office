@@ -152,8 +152,7 @@ public class MfaSlice1RereviewFailRegressionTest extends BaseMockitoUnitTest {
         assertTrue(sql.contains("confirmed"));
         assertTrue(sql.contains("GROUP_CONCAT") && sql.contains("ORDER BY"),
                 "canonical factor order for Java parity");
-        assertTrue(sql.contains("^[0-9a-f]{64}$") || sql.contains("NOT REGEXP"),
-                "one-shot consume gate");
+        assertTrue(sql.contains("legacy_global_merged"), "persistent consume flag (not hex shape)");
         assertFalse(sql.contains("可手工合并"), "must not rely on manual merge comment only");
     }
 

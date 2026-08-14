@@ -37,6 +37,10 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         this.store = store;
     }
 
+    /** 策略面允许的因子类型（与 contract FactorRef 一致）。 */
+    private static final Set<String> POLICY_FACTOR_TYPES =
+            Set.of("TOTP", "SMS", "EMAIL", "BACKUP_CODE");
+
     @Override
     public MfaControlTuple readControlTuple() {
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.GLOBAL_POLICY));
@@ -50,14 +54,15 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
                 }
                 return MfaControlTuple.uninitializedOff();
             }
-            MfaLifecycleState lifecycle = resolveLifecycle(control);
-            if (lifecycle == MfaLifecycleState.DEGRADED_CLOSED) {
-                return MfaControlTuple.degraded(rawEpochOrZero(control), "lifecycle-illegal");
+            // F-R4-01：null/blank lifecycle 不得猜 UNINITIALIZED
+            MfaLifecycleState lifecycle = resolveLifecycleStrict(control);
+            if (lifecycle == null || lifecycle == MfaLifecycleState.DEGRADED_CLOSED) {
+                return MfaControlTuple.degraded(rawEpochOrZero(control),
+                        lifecycle == null ? "lifecycle-null-or-blank" : "lifecycle-illegal");
             }
 
-            // F-R3-01：持久化 control（含 UNINITIALIZED）一律校验 mode/epoch/min/checksum，
-            // 禁止把损坏行折叠为 usable OFF / epoch=0
-            MfaMode mode = parsePersistedMode(control);
+            // F-R3-01 / F-R4-01：持久化 control 一律严格解析，禁止猜 OFF / 折叠 epoch
+            MfaMode mode = parsePersistedModeStrict(control);
             if (mode == null || mode == MfaMode.INHERIT) {
                 return MfaControlTuple.degraded(rawEpochOrZero(control),
                         "global-mode-illegal:" + control.getGlobalMode());
@@ -66,19 +71,34 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
                 if (mode.isNonOff() || hasConfirmedNonOffTenants()) {
                     return MfaControlTuple.degraded(rawEpochOrZero(control), "uninitialized-but-non-off-present");
                 }
-                // UNINITIALIZED 仅允许 OFF
                 if (mode != MfaMode.OFF) {
                     return MfaControlTuple.degraded(rawEpochOrZero(control), "uninitialized-mode-not-off");
                 }
+                // F-R4-01：UNINITIALIZED 必须无 ARMED 标记
+                if (control.getArmedAt() != null) {
+                    return MfaControlTuple.degraded(rawEpochOrZero(control), "uninitialized-armed-marker-present");
+                }
             }
 
-            long epoch = control.getGlobalPolicyEpoch() == null ? 0L : control.getGlobalPolicyEpoch();
-            long min = control.getGlobalMinAcceptedEpoch() == null ? 0L : control.getGlobalMinAcceptedEpoch();
-            // F-R2-04 / F-R3-01：负 epoch / min 不一致 → closed（含 UNINITIALIZED 行）
+            // null epoch/min 对持久化行视为非法（不猜 0），仅允许显式数值
+            if (control.getGlobalPolicyEpoch() == null || control.getGlobalMinAcceptedEpoch() == null) {
+                return MfaControlTuple.degraded(rawEpochOrZero(control), "epoch-or-min-null");
+            }
+            long epoch = control.getGlobalPolicyEpoch();
+            long min = control.getGlobalMinAcceptedEpoch();
+            // F-R2-04 / F-R3-01：负 epoch / min 不一致 → closed
             if (epoch < 0 || min < 0 || min > epoch) {
                 return MfaControlTuple.degraded(epoch < 0 ? 0L : epoch, "epoch-invalid");
             }
+            // F-R4-01：UNINITIALIZED 的 min 必须为 0（非零 min 与未初始化生命周期不兼容）
+            if (lifecycle == MfaLifecycleState.UNINITIALIZED && min != 0L) {
+                return MfaControlTuple.degraded(epoch, "uninitialized-nonzero-min");
+            }
+
             Set<String> factors = parseFactors(control.getGlobalAllowedFactors());
+            if (!factorsTyped(factors)) {
+                return MfaControlTuple.degraded(epoch, "factor-type-illegal");
+            }
             String expected = MfaChecksumUtil.computeControl(
                     lifecycle.name(), mode.name(), factors, epoch, min);
             if (control.getChecksum() == null || !control.getChecksum().equals(expected)) {
@@ -224,11 +244,12 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         }
         long next = nextEpoch(base);
 
-        MfaLifecycleState lifecycle = resolveLifecycle(control);
-        if (lifecycle == MfaLifecycleState.DEGRADED_CLOSED) {
-            lifecycle = MfaLifecycleState.ARMED; // 显式合法写修复
+        MfaLifecycleState lifecycle = control == null ? MfaLifecycleState.UNINITIALIZED
+                : resolveLifecycleStrict(control);
+        if (lifecycle == null || lifecycle == MfaLifecycleState.DEGRADED_CLOSED) {
+            lifecycle = mode.isNonOff() ? MfaLifecycleState.ARMED : MfaLifecycleState.UNINITIALIZED;
         } else if (lifecycle == MfaLifecycleState.ARMED) {
-            // keep
+            // keep ARMED
         } else if (mode.isNonOff()) {
             lifecycle = MfaLifecycleState.ARMED;
         } else {
@@ -266,6 +287,8 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
                         ? control.getArmedAt() : LocalDateTime.now())
                         : null)
                 .checksum(checksum)
+                // F-R4-02/03：应用写即表示 v3 权威已接管，禁止后续 legacy 回写
+                .legacyGlobalMerged(true)
                 .build();
         store.saveControlState(nextState);
         invalidateCache();
@@ -345,6 +368,7 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
                         ? control.getArmedAt() : LocalDateTime.now())
                         : null)
                 .checksum(controlChecksum)
+                .legacyGlobalMerged(true)
                 .build();
         store.saveControlState(nextState);
 
@@ -403,23 +427,39 @@ public class MfaPolicyAuthorityImpl implements MfaPolicyAuthority {
         return false;
     }
 
-    private MfaLifecycleState resolveLifecycle(MfaControlStateDO control) {
-        if (control == null || control.getLifecycleState() == null) {
-            return MfaLifecycleState.UNINITIALIZED;
+    /**
+     * 严格解析 lifecycle：null/blank → null（调用方 closed）；非法枚举 → DEGRADED_CLOSED。
+     * 不得把 null 猜成 UNINITIALIZED（F-R4-01）。
+     */
+    private MfaLifecycleState resolveLifecycleStrict(MfaControlStateDO control) {
+        if (control == null || control.getLifecycleState() == null || control.getLifecycleState().isBlank()) {
+            return null;
         }
         try {
-            return MfaLifecycleState.valueOf(control.getLifecycleState());
+            return MfaLifecycleState.valueOf(control.getLifecycleState().trim());
         } catch (Exception ex) {
             return MfaLifecycleState.DEGRADED_CLOSED;
         }
     }
 
-    /** 持久化 mode：空白按 OFF；非法返回 null（不得猜 OFF）。 */
-    private static MfaMode parsePersistedMode(MfaControlStateDO control) {
+    /** 持久化 mode：null/blank/非法一律 null，不得猜 OFF（F-R4-01）。 */
+    private static MfaMode parsePersistedModeStrict(MfaControlStateDO control) {
         if (control.getGlobalMode() == null || control.getGlobalMode().isBlank()) {
-            return MfaMode.OFF;
+            return null;
         }
-        return MfaMode.parseStrict(control.getGlobalMode());
+        return MfaMode.parseStrict(control.getGlobalMode().trim());
+    }
+
+    private static boolean factorsTyped(Set<String> factors) {
+        if (factors == null || factors.isEmpty()) {
+            return true;
+        }
+        for (String f : factors) {
+            if (f == null || !POLICY_FACTOR_TYPES.contains(f.toUpperCase(java.util.Locale.ROOT))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static long rawEpochOrZero(MfaControlStateDO control) {

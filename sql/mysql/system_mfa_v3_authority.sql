@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS `system_mfa_control_state` (
   `global_min_accepted_epoch` bigint NOT NULL DEFAULT 0 COMMENT '最低可接受策略 epoch',
   `armed_at` datetime NULL DEFAULT NULL COMMENT '首次 ARMED 时间',
   `checksum` varchar(128) NULL DEFAULT NULL COMMENT '控制面 checksum',
+  `legacy_global_merged` bit(1) NOT NULL DEFAULT b'0' COMMENT 'v2 global_policy 是否已消费（F-R4-02/03）',
   `creator` varchar(64) NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) NULL DEFAULT '' COMMENT '更新者',
@@ -99,6 +100,16 @@ SET @sql := (
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- F-R4-02/03：显式消费标记（不得用 64hex 形状推断已迁移；真实 v2 checksum 亦为 64hex）
+SET @sql := (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `system_mfa_control_state` ADD COLUMN `legacy_global_merged` bit(1) NOT NULL DEFAULT b''0'' COMMENT ''v2 global_policy 是否已消费'' AFTER `checksum`',
+    'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'system_mfa_control_state' AND COLUMN_NAME = 'legacy_global_merged'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- 若存在 v2 policy_version 列，回填到 global_policy_epoch（仅当 epoch 仍为 0）
 SET @has_pv := (
   SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -141,28 +152,26 @@ SET @sql := IF(@has_tpv > 0,
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ========== 3) 自旁路/v2 system_mfa_global_policy 语义合并到 control_state ==========
--- 单向/可重放：legacy 仅在 control 尚未成为 v3 权威时一次性消费；
--- 不得用 stale legacy OFF 覆盖已更新的 v3 REQUIRED/OPTIONAL（F-R3-02）。
+-- F-R4-02：用持久列 legacy_global_merged 作一次性消费标记；禁止用 64hex 形状推断版本
+--   （真实 ADR-v2 checksum 亦为 64 位小写 SHA-256）。
+-- F-R4-03：不得用 stale legacy OFF 覆盖/重签已有非 OFF 的 control（含损坏 nonhex）；
+--   禁止对可疑非 seed 行按当前列重新签名。
+-- F-R3-03：factors 字典序后 SHA2，与 Java MfaChecksumUtil.computeControl 一致。
 -- 不删除 legacy 表（只读档案）。
--- checksum 与 Java MfaChecksumUtil.computeControl 一致：
---   SHA2(lifecycle|mode|sortedFactors|epoch|min, 256) 小写 hex
---   factors：按字典序排序、去空白空项后逗号拼接（F-R3-03）
 
 SET @has_legacy_global := (
   SELECT COUNT(*) FROM information_schema.TABLES
   WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'system_mfa_global_policy'
 );
 
--- 确保 control 单例行存在（合并前置）；占位 checksum 非 hex，允许后续一次性消费
+-- 确保 control 单例行存在（合并前置）
 SET @sql := IF(@has_legacy_global > 0,
-  'INSERT IGNORE INTO `system_mfa_control_state` (`id`, `lifecycle_state`, `global_mode`, `global_policy_epoch`, `global_min_accepted_epoch`, `checksum`)
-   VALUES (1, ''UNINITIALIZED'', ''OFF'', 0, 0, ''uninitialized-off'')',
+  'INSERT IGNORE INTO `system_mfa_control_state` (`id`, `lifecycle_state`, `global_mode`, `global_policy_epoch`, `global_min_accepted_epoch`, `checksum`, `legacy_global_merged`)
+   VALUES (1, ''UNINITIALIZED'', ''OFF'', 0, 0, ''uninitialized-off'', b''0'')',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 将 confirmed legacy global 行翻译进 control（仅当 control 仍为未消费/种子态）
--- 门闩：checksum 非 64hex，或 seed(UNINITIALIZED+OFF+epoch0+min0)；
--- 且 control.epoch 不得大于 legacy.policy_version（已前进的 v3 写入绝不回写）
+-- 将 confirmed legacy global 翻译进 control（仅当尚未消费，且不构成 mode 降级）
 SET @sql := IF(@has_legacy_global > 0,
   'UPDATE `system_mfa_control_state` c
    INNER JOIN `system_mfa_global_policy` g
@@ -224,28 +233,24 @@ SET @sql := IF(@has_legacy_global > 0,
              THEN GREATEST(IFNULL(c.global_min_accepted_epoch, 0), IFNULL(g.policy_version, 0))
            ELSE IFNULL(c.global_min_accepted_epoch, 0)
          END
-       ), 256))
+       ), 256)),
+     c.legacy_global_merged = b''1''
    WHERE c.id = 1
+     AND IFNULL(c.legacy_global_merged, 0) = 0
      AND IFNULL(c.global_policy_epoch, 0) <= IFNULL(g.policy_version, 0)
-     AND (
-       c.checksum IS NULL
-       OR c.checksum NOT REGEXP ''^[0-9a-f]{64}$''
-       OR (
-         IFNULL(c.lifecycle_state, ''UNINITIALIZED'') = ''UNINITIALIZED''
-         AND UPPER(IFNULL(c.global_mode, ''OFF'')) = ''OFF''
-         AND IFNULL(c.global_policy_epoch, 0) = 0
-         AND IFNULL(c.global_min_accepted_epoch, 0) = 0
-       )
-     )
-     -- F-R3-02：已是合法 v3 非 OFF 权威时，禁止被 stale legacy OFF 覆盖
+     -- F-R4-03：禁止用更弱 legacy mode 覆盖 control 已有非 OFF（含损坏 nonhex REQUIRED）
      AND NOT (
-       c.checksum REGEXP ''^[0-9a-f]{64}$''
-       AND UPPER(IFNULL(c.global_mode, ''OFF'')) IN (''OPTIONAL'', ''REQUIRED'')
+       UPPER(IFNULL(c.global_mode, ''OFF'')) = ''REQUIRED''
+       AND UPPER(TRIM(g.mode)) IN (''OFF'', ''OPTIONAL'', ''INHERIT'')
+     )
+     AND NOT (
+       UPPER(IFNULL(c.global_mode, ''OFF'')) = ''OPTIONAL''
+       AND UPPER(TRIM(g.mode)) IN (''OFF'', ''INHERIT'')
      )',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- 对 checksum 仍为非 hex 占位串的 control 行：按当前列 + canonical 因子序重算（幂等，不改 mode）
+-- 仅纯 seed 行可重算占位 checksum（F-R4-03：禁止对可疑/损坏非 seed 行重新签名洗白）
 UPDATE `system_mfa_control_state` c
 SET
   c.global_allowed_factors = (
@@ -262,27 +267,17 @@ SET
     END
   ),
   c.checksum = LOWER(SHA2(CONCAT(
-    IFNULL(c.lifecycle_state, 'UNINITIALIZED'), '|',
-    IFNULL(c.global_mode, 'OFF'), '|',
-    (
-      CASE
-        WHEN c.global_allowed_factors IS NULL OR TRIM(c.global_allowed_factors) = '' THEN ''
-        ELSE (
-          SELECT GROUP_CONCAT(DISTINCT TRIM(jt3.f) ORDER BY TRIM(jt3.f) SEPARATOR ',')
-          FROM JSON_TABLE(
-            CONCAT('["', REPLACE(REPLACE(TRIM(c.global_allowed_factors), '"', ''), ',', '","'), '"]'),
-            '$[*]' COLUMNS (f VARCHAR(64) PATH '$')
-          ) AS jt3
-          WHERE TRIM(jt3.f) <> ''
-        )
-      END
-    ), '|',
-    IFNULL(c.global_policy_epoch, 0), '|',
-    IFNULL(c.global_min_accepted_epoch, 0)
+    'UNINITIALIZED', '|', 'OFF', '|', '', '|', '0', '|', '0'
   ), 256))
 WHERE c.id = 1
+  AND IFNULL(c.legacy_global_merged, 0) = 0
+  AND IFNULL(c.lifecycle_state, '') = 'UNINITIALIZED'
+  AND UPPER(IFNULL(c.global_mode, '')) = 'OFF'
+  AND IFNULL(c.global_policy_epoch, 0) = 0
+  AND IFNULL(c.global_min_accepted_epoch, 0) = 0
+  AND c.armed_at IS NULL
   AND c.checksum IS NOT NULL
   AND c.checksum NOT REGEXP '^[0-9a-f]{64}$';
 
 -- 部署后：不默认插入 REQUIRED；空库仍由应用按 UNINITIALIZED 处理。
--- legacy system_mfa_global_policy 保留只读档案，新代码不再读写；重放不得降级已生效 v3 权威。
+-- legacy system_mfa_global_policy 保留只读档案；消费后 legacy_global_merged=1，重放不得回写。

@@ -137,7 +137,7 @@ public class MfaSlice1Fix3FailRegressionTest extends BaseMockitoUnitTest {
                 unsortedMaterial);
     }
 
-    /** F-R3-02/03: 迁移 SQL 含一次性消费门闩 + 因子排序 + 禁止 stale OFF 覆盖 */
+    /** F-R3-02/03 + F-R4-02: 迁移 SQL 持久消费标记 + 因子排序 + 禁止降级 */
     @Test
     void fr302_fr303_migrationSqlGuardsAndSortedFactors() throws Exception {
         Path p = findMigrationSql();
@@ -145,10 +145,7 @@ public class MfaSlice1Fix3FailRegressionTest extends BaseMockitoUnitTest {
         String sql = Files.readString(p);
         assertTrue(sql.contains("system_mfa_global_policy"));
         assertTrue(sql.contains("SHA2("));
-        // one-shot / no overwrite guards
-        assertTrue(sql.contains("NOT REGEXP") || sql.contains("not regexp")
-                        || sql.contains("^[0-9a-f]{64}$"),
-                "must gate on hex checksum / one-shot consume");
+        assertTrue(sql.contains("legacy_global_merged"), "persistent consume flag");
         assertTrue(sql.contains("GROUP_CONCAT") && sql.contains("ORDER BY"),
                 "must sort factors for canonical checksum");
         assertTrue(sql.contains("OPTIONAL") && sql.contains("REQUIRED")
