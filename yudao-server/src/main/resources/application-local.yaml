@@ -218,6 +218,11 @@ yudao:
   wxa-subscribe-message:
     miniprogram-state: developer # 跳转小程序类型：开发版为 “developer”；体验版为 “trial”为；正式版为 “formal”
   tencent-lbs-key: TVDBZ-TDILD-4ON4B-PFDZA-RNLKH-VVF6E # QQ 地图的密钥 https://lbs.qq.com/service/staticV2/staticGuide/staticDoc
+  # EXP-87 Path A：RPC 服务身份共享密钥（privileged create-by-business）；fail-closed 启动校验
+  rpc:
+    service-identity:
+      enabled: true
+      secret: "exp87rpcVmX8Z9w5J3DcuKee2AEDcTqrQMKkAESa"
 
 justauth:
   enabled: true

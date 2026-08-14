@@ -187,6 +187,11 @@ yudao:
     transfer-notify-url: ${PAY_TRANSFER_NOTIFY_URL:}
   demo: false  # 生产环境关闭演示模式
   tencent-lbs-key: ${TENCENT_LBS_KEY:}
+  # EXP-87 Path A：RPC 服务身份共享密钥（privileged create-by-business）；fail-closed 启动校验
+  rpc:
+    service-identity:
+      enabled: true
+      secret: "exp87rpcVmX8Z9w5J3DcuKee2AEDcTqrQMKkAESa"
   access-log: # 访问日志的配置项
     enable: false  # 生产环境默认关闭访问日志，如需开启请确保 Feign 客户端配置正确
 
