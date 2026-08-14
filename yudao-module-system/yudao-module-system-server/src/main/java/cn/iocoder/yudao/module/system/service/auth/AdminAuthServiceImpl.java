@@ -23,6 +23,9 @@ import cn.iocoder.yudao.module.system.enums.oauth2.OAuth2ClientConstants;
 import cn.iocoder.yudao.module.system.enums.sms.SmsSceneEnum;
 import cn.iocoder.yudao.module.system.service.logger.LoginLogService;
 import cn.iocoder.yudao.module.system.service.member.MemberService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaTokenIssuanceFacade;
+import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuancePath;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
 import cn.iocoder.yudao.module.system.service.social.SocialUserService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
@@ -38,6 +41,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -59,6 +63,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private LoginLogService loginLogService;
     @Resource
     private OAuth2TokenService oauth2TokenService;
+    @Resource
+    private MfaTokenIssuanceFacade mfaTokenIssuanceFacade;
     @Resource
     private SocialUserService socialUserService;
     @Resource
@@ -112,8 +118,9 @@ public class AdminAuthServiceImpl implements AdminAuthService {
             socialUserService.bindSocialUser(new SocialUserBindReqDTO(user.getId(), getUserType().getValue(),
                     reqVO.getSocialType(), reqVO.getSocialCode(), reqVO.getSocialState()));
         }
-        // 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(user.getId(), reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
+        // 经 MFA Facade 签发（OFF 兼容直签；需 MFA 时零 access/refresh）
+        return createTokenAfterLoginSuccess(user, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME,
+                MfaIssuancePath.LOGIN_PASSWORD, List.of("pwd"));
     }
 
     @Override
@@ -145,8 +152,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
             throw exception(USER_NOT_EXISTS);
         }
 
-        // 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(user.getId(), reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE);
+        return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE,
+                MfaIssuancePath.LOGIN_SMS, List.of("sms"));
     }
 
     private void createLoginLog(Long userId, String username,
@@ -183,8 +190,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
             throw exception(USER_NOT_EXISTS);
         }
 
-        // 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(user.getId(), user.getUsername(), LoginLogTypeEnum.LOGIN_SOCIAL);
+        return createTokenAfterLoginSuccess(user, user.getUsername(), LoginLogTypeEnum.LOGIN_SOCIAL,
+                MfaIssuancePath.LOGIN_SOCIAL, List.of("social"));
     }
 
     @VisibleForTesting
@@ -209,20 +216,32 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         return captchaService.verification(captchaVO);
     }
 
-    private AuthLoginRespVO createTokenAfterLoginSuccess(Long userId, String username, LoginLogTypeEnum logType) {
-        // 插入登陆日志
-        createLoginLog(userId, username, logType, LoginResultEnum.SUCCESS);
-        // 创建访问令牌
-        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.createAccessToken(userId, getUserType().getValue(),
-                OAuth2ClientConstants.CLIENT_ID_DEFAULT, null);
-        // 构建返回结果
-        return BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+    private AuthLoginRespVO createTokenAfterLoginSuccess(AdminUserDO user, String username,
+                                                         LoginLogTypeEnum logType, MfaIssuancePath path,
+                                                         List<String> amr) {
+        // 插入登陆日志（主凭证通过）
+        createLoginLog(user.getId(), username, logType, LoginResultEnum.SUCCESS);
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.issueAfterPrimaryAuth(
+                path, user.getId(), user.getTenantId(), getUserType().getValue(),
+                OAuth2ClientConstants.CLIENT_ID_DEFAULT, null, amr);
+        if (result.getLoginResp() != null) {
+            if (result.getLoginResp().getUserId() == null) {
+                result.getLoginResp().setUserId(user.getId());
+            }
+            return result.getLoginResp();
+        }
+        // 兜底：ALLOWED 但仅有 accessToken
+        return BeanUtils.toBean(result.getAccessToken(), AuthLoginRespVO.class);
     }
 
     @Override
     public AuthLoginRespVO refreshToken(String refreshToken) {
-        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT);
-        return BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.refresh(
+                MfaIssuancePath.REFRESH_TOKEN, refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT);
+        if (result.getLoginResp() != null) {
+            return result.getLoginResp();
+        }
+        return BeanUtils.toBean(result.getAccessToken(), AuthLoginRespVO.class);
     }
 
     @Override
@@ -272,9 +291,14 @@ public class AdminAuthServiceImpl implements AdminAuthService {
 
         // 2. 校验用户名是否已存在
         Long userId = userService.registerUser(registerReqVO);
+        AdminUserDO user = userService.getUser(userId);
+        if (user == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
 
-        // 3. 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(userId, registerReqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
+        // 3. 经 MFA Facade 签发（需 MFA 时 MFA_ENROLLMENT_REQUIRED，零 Token）
+        return createTokenAfterLoginSuccess(user, registerReqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME,
+                MfaIssuancePath.REGISTER, List.of("pwd"));
     }
 
     @VisibleForTesting

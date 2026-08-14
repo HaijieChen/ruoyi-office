@@ -22,6 +22,7 @@ import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.dal.mysql.oauth2.OAuth2AccessTokenMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.oauth2.OAuth2RefreshTokenMapper;
 import cn.iocoder.yudao.module.system.dal.redis.oauth2.OAuth2AccessTokenRedisDAO;
+import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Lazy;
@@ -33,8 +34,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception0;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
+import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.MFA_ISSUANCE_DECISION_INVALID;
 
 /**
  * OAuth2.0 Token Service 实现类
@@ -61,11 +64,19 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OAuth2AccessTokenDO createAccessToken(Long userId, Integer userType, String clientId, List<String> scopes) {
+        // ADMIN 用户态必须持有 Facade 下发的一次性 IssuanceDecision；client_credentials(userId=0) / MEMBER 放行
+        if (isAdminUserSubject(userId, userType) && !MfaIssuanceGuard.permitAdminIssuance(userId, userType)) {
+            throw exception(MFA_ISSUANCE_DECISION_INVALID);
+        }
         OAuth2ClientDO clientDO = oauth2ClientService.validOAuthClientFromCache(clientId);
         // 创建刷新令牌
         OAuth2RefreshTokenDO refreshTokenDO = createOAuth2RefreshToken(userId, userType, clientDO, scopes);
         // 创建访问令牌
         return createOAuth2AccessToken(refreshTokenDO, clientDO);
+    }
+
+    private static boolean isAdminUserSubject(Long userId, Integer userType) {
+        return userId != null && userId != 0L && UserTypeEnum.ADMIN.getValue().equals(userType);
     }
 
     @Override

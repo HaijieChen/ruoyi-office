@@ -9,6 +9,10 @@ import cn.iocoder.yudao.module.system.dal.dataobject.oauth2.OAuth2CodeDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.enums.ErrorCodeConstants;
 import cn.iocoder.yudao.module.system.service.auth.AdminAuthService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaTokenIssuanceFacade;
+import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuancePath;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
+import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -30,11 +34,18 @@ public class OAuth2GrantServiceImpl implements OAuth2GrantService {
     private OAuth2CodeService oauth2CodeService;
     @Resource
     private AdminAuthService adminAuthService;
+    @Resource
+    private MfaTokenIssuanceFacade mfaTokenIssuanceFacade;
+    @Resource
+    private AdminUserService adminUserService;
 
     @Override
     public OAuth2AccessTokenDO grantImplicit(Long userId, Integer userType,
                                              String clientId, List<String> scopes) {
-        return oauth2TokenService.createAccessToken(userId, userType, clientId, scopes);
+        Long tenantId = resolveTenantId(userId, userType);
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.issueForOAuthGrant(
+                MfaIssuancePath.OAUTH2_IMPLICIT, userId, tenantId, userType, clientId, scopes, List.of("implicit"));
+        return requireAccessToken(result);
     }
 
     @Override
@@ -64,9 +75,11 @@ public class OAuth2GrantServiceImpl implements OAuth2GrantService {
             throw exception(ErrorCodeConstants.OAUTH2_GRANT_STATE_MISMATCH);
         }
 
-        // 创建访问令牌
-        return oauth2TokenService.createAccessToken(codeDO.getUserId(), codeDO.getUserType(),
-                codeDO.getClientId(), codeDO.getScopes());
+        Long tenantId = resolveTenantId(codeDO.getUserId(), codeDO.getUserType());
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.issueForOAuthGrant(
+                MfaIssuancePath.OAUTH2_AUTHORIZATION_CODE, codeDO.getUserId(), tenantId,
+                codeDO.getUserType(), codeDO.getClientId(), codeDO.getScopes(), List.of("authorization_code"));
+        return requireAccessToken(result);
     }
 
     @Override
@@ -75,19 +88,39 @@ public class OAuth2GrantServiceImpl implements OAuth2GrantService {
         AdminUserDO user = adminAuthService.authenticate(username, password);
         Assert.notNull(user, "用户不能为空！"); // 防御性编程
 
-        // 创建访问令牌
-        return oauth2TokenService.createAccessToken(user.getId(), UserTypeEnum.ADMIN.getValue(), clientId, scopes);
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.issueForOAuthGrant(
+                MfaIssuancePath.OAUTH2_PASSWORD, user.getId(), user.getTenantId(),
+                UserTypeEnum.ADMIN.getValue(), clientId, scopes, List.of("pwd"));
+        return requireAccessToken(result);
     }
 
     @Override
     public OAuth2AccessTokenDO grantRefreshToken(String refreshToken, String clientId) {
-        return oauth2TokenService.refreshAccessToken(refreshToken, clientId);
+        MfaIssuanceResult result = mfaTokenIssuanceFacade.refresh(
+                MfaIssuancePath.OAUTH2_REFRESH_TOKEN, refreshToken, clientId);
+        return requireAccessToken(result);
     }
 
     @Override
     public OAuth2AccessTokenDO grantClientCredentials(String clientId, List<String> scopes) {
-        // 特殊：https://yuanbao.tencent.com/bot/app/share/chat/wFj642xSZHHx
-        return oauth2TokenService.createAccessToken(0L, UserTypeEnum.ADMIN.getValue(), clientId, scopes);
+        // 非用户态 N/A：不执行用户 MFA
+        return mfaTokenIssuanceFacade.issueClientCredentials(clientId, scopes);
+    }
+
+    private OAuth2AccessTokenDO requireAccessToken(MfaIssuanceResult result) {
+        if (result == null || result.getAccessToken() == null
+                || result.getAccessToken().getAccessToken() == null) {
+            throw exception(ErrorCodeConstants.MFA_TOKEN_ISSUANCE_REJECTED);
+        }
+        return result.getAccessToken();
+    }
+
+    private Long resolveTenantId(Long userId, Integer userType) {
+        if (userId == null || userId == 0L || !UserTypeEnum.ADMIN.getValue().equals(userType)) {
+            return null;
+        }
+        AdminUserDO user = adminUserService.getUser(userId);
+        return user != null ? user.getTenantId() : null;
     }
 
     @Override

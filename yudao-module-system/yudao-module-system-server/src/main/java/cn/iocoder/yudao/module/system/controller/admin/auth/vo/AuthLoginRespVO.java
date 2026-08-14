@@ -15,16 +15,27 @@ import java.time.LocalDateTime;
 @Builder
 public class AuthLoginRespVO {
 
-    @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
+    @Schema(description = "用户编号", example = "1024")
     private Long userId;
 
-    @Schema(description = "访问令牌", requiredMode = Schema.RequiredMode.REQUIRED, example = "happy")
+    @Schema(description = "登录状态：AUTHENTICATED / MFA_REQUIRED / MFA_ENROLLMENT_REQUIRED 等。"
+            + "缺省或 AUTHENTICATED 时与历史兼容（返回 access/refresh token）",
+            example = "AUTHENTICATED")
+    private String loginStatus;
+
+    @Schema(description = "访问令牌（仅 AUTHENTICATED）", example = "happy")
     private String accessToken;
 
-    @Schema(description = "刷新令牌", requiredMode = Schema.RequiredMode.REQUIRED, example = "nice")
+    @Schema(description = "刷新令牌（仅 AUTHENTICATED）", example = "nice")
     private String refreshToken;
 
-    @Schema(description = "过期时间", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "过期时间（access token 或 challenge）")
     private LocalDateTime expiresTime;
+
+    @Schema(description = "MFA/绑定挑战句柄（非业务 Bearer）")
+    private String challengeToken;
+
+    @Schema(description = "挑战过期秒数", example = "300")
+    private Integer expiresIn;
 
 }
