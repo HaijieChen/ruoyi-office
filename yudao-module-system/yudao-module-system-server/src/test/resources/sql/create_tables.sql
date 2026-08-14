@@ -714,5 +714,23 @@ CREATE TABLE IF NOT EXISTS "system_mfa_factor" (
     "updater" varchar DEFAULT '',
     "update_time" datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     "deleted" bit NOT NULL DEFAULT FALSE,
-    PRIMARY KEY ("id")
+    PRIMARY KEY ("id"),
+    CONSTRAINT "uk_mfa_factor_tenant_user_key" UNIQUE ("tenant_id", "user_id", "factor_key")
 ) COMMENT 'MFA factor v3';
+
+CREATE TABLE IF NOT EXISTS "system_mfa_enroll_saga" (
+    "flow_token_hash" varchar NOT NULL,
+    "tenant_id" bigint,
+    "user_id" bigint NOT NULL,
+    "factor_id" varchar NOT NULL,
+    "totp_step" bigint,
+    "expected_epoch" bigint NOT NULL DEFAULT 0,
+    "access_token" varchar,
+    "state" varchar NOT NULL,
+    "creator" varchar DEFAULT '',
+    "create_time" datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updater" varchar DEFAULT '',
+    "update_time" datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    "deleted" bit NOT NULL DEFAULT FALSE,
+    PRIMARY KEY ("flow_token_hash")
+) COMMENT 'MFA enroll saga';

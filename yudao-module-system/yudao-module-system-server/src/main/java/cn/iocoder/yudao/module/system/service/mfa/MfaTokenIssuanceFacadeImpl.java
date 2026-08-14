@@ -17,6 +17,8 @@ import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuedFlow;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaPolicySnapshot;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaUserAssuranceView;
+import cn.iocoder.yudao.module.system.service.mfa.store.InMemoryMfaEnrollSagaStore;
+import cn.iocoder.yudao.module.system.service.mfa.store.MfaEnrollSagaStore;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaLockOrder;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
@@ -61,6 +63,10 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
     private MfaFactorService factorService;
     @Resource
     private MfaAssuranceAuthority assuranceAuthority;
+    @Resource
+    private MfaEnrollmentCommitter enrollmentCommitter;
+    @Resource
+    private MfaEnrollSagaStore enrollSagaStore;
 
     @Override
     public MfaIssuanceResult issueAfterPrimaryAuth(MfaIssuancePath path, Long userId, Long tenantId,
@@ -325,12 +331,22 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
         if (flow.getAssuranceEpoch() != assurance.getAssuranceEpoch()) {
             throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
         }
-        // 切片 4：先校验 PENDING TOTP（不落 ACTIVE），Token 成功后再 CAS 激活
         Long totpStep = factorService.matchPendingTotpStep(tenantId, flow.getUserId(), factorId, code);
         if (totpStep == null) {
             throw exception(MFA_FACTOR_VERIFY_FAILED);
         }
         long expectedEpoch = assurance.getAssuranceEpoch() + 1;
+        String flowHash = MfaAuthFlowServiceImpl.sha256Hex(rawEnrollmentFlowToken);
+        var sagaStore = enrollSaga();
+        var existing = sagaStore.get(flowHash);
+        if (existing != null && MfaEnrollSagaStore.COMPENSATE_TOKEN.equals(existing.state())
+                && existing.accessToken() != null) {
+            tryRevokeToken(existing.accessToken());
+            sagaStore.upsert(existing.withState(MfaEnrollSagaStore.VERIFIED, null));
+        }
+        sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
+                totpStep, expectedEpoch, existing == null ? null : existing.accessToken(),
+                MfaEnrollSagaStore.VERIFIED));
 
         MfaIssuanceResult issued;
         try {
@@ -338,36 +354,50 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
                     clientId != null ? clientId : flow.getClientId(),
                     scopes, List.of("totp", "enroll"), policy, expectedEpoch);
         } catch (RuntimeException ex) {
-            // 因子仍 PENDING，confirm 可重试
             throw ex;
         }
-        if (!factorService.tryActivatePendingFactor(tenantId, flow.getUserId(), factorId, totpStep)) {
-            if (issued.getAccessToken() != null) {
-                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
-            }
-            throw exception(MFA_FACTOR_VERIFY_FAILED);
-        }
-        if (!authFlowService.tryComplete(rawEnrollmentFlowToken)) {
-            factorService.revertFactorToPending(tenantId, flow.getUserId(), factorId);
-            if (issued.getAccessToken() != null) {
-                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
-            }
-            throw exception(MFA_FLOW_INVALID);
-        }
+        String access = issued.getAccessToken() == null ? null : issued.getAccessToken().getAccessToken();
+        sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
+                totpStep, expectedEpoch, access, MfaEnrollSagaStore.TOKEN_ISSUED));
         try {
-            long newEpoch = assuranceAuthority.bumpAssuranceEpoch(tenantId, flow.getUserId(),
-                    cn.iocoder.yudao.module.system.service.mfa.enums.MfaEnrollmentState.COMPLETED, true);
-            if (newEpoch != expectedEpoch && issued.getAccessToken() != null) {
-                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
-                throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
-            }
+            enrollmentCommitter().commit(tenantId, flow.getUserId(), factorId, totpStep,
+                    rawEnrollmentFlowToken, expectedEpoch);
+            sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
+                    totpStep, expectedEpoch, access, MfaEnrollSagaStore.COMMITTED));
         } catch (RuntimeException ex) {
-            if (issued.getAccessToken() != null) {
-                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
-            }
+            boolean revoked = tryRevokeToken(access);
+            sagaStore.upsert(new MfaEnrollSagaStore.Record(flowHash, tenantId, flow.getUserId(), factorId,
+                    totpStep, expectedEpoch, access,
+                    revoked ? MfaEnrollSagaStore.VERIFIED : MfaEnrollSagaStore.COMPENSATE_TOKEN));
             throw ex;
         }
         return issued;
+    }
+
+    private boolean tryRevokeToken(String accessToken) {
+        if (accessToken == null) {
+            return true;
+        }
+        try {
+            oauth2TokenService.removeAccessToken(accessToken);
+            return true;
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private MfaEnrollmentCommitter enrollmentCommitter() {
+        if (enrollmentCommitter == null) {
+            enrollmentCommitter = new MfaEnrollmentCommitter(factorService, authFlowService, assuranceAuthority);
+        }
+        return enrollmentCommitter;
+    }
+
+    private MfaEnrollSagaStore enrollSaga() {
+        if (enrollSagaStore == null) {
+            enrollSagaStore = InMemoryMfaEnrollSagaStore.shared();
+        }
+        return enrollSagaStore;
     }
 
     private enum DecisionNeed {

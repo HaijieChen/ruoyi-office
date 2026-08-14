@@ -36,3 +36,4 @@ DELETE FROM "system_mfa_tenant_policy";
 DELETE FROM "system_mfa_user_assurance";
 DELETE FROM "system_mfa_auth_flow";
 DELETE FROM "system_mfa_factor";
+DELETE FROM "system_mfa_enroll_saga";

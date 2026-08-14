@@ -3,23 +3,23 @@ package cn.iocoder.yudao.module.system.service.mfa;
 import cn.iocoder.yudao.framework.common.enums.UserTypeEnum;
 import cn.iocoder.yudao.framework.test.core.ut.BaseMockitoUnitTest;
 import cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthLoginRespVO;
-import cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthMfaCodeSendReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthMfaEnrollmentTotpConfirmReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthMfaEnrollmentTotpStartReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthMfaEnrollmentTotpStartRespVO;
-import cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthMfaVerifyReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.enums.oauth2.OAuth2ClientConstants;
 import cn.iocoder.yudao.module.system.service.auth.AdminAuthServiceImpl;
-import cn.iocoder.yudao.module.system.service.mfa.delivery.StubMfaChallengeDelivery;
+import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretCipherImpl;
+import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretProperties;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuancePath;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaLoginStatus;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaMode;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorBinding;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
-import cn.iocoder.yudao.module.system.service.mfa.store.InMemoryMfaAuthFlowStore;
 import cn.iocoder.yudao.module.system.service.mfa.store.InMemoryMfaEnrollSagaStore;
 import cn.iocoder.yudao.module.system.service.mfa.store.InMemoryMfaFactorStore;
+import cn.iocoder.yudao.module.system.service.mfa.store.MfaEnrollSagaStore;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
@@ -32,9 +32,12 @@ import org.mockito.Spy;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,9 +45,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * 切片 4：enroll 失败窗口补偿、存储 CAS 边界、SMS/EMAIL 投递桩。
+ * 关闭 F-S4-FINAL-01～03（终审 @ 0c70e964 不得转签）。
  */
-public class MfaSlice4CompensationAndPersistenceTest extends BaseMockitoUnitTest {
+public class MfaSlice4FinalFailRegressionTest extends BaseMockitoUnitTest {
 
     private InMemoryMfaAuthorityStore store;
     private MfaPolicyControlServiceImpl policyControl;
@@ -53,14 +56,12 @@ public class MfaSlice4CompensationAndPersistenceTest extends BaseMockitoUnitTest
     private MfaAuthFlowServiceImpl flowService = new MfaAuthFlowServiceImpl();
     @Spy
     private MfaFactorServiceImpl factorService = new MfaFactorServiceImpl(flowService);
-
     private MfaTokenIssuanceFacadeImpl facade;
 
     @Mock
     private AdminUserService userService;
     @Mock
     private OAuth2TokenService oauth2TokenService;
-
     @InjectMocks
     private AdminAuthServiceImpl authService;
 
@@ -68,14 +69,18 @@ public class MfaSlice4CompensationAndPersistenceTest extends BaseMockitoUnitTest
     void setUp() {
         store = new InMemoryMfaAuthorityStore();
         policyControl = new MfaPolicyControlServiceImpl(new MfaPolicyAuthorityImpl(store));
-        assurance = new MfaAssuranceAuthorityImpl(store);
+        assurance = spy(new MfaAssuranceAuthorityImpl(store));
         flowService.clear();
         factorService.clear();
+        InMemoryMfaEnrollSagaStore.shared().clear();
         facade = new MfaTokenIssuanceFacadeImpl();
+        MfaEnrollmentCommitter committer = new MfaEnrollmentCommitter(factorService, flowService, assurance);
         ReflectionTestUtils.setField(facade, "policyControlService", policyControl);
         ReflectionTestUtils.setField(facade, "authFlowService", flowService);
         ReflectionTestUtils.setField(facade, "factorService", factorService);
         ReflectionTestUtils.setField(facade, "assuranceAuthority", assurance);
+        ReflectionTestUtils.setField(facade, "enrollmentCommitter", committer);
+        ReflectionTestUtils.setField(facade, "enrollSagaStore", InMemoryMfaEnrollSagaStore.shared());
         ReflectionTestUtils.setField(facade, "userFactorProbe", new MfaUserFactorProbeImpl(factorService));
         ReflectionTestUtils.setField(facade, "oauth2TokenService", oauth2TokenService);
         ReflectionTestUtils.setField(authService, "mfaTokenIssuanceFacade", facade);
@@ -95,104 +100,77 @@ public class MfaSlice4CompensationAndPersistenceTest extends BaseMockitoUnitTest
     }
 
     @Test
-    void enroll_tokenFailure_keepsPending_retrySucceeds() {
+    void fs401_assuranceBumpFailure_rollsBackFactorAndFlow() {
         policyControl.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
         policyControl.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));
         String flowToken = startEnrollment(10L);
         AuthMfaEnrollmentTotpStartRespVO start = startTotp(flowToken, 10L);
-
-        when(oauth2TokenService.createAccessToken(anyLong(), anyInt(), anyString(), any()))
-                .thenThrow(new RuntimeException("token insert failed"))
-                .thenAnswer(inv -> token((Long) inv.getArgument(0)));
+        doThrow(new RuntimeException("bump fail")).when(assurance)
+                .bumpAssuranceEpoch(any(), any(), any(), any());
 
         AuthMfaEnrollmentTotpConfirmReqVO confirm = confirmReq(flowToken, start, totp(start.getSecretManual()));
         assertThrows(RuntimeException.class, () -> authService.mfaEnrollmentTotpConfirm(confirm));
-        assertEquals("PENDING", factorService.peekFactorStatus(1L, 10L, start.getFactorId()));
-        assertFalse(factorService.hasActiveFactor(1L, 10L));
-        assertNotNull(flowService.resolveActive(flowToken));
 
-        AuthLoginRespVO loggedIn = authService.mfaEnrollmentTotpConfirm(confirm);
-        assertEquals("AUTHENTICATED", loggedIn.getLoginStatus());
-        assertEquals("ACTIVE", factorService.peekFactorStatus(1L, 10L, start.getFactorId()));
-        assertNull(flowService.resolveActive(flowToken));
+        assertEquals("PENDING", factorService.peekFactorStatus(1L, 10L, start.getFactorId()));
+        assertNotNull(flowService.resolveActive(flowToken));
+        assertEquals(0L, assurance.getAssurance(1L, 10L).getAssuranceEpoch());
+        assertEquals("NONE", assurance.getAssurance(1L, 10L).getEnrollmentState().name());
+        verify(oauth2TokenService, atLeastOnce()).removeAccessToken(anyString());
     }
 
     @Test
-    void enroll_completeFailure_revertsActive_retrySucceeds() {
+    void fs401_revokeFailure_persistsCompensateThenRetry() {
         policyControl.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
         policyControl.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));
         String flowToken = startEnrollment(10L);
         AuthMfaEnrollmentTotpStartRespVO start = startTotp(flowToken, 10L);
-
-        doReturn(false).doCallRealMethod().when(flowService).tryComplete(anyString());
+        doThrow(new RuntimeException("bump fail")).doCallRealMethod().when(assurance)
+                .bumpAssuranceEpoch(any(), any(), any(), any());
+        doThrow(new RuntimeException("revoke fail")).doReturn(null).when(oauth2TokenService)
+                .removeAccessToken(anyString());
 
         AuthMfaEnrollmentTotpConfirmReqVO confirm = confirmReq(flowToken, start, totp(start.getSecretManual()));
-        assertThrows(Exception.class, () -> authService.mfaEnrollmentTotpConfirm(confirm));
+        assertThrows(RuntimeException.class, () -> authService.mfaEnrollmentTotpConfirm(confirm));
+        String hash = MfaAuthFlowServiceImpl.sha256Hex(flowToken);
+        assertEquals(MfaEnrollSagaStore.COMPENSATE_TOKEN, InMemoryMfaEnrollSagaStore.shared().get(hash).state());
         assertEquals("PENDING", factorService.peekFactorStatus(1L, 10L, start.getFactorId()));
-        verify(oauth2TokenService, atLeastOnce()).removeAccessToken(anyString());
 
         AuthLoginRespVO loggedIn = authService.mfaEnrollmentTotpConfirm(confirm);
         assertEquals("AUTHENTICATED", loggedIn.getLoginStatus());
-        assertEquals("ACTIVE", factorService.peekFactorStatus(1L, 10L, start.getFactorId()));
+        assertEquals(MfaEnrollSagaStore.COMMITTED, InMemoryMfaEnrollSagaStore.shared().get(hash).state());
     }
 
     @Test
-    void flowStore_casComplete_oneShotAcrossInstances() {
-        policyControl.confirmGlobalPolicy(MfaMode.OFF, Set.of());
-        MfaAuthFlowServiceImpl a = new MfaAuthFlowServiceImpl(InMemoryMfaAuthFlowStore.shared());
-        MfaAuthFlowServiceImpl b = new MfaAuthFlowServiceImpl(InMemoryMfaAuthFlowStore.shared());
-        var issued = a.issue(cn.iocoder.yudao.module.system.service.mfa.enums.MfaFlowTokenClass.PRE_AUTH,
-                1L, 1L, "c", policyControl.resolveEffectivePolicy(1L), 0L, List.of(), List.of(), 60);
-        assertTrue(a.tryComplete(issued.getFlowToken()));
-        assertFalse(b.tryComplete(issued.getFlowToken()));
-        assertNull(b.resolveActive(issued.getFlowToken()));
+    void fs402_cipher_aesGcm_roundTripAndRejectPlainDev() {
+        MfaSecretCipherImpl cipher = MfaSecretCipherImpl.forTests("k1");
+        String ct = cipher.encrypt("super-secret");
+        assertNotEquals("super-secret", ct);
+        assertEquals("super-secret", cipher.decrypt("k1", ct));
+        assertThrows(IllegalStateException.class, () -> cipher.decrypt("plain-dev", ct));
+        assertThrows(IllegalStateException.class, () -> cipher.decrypt("missing", ct));
+        assertThrows(Exception.class, () -> new MfaSecretCipherImpl("plain-dev", Map.of("plain-dev", new byte[32])));
+        MfaSecretProperties empty = new MfaSecretProperties();
+        assertThrows(IllegalStateException.class, () -> MfaSecretCipherImpl.fromProperties(empty));
     }
 
     @Test
-    void factorStore_casActivate_oneShot() {
+    void fs403_factorKey_rejectsBlank_andSqlHasUniqueBackfill() throws Exception {
         InMemoryMfaFactorStore s = InMemoryMfaFactorStore.shared();
         s.clear();
-        factorService.startPendingTotp(1L, 8L, "bob");
-        // use register to have known id
-        factorService.registerActiveFactor(1L, 8L, "will-overwrite", "TOTP", "x");
-        s.clear();
-        var pending = factorService.startPendingTotp(1L, 8L, "bob");
-        assertTrue(factorService.tryActivatePendingFactor(1L, 8L, pending.getFactorId(), 12L));
-        assertFalse(factorService.tryActivatePendingFactor(1L, 8L, pending.getFactorId(), 12L));
-        assertEquals("ACTIVE", factorService.peekFactorStatus(1L, 8L, pending.getFactorId()));
-    }
-
-    @Test
-    void smsAndEmail_deliveryStubInvoked() {
-        policyControl.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("SMS", "EMAIL"));
-        policyControl.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("SMS", "EMAIL"));
-        factorService.registerActiveFactor(1L, 10L, "sms-main", "SMS", "+8613800000000");
-        factorService.registerActiveFactor(1L, 10L, "email-main", "EMAIL", "a@example.com");
-        MfaIssuanceResult challenge = facade.issueAfterPrimaryAuth(
-                MfaIssuancePath.LOGIN_PASSWORD, 10L, 1L, UserTypeEnum.ADMIN.getValue(),
-                "default", null, List.of("pwd"));
-        String flowToken = challenge.getLoginResp().getFlow().getFlowToken();
-
-        AuthMfaCodeSendReqVO sms = new AuthMfaCodeSendReqVO();
-        sms.setFlowToken(flowToken);
-        sms.setFactorId("sms-main");
-        authService.mfaSendCode(sms);
-        AuthMfaCodeSendReqVO email = new AuthMfaCodeSendReqVO();
-        email.setFlowToken(flowToken);
-        email.setFactorId("email-main");
-        authService.mfaSendCode(email);
-
-        StubMfaChallengeDelivery stub = (StubMfaChallengeDelivery) factorService.challengeDelivery();
-        assertEquals(2, stub.snapshot().size());
-        assertEquals("SMS", stub.snapshot().get(0).factorType());
-        assertEquals("EMAIL", stub.snapshot().get(1).factorType());
-
-        String code = factorService.peekDeliveryCodeForTest(flowToken, "sms-main");
-        AuthMfaVerifyReqVO verify = new AuthMfaVerifyReqVO();
-        verify.setFlowToken(flowToken);
-        verify.setFactorId("sms-main");
-        verify.setCode(code);
-        assertEquals("AUTHENTICATED", authService.mfaVerify(verify).getLoginStatus());
+        assertThrows(IllegalArgumentException.class, () -> s.save(1L, 1L, MfaFactorBinding.builder()
+                .factorId(" ")
+                .type("TOTP")
+                .status("PENDING")
+                .secretOrDestination("x")
+                .lastUsedStep(-1L)
+                .build()));
+        Path sql = findFix1Sql();
+        assertNotNull(sql);
+        String text = Files.readString(sql);
+        assertTrue(text.contains("CONCAT('legacy-', `id`)"));
+        assertTrue(text.contains("uk_mfa_factor_tenant_user_key"));
+        assertTrue(text.contains("UNIQUE KEY"));
+        assertFalse(text.contains("SET `factor_key` = ''"));
     }
 
     private String startEnrollment(long userId) {
@@ -251,5 +229,24 @@ public class MfaSlice4CompensationAndPersistenceTest extends BaseMockitoUnitTest
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private static Path findFix1Sql() {
+        Path cwd = Path.of("").toAbsolutePath();
+        for (int i = 0; i < 8; i++) {
+            Path hit = cwd.resolve("sql/mysql/system_mfa_v3_slice4_fix1.sql");
+            if (Files.isRegularFile(hit)) {
+                return hit;
+            }
+            hit = cwd.resolve("oa/sql/mysql/system_mfa_v3_slice4_fix1.sql");
+            if (Files.isRegularFile(hit)) {
+                return hit;
+            }
+            cwd = cwd.getParent();
+            if (cwd == null) {
+                break;
+            }
+        }
+        return null;
     }
 }

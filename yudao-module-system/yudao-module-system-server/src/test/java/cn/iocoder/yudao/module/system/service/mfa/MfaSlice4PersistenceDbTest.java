@@ -1,6 +1,9 @@
 package cn.iocoder.yudao.module.system.service.mfa;
 
 import cn.iocoder.yudao.framework.test.core.ut.BaseDbUnitTest;
+import cn.iocoder.yudao.module.system.dal.dataobject.mfa.MfaFactorDO;
+import cn.iocoder.yudao.module.system.dal.mysql.mfa.MfaFactorMapper;
+import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretCipher;
 import cn.iocoder.yudao.module.system.service.mfa.delivery.StubMfaChallengeDelivery;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaAuthFlowState;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaFlowTokenClass;
@@ -24,13 +27,18 @@ import static org.junit.jupiter.api.Assertions.*;
  * 切片 4：MyBatis flow/factor CAS（H2）。
  */
 @Import({MyBatisMfaAuthFlowStore.class, MyBatisMfaFactorStore.class,
-        MfaAuthFlowServiceImpl.class, MfaFactorServiceImpl.class, StubMfaChallengeDelivery.class})
+        MfaAuthFlowServiceImpl.class, MfaFactorServiceImpl.class, StubMfaChallengeDelivery.class,
+        MfaConfiguration.class})
 public class MfaSlice4PersistenceDbTest extends BaseDbUnitTest {
 
     @Resource
     private MfaAuthFlowServiceImpl flowService;
     @Resource
     private MfaFactorServiceImpl factorService;
+    @Resource
+    private MfaFactorMapper factorMapper;
+    @Resource
+    private MfaSecretCipher secretCipher;
 
     @Test
     void flow_casComplete_persisted() {
@@ -54,6 +62,22 @@ public class MfaSlice4PersistenceDbTest extends BaseDbUnitTest {
         assertEquals("ACTIVE", factorService.peekFactorStatus(1L, 20L, pending.getFactorId()));
         assertTrue(factorService.revertFactorToPending(1L, 20L, pending.getFactorId()));
         assertEquals("PENDING", factorService.peekFactorStatus(1L, 20L, pending.getFactorId()));
+    }
+
+    @Test
+    void factor_uniqueKey_andCipherNotPlaintext() {
+        MfaPendingTotp pending = factorService.startPendingTotp(2L, 21L, "dave");
+        MfaFactorDO row = factorMapper.selectByUserAndKey(2L, 21L, pending.getFactorId());
+        assertNotNull(row);
+        assertNotEquals("plain-dev", row.getKeyId());
+        assertNotEquals(pending.getSecretManual(), row.getSecretCiphertext());
+        assertEquals(pending.getSecretManual(), secretCipher.decrypt(row.getKeyId(), row.getSecretCiphertext()));
+
+        MfaFactorDO dup = MfaFactorDO.builder()
+                .tenantId(2L).userId(21L).factorKey(pending.getFactorId())
+                .type("TOTP").status("PENDING").secretCiphertext("x").keyId("test-k1")
+                .build();
+        assertThrows(Exception.class, () -> factorMapper.insert(dup));
     }
 
     @Test

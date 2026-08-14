@@ -24,7 +24,7 @@ public interface MfaFactorMapper extends BaseMapperX<MfaFactorDO> {
     @Update("UPDATE system_mfa_factor SET status = #{toStatus}, "
             + "last_used_step = COALESCE(#{lastUsedStep}, last_used_step) "
             + "WHERE tenant_id = #{tenantId} AND user_id = #{userId} AND factor_key = #{factorKey} "
-            + "AND status = #{fromStatus} AND deleted = 0")
+            + "AND factor_key <> '' AND status = #{fromStatus} AND deleted = 0")
     int casStatus(@Param("tenantId") Long tenantId,
                   @Param("userId") Long userId,
                   @Param("factorKey") String factorKey,

@@ -22,6 +22,9 @@ public class InMemoryMfaFactorStore implements MfaFactorStore {
 
     @Override
     public void save(Long tenantId, Long userId, MfaFactorBinding binding) {
+        if (binding.getFactorId() == null || binding.getFactorId().isBlank()) {
+            throw new IllegalArgumentException("factor_key is required");
+        }
         map.put(key(tenantId, userId, binding.getFactorId()), binding);
     }
 

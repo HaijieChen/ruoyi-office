@@ -131,6 +131,18 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
     }
 
     @Override
+    public boolean tryRevertComplete(String rawFlowToken) {
+        if (rawFlowToken == null || rawFlowToken.isBlank()) {
+            return false;
+        }
+        MfaAuthFlowRecord record = store.getByTokenHash(sha256Hex(rawFlowToken));
+        if (record == null || record.isExpired(Instant.now())) {
+            return false;
+        }
+        return store.casState(record.getFlowTokenHash(), MfaAuthFlowState.COMPLETED, MfaAuthFlowState.ACTIVE);
+    }
+
+    @Override
     public void revoke(String rawFlowToken) {
         if (rawFlowToken == null || rawFlowToken.isBlank()) {
             return;

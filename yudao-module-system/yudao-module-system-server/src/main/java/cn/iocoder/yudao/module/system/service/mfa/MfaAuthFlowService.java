@@ -29,6 +29,11 @@ public interface MfaAuthFlowService {
      */
     boolean tryComplete(String rawFlowToken);
 
+    /**
+     * 补偿：COMPLETED → ACTIVE（仅未过期）。
+     */
+    boolean tryRevertComplete(String rawFlowToken);
+
     void revoke(String rawFlowToken);
 
     void clear();

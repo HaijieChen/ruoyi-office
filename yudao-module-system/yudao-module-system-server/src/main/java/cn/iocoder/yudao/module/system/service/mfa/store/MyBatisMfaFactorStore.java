@@ -2,8 +2,11 @@ package cn.iocoder.yudao.module.system.service.mfa.store;
 
 import cn.iocoder.yudao.module.system.dal.dataobject.mfa.MfaFactorDO;
 import cn.iocoder.yudao.module.system.dal.mysql.mfa.MfaFactorMapper;
+import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretCipher;
+import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretCipherImpl;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorBinding;
 import jakarta.annotation.Resource;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -12,18 +15,28 @@ import java.util.List;
 @Repository
 public class MyBatisMfaFactorStore implements MfaFactorStore {
 
-    static final String KEY_ID_PLAIN = "plain-dev";
-
     @Resource
     private MfaFactorMapper mapper;
+    @Resource
+    private MfaSecretCipher secretCipher;
 
     @Override
     public void save(Long tenantId, Long userId, MfaFactorBinding binding) {
-        MfaFactorDO existing = mapper.selectByUserAndKey(tenantId, userId, binding.getFactorId());
+        requireFactorKey(binding.getFactorId());
         MfaFactorDO row = toDo(tenantId, userId, binding);
-        if (existing == null) {
-            mapper.insert(row);
-        } else {
+        try {
+            MfaFactorDO existing = mapper.selectByUserAndKey(tenantId, userId, binding.getFactorId());
+            if (existing == null) {
+                mapper.insert(row);
+            } else {
+                row.setId(existing.getId());
+                mapper.updateById(row);
+            }
+        } catch (DuplicateKeyException ex) {
+            MfaFactorDO existing = mapper.selectByUserAndKey(tenantId, userId, binding.getFactorId());
+            if (existing == null) {
+                throw ex;
+            }
             row.setId(existing.getId());
             mapper.updateById(row);
         }
@@ -31,7 +44,14 @@ public class MyBatisMfaFactorStore implements MfaFactorStore {
 
     @Override
     public MfaFactorBinding get(Long tenantId, Long userId, String factorId) {
-        return toBinding(mapper.selectByUserAndKey(tenantId, userId, factorId));
+        MfaFactorDO row = mapper.selectByUserAndKey(tenantId, userId, factorId);
+        MfaFactorBinding binding = toBinding(row);
+        if (row != null && binding != null && !secretCipher.isActiveKey(row.getKeyId())) {
+            row.setSecretCiphertext(secretCipher.encrypt(binding.getSecretOrDestination()));
+            row.setKeyId(secretCipher.activeKeyId());
+            mapper.updateById(row);
+        }
+        return binding;
     }
 
     @Override
@@ -49,11 +69,13 @@ public class MyBatisMfaFactorStore implements MfaFactorStore {
     @Override
     public boolean casStatus(Long tenantId, Long userId, String factorId,
                              String fromStatus, String toStatus, Long lastUsedStep) {
+        requireFactorKey(factorId);
         return mapper.casStatus(tenantId, userId, factorId, fromStatus, toStatus, lastUsedStep) == 1;
     }
 
     @Override
     public boolean claimTotpStep(Long tenantId, Long userId, String factorId, long step) {
+        requireFactorKey(factorId);
         return mapper.claimTotpStep(tenantId, userId, factorId, step) == 1;
     }
 
@@ -62,7 +84,7 @@ public class MyBatisMfaFactorStore implements MfaFactorStore {
         mapper.delete(null);
     }
 
-    private static MfaFactorDO toDo(Long tenantId, Long userId, MfaFactorBinding b) {
+    private MfaFactorDO toDo(Long tenantId, Long userId, MfaFactorBinding b) {
         return MfaFactorDO.builder()
                 .tenantId(tenantId)
                 .userId(userId)
@@ -71,24 +93,34 @@ public class MyBatisMfaFactorStore implements MfaFactorStore {
                 .status(b.getStatus())
                 .label(b.getLabel())
                 .destinationMasked(b.getMasked())
-                .secretCiphertext(b.getSecretOrDestination())
-                .keyId(KEY_ID_PLAIN)
+                .secretCiphertext(secretCipher.encrypt(b.getSecretOrDestination()))
+                .keyId(secretCipher.activeKeyId())
                 .lastUsedStep(b.getLastUsedStep())
                 .build();
     }
 
-    private static MfaFactorBinding toBinding(MfaFactorDO d) {
+    private MfaFactorBinding toBinding(MfaFactorDO d) {
         if (d == null) {
             return null;
         }
+        if (d.getKeyId() != null && MfaSecretCipherImpl.FORBIDDEN_KEY_ID.equalsIgnoreCase(d.getKeyId())) {
+            throw new IllegalStateException("MFA secret keyId plain-dev is forbidden");
+        }
+        String secret = secretCipher.decrypt(d.getKeyId(), d.getSecretCiphertext());
         return MfaFactorBinding.builder()
                 .factorId(d.getFactorKey())
                 .type(d.getType())
                 .status(d.getStatus())
-                .secretOrDestination(d.getSecretCiphertext())
+                .secretOrDestination(secret)
                 .label(d.getLabel())
                 .masked(d.getDestinationMasked())
                 .lastUsedStep(d.getLastUsedStep() == null ? -1L : d.getLastUsedStep())
                 .build();
+    }
+
+    static void requireFactorKey(String factorKey) {
+        if (factorKey == null || factorKey.isBlank()) {
+            throw new IllegalArgumentException("factor_key is required");
+        }
     }
 }
