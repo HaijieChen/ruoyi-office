@@ -158,6 +158,11 @@ yudao:
     transfer-notify-url: https://yunai.natapp1.cc/admin-api/pay/notify/transfer # 支付渠道的【转账】回调地址
   demo: false # 开启演示模式
   tencent-lbs-key: TVDBZ-TDILD-4ON4B-PFDZA-RNLKH-VVF6E # QQ 地图的密钥 https://lbs.qq.com/service/staticV2/staticGuide/staticDoc
+  # EXP-87 Path A：RPC 服务身份共享密钥（privileged create-by-business）；fail-closed 启动校验
+  rpc:
+    service-identity:
+      enabled: true
+      secret: "exp87rpcVmX8Z9w5J3DcuKee2AEDcTqrQMKkAESa"
 
 justauth:
   enabled: true
