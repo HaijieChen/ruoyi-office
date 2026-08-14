@@ -86,23 +86,29 @@ class FinancePaymentExp87MigrationContractTest {
     }
 
     @Test
-    void salaryTaxNotInFrontendCreateShellButBackendDenyListed() throws Exception {
+    void salaryTaxNotInFrontendCreateShellButCatalogRedirectAndBackendDenyGeneric() throws Exception {
         Path fe = findRoot().resolve(
                 "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/create/embed-registry.ts");
         String ts = Files.readString(fe);
-        // 壳内嵌不注册
-        assertFalse(ts.contains("finance_salary_payment_apply:"));
-        assertFalse(ts.contains("finance_tax_payment_apply:"));
+        // 壳内嵌不注册（跳转业务页）
+        assertFalse(ts.contains("finance_salary_payment_apply: ()"));
+        assertFalse(ts.contains("finance_tax_payment_apply: ()"));
+        // 统一目录 redirect 注册
+        assertTrue(ts.contains("CREATE_SHELL_REDIRECT_REGISTRY"));
+        assertTrue(ts.contains("finance_salary_payment_apply: '/finance/salary-payment'"));
+        assertTrue(ts.contains("finance_tax_payment_apply: '/finance/tax-payment'"));
         Path be = findRoot().resolve(
                 "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmEmbedProcessStartPermissionRegistry.java");
         String java = Files.readString(be);
-        // 后端有权限元数据 + isCreateShellEmbedAllowed 排除
         assertTrue(java.contains("\"finance_salary_payment_apply\""));
         assertTrue(java.contains("isCreateShellEmbedAllowed"));
+        assertTrue(java.contains("catalogRedirectPath"));
         Path elig = findRoot().resolve(
                 "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmProcessStartEligibilityServiceImpl.java");
         String e = Files.readString(elig);
         assertTrue(e.contains("isMenuOnlyPaymentProcess") || e.contains("finance_salary_payment_apply"));
+        // 通用直启硬拒绝仍在
+        assertTrue(e.contains("validateStartOrThrow") && e.contains("!trustedBusinessStart"));
     }
 
     @Test

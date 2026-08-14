@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { FinanceSalaryPaymentApi } from '#/api/finance/salary-payment';
 
-import { onMounted } from 'vue';
+import { nextTick, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
@@ -29,6 +29,23 @@ function handleRefresh() {
 function handleCreate() {
   formModalApi.setData({});
   formModalApi.open();
+}
+
+/** 统一发起目录 / 深链：?openCreate=1 打开新建 */
+function shouldOpenCreateFromQuery() {
+  const raw = route.query.openCreate;
+  if (raw === undefined || raw === null) return false;
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return v === '1' || v === 'true' || v === 'create';
+}
+
+async function consumeOpenCreateQuery() {
+  if (!shouldOpenCreateFromQuery()) return;
+  await nextTick();
+  handleCreate();
+  const nextQuery = { ...route.query };
+  delete nextQuery.openCreate;
+  await router.replace({ path: route.path, query: nextQuery });
 }
 
 function handleResubmit(row: FinanceSalaryPaymentApi.Application) {
@@ -99,12 +116,19 @@ const [Grid, gridApi] = useVbenVxeGrid({
 });
 
 onMounted(() => {
+  void consumeOpenCreateQuery();
   const open = route.query.openResubmit;
   if (open) {
     formModalApi.setData({ id: Number(open) });
     formModalApi.open();
   }
 });
+watch(
+  () => route.query.openCreate,
+  () => {
+    void consumeOpenCreateQuery();
+  },
+);
 </script>
 
 <template>
