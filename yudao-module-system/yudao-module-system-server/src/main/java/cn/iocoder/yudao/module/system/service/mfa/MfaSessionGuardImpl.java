@@ -19,7 +19,9 @@ import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.MFA_SESSIO
 import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.MFA_TOKEN_CLASS_FORBIDDEN;
 
 /**
- * SessionGuard：ADMIN 业务 Token 使用点 fail-closed 校验。
+ * SessionGuard：ADMIN 业务 Token 使用点 fail-closed 校验（F-S2-02）。
+ * <p>
+ * 缺 tokenClass / subjectClass / 任一 epoch 元数据一律拒绝，不得默认 0 放行。
  */
 @Service
 public class MfaSessionGuardImpl implements MfaSessionGuard {
@@ -53,22 +55,29 @@ public class MfaSessionGuardImpl implements MfaSessionGuard {
                 MfaLockOrder.Resource.USER_ASSURANCE));
 
         Map<String, String> info = accessToken.getUserInfo();
-        if (info != null) {
-            String tc = info.get(UI_TOKEN_CLASS);
-            if (tc != null && !MfaTokenClass.ACCESS.name().equals(tc)) {
-                throw exception(MFA_TOKEN_CLASS_FORBIDDEN);
-            }
+        // F-S2-02：缺安全元数据 fail-closed
+        if (info == null) {
+            throw exception(MFA_SESSION_REJECTED);
+        }
+        String tc = requireMeta(info, UI_TOKEN_CLASS);
+        if (!MfaTokenClass.ACCESS.name().equals(tc)) {
+            throw exception(MFA_TOKEN_CLASS_FORBIDDEN);
+        }
+        String subject = requireMeta(info, UI_SUBJECT_CLASS);
+        if (!SUBJECT_ADMIN_USER.equals(subject)) {
+            throw exception(MFA_SESSION_REJECTED);
+        }
+        long tokenGlobal = requireLongMeta(info, UI_GLOBAL_EPOCH);
+        long tokenTenant = requireLongMeta(info, UI_TENANT_EPOCH);
+        long tokenAssurance = requireLongMeta(info, UI_ASSURANCE_EPOCH);
+        if (tokenGlobal < 0 || tokenTenant < 0 || tokenAssurance < 0) {
+            throw exception(MFA_SESSION_REJECTED);
         }
 
         MfaPolicySnapshot policy = policyControlService.resolveEffectivePolicy(accessToken.getTenantId());
         if (!policy.isUsable() || policy.getLifecycleState() == MfaLifecycleState.DEGRADED_CLOSED) {
             throw exception(MFA_POLICY_UNAVAILABLE);
         }
-
-        long tokenGlobal = readLong(info, UI_GLOBAL_EPOCH, 0L);
-        long tokenTenant = readLong(info, UI_TENANT_EPOCH, 0L);
-        long tokenAssurance = readLong(info, UI_ASSURANCE_EPOCH, 0L);
-
         if (tokenGlobal < policy.getGlobalMinAcceptedEpoch()) {
             throw exception(MFA_SESSION_REJECTED);
         }
@@ -79,7 +88,6 @@ public class MfaSessionGuardImpl implements MfaSessionGuard {
         MfaUserAssuranceView assurance = assuranceAuthority.getAssurance(
                 accessToken.getTenantId(), userId);
         if (assurance == null) {
-            // 缺 assurance 行：slice1 权威 fail-closed；guard 同样拒绝
             throw exception(MFA_SESSION_REJECTED);
         }
         if (tokenAssurance != assurance.getAssuranceEpoch()) {
@@ -87,14 +95,20 @@ public class MfaSessionGuardImpl implements MfaSessionGuard {
         }
     }
 
-    private static long readLong(Map<String, String> info, String key, long defaultVal) {
-        if (info == null || !info.containsKey(key)) {
-            return defaultVal;
+    private static String requireMeta(Map<String, String> info, String key) {
+        String v = info.get(key);
+        if (v == null || v.isBlank()) {
+            throw exception(MFA_SESSION_REJECTED);
         }
+        return v;
+    }
+
+    private static long requireLongMeta(Map<String, String> info, String key) {
+        String v = requireMeta(info, key);
         try {
-            return Long.parseLong(info.get(key));
+            return Long.parseLong(v);
         } catch (NumberFormatException e) {
-            return defaultVal;
+            throw exception(MFA_SESSION_REJECTED);
         }
     }
 }

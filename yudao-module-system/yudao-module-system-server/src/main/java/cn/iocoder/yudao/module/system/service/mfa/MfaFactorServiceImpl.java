@@ -15,10 +15,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 切片 2 最小因子通道：SMS/EMAIL 投递码内存存储 + RFC6238 TOTP 校验（测试/开发用）。
- * 生产投递应走 Delivery Adapter；本实现不决定身份授权。
+ * 切片 2 因子通道（修复 F-S2-04）：allowlist + TOTP last_used_step 防重放。
  */
 @Service
 public class MfaFactorServiceImpl implements MfaFactorService {
@@ -29,9 +29,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
 
     private final MfaAuthFlowService authFlowService;
 
-    /** factorKey tenant:user:factorId -> FactorBinding */
     private final Map<String, FactorBinding> factors = new ConcurrentHashMap<>();
-    /** deliveryKey flowHash:factorId -> DeliveryCode */
     private final Map<String, DeliveryCode> deliveryCodes = new ConcurrentHashMap<>();
 
     public MfaFactorServiceImpl(MfaAuthFlowService authFlowService) {
@@ -48,11 +46,12 @@ public class MfaFactorServiceImpl implements MfaFactorService {
             throw new IllegalArgumentException("TOTP does not use sendChallengeCode");
         }
         MfaAuthFlowRecord flow = requireActiveFlow(rawFlowToken);
+        requireActionAllowed(flow, "send");
+        requireFactorAllowed(flow, factorId);
         FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type);
         String code = String.format("%06d", RANDOM.nextInt(1_000_000));
         String key = deliveryKey(MfaAuthFlowServiceImpl.sha256Hex(rawFlowToken), factorId);
         deliveryCodes.put(key, new DeliveryCode(code, Instant.now().plusSeconds(OTP_TTL_SECONDS), binding.type));
-        // 生产：调用 SMS/EMAIL adapter 发送 code；此处仅存储供校验
     }
 
     @Override
@@ -65,10 +64,12 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         }
         String type = normalizeType(factorType);
         MfaAuthFlowRecord flow = requireActiveFlow(rawFlowToken);
+        requireActionAllowed(flow, "verify");
+        requireFactorAllowed(flow, factorId);
         FactorBinding binding = requireBinding(flow.getTenantId(), flow.getUserId(), factorId, type);
 
         if ("TOTP".equals(type)) {
-            return verifyTotp(binding.secretOrDestination, code.trim(), Instant.now());
+            return verifyTotpWithReplayGuard(binding, code.trim(), Instant.now());
         }
         String key = deliveryKey(MfaAuthFlowServiceImpl.sha256Hex(rawFlowToken), factorId);
         DeliveryCode dc = deliveryCodes.get(key);
@@ -80,7 +81,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         }
         boolean ok = constantTimeEquals(dc.code, code.trim());
         if (ok) {
-            deliveryCodes.remove(key); // 单次消费投递码
+            deliveryCodes.remove(key);
         }
         return ok;
     }
@@ -90,7 +91,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
                                      String secretOrDestination) {
         String type = normalizeType(factorType);
         factors.put(factorKey(tenantId, userId, factorId),
-                new FactorBinding(factorId, type, secretOrDestination));
+                new FactorBinding(factorId, type, secretOrDestination, new AtomicLong(-1L)));
     }
 
     @Override
@@ -99,10 +100,27 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         deliveryCodes.clear();
     }
 
-    /** 测试可见：读取最近一次发送的码（生产禁止暴露）。 */
     public String peekDeliveryCodeForTest(String rawFlowToken, String factorId) {
         DeliveryCode dc = deliveryCodes.get(deliveryKey(MfaAuthFlowServiceImpl.sha256Hex(rawFlowToken), factorId));
         return dc == null ? null : dc.code;
+    }
+
+    private static void requireActionAllowed(MfaAuthFlowRecord flow, String action) {
+        if (flow.getAllowedActions() == null || flow.getAllowedActions().isEmpty()) {
+            return; // 空 = 不限制（仅测试便利）；生产应显式 allowlist
+        }
+        if (!flow.getAllowedActions().contains(action)) {
+            throw new IllegalStateException("action not allowed on flow: " + action);
+        }
+    }
+
+    private static void requireFactorAllowed(MfaAuthFlowRecord flow, String factorId) {
+        if (flow.getAllowedFactorIds() == null || flow.getAllowedFactorIds().isEmpty()) {
+            return;
+        }
+        if (!flow.getAllowedFactorIds().contains(factorId)) {
+            throw new IllegalStateException("factor not allowed on flow: " + factorId);
+        }
     }
 
     private MfaAuthFlowRecord requireActiveFlow(String rawFlowToken) {
@@ -138,15 +156,30 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return flowHash + ":" + factorId;
     }
 
-    private static boolean verifyTotp(String base32OrAsciiSecret, String code, Instant now) {
-        // 简化：以 UTF-8 secret 作为 HMAC key（测试用）；窗口 ±1
+    /**
+     * TOTP 校验 + last_used_step CAS：同一 step 不可跨 flow 重放。
+     */
+    private static boolean verifyTotpWithReplayGuard(FactorBinding binding, String code, Instant now) {
         long step = now.getEpochSecond() / 30L;
+        Long matchedStep = null;
         for (long s = step - 1; s <= step + 1; s++) {
-            if (constantTimeEquals(hotp(base32OrAsciiSecret, s), code)) {
+            if (constantTimeEquals(hotp(binding.secretOrDestination, s), code)) {
+                matchedStep = s;
+                break;
+            }
+        }
+        if (matchedStep == null) {
+            return false;
+        }
+        while (true) {
+            long prev = binding.lastUsedStep.get();
+            if (matchedStep <= prev) {
+                return false; // 重放
+            }
+            if (binding.lastUsedStep.compareAndSet(prev, matchedStep)) {
                 return true;
             }
         }
-        return false;
     }
 
     private static String hotp(String secret, long counter) {
@@ -177,7 +210,8 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return r == 0;
     }
 
-    private record FactorBinding(String factorId, String type, String secretOrDestination) {
+    private record FactorBinding(String factorId, String type, String secretOrDestination,
+                                 AtomicLong lastUsedStep) {
     }
 
     private record DeliveryCode(String code, Instant expiresAt, String type) {

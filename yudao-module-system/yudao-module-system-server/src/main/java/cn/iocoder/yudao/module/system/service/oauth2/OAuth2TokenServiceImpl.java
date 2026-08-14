@@ -22,9 +22,11 @@ import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.dal.mysql.oauth2.OAuth2AccessTokenMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.oauth2.OAuth2RefreshTokenMapper;
 import cn.iocoder.yudao.module.system.dal.redis.oauth2.OAuth2AccessTokenRedisDAO;
+import cn.iocoder.yudao.module.system.service.mfa.MfaSessionGuard;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +62,10 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     @Resource
     @Lazy // 懒加载，避免循环依赖
     private AdminUserService adminUserService;
+
+    /** F-S2-02：ADMIN Token 接受点 SessionGuard（ObjectProvider 避免循环依赖） */
+    @Resource
+    private ObjectProvider<MfaSessionGuard> mfaSessionGuardProvider;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -146,6 +152,11 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         }
         if (DateUtils.isExpired(accessTokenDO.getExpiresTime())) {
             throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "访问令牌已过期");
+        }
+        // F-S2-02：挂入 SessionGuard（ADMIN fail-closed；缺元数据拒绝）
+        MfaSessionGuard guard = mfaSessionGuardProvider.getIfAvailable();
+        if (guard != null) {
+            guard.assertAccessAllowed(accessTokenDO);
         }
         return accessTokenDO;
     }

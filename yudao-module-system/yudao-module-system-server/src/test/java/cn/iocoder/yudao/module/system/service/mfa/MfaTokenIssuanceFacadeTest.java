@@ -132,9 +132,10 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
 
         assertEquals(MfaIssuanceOutcome.CHALLENGE, result.getOutcome());
         assertFalse(result.hasAccessOrRefreshToken());
-        assertNotNull(result.getLoginResp().getFlowToken());
-        assertEquals("PRE_AUTH", result.getLoginResp().getTokenClass());
-        assertNull(result.getLoginResp().getChallengeToken());
+        assertNotNull(result.getLoginResp().getFlow());
+        assertNotNull(result.getLoginResp().getFlow().getFlowToken());
+        assertEquals("PRE_AUTH", result.getLoginResp().getFlow().getTokenClass());
+        assertNull(result.getLoginResp().getAccessToken());
         verify(oauth2TokenService, never()).createAccessToken(anyLong(), anyInt(), anyString(), any());
     }
 
@@ -177,10 +178,10 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
         MfaIssuanceResult challenge = facade.issueAfterPrimaryAuth(
                 MfaIssuancePath.LOGIN_PASSWORD, 10L, 1L, UserTypeEnum.ADMIN.getValue(),
                 "default", null, List.of("pwd"));
-        String flowToken = challenge.getLoginResp().getFlowToken();
+        String flowToken = challenge.getLoginResp().getFlow().getFlowToken();
+        // allowlist empty on challenge issue means any registered factor with verify action
         factorService.registerActiveFactor(1L, 10L, "f1", "TOTP", "test-secret");
 
-        // generate valid TOTP via same algorithm as service
         String code = currentTotp("test-secret");
         MfaIssuanceResult issued = facade.completeChallengeAndIssue(
                 flowToken, "f1", "TOTP", code, "default", List.of("read"));

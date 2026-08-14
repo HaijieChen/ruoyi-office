@@ -21,16 +21,22 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 内存权威实现（切片 2）：生产可替换为 DB 行锁实现，锁序与 CAS 语义保持不变。
+ * Auth flow 权威（切片 2 修复）：
+ * <ul>
+ *   <li>进程内共享 ConcurrentHashMap（多 Spring bean / 同 JVM 多实例构造共享同一 store）</li>
+ *   <li>state 使用 AtomicReference CAS 完成 ACTIVE→COMPLETED</li>
+ *   <li>生产多节点应替换为 MySQL 行锁 + CAS（见 system_mfa_v3_slice2_flow.sql）</li>
+ * </ul>
  */
 @Service
 public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
-
-    private final Map<String, MfaAuthFlowRecord> byHash = new ConcurrentHashMap<>();
+    /** 同 JVM 共享；跨 JVM 由 DB 实现承接 */
+    private static final ConcurrentHashMap<String, StoredFlow> SHARED = new ConcurrentHashMap<>();
 
     @Override
     public MfaIssuedFlow issue(MfaFlowTokenClass tokenClass, Long userId, Long tenantId, String clientId,
@@ -72,7 +78,7 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
                 .expiresAt(now.plusSeconds(ttlSeconds))
                 .createdAt(now)
                 .build();
-        byHash.put(hash, record);
+        SHARED.put(hash, new StoredFlow(record, new AtomicReference<>(MfaAuthFlowState.ACTIVE)));
         return MfaIssuedFlow.builder()
                 .flowId(record.getId())
                 .flowToken(raw)
@@ -87,20 +93,23 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
             return null;
         }
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FLOW_OR_DECISION_OR_CODE));
-        String hash = sha256Hex(rawFlowToken);
-        MfaAuthFlowRecord record = byHash.get(hash);
-        if (record == null) {
+        StoredFlow stored = SHARED.get(sha256Hex(rawFlowToken));
+        if (stored == null) {
             return null;
         }
         Instant now = Instant.now();
-        if (record.getState() != MfaAuthFlowState.ACTIVE) {
+        MfaAuthFlowState st = stored.state.get();
+        if (st != MfaAuthFlowState.ACTIVE) {
             return null;
         }
-        if (record.isExpired(now)) {
-            record.setState(MfaAuthFlowState.EXPIRED);
+        if (stored.record.isExpired(now)) {
+            stored.state.compareAndSet(MfaAuthFlowState.ACTIVE, MfaAuthFlowState.EXPIRED);
+            stored.record.setState(MfaAuthFlowState.EXPIRED);
             return null;
         }
-        return record;
+        // 返回防御拷贝语义：state 以 AtomicReference 为准
+        stored.record.setState(st);
+        return stored.record;
     }
 
     @Override
@@ -109,22 +118,21 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
             return false;
         }
         MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FLOW_OR_DECISION_OR_CODE));
-        String hash = sha256Hex(rawFlowToken);
-        MfaAuthFlowRecord record = byHash.get(hash);
-        if (record == null) {
+        StoredFlow stored = SHARED.get(sha256Hex(rawFlowToken));
+        if (stored == null) {
             return false;
         }
-        synchronized (record) {
-            if (record.getState() != MfaAuthFlowState.ACTIVE) {
-                return false;
-            }
-            if (record.isExpired(Instant.now())) {
-                record.setState(MfaAuthFlowState.EXPIRED);
-                return false;
-            }
-            record.setState(MfaAuthFlowState.COMPLETED);
-            return true;
+        if (stored.record.isExpired(Instant.now())) {
+            stored.state.compareAndSet(MfaAuthFlowState.ACTIVE, MfaAuthFlowState.EXPIRED);
+            stored.record.setState(MfaAuthFlowState.EXPIRED);
+            return false;
         }
+        // 真实 CAS：仅 ACTIVE→COMPLETED
+        if (!stored.state.compareAndSet(MfaAuthFlowState.ACTIVE, MfaAuthFlowState.COMPLETED)) {
+            return false;
+        }
+        stored.record.setState(MfaAuthFlowState.COMPLETED);
+        return true;
     }
 
     @Override
@@ -132,15 +140,16 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
         if (rawFlowToken == null || rawFlowToken.isBlank()) {
             return;
         }
-        MfaAuthFlowRecord record = byHash.get(sha256Hex(rawFlowToken));
-        if (record != null && record.getState() == MfaAuthFlowState.ACTIVE) {
-            record.setState(MfaAuthFlowState.REVOKED);
+        StoredFlow stored = SHARED.get(sha256Hex(rawFlowToken));
+        if (stored != null) {
+            stored.state.set(MfaAuthFlowState.REVOKED);
+            stored.record.setState(MfaAuthFlowState.REVOKED);
         }
     }
 
     @Override
     public void clear() {
-        byHash.clear();
+        SHARED.clear();
     }
 
     public static String sha256Hex(String raw) {
@@ -151,5 +160,8 @@ public class MfaAuthFlowServiceImpl implements MfaAuthFlowService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }
+    }
+
+    private record StoredFlow(MfaAuthFlowRecord record, AtomicReference<MfaAuthFlowState> state) {
     }
 }

@@ -117,8 +117,9 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
 
     @Override
     public MfaIssuanceResult refresh(MfaIssuancePath path, String refreshToken, String clientId) {
-        MfaPolicySnapshot policy = policyControlService.resolveEffectivePolicy(null);
-        if (!policy.isUsable() || policy.getLifecycleState() == MfaLifecycleState.DEGRADED_CLOSED) {
+        // F-S2-03：先看全局策略可用性；非 OFF 下旧会话缺 epoch/assurance 必须拒绝
+        MfaPolicySnapshot globalPolicy = policyControlService.resolveEffectivePolicy(null);
+        if (!globalPolicy.isUsable() || globalPolicy.getLifecycleState() == MfaLifecycleState.DEGRADED_CLOSED) {
             throw exception(MFA_POLICY_UNAVAILABLE);
         }
         if (userFactorProbe.isEnrollmentPendingOnSession(refreshToken)
@@ -126,8 +127,14 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
             throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
         }
         Long sessionVersion = userFactorProbe.getSessionPolicyVersion(refreshToken);
-        if (sessionVersion != null && sessionVersion < policy.getPolicyVersion()
-                && policy.getMode() == MfaMode.REQUIRED) {
+        // REQUIRED 下 sessionVersion 缺失或过旧一律拒绝（不得 null 放行）
+        if (globalPolicy.getMode() == MfaMode.REQUIRED) {
+            if (sessionVersion == null || sessionVersion < globalPolicy.getGlobalMinAcceptedEpoch()) {
+                throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+            }
+        } else if (sessionVersion != null && sessionVersion < globalPolicy.getPolicyVersion()
+                && globalPolicy.getMode() == MfaMode.OPTIONAL) {
+            // OPTIONAL 变严路径：有快照则比较
             throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
         }
 
@@ -139,7 +146,7 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
                 .mfaSatisfied(true)
                 .enrollmentComplete(true)
                 .recoveryRequired(false)
-                .policyVersion(policy.getPolicyVersion())
+                .policyVersion(globalPolicy.getPolicyVersion())
                 .factorVersion(0L)
                 .expiresAt(Instant.now().plusSeconds(60))
                 .build();
@@ -151,6 +158,42 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
                 if (!again.isUsable() || again.getLifecycleState() == MfaLifecycleState.DEGRADED_CLOSED) {
                     oauth2TokenService.removeAccessToken(token.getAccessToken());
                     throw exception(MFA_POLICY_UNAVAILABLE);
+                }
+                // F-S2-03：非 OFF 策略下，新 access 必须具备完整安全元数据并通过 Guard
+                if (again.getMode() != null && again.getMode() != MfaMode.OFF) {
+                    if (token.getUserInfo() == null
+                            || !token.getUserInfo().containsKey(MfaSessionGuardImpl.UI_GLOBAL_EPOCH)
+                            || !token.getUserInfo().containsKey(MfaSessionGuardImpl.UI_ASSURANCE_EPOCH)) {
+                        oauth2TokenService.removeAccessToken(token.getAccessToken());
+                        throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+                    }
+                    long aEpoch = 0L;
+                    if (token.getTenantId() != null) {
+                        MfaUserAssuranceView view = assuranceAuthority.getAssurance(
+                                token.getTenantId(), token.getUserId());
+                        if (view == null) {
+                            oauth2TokenService.removeAccessToken(token.getAccessToken());
+                            throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+                        }
+                        aEpoch = view.getAssuranceEpoch();
+                    }
+                    stampTokenMetadata(token, again, aEpoch);
+                    // min accepted + assurance 精确匹配
+                    long tg = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_GLOBAL_EPOCH));
+                    long tt = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_TENANT_EPOCH));
+                    long ta = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_ASSURANCE_EPOCH));
+                    if (tg < again.getGlobalMinAcceptedEpoch() || tt < again.getTenantMinAcceptedEpoch()) {
+                        oauth2TokenService.removeAccessToken(token.getAccessToken());
+                        throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+                    }
+                    if (token.getTenantId() != null) {
+                        MfaUserAssuranceView current = assuranceAuthority.getAssurance(
+                                token.getTenantId(), token.getUserId());
+                        if (current == null || ta != current.getAssuranceEpoch()) {
+                            oauth2TokenService.removeAccessToken(token.getAccessToken());
+                            throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+                        }
+                    }
                 }
             }
             return MfaIssuanceResult.builder()
@@ -196,8 +239,8 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
         if (flow == null) {
             throw exception(MFA_FLOW_INVALID);
         }
-        if (flow.getTokenClass() != MfaFlowTokenClass.PRE_AUTH
-                && flow.getTokenClass() != MfaFlowTokenClass.ENROLLMENT) {
+        // 普通 complete 仅 PRE_AUTH；ENROLLMENT 需独立原子路径（切片 3）
+        if (flow.getTokenClass() != MfaFlowTokenClass.PRE_AUTH) {
             throw exception(MFA_FLOW_INVALID);
         }
 
@@ -205,9 +248,19 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
         if (!policy.isUsable() || policy.getLifecycleState() == MfaLifecycleState.DEGRADED_CLOSED) {
             throw exception(MFA_POLICY_UNAVAILABLE);
         }
-        // Decision epoch 精确匹配
+        // Decision epoch 精确匹配（含 assurance）
         if (flow.getGlobalPolicyEpoch() != policy.getGlobalPolicyEpoch()
                 || flow.getTenantPolicyEpoch() != policy.getTenantPolicyEpoch()) {
+            throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
+        }
+        Long tenantId = flow.getTenantId() == null ? 0L : flow.getTenantId();
+        MfaUserAssuranceView assurance = assuranceAuthority.getAssurance(tenantId, flow.getUserId());
+        if (assurance == null) {
+            // 缺行：bootstrap 仅当 flow 绑 0 且当前仍为 0 才允许
+            assurance = assuranceAuthority.ensureBootstrapRow(tenantId, flow.getUserId());
+        }
+        if (flow.getAssuranceEpoch() != assurance.getAssuranceEpoch()) {
+            // F-S2-04：assurance bump 后旧 flow 失效
             throw exception(MFA_TOKEN_ISSUANCE_REJECTED);
         }
 
@@ -221,16 +274,25 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
             throw exception(MFA_FACTOR_VERIFY_FAILED);
         }
 
+        // F-S2-01：先签发 Token，成功后再 CAS 消费 flow；Token 失败则 flow 保持 ACTIVE
+        List<String> amr = List.of(factorType == null ? "mfa" : factorType.toLowerCase());
+        MfaIssuanceResult issued;
+        try {
+            issued = allowWithDecision(flow.getUserId(), flow.getTenantId(),
+                    clientId != null ? clientId : flow.getClientId(),
+                    scopes, amr, policy, assurance.getAssuranceEpoch());
+        } catch (RuntimeException ex) {
+            // flow 未 complete，可重试
+            throw ex;
+        }
         if (!authFlowService.tryComplete(rawFlowToken)) {
+            // 极少：并发 double-complete；撤销刚发的 token 防双签发
+            if (issued.getAccessToken() != null) {
+                oauth2TokenService.removeAccessToken(issued.getAccessToken().getAccessToken());
+            }
             throw exception(MFA_FLOW_INVALID);
         }
-
-        MfaUserAssuranceView assurance = assuranceAuthority.ensureBootstrapRow(
-                flow.getTenantId() == null ? 0L : flow.getTenantId(), flow.getUserId());
-        List<String> amr = List.of(factorType == null ? "mfa" : factorType.toLowerCase());
-        return allowWithDecision(flow.getUserId(), flow.getTenantId(),
-                clientId != null ? clientId : flow.getClientId(),
-                scopes, amr, policy, assurance.getAssuranceEpoch());
+        return issued;
     }
 
     private enum DecisionNeed {
@@ -337,14 +399,15 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
 
     private MfaIssuanceResult challengeMfa(Long userId, Long tenantId, String clientId,
                                            MfaPolicySnapshot policy) {
+        long aEpoch = currentAssuranceEpoch(tenantId, userId);
         MfaIssuedFlow flow = authFlowService.issue(
-                MfaFlowTokenClass.PRE_AUTH, userId, tenantId, clientId, policy, 0L,
+                MfaFlowTokenClass.PRE_AUTH, userId, tenantId, clientId, policy, aEpoch,
                 List.of("verify", "send", "logout"), List.of(), PRE_AUTH_TTL_SECONDS);
-        // 契约校验：status × tokenClass × TTL
         MfaAuthLoginResult.mfaFlow(MfaLoginStatus.MFA_REQUIRED,
                 MfaAuthLoginResult.FlowPayload.of(flow.getFlowToken(), MfaFlowTokenClass.PRE_AUTH,
                         flow.getExpiresInSeconds()));
-        AuthLoginRespVO resp = toFlowResp(userId, MfaLoginStatus.MFA_REQUIRED, flow);
+        AuthLoginRespVO resp = toFlowResp(userId, MfaLoginStatus.MFA_REQUIRED, flow,
+                List.of("verify", "send", "logout"));
         return MfaIssuanceResult.builder()
                 .outcome(MfaIssuanceOutcome.CHALLENGE)
                 .loginStatus(MfaLoginStatus.MFA_REQUIRED)
@@ -355,19 +418,29 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
 
     private MfaIssuanceResult challengeEnrollment(Long userId, Long tenantId, String clientId,
                                                   MfaPolicySnapshot policy) {
+        long aEpoch = currentAssuranceEpoch(tenantId, userId);
         MfaIssuedFlow flow = authFlowService.issue(
-                MfaFlowTokenClass.ENROLLMENT, userId, tenantId, clientId, policy, 0L,
+                MfaFlowTokenClass.ENROLLMENT, userId, tenantId, clientId, policy, aEpoch,
                 List.of("enroll", "logout"), List.of(), ENROLLMENT_TTL_SECONDS);
         MfaAuthLoginResult.mfaFlow(MfaLoginStatus.MFA_ENROLLMENT_REQUIRED,
                 MfaAuthLoginResult.FlowPayload.of(flow.getFlowToken(), MfaFlowTokenClass.ENROLLMENT,
                         flow.getExpiresInSeconds()));
-        AuthLoginRespVO resp = toFlowResp(userId, MfaLoginStatus.MFA_ENROLLMENT_REQUIRED, flow);
+        AuthLoginRespVO resp = toFlowResp(userId, MfaLoginStatus.MFA_ENROLLMENT_REQUIRED, flow,
+                List.of("enroll", "logout"));
         return MfaIssuanceResult.builder()
                 .outcome(MfaIssuanceOutcome.CHALLENGE)
                 .loginStatus(MfaLoginStatus.MFA_ENROLLMENT_REQUIRED)
                 .accessToken(null)
                 .loginResp(resp)
                 .build();
+    }
+
+    private long currentAssuranceEpoch(Long tenantId, Long userId) {
+        if (tenantId == null || userId == null) {
+            return 0L;
+        }
+        MfaUserAssuranceView view = assuranceAuthority.ensureBootstrapRow(tenantId, userId);
+        return view.getAssuranceEpoch();
     }
 
     private MfaIssuanceResult policyUnavailable() {
@@ -386,17 +459,21 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
         return builder.build();
     }
 
-    private static AuthLoginRespVO toFlowResp(Long userId, MfaLoginStatus status, MfaIssuedFlow flow) {
+    private static AuthLoginRespVO toFlowResp(Long userId, MfaLoginStatus status, MfaIssuedFlow flow,
+                                              List<String> allowedActions) {
+        // F-S2-05：canonical nested flow union；无顶层 flowToken/challengeToken
         return AuthLoginRespVO.builder()
                 .userId(userId)
                 .loginStatus(status.name())
-                .flowToken(flow.getFlowToken())
-                .tokenClass(flow.getTokenClass().name())
-                .expiresIn(flow.getExpiresInSeconds())
-                // 明确不写 challengeToken 别名
-                .challengeToken(null)
                 .accessToken(null)
                 .refreshToken(null)
+                .flow(AuthLoginRespVO.FlowPayload.builder()
+                        .flowToken(flow.getFlowToken())
+                        .tokenClass(flow.getTokenClass().name())
+                        .expiresIn(flow.getExpiresInSeconds())
+                        .allowedActions(allowedActions)
+                        .factors(List.of())
+                        .build())
                 .build();
     }
 
