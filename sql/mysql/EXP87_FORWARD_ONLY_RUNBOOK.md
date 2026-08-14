@@ -30,7 +30,7 @@
 3. 部署应用与前端。
 4. 导入 BPMN 定义（`finance_salary_payment_apply` / `finance_tax_payment_apply`）。
 5. 执行 `finance_salary_tax_bpm_form_view_path_exp87.sql`（依赖已存在 process_definition_info 行）。
-6. 冒烟：普通付款出纳选账户；薪税独立菜单发起；待办详情 form path；财务节点写科目。
+6. 冒烟：普通付款出纳选账户；薪税**独立菜单**与**统一发起目录**（有 create 权限时露出两流程卡片，点击跳转业务页）均可发起；**禁止**通用 createProcessInstance 直启薪税 key；待办详情 form path；财务节点写科目。
 
 ## Flowable 状态备份与恢复（EXP-87 F6）
 
@@ -102,12 +102,13 @@ WHERE deleted = b'0'
 - **支付行不可变**：禁止逻辑删除实际支付明细作为业务回滚手段。  
 - 有支付后的纠错走 **作废/冲正**（本单未实现冲正，须挡死 resubmit/reject）。  
 - 公司主体仍以组织 `dept` 为准，账户仅 FK，无双写主体。  
-- 薪税 **禁止** 通用流程目录发起；仅独立菜单 + 领域 API。
+- 薪税 **禁止** 通用 `createProcessInstance` 直启；统一发起目录**可露出**（有 create 时），卡片跳转业务页；独立菜单 + 领域 API 仍为主路径。
 
 ## 检查清单
 
 - [ ] 全库/Flowable 备份路径与 SHA256 已登记  
 - [ ] 预发完成一次 restore 演练（含 ACT_RE_* 校验 SQL）  
 - [ ] BPM path SQL 在定义部署后执行  
-- [ ] 通用目录已确认不展示薪税 key  
+- [ ] 有 create 权限时统一目录展示薪税两 key，点击跳转业务入口  
+- [ ] 通用 createProcessInstance 对薪税 key 仍拒绝  
 - [ ] 回滚决策人与窗口已确认  

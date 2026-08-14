@@ -11,26 +11,31 @@ public interface BpmProcessStartEligibilityService {
     BpmProcessStartEligibility evaluate(String processKey);
 
     /**
-     * 评估发起资格。
+     * 评估发起资格（目录可见 / 预检 canStart）。
+     * <p>
+     * 薪税：有 create 权限时 {@code canStart=true}（统一目录可露出）；
+     * 通用 {@code createProcessInstance} 仍须走 {@link #validateStartOrThrow} 硬拒绝。
      *
-     * @param trustedBusinessStart true 时允许菜单专属流程（薪资/税金）走业务权限校验，而非通用通道恒 deny
+     * @param trustedBusinessStart true 时表示可信业务通道（Finance 领域 API）下的权限评估
      */
     BpmProcessStartEligibility evaluate(String processKey, boolean trustedBusinessStart);
 
     /**
      * 发起列表是否应隐藏（无业务 create 权限或配置缺失时隐藏，禁止仅灰置）。
+     * 薪税有 create 时<strong>不</strong>隐藏（验收：统一目录露出）。
      */
     boolean shouldHideFromStartList(String processKey);
 
     /**
      * 启动/创建流程前强制校验（通用通道）；失败抛出带友好文案的业务异常。
+     * 薪税在通用通道<strong>恒拒绝</strong>（即使目录可见）。
      */
     void validateStartOrThrow(String processKey);
 
     /**
      * 启动/创建流程前强制校验。
      *
-     * @param trustedBusinessStart true 表示来自可信业务通道（Finance 独立入口）
+     * @param trustedBusinessStart true 表示来自可信业务通道（Finance 独立入口 API）
      */
     void validateStartOrThrow(String processKey, boolean trustedBusinessStart);
 

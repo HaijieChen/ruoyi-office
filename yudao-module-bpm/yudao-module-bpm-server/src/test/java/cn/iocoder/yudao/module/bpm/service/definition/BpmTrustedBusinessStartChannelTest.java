@@ -127,7 +127,24 @@ class BpmTrustedBusinessStartChannelTest {
     }
 
     @Test
-    void catalogStillHidesSalaryTax() {
+    void catalogShowsSalaryTaxWhenHasCreatePermission() {
+        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
+                .thenReturn(true);
+        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
+                .thenReturn(true);
+        assertFalse(eligibility.shouldHideFromStartList(SALARY_KEY));
+        assertFalse(eligibility.shouldHideFromStartList(TAX_KEY));
+        // 目录可见仍禁止通用直启
+        assertThrows(Exception.class, () -> eligibility.validateStartOrThrow(SALARY_KEY, false));
+        assertThrows(Exception.class, () -> eligibility.validateStartOrThrow(TAX_KEY, false));
+    }
+
+    @Test
+    void catalogHidesSalaryTaxWithoutCreatePermission() {
+        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
+                .thenReturn(false);
+        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
+                .thenReturn(false);
         assertTrue(eligibility.shouldHideFromStartList(SALARY_KEY));
         assertTrue(eligibility.shouldHideFromStartList(TAX_KEY));
     }

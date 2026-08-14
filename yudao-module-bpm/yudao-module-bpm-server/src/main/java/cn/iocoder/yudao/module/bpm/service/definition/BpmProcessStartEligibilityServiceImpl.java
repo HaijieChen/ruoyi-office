@@ -9,7 +9,10 @@ import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.MODEL_DEPLOY_
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED;
 
 /**
- * 嵌入式流程发起资格：列表隐藏 / 详情预检 / 启动校验共用同一评估逻辑。
+ * 嵌入式流程发起资格：列表隐藏 / 详情预检 / 启动校验。
+ * <p>
+ * EXP-87 验收：薪资/税金可出现在<strong>统一发起目录</strong>（有 create 权限时），
+ * 但通用 {@code createProcessInstance} <strong>仍拒绝直启</strong>；业务 API 可信通道可发。
  */
 @Service
 public class BpmProcessStartEligibilityServiceImpl implements BpmProcessStartEligibilityService {
@@ -29,14 +32,9 @@ public class BpmProcessStartEligibilityServiceImpl implements BpmProcessStartEli
 
     @Override
     public BpmProcessStartEligibility evaluate(String processKey, boolean trustedBusinessStart) {
-        // EXP-87 G1：薪税 key — 通用通道 hide+deny；可信业务通道走正常业务权限
-        if (isMenuOnlyPaymentProcess(processKey) && !trustedBusinessStart) {
-            String required = BpmEmbedProcessStartPermissionRegistry.requiredPermission(processKey);
-            String denyMsg = StrUtil.blankToDefault(
-                    BpmEmbedProcessStartPermissionRegistry.denyMessage(processKey),
-                    "该流程仅允许从业务菜单发起，禁止通用流程发起");
-            // 无权限：隐藏+拒绝；有权限：仍拒绝通用直启（须走独立菜单 API）
-            return BpmProcessStartEligibility.denied(required, denyMsg);
+        // 薪税：目录可见性按业务 create 权限；通用直启仍由 validateStartOrThrow 硬拒绝
+        if (isMenuOnlyPaymentProcess(processKey)) {
+            return evaluateMenuOnlyPayment(processKey, trustedBusinessStart);
         }
         if (!BpmEmbedProcessStartPermissionRegistry.isEmbedProcess(processKey)) {
             return BpmProcessStartEligibility.allowed();
@@ -45,15 +43,38 @@ public class BpmProcessStartEligibilityServiceImpl implements BpmProcessStartEli
         if (StrUtil.isBlank(required)) {
             return BpmProcessStartEligibility.denied(null, MISSING_CONFIG_REASON);
         }
-        // 可信通道下薪税：有权限则允许；无权限仍拒绝（非 fail-open）
         String denyMsg = StrUtil.blankToDefault(
                 BpmEmbedProcessStartPermissionRegistry.denyMessage(processKey),
                 MISSING_CONFIG_REASON);
         if (!securityFrameworkService.hasPermission(required)) {
-            // 可信通道缺权：用更明确的缺权文案，避免「请从菜单发起」误导
-            if (trustedBusinessStart && isMenuOnlyPaymentProcess(processKey)) {
+            return BpmProcessStartEligibility.denied(required, denyMsg);
+        }
+        return BpmProcessStartEligibility.builder()
+                .canStart(true)
+                .requiredStartPermission(required)
+                .build();
+    }
+
+    /**
+     * 薪税：有 create → canStart=true（统一目录卡片可见 / 可跳转业务入口）；
+     * 无 create → 隐藏+拒绝。
+     * 可信通道与通用通道在<strong>权限评估</strong>上一致；通用 BPM 直启另由
+     * {@link #validateStartOrThrow(String, boolean)} 硬拒绝。
+     */
+    private BpmProcessStartEligibility evaluateMenuOnlyPayment(String processKey, boolean trustedBusinessStart) {
+        String required = BpmEmbedProcessStartPermissionRegistry.requiredPermission(processKey);
+        if (StrUtil.isBlank(required)) {
+            return BpmProcessStartEligibility.denied(null, MISSING_CONFIG_REASON);
+        }
+        if (!securityFrameworkService.hasPermission(required)) {
+            String denyMsg;
+            if (trustedBusinessStart) {
                 denyMsg = "无" + ("finance_salary_payment_apply".equals(processKey.trim()) ? "薪资" : "税金")
                         + "付款发起权限，请联系管理员分配对应角色";
+            } else {
+                denyMsg = StrUtil.blankToDefault(
+                        BpmEmbedProcessStartPermissionRegistry.denyMessage(processKey),
+                        MISSING_CONFIG_REASON);
             }
             return BpmProcessStartEligibility.denied(required, denyMsg);
         }
@@ -65,10 +86,7 @@ public class BpmProcessStartEligibilityServiceImpl implements BpmProcessStartEli
 
     @Override
     public boolean shouldHideFromStartList(String processKey) {
-        // 薪税始终从通用目录隐藏（与 trusted 无关）
-        if (isMenuOnlyPaymentProcess(processKey)) {
-            return true;
-        }
+        // 与其它嵌入式一致：无 create 权限才隐藏；有权限则在统一目录露出
         return !evaluate(processKey).isCanStart();
     }
 
@@ -87,6 +105,14 @@ public class BpmProcessStartEligibilityServiceImpl implements BpmProcessStartEli
 
     @Override
     public void validateStartOrThrow(String processKey, boolean trustedBusinessStart) {
+        // 目录可见 ≠ 通用直启：非可信通道对薪税硬拒绝 createProcessInstance
+        if (isMenuOnlyPaymentProcess(processKey) && !trustedBusinessStart) {
+            String required = BpmEmbedProcessStartPermissionRegistry.requiredPermission(processKey);
+            String denyMsg = StrUtil.blankToDefault(
+                    BpmEmbedProcessStartPermissionRegistry.denyMessage(processKey),
+                    "该流程仅允许从业务入口发起，禁止通用流程直启");
+            throw exception(PROCESS_INSTANCE_START_PERMISSION_DENIED, denyMsg);
+        }
         BpmProcessStartEligibility e = evaluate(processKey, trustedBusinessStart);
         if (!e.isCanStart()) {
             String reason = StrUtil.blankToDefault(e.getCannotStartReason(), MISSING_CONFIG_REASON);

@@ -93,19 +93,43 @@ class BpmProcessStartEligibilityServiceTest {
     }
 
     @Test
-    void salaryTax_alwaysHiddenAndDeniedFromGenericStart() {
-        // 不依赖权限 stub：有/无权限均拒绝通用直启（须走独立菜单）
-        BpmProcessStartEligibility salary = service.evaluate("finance_salary_payment_apply");
-        BpmProcessStartEligibility tax = service.evaluate("finance_tax_payment_apply");
-        assertFalse(salary.isCanStart());
-        assertFalse(tax.isCanStart());
+    void salaryTax_withoutPermission_hiddenAndGenericStartDenied() {
+        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
+                .thenReturn(false);
+        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
+                .thenReturn(false);
+
+        assertFalse(service.evaluate("finance_salary_payment_apply").isCanStart());
+        assertFalse(service.evaluate("finance_tax_payment_apply").isCanStart());
         assertTrue(service.shouldHideFromStartList("finance_salary_payment_apply"));
         assertTrue(service.shouldHideFromStartList("finance_tax_payment_apply"));
 
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.validateStartOrThrow("finance_salary_payment_apply"));
         assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
-        // 显式 trusted=false 与默认一致
+        assertThrows(ServiceException.class,
+                () -> service.validateStartOrThrow("finance_tax_payment_apply", false));
+    }
+
+    @Test
+    void salaryTax_withPermission_catalogVisible_butGenericStartStillDenied() {
+        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
+                .thenReturn(true);
+        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
+                .thenReturn(true);
+
+        // 统一目录：可见（canStart=true）
+        assertTrue(service.evaluate("finance_salary_payment_apply").isCanStart());
+        assertTrue(service.evaluate("finance_tax_payment_apply").isCanStart());
+        assertFalse(service.shouldHideFromStartList("finance_salary_payment_apply"));
+        assertFalse(service.shouldHideFromStartList("finance_tax_payment_apply"));
+
+        // 通用 createProcessInstance：仍硬拒绝
+        ServiceException salaryEx = assertThrows(ServiceException.class,
+                () -> service.validateStartOrThrow("finance_salary_payment_apply"));
+        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), salaryEx.getCode());
+        assertTrue(salaryEx.getMessage().contains("禁止") || salaryEx.getMessage().contains("直启")
+                || salaryEx.getMessage().contains("菜单") || salaryEx.getMessage().contains("入口"));
         assertThrows(ServiceException.class,
                 () -> service.validateStartOrThrow("finance_tax_payment_apply", false));
     }
@@ -121,9 +145,20 @@ class BpmProcessStartEligibilityServiceTest {
         assertTrue(service.evaluate("finance_tax_payment_apply", true).isCanStart());
         assertDoesNotThrow(() -> service.validateStartOrThrow("finance_salary_payment_apply", true));
         assertDoesNotThrow(() -> service.validateStartOrThrow("finance_tax_payment_apply", true));
-        // 目录仍隐藏
-        assertTrue(service.shouldHideFromStartList("finance_salary_payment_apply"));
-        assertTrue(service.shouldHideFromStartList("finance_tax_payment_apply"));
+        // 有权限时目录不隐藏（与通用 evaluate 一致）
+        assertFalse(service.shouldHideFromStartList("finance_salary_payment_apply"));
+        assertFalse(service.shouldHideFromStartList("finance_tax_payment_apply"));
+    }
+
+    @Test
+    void catalogRedirectPaths_forSalaryTax() {
+        assertEquals("/finance/salary-payment",
+                BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("finance_salary_payment_apply"));
+        assertEquals("/finance/tax-payment",
+                BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("finance_tax_payment_apply"));
+        assertNull(BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("finance_payment_apply"));
+        assertFalse(BpmEmbedProcessStartPermissionRegistry.isCreateShellEmbedAllowed("finance_salary_payment_apply"));
+        assertFalse(BpmEmbedProcessStartPermissionRegistry.isCreateShellEmbedAllowed("finance_tax_payment_apply"));
     }
 
     @Test

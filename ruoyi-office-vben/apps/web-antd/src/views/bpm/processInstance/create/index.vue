@@ -3,7 +3,7 @@ import type { BpmCategoryApi } from '#/api/bpm/category';
 import type { BpmProcessDefinitionApi } from '#/api/bpm/definition';
 
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 import { groupBy } from '@vben/utils';
@@ -26,11 +26,15 @@ import {
 } from '#/api/bpm/definition';
 import { getProcessInstance } from '#/api/bpm/processInstance';
 
+import {
+  resolveCreateShellRedirectPath,
+} from './embed-registry';
 import ProcessDefinitionDetail from './modules/form.vue';
 
 defineOptions({ name: 'BpmProcessInstanceCreate' });
 
 const route = useRoute();
+const router = useRouter();
 
 const loading = ref(true); // 加载中
 const processInstanceId: any = route.query.processInstanceId; // 流程实例编号。场景：重新发起时
@@ -150,13 +154,30 @@ const processDefinitionGroup = computed(() => {
 });
 
 /**
- * 处理选择流程：通用发起一律留在 BPM 壳内（U1）。
- * CUSTOM 不再 router.push 业务列表；由 form 模块按 key 注册表挂 FormBody。
+ * 处理选择流程。
+ * - 默认：留在 BPM 壳内，form 按 embed-registry 挂 FormBody
+ * - EXP-87 薪税：跳转业务创建页（禁止壳内嵌 / 禁止通用 createProcessInstance）
  */
 async function handleSelect(
   row: BpmProcessDefinitionApi.ProcessDefinition,
   formVariables?: any,
 ) {
+  const redirectPath = resolveCreateShellRedirectPath(row.key);
+  if (redirectPath) {
+    // 无 create 时后端已从列表剔除；仍防御 canStart=false
+    if (row.canStart === false) {
+      message.warning(
+        row.cannotStartReason ||
+          '无发起权限，请联系管理员分配对应业务角色',
+      );
+      return;
+    }
+    await router.push({
+      path: redirectPath,
+      query: { openCreate: '1' },
+    });
+    return;
+  }
   selectProcessDefinition.value = row;
   await nextTick();
   processDefinitionDetailRef.value?.initProcessInfo(row, formVariables);
