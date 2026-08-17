@@ -97,7 +97,8 @@ public class DeptController {
     @GetMapping("/company-simple-list")
     @Operation(summary = "获取启用公司精简列表", description = "仅返回当前租户已启用的公司，供下拉选项使用")
     public CommonResult<List<DeptSimpleRespVO>> getSimpleCompanyList() {
-        List<DeptDO> list = deptService.getEnabledCompanySimpleList();
+        List<DeptDO> list = deptService.getCompanyList(
+                new DeptListReqVO().setStatus(CommonStatusEnum.ENABLE.getStatus()));
         return success(BeanUtils.toBean(list, DeptSimpleRespVO.class));
     }
 
