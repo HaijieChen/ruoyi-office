@@ -19,6 +19,9 @@ const [Modal, modalApi] = useVbenModal({
     formTitle.value =
       data.mode === 'resubmit' ? '重提付款申请' : '发起付款申请';
     await nextTick();
+    if (!bodyRef.value) {
+      await nextTick();
+    }
     await bodyRef.value?.reset({ id: data.id, mode: data.mode });
   },
   async onConfirm() {
