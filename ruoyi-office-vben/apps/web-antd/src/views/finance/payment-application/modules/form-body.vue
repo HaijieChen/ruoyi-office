@@ -117,12 +117,23 @@ async function loadSuppliers() {
 }
 
 async function loadCompanies() {
-  const list = (await getSimpleCompanyList()) || [];
-  companyOptions.value = list.map((c) => ({
-    label: c.name,
-    value: c.id as number,
-    functionalCurrency: c.functionalCurrency || 'CNY',
-  }));
+  try {
+    const raw = await getSimpleCompanyList();
+    const list = Array.isArray(raw) ? raw : [];
+    companyOptions.value = list
+      .filter((c) => c?.id != null)
+      .map((c) => ({
+        label: c.name,
+        value: c.id as number,
+        functionalCurrency: c.functionalCurrency || 'CNY',
+      }));
+    if (!companyOptions.value.length) {
+      message.warning('未获取到启用中的主体公司，请联系管理员检查组织架构');
+    }
+  } catch {
+    companyOptions.value = [];
+    message.error('加载主体公司失败');
+  }
 }
 
 function onEntityCompanyChange(value: SelectValue) {

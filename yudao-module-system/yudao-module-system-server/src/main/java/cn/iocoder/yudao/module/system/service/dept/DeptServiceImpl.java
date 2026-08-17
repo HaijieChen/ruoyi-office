@@ -255,6 +255,12 @@ public class DeptServiceImpl implements DeptService {
     }
 
     @Override
+    @DataPermission(enable = false)
+    public List<DeptDO> getEnabledCompanySimpleList() {
+        return getCompanyList(new DeptListReqVO().setStatus(CommonStatusEnum.ENABLE.getStatus()));
+    }
+
+    @Override
     public List<DeptDO> getChildDeptList(Collection<Long> ids) {
         List<DeptDO> children = new LinkedList<>();
         // 遍历每一层

@@ -76,6 +76,12 @@ public interface DeptService {
     List<DeptDO> getCompanyList(DeptListReqVO reqVO);
 
     /**
+     * 启用公司精简列表（下拉）。忽略部门数据权限：主体公司是租户主数据，
+     * 不能按登录人所属部门 id 过滤，否则商务人员（挂在普通部门）会看到空列表。
+     */
+    List<DeptDO> getEnabledCompanySimpleList();
+
+    /**
      * 获得指定编号的部门 Map
      *
      * @param ids 部门编号数组
