@@ -107,13 +107,17 @@ const rules: Record<string, Rule[]> = {
 };
 
 async function loadSuppliers() {
-  const list = (await getCustomerCompanySimpleList('SUPPLIER')) || [];
-  supplierOptions.value = list.map((c) => ({
-    label: `${c.name}（${c.taxNo || '-'}）`,
-    value: c.id,
-    bankName: c.bankName,
-    bankAccount: c.bankAccount,
-  }));
+  try {
+    const list = (await getCustomerCompanySimpleList('SUPPLIER')) || [];
+    supplierOptions.value = list.map((c) => ({
+      label: `${c.name}（${c.taxNo || '-'}）`,
+      value: c.id,
+      bankName: c.bankName,
+      bankAccount: c.bankAccount,
+    }));
+  } catch {
+    supplierOptions.value = [];
+  }
 }
 
 async function loadCompanies() {
@@ -281,8 +285,15 @@ function parseEvidenceUrls(raw?: string): string[] {
   }
 }
 
+function onCompanyDropdownVisible(open: boolean) {
+  if (open && !companyOptions.value.length) {
+    void loadCompanies();
+  }
+}
+
 /** 初始化（壳内 mount 或 Modal open） */
 async function reset(opts?: { id?: number; mode?: string }) {
+  // 公司与收款方分开拉：收款方失败不能把主体公司也带空
   await Promise.all([loadSuppliers(), loadCompanies()]);
   mode.value = opts?.mode === 'resubmit' ? 'resubmit' : 'create';
   currencyTouched.value = false;
@@ -318,7 +329,8 @@ async function reset(opts?: { id?: number; mode?: string }) {
     ) {
       companyOptions.value = [
         {
-          label: detail.entityCompanyName || `公司 #${detail.entityCompanyDeptId}`,
+          label:
+            detail.entityCompanyName || `公司 #${detail.entityCompanyDeptId}`,
           value: detail.entityCompanyDeptId,
           functionalCurrency: detail.currency || 'CNY',
         },
@@ -435,6 +447,7 @@ defineExpose({
           option-filter-prop="label"
           placeholder="请选择业务主体公司"
           @change="onEntityCompanyChange"
+          @dropdown-visible-change="onCompanyDropdownVisible"
         />
       </Form.Item>
       <Form.Item label="支付时效" name="paymentTiming" required>
