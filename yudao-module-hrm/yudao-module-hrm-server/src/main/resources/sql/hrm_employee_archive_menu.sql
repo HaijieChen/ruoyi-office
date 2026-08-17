@@ -125,9 +125,10 @@ INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, 
 (@dict_type_id, '副部门经理', '4', 4, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
 (@dict_type_id, '主管', '5', 5, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
 (@dict_type_id, '副主管', '6', 6, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '专员', '7', 7, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '助理', '8', 8, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '其他', '9', 9, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
+(@dict_type_id, '组长', '组长', 7, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '专员', '7', 8, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '助理', '8', 9, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '其他', '9', 10, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
 
 -- 文化程度字典
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
@@ -136,15 +137,11 @@ VALUES ('文化程度', 'hrm_education', 0, '员工文化程度', '1', NOW(), '1
 SET @dict_type_id = 'hrm_education';
 
 INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted) VALUES
-(@dict_type_id, '小学', '1', 1, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '初中', '2', 2, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '高中', '3', 3, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '中专', '4', 4, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '大专', '5', 5, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '本科', '6', 6, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '硕士', '7', 7, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '博士', '8', 8, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '其他', '9', 9, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
+(@dict_type_id, '高中', '高中', 1, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '大专', '大专', 2, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '本科', '本科', 3, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '研究生', '研究生', 4, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '博士', '博士', 5, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
 
 -- 民族字典
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
@@ -217,11 +214,8 @@ VALUES ('政治面貌', 'hrm_political_status', 0, '员工政治面貌', '1', NO
 SET @dict_type_id = 'hrm_political_status';
 
 INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted) VALUES
-(@dict_type_id, '中共党员', '1', 1, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '中共预备党员', '2', 2, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '共青团员', '3', 3, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '民主党派', '4', 4, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '群众', '5', 5, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
+(@dict_type_id, '群众', '群众', 1, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '党员', '党员', 2, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
 
 -- 婚姻状况字典
 INSERT INTO system_dict_type(name, type, status, remark, creator, create_time, updater, update_time, deleted, deleted_time)
@@ -230,7 +224,9 @@ VALUES ('婚姻状况', 'hrm_marital_status', 0, '员工婚姻状况', '1', NOW(
 SET @dict_type_id = 'hrm_marital_status';
 
 INSERT INTO system_dict_data(dict_type, label, value, sort, status, color_type, css_class, remark, creator, create_time, updater, update_time, deleted) VALUES
-(@dict_type_id, '未婚', '1', 1, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '已婚', '2', 2, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '离异', '3', 3, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
-(@dict_type_id, '丧偶', '4', 4, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);
+(@dict_type_id, '已婚', '已婚', 1, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '未婚', '未婚', 2, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '已婚未育', '已婚未育', 3, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '已婚已育', '已婚已育', 4, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '离异', '离异', 5, 0, 'default', '', '', '1', NOW(), '1', NOW(), false),
+(@dict_type_id, '丧偶', '丧偶', 6, 0, 'default', '', '', '1', NOW(), '1', NOW(), false);

@@ -141,10 +141,9 @@ export function useFormSchema(
     {
       fieldName: 'jobPost',
       label: '职位',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
         placeholder: '职位',
-        options: getDictOptions(DICT_TYPE.HRM_JOB_POST),
         readonly: true,
         disabled: true,
       },
@@ -202,10 +201,9 @@ export function useTransferFormSchema(
     {
       fieldName: 'originalJobPost',
       label: '原职位',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
         placeholder: '原职位',
-        options: getDictOptions(DICT_TYPE.HRM_JOB_POST),
         readonly: true,
         disabled: true,
       },
@@ -213,10 +211,9 @@ export function useTransferFormSchema(
     {
       fieldName: 'newJobPost',
       label: '变更为职位',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
-        placeholder: '请选择变更为职位',
-        options: getDictOptions(DICT_TYPE.HRM_JOB_POST),
+        placeholder: '请输入变更为职位',
       },
     },
     {

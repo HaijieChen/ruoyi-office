@@ -49,6 +49,8 @@ import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTR
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_NOT_EXISTS;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_INVALID;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_LIMIT;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_TOO_LARGE;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_TYPE;
 import static cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum.APPROVE;
 
 /**
@@ -249,11 +251,11 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
 
     void validateEntryBillClaimFile(FileRespDTO file) {
         if (file.getSize() != null && file.getSize() > EmployeeServiceImpl.ONBOARDING_MAX_SIZE_BYTES) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_TOO_LARGE);
         }
         String ext = resolveExt(file.getName());
         if (StrUtil.isBlank(ext) || !EmployeeServiceImpl.ONBOARDING_ALLOWED_EXTENSIONS.contains(ext)) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_TYPE);
         }
         if (file.getPath() == null || !FilePrivateDirs.isPrivateDirectory(file.getPath())) {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);

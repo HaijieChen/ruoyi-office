@@ -26,7 +26,6 @@ final class EmployeeRosterImportSupport {
 
     private static final String DICT_NATION = "hrm_nation";
     private static final String DICT_MARITAL = "hrm_marital_status";
-    private static final String DICT_FERTILITY = "hrm_fertility_status";
     private static final String DICT_HOUSEHOLD = "hrm_household_type";
     private static final String DICT_EDUCATION = "hrm_education";
     private static final String DICT_EDUCATION_TYPE = "hrm_education_type";
@@ -448,16 +447,18 @@ final class EmployeeRosterImportSupport {
             return;
         }
         String t = summary.trim();
+        // 婚姻状况已含生育语义：优先整词匹配，不再拆到生育状况
+        if (t.contains("已婚未育")) {
+            req.setMaritalStatus(resolveDictOrRaw(DICT_MARITAL, "已婚未育"));
+            return;
+        }
+        if (t.contains("已婚已育") || (t.contains("已婚") && t.contains("已育"))) {
+            req.setMaritalStatus(resolveDictOrRaw(DICT_MARITAL, "已婚已育"));
+            return;
+        }
         if (t.contains("/")) {
             String[] parts = t.split("/", 2);
             req.setMaritalStatus(resolveDictOrRaw(DICT_MARITAL, parts[0]));
-            req.setFertilityStatus(resolveDictOrRaw(DICT_FERTILITY, parts[1]));
-            return;
-        }
-        // 常见粘连：已婚已育
-        if (t.contains("已婚") && t.contains("已育")) {
-            req.setMaritalStatus(resolveDictOrRaw(DICT_MARITAL, "已婚"));
-            req.setFertilityStatus(resolveDictOrRaw(DICT_FERTILITY, "已育"));
             return;
         }
         if (t.contains("未婚")) {

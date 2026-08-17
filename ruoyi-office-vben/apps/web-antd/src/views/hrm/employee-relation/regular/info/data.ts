@@ -124,10 +124,9 @@ export function useFormSchema(
     {
       fieldName: 'jobPost',
       label: '职位',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
         placeholder: '职位',
-        options: getDictOptions(DICT_TYPE.HRM_JOB_POST),
         readonly: true,
         disabled: true,
       },

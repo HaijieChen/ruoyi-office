@@ -91,11 +91,10 @@ export function useEmployeeSelectFormSchema(
     {
       fieldName: 'jobPost',
       label: '职位',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
         allowClear: true,
-        options: getDictOptions(DICT_TYPE.HRM_JOB_POST),
-        placeholder: '请选择职位',
+        placeholder: '请输入职位',
       },
     },
     {
@@ -156,12 +155,6 @@ export function useEmployeeSelectColumns(
       title: '职位',
       field: 'jobPost',
       width: 140,
-      cellRender: {
-        name: 'CellDict',
-        props: {
-          type: DICT_TYPE.HRM_JOB_POST,
-        },
-      },
     },
     {
       title: '职务',

@@ -258,13 +258,8 @@ export function batchGenerateUserForEmployee(ids: number[]) {
 
 /** 上传入职资料：返回一次性 claimToken（不返回公开直链） */
 export function uploadOnboardingFile(file: File) {
-  const formData = new FormData();
-  formData.append('file', file);
-  return requestClient.post<EmployeeArchiveApi.OnboardingFileClaim>(
+  return requestClient.upload<EmployeeArchiveApi.OnboardingFileClaim>(
     '/hrm/employee-archive/onboarding-file/upload',
-    formData,
-    {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    },
+    { file },
   );
 }
