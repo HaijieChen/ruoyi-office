@@ -10,9 +10,7 @@ import { createRouterLinkColumn } from '#/adapter/vxe-table';
 /**
  * 表格搜索表单配置
  */
-export function useGridFormSchema(
-  deptSelectModalRef?: any,
-): VbenFormSchema[] {
+export function useGridFormSchema(deptSelectModalRef?: any): VbenFormSchema[] {
   return [
     {
       fieldName: 'employeeNo',
@@ -204,4 +202,3 @@ export function useGridColumns(): VxeTableGridOptions<EmployeeArchiveApi.Employe
     },
   ];
 }
-

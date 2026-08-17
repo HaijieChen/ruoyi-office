@@ -674,7 +674,9 @@ async function loadData(newId?: string) {
       startDate: item.startDate
         ? dayjs(item.startDate).format('YYYY-MM-DD')
         : '',
-      endDate: item.endDate ? dayjs(item.endDate).format('YYYY-MM-DD') : undefined,
+      endDate: item.endDate
+        ? dayjs(item.endDate).format('YYYY-MM-DD')
+        : undefined,
     }));
 
     // 入职资料（含鉴权 downloadPath；不暴露 fileId/url）
