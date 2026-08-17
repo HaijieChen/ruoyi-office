@@ -67,7 +67,10 @@ public class EmployeeServiceImpl implements EmployeeService {
     /** 入职资料专用边界（不作用于其他业务附件） */
     public static final int ONBOARDING_MAX_COUNT = 10;
     public static final long ONBOARDING_MAX_SIZE_BYTES = 20L * 1024 * 1024;
-    public static final Set<String> ONBOARDING_ALLOWED_EXTENSIONS = Set.of("pdf", "jpg", "jpeg", "png");
+    public static final Set<String> ONBOARDING_ALLOWED_EXTENSIONS = Set.of(
+            "pdf", "jpg", "jpeg", "png", "gif", "bmp", "webp",
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+            "zip", "rar", "7z");
 
     private static final DateTimeFormatter YEAR_MONTH = DateTimeFormatter.ofPattern("yyyy-MM");
 
@@ -755,15 +758,15 @@ public class EmployeeServiceImpl implements EmployeeService {
      */
     public OnboardingFileClaimRespVO uploadOnboardingFile(MultipartFile file) throws Exception {
         if (file == null || file.isEmpty()) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_EMPTY);
         }
         if (file.getSize() > ONBOARDING_MAX_SIZE_BYTES) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_TOO_LARGE);
         }
         String original = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
         String ext = resolveExt(original);
         if (StrUtil.isBlank(ext) || !ONBOARDING_ALLOWED_EXTENSIONS.contains(ext)) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_TYPE);
         }
         Long userId = SecurityFrameworkUtils.getLoginUserId();
         if (userId == null) {
@@ -878,11 +881,11 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     void validateOnboardingFile(FileRespDTO file) {
         if (file.getSize() != null && file.getSize() > ONBOARDING_MAX_SIZE_BYTES) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_TOO_LARGE);
         }
         String ext = resolveExt(file.getName());
         if (StrUtil.isBlank(ext) || !ONBOARDING_ALLOWED_EXTENSIONS.contains(ext)) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_TYPE);
         }
         // 必须落在私有目录
         if (file.getPath() == null || !file.getPath().contains(ONBOARDING_PRIVATE_DIR)) {

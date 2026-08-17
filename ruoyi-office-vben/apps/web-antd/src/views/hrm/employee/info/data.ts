@@ -69,10 +69,9 @@ export function useBasicFormSchema(_isEdit?: boolean): VbenFormSchema[] {
     {
       fieldName: 'nation',
       label: '民族',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
-        placeholder: '请选择民族',
-        options: getDictOptions(DICT_TYPE.HRM_NATION),
+        placeholder: '请输入民族',
       },
     },
     {
@@ -94,15 +93,6 @@ export function useBasicFormSchema(_isEdit?: boolean): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'fertilityStatus',
-      label: '生育状况',
-      component: 'Select',
-      componentProps: {
-        placeholder: '请选择生育状况',
-        options: getDictOptions(DICT_TYPE.HRM_FERTILITY_STATUS),
-        allowClear: true,
-      },
-    },
     {
       fieldName: 'householdType',
       label: '户籍性质',
@@ -291,10 +281,9 @@ export function useWorkFormSchema(
     {
       fieldName: 'jobPost',
       label: '职位',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
-        placeholder: '请选择职位',
-        options: getDictOptions(DICT_TYPE.HRM_JOB_POST),
+        placeholder: '请输入职位',
       },
     },
     {

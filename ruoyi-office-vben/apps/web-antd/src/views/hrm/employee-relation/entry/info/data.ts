@@ -106,10 +106,9 @@ export function useFormSchema(
     {
       fieldName: 'nation',
       label: '民族',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
-        placeholder: '请选择民族',
-        options: getDictOptions(DICT_TYPE.HRM_NATION),
+        placeholder: '请输入民族',
       },
     },
     {
@@ -221,10 +220,9 @@ export function useWorkFormSchema(
     {
       fieldName: 'jobPost',
       label: '职位',
-      component: 'Select',
+      component: 'Input',
       componentProps: {
-        placeholder: '请选择职位',
-        options: getDictOptions(DICT_TYPE.HRM_JOB_POST),
+        placeholder: '请输入职位',
       },
     },
     {

@@ -24,6 +24,10 @@ public interface ErrorCodeConstants {
             "合同开始日期不能为空（正确示例：2021-09-03）");
     ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_LIMIT = new ErrorCode(1_050_001_010, "入职资料最多 10 份");
     ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_INVALID = new ErrorCode(1_050_001_011, "入职资料附件不合法");
+    ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_EMPTY = new ErrorCode(1_050_001_012, "入职资料不能为空");
+    ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_TOO_LARGE = new ErrorCode(1_050_001_013, "入职资料不能超过 20MB");
+    ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_TYPE = new ErrorCode(1_050_001_014,
+            "入职资料仅支持 pdf/jpg/jpeg/png/gif/bmp/webp/doc/docx/xls/xlsx/ppt/pptx/zip/rar/7z");
 
     // ========== 员工入职申请单 1-050-002-000 ==========
     ErrorCode EMPLOYEE_ENTRY_BILL_NOT_EXISTS = new ErrorCode(1_050_002_001, "员工入职申请单不存在");
