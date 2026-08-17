@@ -93,7 +93,6 @@ export function useBasicFormSchema(_isEdit?: boolean): VbenFormSchema[] {
       },
     },
     {
-    {
       fieldName: 'householdType',
       label: '户籍性质',
       component: 'Select',
