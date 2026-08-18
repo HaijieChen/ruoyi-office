@@ -17,6 +17,7 @@ export function createAttachmentFromOnboardingClaim(
 ): AttachmentApi.AttachmentSaveReq & {
   claimToken?: string;
   downloadPath?: string;
+  localPreviewUrl?: string;
 } {
   if (!claim?.claimToken) {
     throw new Error('文件上传必须返回作用域 claimToken');
@@ -29,6 +30,7 @@ export function createAttachmentFromOnboardingClaim(
     fileName: claim.fileName || file.name,
     filePath: '',
     fileUrl: '',
+    localPreviewUrl: URL.createObjectURL(file),
     fileSize: claim.fileSize ?? file.size,
     fileType: file.type,
     fileExtension:
