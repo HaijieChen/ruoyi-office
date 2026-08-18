@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  外出申请 oa_outing（设计师导入种子，不自动 INSERT 流程定义）
+  - 语义：发起人连续多级部门负责人(strategy=38, candidateParam=2) → 人事 hr_admin 角色或签(strategy=10, approveMethod=3 ANY) → end
+  - 不含空「审批人」或抄送 userTask；管理员上线前在设计器补齐
+  - 含 BPMNDiagram/DI
+  - 业务表单类型由部署后 sql/mysql/bpm_oa_trip_outing_model.sql 写入（form_type=20）
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://www.iocoder.cn/oa">
+
+  <process id="oa_outing" name="外出申请" isExecutable="true">
+
+    <startEvent id="startEvent" name="开始"/>
+
+    <!-- KTD5：发起人连续多级部门负责人 strategy=38 START_USER_DEPT_LEADER_MULTI，param=部门层级 2 -->
+    <userTask id="taskDeptLeaderMulti" name="部门负责人审批"
+              flowable:candidateStrategy="38" flowable:candidateParam="2">
+      <extensionElements>
+        <flowable:candidateStrategy>38</flowable:candidateStrategy>
+        <flowable:candidateParam>2</flowable:candidateParam>
+      </extensionElements>
+    </userTask>
+
+    <!-- KTD5：人事 hr_admin ROLE 或签 ANY -->
+    <userTask id="taskHr" name="人事审批"
+              flowable:candidateStrategy="10" flowable:candidateParam="hr_admin">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>hr_admin</flowable:candidateParam>
+        <flowable:approveMethod>3</flowable:approveMethod>
+      </extensionElements>
+      <multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${coll_userList}">
+        <completionCondition xsi:type="tFormalExpression"><![CDATA[${ nrOfCompletedInstances > 0 }]]></completionCondition>
+      </multiInstanceLoopCharacteristics>
+    </userTask>
+
+    <endEvent id="endEvent" name="结束"/>
+
+    <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskDeptLeaderMulti"/>
+    <sequenceFlow id="flow2" sourceRef="taskDeptLeaderMulti" targetRef="taskHr"/>
+    <sequenceFlow id="flow3" sourceRef="taskHr" targetRef="endEvent"/>
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_oa_outing">
+    <bpmndi:BPMNPlane id="BPMNPlane_oa_outing" bpmnElement="oa_outing">
+      <bpmndi:BPMNShape id="shape_startEvent" bpmnElement="startEvent">
+        <omgdc:Bounds x="100" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskDeptLeaderMulti" bpmnElement="taskDeptLeaderMulti">
+        <omgdc:Bounds x="180" y="140" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskHr" bpmnElement="taskHr">
+        <omgdc:Bounds x="360" y="140" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_endEvent" bpmnElement="endEvent">
+        <omgdc:Bounds x="520" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="edge_flow1" bpmnElement="flow1">
+        <omgdi:waypoint x="136" y="180"/><omgdi:waypoint x="180" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow2" bpmnElement="flow2">
+        <omgdi:waypoint x="310" y="180"/><omgdi:waypoint x="360" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow3" bpmnElement="flow3">
+        <omgdi:waypoint x="470" y="180"/><omgdi:waypoint x="520" y="180"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
