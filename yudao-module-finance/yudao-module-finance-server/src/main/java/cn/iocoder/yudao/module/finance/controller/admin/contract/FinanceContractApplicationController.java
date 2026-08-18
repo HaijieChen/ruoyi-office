@@ -3,19 +3,29 @@ package cn.iocoder.yudao.module.finance.controller.admin.contract;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.*;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
+import cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicationImportService;
 import cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicationService;
 import cn.iocoder.yudao.module.finance.service.payment.FinancePaymentPredocService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -32,9 +42,45 @@ public class FinanceContractApplicationController {
     @Resource
     private FinanceContractApplicationService contractApplicationService;
     @Resource
+    private FinanceContractApplicationImportService contractApplicationImportService;
+    @Resource
     private FinancePaymentPredocService paymentPredocService;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得合同签约导入模板")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:import')")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        List<FinanceContractApplicationImportExcelVO> list = Arrays.asList(
+                FinanceContractApplicationImportExcelVO.builder()
+                        .applicationNo("HT-DEMO-001")
+                        .applicantUsername("admin")
+                        .entityCompanyName("示例主体")
+                        .counterpartyName("示例客户")
+                        .fileType("销售合同")
+                        .productType("软件")
+                        .amountApplicableText("是")
+                        .contractAmount(new BigDecimal("1000.00"))
+                        .rebateRatio("10%")
+                        .settlementMethod("月结")
+                        .fileName("销售合同.pdf")
+                        .startDate(LocalDate.of(2026, 1, 1))
+                        .endDate(LocalDate.of(2026, 12, 31))
+                        .build()
+        );
+        ExcelUtils.write(response, "合同签约导入模板.xls", "合同签约",
+                FinanceContractApplicationImportExcelVO.class, list);
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "导入已通过合同签约（不启动审批）")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:import')")
+    public CommonResult<FinanceContractApplicationImportRespVO> importApproved(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return success(contractApplicationImportService.importApprovedList(
+                ExcelUtils.read(file, FinanceContractApplicationImportExcelVO.class)));
+    }
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建合同签约申请并启动审批（无草稿）")

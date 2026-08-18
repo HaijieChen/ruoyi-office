@@ -39,6 +39,11 @@ public interface AdminUserApi extends AutoTransable<AdminUserRespDTO> {
     @Parameter(name = "id", description = "用户编号", example = "1", required = true)
     CommonResult<AdminUserRespDTO> getUser(@RequestParam("id") Long id);
 
+    @GetMapping(PREFIX + "/get-by-username")
+    @Operation(summary = "通过用户账号查询用户")
+    @Parameter(name = "username", description = "用户账号", required = true)
+    CommonResult<AdminUserRespDTO> getUserByUsername(@RequestParam("username") String username);
+
     @GetMapping(PREFIX + "/list-by-subordinate")
     @Operation(summary = "通过用户 ID 查询用户下属")
     @Parameter(name = "id", description = "用户编号", example = "1", required = true)

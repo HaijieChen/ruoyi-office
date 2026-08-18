@@ -43,6 +43,13 @@ public class AdminUserApiImpl implements AdminUserApi {
     }
 
     @Override
+    @DataPermission(enable = false)
+    public CommonResult<AdminUserRespDTO> getUserByUsername(String username) {
+        AdminUserDO user = userService.getUserByUsername(username);
+        return success(BeanUtils.toBean(user, AdminUserRespDTO.class));
+    }
+
+    @Override
     public CommonResult<List<AdminUserRespDTO>> getUserListBySubordinate(Long id) {
         // 1.1 获取用户负责的部门
         AdminUserDO user = userService.getUser(id);
