@@ -90,3 +90,21 @@ export function getCustomerCompanySimpleList(
     { params: { role } },
   );
 }
+
+export interface CustomerCompanyImportResult {
+  createdCodes: string[];
+  failureRows: Record<number, string>;
+}
+
+export function importCustomerCompanyTemplate() {
+  return requestClient.download(
+    '/finance/customer-company/get-import-template',
+  );
+}
+
+export function importCustomerCompany(file: File) {
+  return requestClient.upload<CustomerCompanyImportResult>(
+    '/finance/customer-company/import',
+    { file },
+  );
+}

@@ -13,11 +13,17 @@ import { message } from 'ant-design-vue';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import FormModal from './modules/form.vue';
+import ImportModal from './modules/import-modal.vue';
 
 defineOptions({ name: 'FinanceCustomerCompany' });
 
 const [CustomerCompanyFormModal, formModalApi] = useVbenModal({
   connectedComponent: FormModal,
+  destroyOnClose: true,
+});
+
+const [CustomerCompanyImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportModal,
   destroyOnClose: true,
 });
 
@@ -28,6 +34,10 @@ function handleRefresh() {
 function handleCreate() {
   formModalApi.setData({});
   formModalApi.open();
+}
+
+function openImport() {
+  importModalApi.open();
 }
 
 function handleEdit(row: FinanceCustomerCompanyApi.CustomerCompany) {
@@ -71,6 +81,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <CustomerCompanyFormModal @success="handleRefresh" />
+    <CustomerCompanyImportModal @success="handleRefresh" />
     <Grid table-title="客户公司（购方档案）">
       <template #toolbar-tools>
         <TableAction
@@ -81,6 +92,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['finance:customer-company:create'],
               onClick: handleCreate,
+            },
+            {
+              label: '导入',
+              type: 'default',
+              icon: ACTION_ICON.UPLOAD,
+              auth: ['finance:customer-company:import'],
+              onClick: openImport,
             },
           ]"
         />
