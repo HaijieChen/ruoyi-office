@@ -103,11 +103,9 @@ public class BpmOAOutingServiceImpl implements BpmOAOutingService {
         if (outing == null) {
             throw exception(OA_OUTING_NOT_EXISTS);
         }
-        if (securityFrameworkService.hasPermission(QUERY_PERMISSION)) {
-            return outing;
-        }
-        if (oaBillAccessPermission.canTaskContextOrOwnerRead(userId, outing.getUserId(),
-                outing.getProcessInstanceId())) {
+        if (java.util.Objects.equals(outing.getUserId(), userId)
+                || securityFrameworkService.hasPermission(QUERY_PERMISSION)
+                || oaBillAccessPermission.isActiveTaskCandidateOrAssignee(outing.getProcessInstanceId(), userId)) {
             return outing;
         }
         throw exception(OA_OUTING_ACCESS_DENIED);
