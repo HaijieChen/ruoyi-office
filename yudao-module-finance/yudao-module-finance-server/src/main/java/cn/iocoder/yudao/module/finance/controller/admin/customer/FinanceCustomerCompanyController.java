@@ -3,6 +3,9 @@ package cn.iocoder.yudao.module.finance.controller.admin.customer;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
+import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyImportExcelVO;
+import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanySaveReqVO;
@@ -12,11 +15,15 @@ import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanySe
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -31,6 +38,37 @@ public class FinanceCustomerCompanyController {
 
     public FinanceCustomerCompanyController(FinanceCustomerCompanyService customerCompanyService) {
         this.customerCompanyService = customerCompanyService;
+    }
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得客户公司导入模板")
+    @PreAuthorize("@ss.hasPermission('finance:customer-company:import')")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        List<FinanceCustomerCompanyImportExcelVO> list = Arrays.asList(
+                FinanceCustomerCompanyImportExcelVO.builder()
+                        .name("示例客户公司")
+                        .taxNo("91110000DEMO001")
+                        .isCustomerText("是")
+                        .isSupplierText("否")
+                        .bankName("")
+                        .bankAccount("")
+                        .address("示例地址")
+                        .phone("13800000000")
+                        .contactName("张三")
+                        .email("demo@example.com")
+                        .build()
+        );
+        ExcelUtils.write(response, "客户公司导入模板.xls", "客户公司",
+                FinanceCustomerCompanyImportExcelVO.class, list);
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "导入客户公司")
+    @PreAuthorize("@ss.hasPermission('finance:customer-company:import')")
+    public CommonResult<FinanceCustomerCompanyImportRespVO> importCustomerCompany(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return success(customerCompanyService.importCustomerCompanyList(
+                ExcelUtils.read(file, FinanceCustomerCompanyImportExcelVO.class)));
     }
 
     @PostMapping("/create")

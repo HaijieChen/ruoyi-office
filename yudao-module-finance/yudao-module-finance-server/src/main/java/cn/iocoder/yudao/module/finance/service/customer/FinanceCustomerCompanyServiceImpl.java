@@ -1,7 +1,11 @@
 package cn.iocoder.yudao.module.finance.service.customer;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyImportExcelVO;
+import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanySaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
@@ -10,11 +14,16 @@ import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceCustomerCompanyNoRedi
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
@@ -64,6 +73,46 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
             throw mapDuplicateKey(ex);
         }
         return company.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public FinanceCustomerCompanyImportRespVO importCustomerCompanyList(
+            List<FinanceCustomerCompanyImportExcelVO> rows) {
+        if (CollUtil.isEmpty(rows)) {
+            throw new IllegalArgumentException("导入客户公司数据不能为空");
+        }
+        FinanceCustomerCompanyImportRespVO resp = FinanceCustomerCompanyImportRespVO.builder()
+                .createdCodes(new ArrayList<>())
+                .failureRows(new LinkedHashMap<>())
+                .build();
+        Set<String> seenTaxNos = new HashSet<>();
+        for (int i = 0; i < rows.size(); i++) {
+            int rowNumber = i + 2;
+            FinanceCustomerCompanyImportSupport.ParsedRow[] parsed = new FinanceCustomerCompanyImportSupport.ParsedRow[1];
+            String err = FinanceCustomerCompanyImportSupport.validateAndParse(rows.get(i), parsed);
+            if (err != null) {
+                resp.getFailureRows().put(rowNumber, err);
+                continue;
+            }
+            String taxNo = parsed[0].taxNo();
+            if (!seenTaxNos.add(taxNo)) {
+                resp.getFailureRows().put(rowNumber, "本文件内纳税人识别号重复");
+                continue;
+            }
+            if (customerCompanyMapper.selectByTaxNo(taxNo) != null) {
+                resp.getFailureRows().put(rowNumber, "纳税人识别号已存在");
+                continue;
+            }
+            try {
+                Long id = createCustomerCompany(parsed[0].saveReq());
+                FinanceCustomerCompanyDO created = customerCompanyMapper.selectById(id);
+                resp.getCreatedCodes().add(created.getCode());
+            } catch (ServiceException ex) {
+                resp.getFailureRows().put(rowNumber, ex.getMessage());
+            }
+        }
+        return resp;
     }
 
     @Override

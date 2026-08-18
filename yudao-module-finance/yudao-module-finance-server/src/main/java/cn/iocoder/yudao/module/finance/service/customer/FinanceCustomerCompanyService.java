@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.finance.service.customer;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyImportExcelVO;
+import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanyPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.customer.vo.FinanceCustomerCompanySaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
@@ -10,6 +12,8 @@ import java.util.List;
 public interface FinanceCustomerCompanyService {
 
     Long createCustomerCompany(FinanceCustomerCompanySaveReqVO createReqVO);
+
+    FinanceCustomerCompanyImportRespVO importCustomerCompanyList(List<FinanceCustomerCompanyImportExcelVO> rows);
 
     void updateCustomerCompany(FinanceCustomerCompanySaveReqVO updateReqVO);
 
