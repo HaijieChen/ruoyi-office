@@ -4,7 +4,7 @@ import type { AttachmentApi } from '#/api/common/attachment';
 
 import { computed, nextTick, ref, watch } from 'vue';
 
-import { message } from 'ant-design-vue';
+import { Modal, message } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 
@@ -145,6 +145,68 @@ function resolveLocalPreviewUrl(row: any): string | undefined {
   return local && local.startsWith('blob:') ? local : undefined;
 }
 
+const PREVIEW_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  bmp: 'image/bmp',
+  webp: 'image/webp',
+};
+
+function fileExt(row: any): string {
+  const fromName =
+    typeof row?.fileName === 'string' && row.fileName.includes('.')
+      ? row.fileName.split('.').pop()
+      : '';
+  return String(row?.fileExtension || fromName || '')
+    .replace(/^\./, '')
+    .toLowerCase();
+}
+
+function previewKind(row: any): 'image' | 'pdf' | null {
+  const ext = fileExt(row);
+  if (ext === 'pdf') return 'pdf';
+  if (PREVIEW_MIME[ext]?.startsWith('image/')) return 'image';
+  return null;
+}
+
+const previewOpen = ref(false);
+const previewTitle = ref('预览');
+const previewSrc = ref('');
+const previewType = ref<'image' | 'pdf'>('image');
+let previewObjectUrl = '';
+
+function closePreview() {
+  previewOpen.value = false;
+  previewSrc.value = '';
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = '';
+  }
+}
+
+function openPreview(
+  src: string,
+  kind: 'image' | 'pdf',
+  title: string,
+  revoke = false,
+) {
+  closePreview();
+  if (revoke) previewObjectUrl = src;
+  previewSrc.value = src;
+  previewType.value = kind;
+  previewTitle.value = title || '预览';
+  previewOpen.value = true;
+}
+
+function blobWithPreviewType(blob: Blob, row: any): Blob {
+  const mime = PREVIEW_MIME[fileExt(row)];
+  if (!mime || blob.type === mime) return blob;
+  return new Blob([blob], { type: mime });
+}
+
 /** 带 Authorization / tenant-id 拉取鉴权下载地址 */
 async function fetchAuthorizedBlob(row: any): Promise<Blob | null> {
   const url = resolveAuthUrl(row);
@@ -168,24 +230,33 @@ async function fetchAuthorizedBlob(row: any): Promise<Blob | null> {
   return res.blob();
 }
 
-/** 预览附件 */
+/** 预览：弹窗看图/PDF。Office/压缩包等不支持在线预览，走下载。 */
 async function handlePreview(row: AttachmentApi.AttachmentSaveReq) {
+  const kind = previewKind(row);
+  if (!kind) {
+    message.info('该文件类型不支持在线预览，请下载后查看');
+    return;
+  }
   try {
     if (props.authDownload) {
       const local = resolveLocalPreviewUrl(row);
       if (local) {
-        window.open(local, '_blank');
+        openPreview(local, kind, row.fileName || '预览');
         return;
       }
       const blob = await fetchAuthorizedBlob(row);
       if (blob) {
-        const obj = URL.createObjectURL(blob);
-        window.open(obj, '_blank');
+        openPreview(
+          URL.createObjectURL(blobWithPreviewType(blob, row)),
+          kind,
+          row.fileName || '预览',
+          true,
+        );
         return;
       }
     }
     if (row.fileUrl && !row.fileUrl.startsWith('blob:')) {
-      window.open(row.fileUrl, '_blank');
+      openPreview(row.fileUrl, kind, row.fileName || '预览');
     } else {
       message.warning('无法预览：缺少鉴权下载地址');
     }
@@ -431,6 +502,28 @@ watch(
         </template>
       </Grid>
     </div>
+
+    <Modal
+      v-model:open="previewOpen"
+      :title="previewTitle"
+      :footer="null"
+      width="860px"
+      destroy-on-close
+      @cancel="closePreview"
+    >
+      <img
+        v-if="previewType === 'image'"
+        :src="previewSrc"
+        :alt="previewTitle"
+        class="max-h-[70vh] w-full object-contain"
+      />
+      <iframe
+        v-else
+        :src="previewSrc"
+        class="h-[70vh] w-full border-0"
+        title="pdf-preview"
+      />
+    </Modal>
   </div>
 </template>
 
