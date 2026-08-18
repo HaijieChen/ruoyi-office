@@ -28,6 +28,8 @@ public interface ErrorCodeConstants {
     ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_TOO_LARGE = new ErrorCode(1_050_001_013, "入职资料不能超过 20MB");
     ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_TYPE = new ErrorCode(1_050_001_014,
             "入职资料仅支持 pdf/jpg/jpeg/png/gif/bmp/webp/doc/docx/xls/xlsx/ppt/pptx/zip/rar/7z");
+    ErrorCode EMPLOYEE_ROSTER_ATTACHMENT_STORE_FAILED = new ErrorCode(1_050_001_015,
+            "入职资料存储失败，请检查文件配置主存储器");
 
     // ========== 员工入职申请单 1-050-002-000 ==========
     ErrorCode EMPLOYEE_ENTRY_BILL_NOT_EXISTS = new ErrorCode(1_050_002_001, "员工入职申请单不存在");

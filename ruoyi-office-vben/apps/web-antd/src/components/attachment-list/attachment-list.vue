@@ -11,7 +11,9 @@ import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { uploadFile } from '#/api/infra/file';
 import { uploadOnboardingFile } from '#/api/hrm/employee';
 import { useAccessStore } from '@vben/stores';
-import { useAppConfig } from '@vben/hooks';
+import { isTenantEnable, useAppConfig } from '@vben/hooks';
+
+import { resolveRequestTenantId } from '#/constants/tenant';
 
 import { createAttachmentFromOnboardingClaim } from './onboarding-claim';
 import { useAttachmentActions, useAttachmentColumns } from './data';
@@ -138,14 +140,26 @@ function resolveAuthUrl(row: any): string | undefined {
     : `${base}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
-/** 带 Authorization 头拉取鉴权下载地址 */
+function resolveLocalPreviewUrl(row: any): string | undefined {
+  const local = row.localPreviewUrl as string | undefined;
+  return local && local.startsWith('blob:') ? local : undefined;
+}
+
+/** 带 Authorization / tenant-id 拉取鉴权下载地址 */
 async function fetchAuthorizedBlob(row: any): Promise<Blob | null> {
   const url = resolveAuthUrl(row);
   if (!url) return null;
   const token = accessStore.accessToken;
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  if (isTenantEnable()) {
+    headers['tenant-id'] = String(resolveRequestTenantId(accessStore.tenantId));
+  }
   const res = await fetch(url, {
     method: 'GET',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers,
     credentials: 'include',
   });
   if (!res.ok) {
@@ -158,6 +172,11 @@ async function fetchAuthorizedBlob(row: any): Promise<Blob | null> {
 async function handlePreview(row: AttachmentApi.AttachmentSaveReq) {
   try {
     if (props.authDownload) {
+      const local = resolveLocalPreviewUrl(row);
+      if (local) {
+        window.open(local, '_blank');
+        return;
+      }
       const blob = await fetchAuthorizedBlob(row);
       if (blob) {
         const obj = URL.createObjectURL(blob);
@@ -179,6 +198,14 @@ async function handlePreview(row: AttachmentApi.AttachmentSaveReq) {
 async function handleDownload(row: AttachmentApi.AttachmentSaveReq) {
   try {
     if (props.authDownload) {
+      const local = resolveLocalPreviewUrl(row);
+      if (local) {
+        const link = document.createElement('a');
+        link.href = local;
+        link.download = row.fileName || 'attachment';
+        link.click();
+        return;
+      }
       const blob = await fetchAuthorizedBlob(row);
       if (blob) {
         const obj = URL.createObjectURL(blob);
@@ -230,7 +257,10 @@ function validateFileClient(file: File): string | undefined {
       : '';
     const mime = (file.type || '').toLowerCase();
     const ok = allowed.some(
-      (a) => a === ext || a === mime || (a.endsWith('/*') && mime.startsWith(a.replace('/*', '/'))),
+      (a) =>
+        a === ext ||
+        a === mime ||
+        (a.endsWith('/*') && mime.startsWith(a.replace('/*', '/'))),
     );
     if (!ok) {
       return `仅支持文件类型：${props.accept}`;

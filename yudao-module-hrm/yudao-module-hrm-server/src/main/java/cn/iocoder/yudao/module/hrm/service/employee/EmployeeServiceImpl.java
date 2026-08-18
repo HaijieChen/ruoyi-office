@@ -773,9 +773,15 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
         }
         byte[] content = file.getBytes();
-        FileRespDTO stored = fileAccessApi.createFile(content, original, ONBOARDING_PRIVATE_DIR, file.getContentType());
+        FileRespDTO stored;
+        try {
+            stored = fileAccessApi.createFile(content, original, ONBOARDING_PRIVATE_DIR, file.getContentType());
+        } catch (Exception ex) {
+            log.error("[uploadOnboardingFile] store failed, name={}", original, ex);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_STORE_FAILED);
+        }
         if (stored == null || stored.getId() == null) {
-            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_INVALID);
+            throw exception(EMPLOYEE_ROSTER_ATTACHMENT_STORE_FAILED);
         }
 
         String token = UUID.randomUUID().toString().replace("-", "");
