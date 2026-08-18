@@ -28,6 +28,8 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
 export const CREATE_SHELL_REDIRECT_REGISTRY: Record<string, string> = {
   finance_salary_payment_apply: '/finance/salary-payment',
   finance_tax_payment_apply: '/finance/tax-payment',
+  oa_business_trip: '/bpm/oa/trip/create',
+  oa_outing: '/bpm/oa/outing/create',
 };
 
 export function resolveCreateShellEmbedLoader(key?: null | string) {
