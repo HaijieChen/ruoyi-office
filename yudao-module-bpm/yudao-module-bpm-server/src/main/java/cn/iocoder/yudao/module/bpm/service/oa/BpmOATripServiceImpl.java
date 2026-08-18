@@ -1,0 +1,113 @@
+package cn.iocoder.yudao.module.bpm.service.oa;
+
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
+import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.bpm.controller.admin.oa.vo.BpmOATripCreateReqVO;
+import cn.iocoder.yudao.module.bpm.controller.admin.oa.vo.BpmOATripPageReqVO;
+import cn.iocoder.yudao.module.bpm.dal.dataobject.oa.BpmOATripDO;
+import cn.iocoder.yudao.module.bpm.dal.mysql.oa.BpmOATripMapper;
+import cn.iocoder.yudao.module.bpm.enums.OaAttendanceSyncStatusEnum;
+import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
+import cn.iocoder.yudao.module.bpm.framework.security.OaBillAccessPermission;
+import jakarta.annotation.Resource;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
+
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_DURATION_INVALID;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_ACCESS_DENIED;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_NOT_EXISTS;
+
+/**
+ * OA 出差申请 Service 实现类
+ */
+@Service
+@Validated
+public class BpmOATripServiceImpl implements BpmOATripService {
+
+    /**
+     * OA 出差对应的流程定义 KEY
+     */
+    public static final String PROCESS_KEY = "oa_business_trip";
+
+    public static final String QUERY_PERMISSION = "bpm:oa-trip:query";
+
+    @Resource
+    private BpmOATripMapper tripMapper;
+
+    @Resource
+    private BpmProcessInstanceApi processInstanceApi;
+
+    @Resource
+    private SecurityFrameworkService securityFrameworkService;
+
+    @Resource
+    private OaBillAccessPermission oaBillAccessPermission;
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createTrip(Long userId, BpmOATripCreateReqVO createReqVO) {
+        BigDecimal hours = OaDurationHours.calc(createReqVO.getStartTime(), createReqVO.getEndTime())
+                .orElseThrow(() -> exception(OA_DURATION_INVALID));
+
+        BpmOATripDO trip = BeanUtils.toBean(createReqVO, BpmOATripDO.class)
+                .setUserId(userId)
+                .setHours(hours)
+                .setStatus(BpmTaskStatusEnum.RUNNING.getStatus())
+                .setAttendanceSyncStatus(OaAttendanceSyncStatusEnum.NOT_SYNCED.getStatus());
+        tripMapper.insert(trip);
+
+        Map<String, Object> processInstanceVariables = new HashMap<>();
+        processInstanceVariables.put("hours", hours);
+        processInstanceVariables.put("type", createReqVO.getType());
+        String processInstanceId = processInstanceApi.createProcessInstance(userId,
+                new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)
+                        .setVariables(processInstanceVariables).setBusinessKey(String.valueOf(trip.getId())))
+                .getCheckedData();
+
+        tripMapper.updateById(new BpmOATripDO().setId(trip.getId()).setProcessInstanceId(processInstanceId));
+        return trip.getId();
+    }
+
+    @Override
+    public void updateTripStatus(Long id, Integer status) {
+        validateTripExists(id);
+        tripMapper.updateById(new BpmOATripDO().setId(id).setStatus(status));
+    }
+
+    private void validateTripExists(Long id) {
+        if (tripMapper.selectById(id) == null) {
+            throw exception(OA_TRIP_NOT_EXISTS);
+        }
+    }
+
+    @Override
+    public BpmOATripDO getTrip(Long id, Long userId) {
+        BpmOATripDO trip = tripMapper.selectById(id);
+        if (trip == null) {
+            throw exception(OA_TRIP_NOT_EXISTS);
+        }
+        if (Objects.equals(trip.getUserId(), userId)
+                || securityFrameworkService.hasPermission(QUERY_PERMISSION)
+                || oaBillAccessPermission.isActiveTaskCandidateOrAssignee(trip.getProcessInstanceId(), userId)) {
+            return trip;
+        }
+        throw exception(OA_TRIP_ACCESS_DENIED);
+    }
+
+    @Override
+    public PageResult<BpmOATripDO> getTripPage(Long userId, BpmOATripPageReqVO pageReqVO) {
+        Long filterUserId = securityFrameworkService.hasPermission(QUERY_PERMISSION) ? null : userId;
+        return tripMapper.selectPage(filterUserId, pageReqVO);
+    }
+
+}
