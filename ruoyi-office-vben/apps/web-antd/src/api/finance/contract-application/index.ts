@@ -165,3 +165,21 @@ export function recordContractMail(
     { params: { id, taskId, mailTrackingNo } },
   );
 }
+
+export interface ContractApplicationImportResult {
+  createdNos: string[];
+  failureRows: Record<number, string>;
+}
+
+export function importContractApplicationTemplate() {
+  return requestClient.download(
+    '/finance/contract-application/get-import-template',
+  );
+}
+
+export function importContractApplication(file: File) {
+  return requestClient.upload<ContractApplicationImportResult>(
+    '/finance/contract-application/import',
+    { file },
+  );
+}

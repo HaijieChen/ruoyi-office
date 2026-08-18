@@ -15,6 +15,7 @@ import {
 import { message, Modal } from 'ant-design-vue';
 
 import FormModal from './modules/form.vue';
+import ImportModal from './modules/import-modal.vue';
 import InfoModal from './modules/info.vue';
 
 defineOptions({ name: 'FinanceContractApplication' });
@@ -32,6 +33,11 @@ const [DetailModal, detailModalApi] = useVbenModal({
   destroyOnClose: true,
 });
 
+const [ContractApplicationImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportModal,
+  destroyOnClose: true,
+});
+
 function handleRefresh() {
   gridApi.query();
 }
@@ -39,6 +45,10 @@ function handleRefresh() {
 function handleCreate() {
   createModalApi.setData({});
   createModalApi.open();
+}
+
+function openImport() {
+  importModalApi.open();
 }
 
 function shouldOpenCreateFromQuery() {
@@ -249,6 +259,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   <Page auto-content-height>
     <CreateModal @success="handleRefresh" />
     <DetailModal />
+    <ContractApplicationImportModal @success="handleRefresh" />
     <Grid table-title="合同签约申请">
       <template #toolbar-tools>
         <TableAction
@@ -259,6 +270,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['finance:contract-application:create'],
               onClick: handleCreate,
+            },
+            {
+              label: '导入',
+              type: 'default',
+              icon: ACTION_ICON.UPLOAD,
+              auth: ['finance:contract-application:import'],
+              onClick: openImport,
             },
           ]"
         />
