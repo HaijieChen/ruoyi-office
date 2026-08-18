@@ -78,6 +78,20 @@ class BpmProcessStartEligibilityServiceTest {
     }
 
     @Test
+    void tripAndOuting_notHiddenAndNotEmbed() {
+        for (String key : new String[]{"oa_business_trip", "oa_outing"}) {
+            assertFalse(service.shouldHideFromStartList(key), key);
+            assertFalse(BpmEmbedProcessStartPermissionRegistry.isEmbedProcess(key), key);
+            assertFalse(BpmEmbedProcessStartPermissionRegistry.isCreateShellEmbedAllowed(key), key);
+
+            BpmProcessStartEligibility e = service.evaluate(key);
+            assertTrue(e.isCanStart(), key);
+            assertNull(e.getRequiredStartPermission(), key);
+            assertNull(e.getCannotStartReason(), key);
+        }
+    }
+
+    @Test
     void blankKey_treatedAsNonEmbed_canStart() {
         assertTrue(service.evaluate(null).isCanStart());
         assertTrue(service.evaluate("  ").isCanStart());
