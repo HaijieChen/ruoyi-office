@@ -13,6 +13,11 @@ public interface ErrorCodeConstants {
 
     // ========== OA 流程模块 1-009-001-000 ==========
     ErrorCode OA_LEAVE_NOT_EXISTS = new ErrorCode(1_009_001_001, "请假申请不存在");
+    ErrorCode OA_TRIP_NOT_EXISTS = new ErrorCode(1_009_001_002, "出差申请不存在");
+    ErrorCode OA_OUTING_NOT_EXISTS = new ErrorCode(1_009_001_003, "外出申请不存在");
+    ErrorCode OA_DURATION_INVALID = new ErrorCode(1_009_001_004, "开始结束时间无效或时长小于等于 0");
+    ErrorCode OA_TRIP_ACCESS_DENIED = new ErrorCode(1_009_001_005, "无权查看该出差申请");
+    ErrorCode OA_OUTING_ACCESS_DENIED = new ErrorCode(1_009_001_006, "无权查看该外出申请");
 
     // ========== 流程模型 1-009-002-000 ==========
     ErrorCode MODEL_KEY_EXISTS = new ErrorCode(1_009_002_000, "已经存在流程标识为【{}】的流程");
