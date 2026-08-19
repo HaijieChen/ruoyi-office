@@ -1,0 +1,34 @@
+package cn.iocoder.yudao.module.finance.dal.dataobject.expense;
+
+import cn.iocoder.yudao.framework.tenant.core.db.TenantBaseDO;
+import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+@TableName("finance_expense_reimbursement_line")
+@KeySequence("finance_expense_reimbursement_line_seq")
+@Data
+@EqualsAndHashCode(callSuper = true)
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class FinanceExpenseReimbursementLineDO extends TenantBaseDO {
+
+    public static final String KIND_NORMAL = "NORMAL";
+    public static final String KIND_PROXY = "PROXY";
+
+    @TableId
+    private Long id;
+    private Long reimbursementId;
+    private String lineKind;
+    private String category;
+    private LocalDate feeDate;
+    private BigDecimal amount;
+    private String attachments;
+    private String remark;
+    private Integer sort;
+}
