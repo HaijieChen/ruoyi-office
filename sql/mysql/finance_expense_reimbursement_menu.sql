@@ -51,8 +51,9 @@ WHERE r.`deleted` = b'0' AND r.`tenant_id` = 1
             m.`component` IN (
                 'finance/expense-reimbursement/index',
                 'finance/expense-reimbursement/create',
-                'finance/expense-reimbursement/detail')
-         OR m.`permission` IN ('finance:expense:query', 'finance:expense:record-pay')))
+                'finance/expense-reimbursement/detail',
+                'finance/expense-reimbursement/no-invoice-create')
+         OR m.`permission` IN ('finance:expense:query', 'finance:expense:record-pay', 'finance:expense-no-invoice:create')))
      OR (r.`code` = 'business_staff' AND m.`component` IN (
             'finance/expense-reimbursement/index',
             'finance/expense-reimbursement/create',
