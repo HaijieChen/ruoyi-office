@@ -282,6 +282,18 @@ public interface ErrorCodeConstants {
             "申请人档案缺少部门，无法发起报销");
     ErrorCode EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID = new ErrorCode(1_040_008_014,
             "报销附件或支付凭证须为可识别的文件 URL");
+    ErrorCode EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED = new ErrorCode(1_040_008_015,
+            "有票普通明细每行必须上传一张发票");
+    ErrorCode EXPENSE_REIMBURSEMENT_INVOICE_FORBIDDEN = new ErrorCode(1_040_008_016,
+            "无票或代票明细不得上传发票");
+    ErrorCode EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED = new ErrorCode(1_040_008_017,
+            "差旅必须关联已通过的出差单，交通必须关联已通过的出差或外出单");
+    ErrorCode EXPENSE_REIMBURSEMENT_PREDOC_INVALID = new ErrorCode(1_040_008_018,
+            "前置出差/外出单无效：须为本人发起且已通过");
+    ErrorCode EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN = new ErrorCode(1_040_008_019,
+            "该事由分类不得关联出差或外出单");
+    ErrorCode EXPENSE_REIMBURSEMENT_INVOICE_MODE_MISMATCH = new ErrorCode(1_040_008_020,
+            "发票模式与发起入口不一致");
 
     // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
     /** 交易币种仅允许 CNY/USD/HKD */

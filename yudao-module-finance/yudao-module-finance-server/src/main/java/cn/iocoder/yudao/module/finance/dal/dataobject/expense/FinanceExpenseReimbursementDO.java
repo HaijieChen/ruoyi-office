@@ -21,6 +21,8 @@ public class FinanceExpenseReimbursementDO extends TenantBaseDO {
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_WAIT_PAY = "WAIT_PAY";
     public static final String STATUS_PAID = "PAID";
+    public static final String MODE_WITH_INVOICE = "WITH_INVOICE";
+    public static final String MODE_NO_INVOICE = "NO_INVOICE";
 
     @TableId
     private Long id;
@@ -32,6 +34,8 @@ public class FinanceExpenseReimbursementDO extends TenantBaseDO {
     private BigDecimal approvedAmount;
     private Long companyBankAccountId;
     private Boolean proxyTicket;
+    private String invoiceMode;
+    private String processKey;
     private String status;
     private String processInstanceId;
     private Long applicantUserId;

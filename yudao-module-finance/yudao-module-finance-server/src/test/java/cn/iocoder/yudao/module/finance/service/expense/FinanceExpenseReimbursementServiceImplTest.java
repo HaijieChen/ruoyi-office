@@ -23,7 +23,9 @@ import java.util.List;
 
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_APPROVED_AMOUNT_INVALID;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINE_KIND_MISMATCH;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINES_EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -59,8 +61,12 @@ class FinanceExpenseReimbursementServiceImplTest {
             row.setId(88L);
             return 1;
         }).when(mapper).insert(any(FinanceExpenseReimbursementDO.class));
+        FinanceExpensePredocService predoc = mock(FinanceExpensePredocService.class);
+        when(predoc.isApprovedTrip(anyLong(), any())).thenReturn(true);
+        when(predoc.isApprovedOuting(anyLong(), any())).thenReturn(true);
         service = new FinanceExpenseReimbursementServiceImpl(mapper, lineMapper, users, bpm,
-                mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class));
+                mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class),
+                predoc);
     }
 
     @Test
@@ -111,17 +117,36 @@ class FinanceExpenseReimbursementServiceImplTest {
         assertEquals(EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED.getCode(), ex.getCode());
     }
 
+    @Test
+    void withInvoiceRejectsMissingInvoice() {
+        FinanceExpenseReimbursementCreateReqVO req = baseReq(false);
+        req.getLines().get(0).setInvoiceFileUrl(null);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void travelRequiresTripPredoc() {
+        FinanceExpenseReimbursementCreateReqVO req = baseReq(false);
+        req.getLines().get(0).setCategory("travel");
+        req.getLines().get(0).setPredocType(null);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED.getCode(), ex.getCode());
+    }
+
     private static FinanceExpenseReimbursementCreateReqVO baseReq(boolean proxy) {
         FinanceExpenseReimbursementLineReqVO line = new FinanceExpenseReimbursementLineReqVO();
         line.setLineKind(FinanceExpenseReimbursementLineDO.KIND_NORMAL);
-        line.setCategory("travel");
+        line.setCategory("office");
         line.setFeeDate(LocalDate.of(2026, 8, 1));
         line.setAmount(new BigDecimal("10"));
+        line.setInvoiceFileUrl("https://files.example/inv1.jpg");
         FinanceExpenseReimbursementLineReqVO line2 = new FinanceExpenseReimbursementLineReqVO();
         line2.setLineKind(FinanceExpenseReimbursementLineDO.KIND_NORMAL);
         line2.setCategory("office");
         line2.setFeeDate(LocalDate.of(2026, 8, 2));
         line2.setAmount(new BigDecimal("20"));
+        line2.setInvoiceFileUrl("https://files.example/inv2.jpg");
         FinanceExpenseReimbursementCreateReqVO req = new FinanceExpenseReimbursementCreateReqVO();
         req.setPeriodLabel("2026-08");
         req.setProxyTicket(proxy);

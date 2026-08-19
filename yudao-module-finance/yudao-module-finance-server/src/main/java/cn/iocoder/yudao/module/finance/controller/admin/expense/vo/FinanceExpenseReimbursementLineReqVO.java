@@ -20,5 +20,8 @@ public class FinanceExpenseReimbursementLineReqVO {
     @NotNull
     private BigDecimal amount;
     private List<String> attachments;
+    private String invoiceFileUrl;
+    private String predocType;
+    private String predocProcessInstanceId;
     private String remark;
 }

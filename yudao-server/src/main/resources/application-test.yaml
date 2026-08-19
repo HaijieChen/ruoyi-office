@@ -163,6 +163,10 @@ yudao:
     service-identity:
       enabled: true
       secret: "exp87rpcVmX8Z9w5J3DcuKee2AEDcTqrQMKkAESa"
+  finance:
+    invoice-ocr:
+      base-url: http://10.20.32.1:8099
+      timeout-ms: 8000
 
 justauth:
   enabled: true

@@ -9,6 +9,9 @@ export namespace FinanceExpenseApi {
     feeDate: string;
     amount: number;
     attachments?: string[];
+    invoiceFileUrl?: string;
+    predocType?: string;
+    predocProcessInstanceId?: string;
     remark?: string;
   }
 
@@ -48,6 +51,21 @@ export namespace FinanceExpenseApi {
 
 export function createExpenseReimbursement(data: FinanceExpenseApi.CreateForm) {
   return requestClient.post<number>('/finance/expense-reimbursement/create', data);
+}
+
+export function createNoInvoiceExpense(data: FinanceExpenseApi.CreateForm) {
+  return requestClient.post<number>(
+    '/finance/expense-reimbursement/create-no-invoice',
+    data,
+  );
+}
+
+export function ocrExpenseInvoice(fileUrl: string) {
+  return requestClient.post<{ feeDate?: string; amount?: number }>(
+    '/finance/expense-reimbursement/ocr-invoice',
+    null,
+    { params: { fileUrl } },
+  );
 }
 
 export function getExpenseReimbursement(id: number) {

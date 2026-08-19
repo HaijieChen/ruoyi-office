@@ -36,6 +36,9 @@ interface LineRow {
   category?: string;
   feeDate?: string;
   amount?: number;
+  invoiceFileUrl?: string;
+  predocType?: string;
+  predocProcessInstanceId?: string;
   remark?: string;
 }
 
@@ -127,6 +130,14 @@ async function submit(): Promise<void> {
       category: String(l.category),
       feeDate: String(l.feeDate),
       amount: Number(l.amount),
+      invoiceFileUrl: l.invoiceFileUrl,
+      predocType:
+        l.category === 'travel'
+          ? 'TRIP'
+          : l.category === 'transport'
+            ? l.predocType || 'TRIP'
+            : undefined,
+      predocProcessInstanceId: l.predocProcessInstanceId,
       remark: l.remark,
     }));
   if (lines.length === 0) {
@@ -208,6 +219,18 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           @change="(d) => (line.feeDate = d ? dayjs(d).format('YYYY-MM-DD') : undefined)"
         />
         <InputNumber v-model:value="line.amount" :min="0.01" :precision="2" placeholder="金额" />
+        <Input
+          v-if="!formData.proxyTicket"
+          v-model:value="line.invoiceFileUrl"
+          class="w-48"
+          placeholder="发票 URL"
+        />
+        <Input
+          v-if="line.category === 'travel' || line.category === 'transport'"
+          v-model:value="line.predocProcessInstanceId"
+          class="w-44"
+          placeholder="出差/外出流程实例ID"
+        />
         <Input v-model:value="line.remark" class="w-36" placeholder="说明" />
         <Button danger size="small" @click="removeLine(index)">删</Button>
       </div>

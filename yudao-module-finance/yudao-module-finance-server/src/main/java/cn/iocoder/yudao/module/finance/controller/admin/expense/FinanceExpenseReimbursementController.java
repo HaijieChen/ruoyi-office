@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpens
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementCreateReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementRespVO;
+import cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient;
 import cn.iocoder.yudao.module.finance.service.expense.FinanceExpenseReimbursementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,11 +38,26 @@ public class FinanceExpenseReimbursementController {
     private FinanceExpenseReimbursementService expenseReimbursementService;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
+    @Resource
+    private FinanceInvoiceOcrClient invoiceOcrClient;
 
     @PostMapping("/create")
     @Operation(summary = "创建并发起费用报销")
     public CommonResult<Long> create(@Valid @RequestBody FinanceExpenseReimbursementCreateReqVO reqVO) {
         return success(expenseReimbursementService.create(reqVO, getLoginUserId()));
+    }
+
+    @PostMapping("/create-no-invoice")
+    @Operation(summary = "创建并发起无票费用报销")
+    @PreAuthorize("@ss.hasPermission('finance:expense-no-invoice:create')")
+    public CommonResult<Long> createNoInvoice(@Valid @RequestBody FinanceExpenseReimbursementCreateReqVO reqVO) {
+        return success(expenseReimbursementService.createNoInvoice(reqVO, getLoginUserId()));
+    }
+
+    @PostMapping("/ocr-invoice")
+    @Operation(summary = "识别发票日期与金额（失败返回空字段）")
+    public CommonResult<FinanceInvoiceOcrClient.Result> ocrInvoice(@RequestParam("fileUrl") String fileUrl) {
+        return success(invoiceOcrClient.recognize(fileUrl));
     }
 
     @GetMapping("/get")

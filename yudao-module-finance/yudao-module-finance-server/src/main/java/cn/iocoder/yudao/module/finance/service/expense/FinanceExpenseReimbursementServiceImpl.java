@@ -45,6 +45,11 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINE_KIND_MISMATCH;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_NOT_EXISTS;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PERIOD_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_FORBIDDEN;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
 
 @Service
 @Validated
@@ -55,22 +60,38 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private final AdminUserApi adminUserApi;
     private final FinanceBpmProcessInstanceApi processInstanceApi;
     private final FinanceCompanyBankAccountService companyBankAccountService;
+    private final FinanceExpensePredocService predocService;
 
     public FinanceExpenseReimbursementServiceImpl(FinanceExpenseReimbursementMapper mapper,
                                                   FinanceExpenseReimbursementLineMapper lineMapper,
                                                   AdminUserApi adminUserApi,
                                                   FinanceBpmProcessInstanceApi processInstanceApi,
-                                                  FinanceCompanyBankAccountService companyBankAccountService) {
+                                                  FinanceCompanyBankAccountService companyBankAccountService,
+                                                  FinanceExpensePredocService predocService) {
         this.mapper = mapper;
         this.lineMapper = lineMapper;
         this.adminUserApi = adminUserApi;
         this.processInstanceApi = processInstanceApi;
         this.companyBankAccountService = companyBankAccountService;
+        this.predocService = predocService;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create(FinanceExpenseReimbursementCreateReqVO reqVO, Long userId) {
+        return createInternal(reqVO, userId,
+                FinanceExpenseReimbursementDO.MODE_WITH_INVOICE, PROCESS_KEY);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createNoInvoice(FinanceExpenseReimbursementCreateReqVO reqVO, Long userId) {
+        return createInternal(reqVO, userId,
+                FinanceExpenseReimbursementDO.MODE_NO_INVOICE, PROCESS_KEY_NO_INVOICE);
+    }
+
+    private Long createInternal(FinanceExpenseReimbursementCreateReqVO reqVO, Long userId,
+                                String invoiceMode, String processKey) {
         if (reqVO.getLines() == null || reqVO.getLines().isEmpty()) {
             throw exception(EXPENSE_REIMBURSEMENT_LINES_EMPTY);
         }
@@ -93,6 +114,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             if (line.getAmount() == null || line.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
                 throw exception(EXPENSE_REIMBURSEMENT_AMOUNT_INVALID);
             }
+            validateInvoiceAndPredoc(line, proxy, invoiceMode, userId);
             apply = apply.add(line.getAmount());
             i++;
         }
@@ -114,6 +136,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .payeeAccountNo(reqVO.getPayeeAccountNo().trim())
                 .applyAmount(apply)
                 .proxyTicket(proxy)
+                .invoiceMode(invoiceMode)
+                .processKey(processKey)
                 .status(FinanceExpenseReimbursementDO.STATUS_PENDING)
                 .applicantUserId(userId)
                 .applicantDeptId(user.getDeptId())
@@ -130,6 +154,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                     .feeDate(line.getFeeDate())
                     .amount(line.getAmount().setScale(2, RoundingMode.HALF_UP))
                     .attachments(line.getAttachments() == null ? null : String.join(",", line.getAttachments()))
+                    .invoiceFileUrl(line.getInvoiceFileUrl())
+                    .predocType(line.getPredocType())
+                    .predocProcessInstanceId(line.getPredocProcessInstanceId())
                     .remark(line.getRemark())
                     .sort(sort++)
                     .build());
@@ -140,7 +167,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         vars.put("periodLabel", header.getPeriodLabel());
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                         new BpmProcessInstanceCreateReqDTO()
-                                .setProcessDefinitionKey(PROCESS_KEY)
+                                .setProcessDefinitionKey(processKey)
                                 .setVariables(vars)
                                 .setBusinessKey(String.valueOf(header.getId())))
                 .getCheckedData();
@@ -264,6 +291,58 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .payVoucherUrl(url)
                 .status(FinanceExpenseReimbursementDO.STATUS_PAID)
                 .build());
+    }
+
+    private void validateInvoiceAndPredoc(FinanceExpenseReimbursementLineReqVO line,
+                                         boolean proxy, String invoiceMode, Long userId) {
+        boolean noInvoice = FinanceExpenseReimbursementDO.MODE_NO_INVOICE.equals(invoiceMode);
+        boolean hasInvoice = StrUtil.isNotBlank(line.getInvoiceFileUrl());
+        if (noInvoice || proxy) {
+            if (hasInvoice) {
+                throw exception(EXPENSE_REIMBURSEMENT_INVOICE_FORBIDDEN);
+            }
+        } else {
+            if (!hasInvoice || !isAcceptableFileUrl(line.getInvoiceFileUrl().trim())) {
+                throw exception(EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED);
+            }
+        }
+        String cat = line.getCategory() == null ? "" : line.getCategory().trim();
+        String predocType = StrUtil.trimToNull(line.getPredocType());
+        String predocId = StrUtil.trimToNull(line.getPredocProcessInstanceId());
+        if (FinanceExpensePredocService.CAT_TRAVEL.equals(cat)) {
+            if (!FinanceExpensePredocService.TYPE_TRIP.equals(predocType) || predocId == null) {
+                throw exception(EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED);
+            }
+            if (!predocService.isApprovedTrip(userId, predocId)) {
+                throw exception(EXPENSE_REIMBURSEMENT_PREDOC_INVALID);
+            }
+            return;
+        }
+        if (FinanceExpensePredocService.CAT_TRANSPORT.equals(cat)) {
+            if (predocId == null || (!FinanceExpensePredocService.TYPE_TRIP.equals(predocType)
+                    && !FinanceExpensePredocService.TYPE_OUTING.equals(predocType))) {
+                throw exception(EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED);
+            }
+            boolean ok = FinanceExpensePredocService.TYPE_TRIP.equals(predocType)
+                    ? predocService.isApprovedTrip(userId, predocId)
+                    : predocService.isApprovedOuting(userId, predocId);
+            if (!ok) {
+                throw exception(EXPENSE_REIMBURSEMENT_PREDOC_INVALID);
+            }
+            return;
+        }
+        if (predocType != null || predocId != null) {
+            throw exception(EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN);
+        }
+    }
+
+    private static boolean isAcceptableFileUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return false;
+        }
+        String t = url.trim();
+        return t.startsWith("http://") || t.startsWith("https://")
+                || t.startsWith("/") || t.contains("/admin-api/infra/file/");
     }
 
     private AdminUserRespDTO requireUser(Long userId) {

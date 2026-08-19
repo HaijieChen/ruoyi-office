@@ -10,9 +10,12 @@ import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpens
 public interface FinanceExpenseReimbursementService {
 
     String PROCESS_KEY = "oa_expense_reimbursement";
+    String PROCESS_KEY_NO_INVOICE = "oa_expense_no_invoice";
     String QUERY_PERMISSION = "finance:expense:query";
 
     Long create(FinanceExpenseReimbursementCreateReqVO reqVO, Long userId);
+
+    Long createNoInvoice(FinanceExpenseReimbursementCreateReqVO reqVO, Long userId);
 
     FinanceExpenseReimbursementRespVO get(Long id, Long userId, boolean canQueryAll);
 
