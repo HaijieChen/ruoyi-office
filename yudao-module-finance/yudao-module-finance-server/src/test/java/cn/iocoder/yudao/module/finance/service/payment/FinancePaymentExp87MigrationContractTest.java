@@ -90,13 +90,13 @@ class FinancePaymentExp87MigrationContractTest {
         Path fe = findRoot().resolve(
                 "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/create/embed-registry.ts");
         String ts = Files.readString(fe);
-        // 壳内嵌不注册（跳转业务页）
-        assertFalse(ts.contains("finance_salary_payment_apply: ()"));
-        assertFalse(ts.contains("finance_tax_payment_apply: ()"));
-        // 统一目录 redirect 注册
-        assertTrue(ts.contains("CREATE_SHELL_REDIRECT_REGISTRY"));
-        assertTrue(ts.contains("finance_salary_payment_apply: '/finance/salary-payment'"));
-        assertTrue(ts.contains("finance_tax_payment_apply: '/finance/tax-payment'"));
+        // 统一发起壳内嵌业务表单（与合同签约一致）
+        assertTrue(ts.contains("finance_salary_payment_apply: ()"));
+        assertTrue(ts.contains("finance_tax_payment_apply: ()"));
+        assertTrue(ts.contains("salary-payment/modules/form-body.vue"));
+        assertTrue(ts.contains("tax-payment/modules/form-body.vue"));
+        assertFalse(ts.contains("finance_salary_payment_apply: '/finance/salary-payment'"));
+        assertFalse(ts.contains("finance_tax_payment_apply: '/finance/tax-payment'"));
         Path be = findRoot().resolve(
                 "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmEmbedProcessStartPermissionRegistry.java");
         String java = Files.readString(be);

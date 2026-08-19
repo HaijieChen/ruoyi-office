@@ -44,10 +44,7 @@ import ProcessInstanceBpmnViewer from '#/views/bpm/processInstance/detail/module
 import ProcessInstanceSimpleViewer from '#/views/bpm/processInstance/detail/modules/simple-bpm-viewer.vue';
 import ProcessInstanceTimeline from '#/views/bpm/processInstance/detail/modules/time-line.vue';
 
-import {
-  resolveCreateShellEmbedLoader,
-  resolveCreateShellRedirectPath,
-} from '../embed-registry';
+import { resolveCreateShellEmbedLoader } from '../embed-registry';
 
 /** 类型定义 */
 interface ProcessFormData {
@@ -292,22 +289,6 @@ async function initProcessInfo(row: any, formVariables?: any) {
   embedError.value = null;
   startDeniedReason.value = null;
   activeTab.value = 'form';
-
-  const redirectPath = resolveCreateShellRedirectPath(row.key);
-  if (redirectPath) {
-    if (row.canStart === false) {
-      shellMode.value = 'denied';
-      startDeniedReason.value =
-        row.cannotStartReason ||
-        '无发起权限，请联系管理员分配对应业务角色';
-      return;
-    }
-    await router.push({
-      path: redirectPath,
-      query: { openCreate: '1' },
-    });
-    return;
-  }
 
   // 嵌入式业务表单：先用后端 canStart 权威预检（深链/缓存/撤权后直接访问）
   // 列表已隐藏无权限项；此处禁止加载受保护数据，禁止半屏字段与通用 403 toast

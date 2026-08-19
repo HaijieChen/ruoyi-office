@@ -40,14 +40,16 @@ class BpmOATripOutingMenuContractTest {
     }
 
     @Test
-    void catalogRedirectsTripAndOutingAndDoesNotEmbed() throws Exception {
+    void catalogEmbedsTripAndOutingInStartShell() throws Exception {
         Path fe = findRoot().resolve(
                 "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/create/embed-registry.ts");
         String ts = Files.readString(fe);
-        assertTrue(ts.contains("oa_business_trip: '/bpm/oa/trip/create'"));
-        assertTrue(ts.contains("oa_outing: '/bpm/oa/outing/create'"));
-        assertFalse(ts.contains("oa_business_trip: ()"));
-        assertFalse(ts.contains("oa_outing: ()"));
+        assertTrue(ts.contains("oa_business_trip: ()"));
+        assertTrue(ts.contains("oa_outing: ()"));
+        assertTrue(ts.contains("bpm/oa/trip/modules/form-body.vue"));
+        assertTrue(ts.contains("bpm/oa/outing/modules/form-body.vue"));
+        assertFalse(ts.contains("oa_business_trip: '/bpm/oa/trip/create'"));
+        assertFalse(ts.contains("oa_outing: '/bpm/oa/outing/create'"));
 
         Path registry = findRoot().resolve(
                 "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmEmbedProcessStartPermissionRegistry.java");

@@ -4,9 +4,8 @@ import type { Component } from 'vue';
  * CUSTOM 流程在「通用发起」壳内嵌的业务表单注册表。
  * key = processDefinition.key（与后端 PROCESS_KEY 一致）。
  *
- * EXP-87：finance_salary_payment_apply / finance_tax_payment_apply **不注册壳内嵌**，
- * 也不走通用 createProcessInstance；统一目录卡片通过 {@link CREATE_SHELL_REDIRECT_REGISTRY}
- * 跳转业务创建页（独立菜单入口同等可用）。
+ * 合同 / 付款 / 开票 / 薪税 / 出差 / 外出：壳内嵌业务 form-body。
+ * submit 走各自业务 API，不走通用 createProcessInstance。
  */
 export const CREATE_SHELL_EMBED_REGISTRY: Record<
   string,
@@ -18,6 +17,12 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
     import('#/views/finance/contract-application/modules/form-body.vue'),
   finance_invoice_apply: () =>
     import('#/views/finance/invoice-application/modules/form-body.vue'),
+  finance_salary_payment_apply: () =>
+    import('#/views/finance/salary-payment/modules/form-body.vue'),
+  finance_tax_payment_apply: () =>
+    import('#/views/finance/tax-payment/modules/form-body.vue'),
+  oa_business_trip: () => import('#/views/bpm/oa/trip/modules/form-body.vue'),
+  oa_outing: () => import('#/views/bpm/oa/outing/modules/form-body.vue'),
 };
 
 /**
@@ -25,12 +30,7 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
  * path 与后端 BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath 对齐。
  * openCreate=1 打开创建表单（各业务页须支持）。
  */
-export const CREATE_SHELL_REDIRECT_REGISTRY: Record<string, string> = {
-  finance_salary_payment_apply: '/finance/salary-payment',
-  finance_tax_payment_apply: '/finance/tax-payment',
-  oa_business_trip: '/bpm/oa/trip/create',
-  oa_outing: '/bpm/oa/outing/create',
-};
+export const CREATE_SHELL_REDIRECT_REGISTRY: Record<string, string> = {};
 
 export function resolveCreateShellEmbedLoader(key?: null | string) {
   if (!key) return undefined;
