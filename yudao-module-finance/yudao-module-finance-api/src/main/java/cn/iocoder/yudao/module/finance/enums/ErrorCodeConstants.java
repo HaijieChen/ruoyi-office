@@ -259,4 +259,10 @@ public interface ErrorCodeConstants {
     ErrorCode CURRENCY_MISMATCH = new ErrorCode(1_040_000_031,
             "关联单据币种不一致，本期不支持跨币种折算");
 
+    // ========== 部门费用分摊 1-040-008-000 ==========
+    ErrorCode DEPT_ALLOCATION_IMPORT_EMPTY = new ErrorCode(1_040_008_000, "分摊导入数据不能为空");
+    ErrorCode DEPT_ALLOCATION_SOURCE_TYPE_INVALID = new ErrorCode(1_040_008_001,
+            "来源类型必须为薪资、云服务或其他");
+    ErrorCode DEPT_ALLOCATION_IMPORT_INVALID = new ErrorCode(1_040_008_002, "分摊导入校验失败：{}");
+
 }
