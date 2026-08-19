@@ -15,6 +15,8 @@ FROM (
            'finance/expense-reimbursement/create', 'FinanceExpenseReimbursementCreate', b'0'
     UNION ALL SELECT '费用报销详情', 2, 42, 'expense-reimbursement/detail', '',
            'finance/expense-reimbursement/detail', 'FinanceExpenseReimbursementDetail', b'0'
+    UNION ALL SELECT '发起无票费用报销', 2, 43, 'expense-reimbursement/no-invoice-create', '',
+           'finance/expense-reimbursement/no-invoice-create', 'FinanceExpenseNoInvoiceCreate', b'0'
 ) t
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu` m WHERE m.`deleted` = b'0' AND m.`component` = t.component
@@ -28,6 +30,7 @@ SELECT btn.name, btn.permission, 3, btn.sort, parent.id, '', '', NULL, NULL,
 FROM (
     SELECT '费用报销查询' name, 'finance:expense:query' permission, 10 sort
     UNION ALL SELECT '费用报销出纳登记', 'finance:expense:record-pay', 11
+    UNION ALL SELECT '无票费用报销发起', 'finance:expense-no-invoice:create', 12
 ) btn
 CROSS JOIN (
     SELECT `id` FROM `system_menu`
