@@ -1,14 +1,19 @@
 package cn.iocoder.yudao.module.finance.controller.admin.report;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.yudao.module.finance.controller.admin.report.vo.FinanceArDetailReportPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.report.vo.FinanceArDetailReportPageRespVO;
+import cn.iocoder.yudao.module.finance.controller.admin.report.vo.FinanceArDetailReportRespVO;
 import cn.iocoder.yudao.module.finance.service.report.FinanceArDetailReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+
+import java.io.IOException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,5 +42,16 @@ public class FinanceArDetailReportController {
     public CommonResult<FinanceArDetailReportPageRespVO> getPage(@Valid FinanceArDetailReportPageReqVO pageReqVO) {
         boolean queryAll = securityFrameworkService.hasPermission(QUERY_ALL_PERMISSION);
         return success(arDetailReportService.getPage(pageReqVO, getLoginUserId(), queryAll));
+    }
+
+    @GetMapping("/export-excel")
+    @Operation(summary = "导出应收明细 Excel")
+    @PreAuthorize("@ss.hasPermission('finance:report-ar:query')")
+    public void exportExcel(@Valid FinanceArDetailReportPageReqVO pageReqVO,
+                            HttpServletResponse response) throws IOException {
+        boolean queryAll = securityFrameworkService.hasPermission(QUERY_ALL_PERMISSION);
+        java.util.List<FinanceArDetailReportRespVO> rows =
+                arDetailReportService.listForExport(pageReqVO, getLoginUserId(), queryAll);
+        ExcelUtils.write(response, "应收明细.xls", "应收明细", FinanceArDetailReportRespVO.class, rows);
     }
 }
