@@ -3,7 +3,7 @@ SET NAMES utf8mb4;
 
 UPDATE bpm_process_definition_info
 SET category = 'default',
-    start_user_ids = '[]',
+    start_user_ids = NULL,
     form_type = 20,
     form_custom_create_path = '/finance/expense-reimbursement/no-invoice-create',
     form_custom_view_path = '/finance/expense-reimbursement/detail',
