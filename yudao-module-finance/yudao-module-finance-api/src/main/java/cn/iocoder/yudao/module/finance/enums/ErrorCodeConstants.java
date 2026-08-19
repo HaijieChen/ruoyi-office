@@ -252,6 +252,37 @@ public interface ErrorCodeConstants {
     ErrorCode COMPANY_BANK_ACCOUNT_STATUS_INVALID = new ErrorCode(1_040_007_005, "公司银行账户状态无效");
     ErrorCode COMPANY_BANK_ACCOUNT_FIELD_REQUIRED = new ErrorCode(1_040_007_006, "公司银行账户必填字段不完整");
 
+    // ========== 费用报销 1-040-008-000 ==========
+    ErrorCode EXPENSE_REIMBURSEMENT_NOT_EXISTS = new ErrorCode(1_040_008_000, "费用报销申请不存在");
+    ErrorCode EXPENSE_REIMBURSEMENT_STATUS_INVALID = new ErrorCode(1_040_008_001,
+            "当前状态不允许执行该操作");
+    ErrorCode EXPENSE_REIMBURSEMENT_ACCESS_DENIED = new ErrorCode(1_040_008_002,
+            "无权查看或操作该费用报销申请");
+    ErrorCode EXPENSE_REIMBURSEMENT_FIELD_REQUIRED = new ErrorCode(1_040_008_003,
+            "费用报销必填字段不完整");
+    ErrorCode EXPENSE_REIMBURSEMENT_PERIOD_INVALID = new ErrorCode(1_040_008_004,
+            "费用归属期间须为 YYYY-MM");
+    ErrorCode EXPENSE_REIMBURSEMENT_AMOUNT_INVALID = new ErrorCode(1_040_008_005,
+            "报销金额必须大于 0");
+    ErrorCode EXPENSE_REIMBURSEMENT_LINES_EMPTY = new ErrorCode(1_040_008_006,
+            "报销明细至少一行");
+    ErrorCode EXPENSE_REIMBURSEMENT_LINE_KIND_MISMATCH = new ErrorCode(1_040_008_007,
+            "代票单只能提交代票明细，普通单只能提交普通明细");
+    ErrorCode EXPENSE_REIMBURSEMENT_CATEGORY_INVALID = new ErrorCode(1_040_008_008,
+            "事由分类不在启用字典中");
+    ErrorCode EXPENSE_REIMBURSEMENT_APPROVED_AMOUNT_INVALID = new ErrorCode(1_040_008_009,
+            "实报金额必须大于 0 且不能超过申请总额");
+    ErrorCode EXPENSE_REIMBURSEMENT_TASK_INVALID = new ErrorCode(1_040_008_010,
+            "BPM 任务无效、节点不匹配或当前用户无权执行");
+    ErrorCode EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED = new ErrorCode(1_040_008_011,
+            "出纳支付须选择公司银行账户");
+    ErrorCode EXPENSE_REIMBURSEMENT_CASHIER_FIELDS_REQUIRED = new ErrorCode(1_040_008_012,
+            "出纳办结须填写实际支付日期与支付凭证");
+    ErrorCode EXPENSE_REIMBURSEMENT_DEPT_REQUIRED = new ErrorCode(1_040_008_013,
+            "申请人档案缺少部门，无法发起报销");
+    ErrorCode EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID = new ErrorCode(1_040_008_014,
+            "报销附件或支付凭证须为可识别的文件 URL");
+
     // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
     /** 交易币种仅允许 CNY/USD/HKD */
     ErrorCode CURRENCY_INVALID = new ErrorCode(1_040_000_030, "币种仅支持 CNY/USD/HKD");

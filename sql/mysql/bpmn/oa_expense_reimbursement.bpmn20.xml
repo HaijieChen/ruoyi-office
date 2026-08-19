@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  费用报销 oa_expense_reimbursement（STORY-0011 U2 设计师导入种子，不自动 INSERT / 不部署）
+  - 语义：发起人连续多级部门负责人(strategy=38 START_USER_DEPT_LEADER_MULTI, candidateParam=2)
+          → 财务 payment_finance 角色或签(strategy=10, approveMethod=3 ANY)
+          → 出纳 payment_cashier(strategy=10) → end
+  - 复用付款角色 payment_finance / payment_cashier，本期不新建角色
+  - 不含 Java listener / delegate（U3 再补出纳 complete 守卫）
+  - 含 BPMNDiagram/DI
+  - 业务表单路径由部署后 sql/mysql/finance_expense_reimbursement_model.sql 写入
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://www.iocoder.cn/finance">
+
+  <process id="oa_expense_reimbursement" name="费用报销" isExecutable="true">
+
+    <startEvent id="startEvent" name="开始"/>
+
+    <!-- 发起人连续多级部门负责人 strategy=38 START_USER_DEPT_LEADER_MULTI，param=部门层级 2 -->
+    <userTask id="taskDeptLeaderMulti" name="部门负责人审批"
+              flowable:candidateStrategy="38" flowable:candidateParam="2">
+      <extensionElements>
+        <flowable:candidateStrategy>38</flowable:candidateStrategy>
+        <flowable:candidateParam>2</flowable:candidateParam>
+      </extensionElements>
+    </userTask>
+
+    <!-- 财务 payment_finance ROLE 或签 ANY -->
+    <userTask id="taskFinance" name="财务审核"
+              flowable:candidateStrategy="10" flowable:candidateParam="payment_finance">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>payment_finance</flowable:candidateParam>
+        <flowable:approveMethod>3</flowable:approveMethod>
+      </extensionElements>
+      <multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${coll_userList}">
+        <completionCondition xsi:type="tFormalExpression"><![CDATA[${ nrOfCompletedInstances > 0 }]]></completionCondition>
+      </multiInstanceLoopCharacteristics>
+    </userTask>
+
+    <!-- 出纳 payment_cashier；complete 守卫由 U3 补 -->
+    <userTask id="taskCashier" name="出纳支付"
+              flowable:candidateStrategy="10" flowable:candidateParam="payment_cashier">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>payment_cashier</flowable:candidateParam>
+      </extensionElements>
+    </userTask>
+
+    <endEvent id="endEvent" name="结束"/>
+
+    <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskDeptLeaderMulti"/>
+    <sequenceFlow id="flow2" sourceRef="taskDeptLeaderMulti" targetRef="taskFinance"/>
+    <sequenceFlow id="flow3" sourceRef="taskFinance" targetRef="taskCashier"/>
+    <sequenceFlow id="flow4" sourceRef="taskCashier" targetRef="endEvent"/>
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_oa_expense_reimbursement">
+    <bpmndi:BPMNPlane id="BPMNPlane_oa_expense_reimbursement" bpmnElement="oa_expense_reimbursement">
+      <bpmndi:BPMNShape id="shape_startEvent" bpmnElement="startEvent">
+        <omgdc:Bounds x="100" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskDeptLeaderMulti" bpmnElement="taskDeptLeaderMulti">
+        <omgdc:Bounds x="180" y="140" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskFinance" bpmnElement="taskFinance">
+        <omgdc:Bounds x="360" y="140" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskCashier" bpmnElement="taskCashier">
+        <omgdc:Bounds x="520" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_endEvent" bpmnElement="endEvent">
+        <omgdc:Bounds x="670" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="edge_flow1" bpmnElement="flow1">
+        <omgdi:waypoint x="136" y="180"/><omgdi:waypoint x="180" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow2" bpmnElement="flow2">
+        <omgdi:waypoint x="310" y="180"/><omgdi:waypoint x="360" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow3" bpmnElement="flow3">
+        <omgdi:waypoint x="470" y="180"/><omgdi:waypoint x="520" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow4" bpmnElement="flow4">
+        <omgdi:waypoint x="620" y="180"/><omgdi:waypoint x="670" y="180"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
