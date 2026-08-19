@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.finance.service.expense;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseApproveReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseRecordPayReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementCreateReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementRespVO;
@@ -16,4 +18,8 @@ public interface FinanceExpenseReimbursementService {
 
     PageResult<FinanceExpenseReimbursementRespVO> getPage(FinanceExpenseReimbursementPageReqVO reqVO,
                                                           Long userId, boolean canQueryAll);
+
+    void approve(FinanceExpenseApproveReqVO reqVO, Long userId);
+
+    void recordPay(FinanceExpenseRecordPayReqVO reqVO, Long userId);
 }

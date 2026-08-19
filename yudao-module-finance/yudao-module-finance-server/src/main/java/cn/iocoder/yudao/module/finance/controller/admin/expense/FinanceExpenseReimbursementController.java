@@ -3,6 +3,8 @@ package cn.iocoder.yudao.module.finance.controller.admin.expense;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseApproveReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseRecordPayReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementCreateReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementRespVO;
@@ -11,9 +13,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -53,5 +57,20 @@ public class FinanceExpenseReimbursementController {
             @Valid FinanceExpenseReimbursementPageReqVO reqVO) {
         boolean all = securityFrameworkService.hasPermission(QUERY_PERMISSION);
         return success(expenseReimbursementService.getPage(reqVO, getLoginUserId(), all));
+    }
+
+    @PutMapping("/approve")
+    @Operation(summary = "财务填写实报金额")
+    public CommonResult<Boolean> approve(@Valid @RequestBody FinanceExpenseApproveReqVO reqVO) {
+        expenseReimbursementService.approve(reqVO, getLoginUserId());
+        return success(true);
+    }
+
+    @PutMapping("/record-pay")
+    @Operation(summary = "出纳登记支付")
+    @PreAuthorize("@ss.hasPermission('finance:expense:record-pay')")
+    public CommonResult<Boolean> recordPay(@Valid @RequestBody FinanceExpenseRecordPayReqVO reqVO) {
+        expenseReimbursementService.recordPay(reqVO, getLoginUserId());
+        return success(true);
     }
 }

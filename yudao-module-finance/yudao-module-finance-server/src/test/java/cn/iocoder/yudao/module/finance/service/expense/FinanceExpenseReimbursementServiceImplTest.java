@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.finance.service.expense;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseApproveReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseRecordPayReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementCreateReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementLineReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.expense.FinanceExpenseReimbursementDO;
@@ -19,7 +21,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_APPROVED_AMOUNT_INVALID;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINE_KIND_MISMATCH;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINES_EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -55,7 +59,8 @@ class FinanceExpenseReimbursementServiceImplTest {
             row.setId(88L);
             return 1;
         }).when(mapper).insert(any(FinanceExpenseReimbursementDO.class));
-        service = new FinanceExpenseReimbursementServiceImpl(mapper, lineMapper, users, bpm);
+        service = new FinanceExpenseReimbursementServiceImpl(mapper, lineMapper, users, bpm,
+                mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class));
     }
 
     @Test
@@ -82,6 +87,28 @@ class FinanceExpenseReimbursementServiceImplTest {
     void proxyRejectsNormalLines() {
         ServiceException ex = assertThrows(ServiceException.class, () -> service.create(baseReq(true), 1L));
         assertEquals(EXPENSE_REIMBURSEMENT_LINE_KIND_MISMATCH.getCode(), ex.getCode());
+    }
+
+    @Test
+    void approveRejectsAmountOverApply() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).applyAmount(new BigDecimal("30.00"))
+                .status(FinanceExpenseReimbursementDO.STATUS_PENDING).build());
+        FinanceExpenseApproveReqVO req = new FinanceExpenseApproveReqVO();
+        req.setId(88L);
+        req.setApprovedAmount(new BigDecimal("40"));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.approve(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_APPROVED_AMOUNT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void recordPayRequiresCompanyAccount() {
+        FinanceExpenseRecordPayReqVO req = new FinanceExpenseRecordPayReqVO();
+        req.setId(88L);
+        req.setActualPayDate(LocalDate.of(2026, 8, 20));
+        req.setPayVoucherUrl("https://x/v.pdf");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED.getCode(), ex.getCode());
     }
 
     private static FinanceExpenseReimbursementCreateReqVO baseReq(boolean proxy) {

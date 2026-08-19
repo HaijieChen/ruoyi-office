@@ -4,6 +4,8 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseApproveReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseRecordPayReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementCreateReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementLineReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementPageReqVO;
@@ -31,6 +33,11 @@ import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_ACCESS_DENIED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_APPROVED_AMOUNT_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_CASHIER_FIELDS_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_STATUS_INVALID;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_AMOUNT_INVALID;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_DEPT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_FIELD_REQUIRED;
@@ -47,15 +54,18 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private final FinanceExpenseReimbursementLineMapper lineMapper;
     private final AdminUserApi adminUserApi;
     private final FinanceBpmProcessInstanceApi processInstanceApi;
+    private final FinanceCompanyBankAccountService companyBankAccountService;
 
     public FinanceExpenseReimbursementServiceImpl(FinanceExpenseReimbursementMapper mapper,
                                                   FinanceExpenseReimbursementLineMapper lineMapper,
                                                   AdminUserApi adminUserApi,
-                                                  FinanceBpmProcessInstanceApi processInstanceApi) {
+                                                  FinanceBpmProcessInstanceApi processInstanceApi,
+                                                  FinanceCompanyBankAccountService companyBankAccountService) {
         this.mapper = mapper;
         this.lineMapper = lineMapper;
         this.adminUserApi = adminUserApi;
         this.processInstanceApi = processInstanceApi;
+        this.companyBankAccountService = companyBankAccountService;
     }
 
     @Override
@@ -199,6 +209,58 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             return;
         }
         throw exception(EXPENSE_REIMBURSEMENT_ACCESS_DENIED);
+    }
+
+    @Override
+    public void approve(FinanceExpenseApproveReqVO reqVO, Long userId) {
+        FinanceExpenseReimbursementDO header = mapper.selectById(reqVO.getId());
+        if (header == null) {
+            throw exception(EXPENSE_REIMBURSEMENT_NOT_EXISTS);
+        }
+        if (!FinanceExpenseReimbursementDO.STATUS_PENDING.equals(header.getStatus())) {
+            throw exception(EXPENSE_REIMBURSEMENT_STATUS_INVALID);
+        }
+        if (reqVO.getApprovedAmount() == null
+                || reqVO.getApprovedAmount().compareTo(BigDecimal.ZERO) <= 0
+                || reqVO.getApprovedAmount().compareTo(header.getApplyAmount()) > 0) {
+            throw exception(EXPENSE_REIMBURSEMENT_APPROVED_AMOUNT_INVALID);
+        }
+        mapper.updateById(FinanceExpenseReimbursementDO.builder()
+                .id(header.getId())
+                .approvedAmount(reqVO.getApprovedAmount().setScale(2, RoundingMode.HALF_UP))
+                .financeComment(reqVO.getFinanceComment())
+                .status(FinanceExpenseReimbursementDO.STATUS_WAIT_PAY)
+                .build());
+    }
+
+    @Override
+    public void recordPay(FinanceExpenseRecordPayReqVO reqVO, Long userId) {
+        if (reqVO.getCompanyBankAccountId() == null) {
+            throw exception(EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED);
+        }
+        if (reqVO.getActualPayDate() == null || StrUtil.isBlank(reqVO.getPayVoucherUrl())) {
+            throw exception(EXPENSE_REIMBURSEMENT_CASHIER_FIELDS_REQUIRED);
+        }
+        String url = reqVO.getPayVoucherUrl().trim();
+        if (!(url.startsWith("http://") || url.startsWith("https://")
+                || url.startsWith("/") || url.contains("/admin-api/infra/file/"))) {
+            throw exception(EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID);
+        }
+        FinanceExpenseReimbursementDO header = mapper.selectById(reqVO.getId());
+        if (header == null) {
+            throw exception(EXPENSE_REIMBURSEMENT_NOT_EXISTS);
+        }
+        if (!FinanceExpenseReimbursementDO.STATUS_WAIT_PAY.equals(header.getStatus())) {
+            throw exception(EXPENSE_REIMBURSEMENT_STATUS_INVALID);
+        }
+        companyBankAccountService.get(reqVO.getCompanyBankAccountId());
+        mapper.updateById(FinanceExpenseReimbursementDO.builder()
+                .id(header.getId())
+                .companyBankAccountId(reqVO.getCompanyBankAccountId())
+                .actualPayDate(reqVO.getActualPayDate())
+                .payVoucherUrl(url)
+                .status(FinanceExpenseReimbursementDO.STATUS_PAID)
+                .build());
     }
 
     private AdminUserRespDTO requireUser(Long userId) {
