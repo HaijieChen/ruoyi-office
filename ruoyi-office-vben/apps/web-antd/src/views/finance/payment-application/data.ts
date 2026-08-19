@@ -1,6 +1,9 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { DICT_TYPE } from '@vben/constants';
+import { getDictLabel } from '@vben/hooks';
+
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -62,6 +65,15 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'applyAmount', title: '金额', minWidth: 100 },
     { field: 'currency', title: '币种', width: 80 },
     { field: 'paymentReason', title: '事由', minWidth: 100 },
+    {
+      field: 'costProject',
+      title: '产品名称',
+      minWidth: 120,
+      formatter: ({ cellValue }) =>
+        getDictLabel(DICT_TYPE.FINANCE_PRODUCT_TYPE, cellValue) ||
+        cellValue ||
+        '-',
+    },
     {
       field: 'status',
       title: '状态',

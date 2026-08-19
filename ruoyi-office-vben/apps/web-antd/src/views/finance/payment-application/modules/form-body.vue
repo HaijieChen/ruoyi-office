@@ -70,7 +70,9 @@ const companyOptions = ref<
 >([]);
 const purchaseOptions = ref<{ label: string; value: string }[]>([]);
 const leaseOptions = ref<{ label: string; value: number }[]>([]);
-const relatedContractOptions = ref<{ label: string; value: number }[]>([]);
+const relatedContractOptions = ref<
+  { label: string; productType?: string; value: number }[]
+>([]);
 const cumulativePaid = ref(0);
 const submitting = ref(false);
 /** 用户是否手动改过币种（切换主体时不再覆盖） */
@@ -93,7 +95,7 @@ const rules: Record<string, Rule[]> = {
   currency: [{ required: true, message: '请选择币种' }],
   businessSettlementTerm: [{ required: true, message: '请填写账期' }],
   payMethod: [{ required: true, message: '请选择支付方式' }],
-  costProject: [{ required: true, message: '请选择费用项目' }],
+  costProject: [{ required: true, message: '请选择产品名称' }],
   evidenceFileUrls: [
     {
       required: true,
@@ -183,8 +185,26 @@ async function loadRelatedContracts() {
   relatedContractOptions.value = list.map((c) => ({
     label: `${c.applicationNo || c.id} ${c.fileName || c.counterpartyName || ''}`,
     value: c.id,
+    productType: c.productType,
   }));
 }
+
+function onRelatedContractChange(value: SelectValue) {
+  const id = typeof value === 'number' ? value : Number(value);
+  const opt = relatedContractOptions.value.find((o) => o.value === id);
+  if (opt?.productType) {
+    formData.value.costProject = String(opt.productType);
+  }
+}
+
+const costProjectOptions = computed(() => {
+  const options = dictOptions('finance_product_type');
+  const current = formData.value.costProject;
+  if (current && !options.some((o) => String(o.value) === current)) {
+    return [...options, { value: current, label: current }];
+  }
+  return options;
+});
 
 function onEvidenceUpload(val: string | string[]) {
   let urls: string[] = [];
@@ -492,6 +512,7 @@ defineExpose({
           show-search
           allow-clear
           placeholder="本人已通过合同，带出结算方式"
+          @change="onRelatedContractChange"
         />
       </Form.Item>
       <Form.Item label="收款方" name="payeeCompanyId" required>
@@ -532,10 +553,10 @@ defineExpose({
           :options="dictOptions('finance_pay_method')"
         />
       </Form.Item>
-      <Form.Item label="费用项目" name="costProject" required>
+      <Form.Item label="产品名称" name="costProject" required>
         <Select
           v-model:value="formData.costProject"
-          :options="dictOptions('finance_cost_project')"
+          :options="costProjectOptions"
         />
       </Form.Item>
       <Form.Item label="付款依据" name="evidenceFileUrls" required>

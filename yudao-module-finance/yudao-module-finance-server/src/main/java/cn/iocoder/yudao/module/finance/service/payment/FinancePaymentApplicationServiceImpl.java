@@ -77,7 +77,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
     private static final int AMOUNT_SCALE = 2;
-    private static final String DICT_COST_PROJECT = "finance_cost_project";
+    private static final String DICT_COST_PROJECT = "finance_product_type";
     private static final String DICT_PAY_METHOD = "finance_pay_method";
     private static final String DICT_ACCOUNTING_SUBJECT = "finance_accounting_subject";
     /** EXP-73：交易币种白名单 */
