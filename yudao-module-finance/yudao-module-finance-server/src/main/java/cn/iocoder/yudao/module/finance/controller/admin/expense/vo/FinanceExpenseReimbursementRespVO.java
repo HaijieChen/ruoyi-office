@@ -22,5 +22,8 @@ public class FinanceExpenseReimbursementRespVO {
     private Long applicantUserId;
     private Long applicantDeptId;
     private LocalDate applyDate;
+    private String financeComment;
+    private LocalDate actualPayDate;
+    private Long companyBankAccountId;
     private List<FinanceExpenseReimbursementLineReqVO> lines;
 }

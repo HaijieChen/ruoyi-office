@@ -2,10 +2,12 @@ package cn.iocoder.yudao.module.finance.service.report;
 
 import cn.iocoder.yudao.module.finance.controller.admin.report.vo.FinanceBankBalanceReportRespVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.expense.FinanceExpenseReimbursementDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.opening.FinanceBankOpeningBalanceDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.receipt.FinanceReceiptDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.companyaccount.FinanceCompanyBankAccountMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.opening.FinanceBankOpeningBalanceMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
@@ -30,7 +32,8 @@ class FinanceBankBalanceReportServiceImplTest {
                 mock(FinanceCompanyBankAccountMapper.class),
                 mock(FinanceBankOpeningBalanceMapper.class),
                 mock(FinanceBankReceiptMapper.class),
-                mock(FinancePaymentPayLineMapper.class));
+                mock(FinancePaymentPayLineMapper.class),
+                mock(FinanceExpenseReimbursementMapper.class));
     }
 
     @Test
@@ -56,7 +59,7 @@ class FinanceBankBalanceReportServiceImplTest {
                 .currencySnapshot("CNY")
                 .build();
         FinanceBankBalanceReportRespVO resp = service.aggregate(
-                List.of(account), List.of(opening), List.of(receipt), List.of(pay),
+                List.of(account), List.of(opening), List.of(receipt), List.of(pay), List.of(),
                 LocalDate.of(2026, 8, 31));
         assertEquals(1, resp.getList().size());
         assertEquals(new BigDecimal("120.00"), resp.getList().get(0).getBalanceAmount());
@@ -76,7 +79,7 @@ class FinanceBankBalanceReportServiceImplTest {
                 .currency("USD")
                 .build();
         FinanceBankBalanceReportRespVO resp = service.aggregate(
-                List.of(account), List.of(), List.of(receipt), List.of(),
+                List.of(account), List.of(), List.of(receipt), List.of(), List.of(),
                 LocalDate.of(2026, 8, 31));
         assertEquals(BigDecimal.ZERO, resp.getList().get(0).getIncomeAmount());
         assertEquals(1L, resp.getExcludedFxCount());
@@ -93,9 +96,26 @@ class FinanceBankBalanceReportServiceImplTest {
                 .currency("CNY")
                 .build();
         FinanceBankBalanceReportRespVO resp = service.aggregate(
-                List.of(account), List.of(), List.of(receipt), List.of(),
+                List.of(account), List.of(), List.of(receipt), List.of(), List.of(),
                 LocalDate.of(2026, 8, 31));
         assertEquals(new BigDecimal("50.00"), resp.getList().get(0).getIncomeAmount());
+    }
+
+    @Test
+    void paidReimbursementCountsAsExpense() {
+        FinanceCompanyBankAccountDO account = account(1L, 20L, "基本户", "62220001");
+        FinanceExpenseReimbursementDO paid = FinanceExpenseReimbursementDO.builder()
+                .companyBankAccountId(1L)
+                .status(FinanceExpenseReimbursementDO.STATUS_PAID)
+                .actualPayDate(LocalDate.of(2026, 8, 15))
+                .approvedAmount(new BigDecimal("20.00"))
+                .applyAmount(new BigDecimal("20.00"))
+                .build();
+        FinanceBankBalanceReportRespVO resp = service.aggregate(
+                List.of(account), List.of(), List.of(), List.of(), List.of(paid),
+                LocalDate.of(2026, 8, 31));
+        assertEquals(new BigDecimal("20.00"), resp.getList().get(0).getReimbursementExpenseAmount());
+        assertEquals(new BigDecimal("-20.00"), resp.getList().get(0).getBalanceAmount());
     }
 
     private static FinanceCompanyBankAccountDO account(Long id, Long deptId, String name, String no) {
