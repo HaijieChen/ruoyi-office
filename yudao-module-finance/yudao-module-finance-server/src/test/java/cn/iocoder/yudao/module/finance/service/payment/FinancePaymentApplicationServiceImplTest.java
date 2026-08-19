@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationCreateAndStartReqVO;
+import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentRecordPayReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
@@ -648,6 +649,9 @@ class FinancePaymentApplicationServiceImplTest {
 
         Long id = service.createAndStartSalary(req, 1L);
         assertEquals(100L, id);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertNull(cap.getValue().getCostProject());
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
         verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
@@ -671,6 +675,9 @@ class FinancePaymentApplicationServiceImplTest {
 
         Long id = service.createAndStartTax(req, 1L);
         assertEquals(100L, id);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertNull(cap.getValue().getCostProject());
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
         verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
@@ -906,6 +913,71 @@ class FinancePaymentApplicationServiceImplTest {
                 .thenThrow(new RuntimeException("bad dict"));
         ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(baseReq(), 1L));
         assertEquals(PAYMENT_APPLICATION_DICT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void createWithProductTypeSoftwareSucceeds() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setCostProject("软件");
+        Long id = service.createAndStart(req, 1L);
+        assertEquals(100L, id);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals("软件", cap.getValue().getCostProject());
+        verify(dictDataApi).validateDictDataList(eq("finance_product_type"),
+                argThat(values -> values.contains("软件")));
+    }
+
+    @Test
+    void createWithOldCostProjectBaiduRechargeFails() {
+        when(dictDataApi.validateDictDataList(eq("finance_product_type"),
+                argThat(values -> values != null && values.contains("baidu_recharge"))))
+                .thenThrow(new RuntimeException("bad dict"));
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setCostProject("baidu_recharge");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_DICT_INVALID.getCode(), ex.getCode());
+        verify(mapper, never()).insert(any(FinancePaymentApplicationDO.class));
+    }
+
+    @Test
+    void resubmitWithOldCostProjectBaiduRechargeFails() {
+        when(mapper.selectById(81L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(81L)
+                .applicantUserId(1L)
+                .status(FinancePaymentApplicationStatusEnum.REJECTED.getStatus())
+                .applicationKind("ORDINARY")
+                .voided(false)
+                .costProject("baidu_recharge")
+                .build());
+        when(dictDataApi.validateDictDataList(eq("finance_product_type"),
+                argThat(values -> values != null && values.contains("baidu_recharge"))))
+                .thenThrow(new RuntimeException("bad dict"));
+        FinancePaymentApplicationResubmitReqVO req = new FinancePaymentApplicationResubmitReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPaymentReason(FinancePaymentReasonEnum.BUSINESS.getCode());
+        req.setPayeeCompanyId(9L);
+        req.setEntityCompanyDeptId(20L);
+        req.setApplyAmount(new BigDecimal("100.00"));
+        req.setCurrency("CNY");
+        req.setBusinessSettlementTerm("月结30天");
+        req.setPayMethod("wire");
+        req.setCostProject("baidu_recharge");
+        req.setEvidenceFileUrls(List.of("https://x/a.pdf"));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.resubmit(81L, req, 1L));
+        assertEquals(PAYMENT_APPLICATION_DICT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void getOldCostProjectRowDoesNotThrow() {
+        when(mapper.selectById(82L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(82L)
+                .costProject("baidu_recharge")
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .build());
+        FinancePaymentApplicationDO row = assertDoesNotThrow(() -> service.getApplication(82L));
+        assertEquals("baidu_recharge", row.getCostProject());
+        verify(dictDataApi, never()).validateDictDataList(anyString(), anyCollection());
     }
 
     @Test

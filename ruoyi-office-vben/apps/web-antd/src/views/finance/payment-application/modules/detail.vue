@@ -48,6 +48,7 @@ const [Modal, modalApi] = useVbenModal({
         </Descriptions.Item>
         <Descriptions.Item label="金额">{{ detail.applyAmount }} {{ detail.currency }}</Descriptions.Item>
         <Descriptions.Item label="时效">{{ detail.paymentTiming }}</Descriptions.Item>
+        <Descriptions.Item label="产品名称">{{ detail.costProject || '-' }}</Descriptions.Item>
         <Descriptions.Item label="事由">{{ detail.paymentReason }}</Descriptions.Item>
         <Descriptions.Item label="采购前置">{{ detail.purchaseSnapshot || detail.purchaseProcessInstanceId || '-' }}</Descriptions.Item>
         <Descriptions.Item label="租赁合同">{{ detail.leaseContractApplicationId || '-' }}</Descriptions.Item>

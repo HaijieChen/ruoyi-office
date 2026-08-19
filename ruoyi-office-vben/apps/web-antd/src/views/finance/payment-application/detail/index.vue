@@ -470,6 +470,12 @@ watch(
           <Descriptions.Item label="金额">
             {{ detail.applyAmount }} {{ detail.currency }}
           </Descriptions.Item>
+          <Descriptions.Item
+            v-if="!detail.applicationKind || detail.applicationKind === 'ORDINARY'"
+            label="产品名称"
+          >
+            {{ detail.costProject || '-' }}
+          </Descriptions.Item>
           <Descriptions.Item label="事由">{{ detail.paymentReason }}</Descriptions.Item>
           <Descriptions.Item label="时效">{{ detail.paymentTiming }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ detail.periodLabel || '-' }}</Descriptions.Item>
