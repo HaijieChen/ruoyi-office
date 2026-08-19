@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
 
-import { Page, useTabs } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
+import { useTabs } from '@vben/hooks';
 
 import { Button } from 'ant-design-vue';
 
