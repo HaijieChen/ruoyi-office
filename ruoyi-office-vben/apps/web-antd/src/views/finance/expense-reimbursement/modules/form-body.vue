@@ -149,6 +149,25 @@ async function loadPredocOptions() {
   }
 }
 
+function needsPredoc(line: LineRow) {
+  return line.category === 'travel' || line.category === 'transport';
+}
+
+function lineDetailsEnabled(line: LineRow) {
+  if (!line.category) return false;
+  if (needsPredoc(line)) return !!line.predocProcessInstanceId;
+  return true;
+}
+
+function onCategoryChange(index: number) {
+  const line = formData.value.lines[index];
+  if (!line) return;
+  line.predocProcessInstanceId = undefined;
+  line.predocType = undefined;
+  line.stayCityTier = undefined;
+  line.overLimitReason = undefined;
+}
+
 function predocOptions(category?: string) {
   if (category === 'travel') return tripOptions.value;
   if (category === 'transport') return [...tripOptions.value, ...outingOptions.value];
@@ -419,48 +438,53 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           class="w-28"
           :options="categoryOptions"
           placeholder="分类"
+          @change="onCategoryChange(index)"
         />
         <Input
           v-else
           v-model:value="line.category"
           class="w-28"
           placeholder="费用类型"
-        />
-        <DatePicker
-          :value="line.feeDate ? dayjs(line.feeDate) : undefined"
-          class="w-36"
-          @change="(d) => (line.feeDate = d ? dayjs(d).format('YYYY-MM-DD') : undefined)"
-        />
-        <InputNumber v-model:value="line.amount" :min="0.01" :precision="2" placeholder="金额" />
-        <Input
-          v-if="line.category === 'travel' && needOverLimitReason(line)"
-          v-model:value="line.overLimitReason"
-          class="w-48"
-          placeholder="超标原因"
-        />
-        <FileUpload
-          v-if="!formData.proxyTicket"
-          class="w-48"
-          :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
-          :max-number="1"
-          :max-size="20"
-          :accept="['pdf', 'jpg', 'jpeg', 'png']"
-          help-text="发票"
-          :api="(file, progress) => uploadInvoice(index, file as File, progress)"
-          @update:value="(v) => onInvoiceUpload(index, v)"
+          @change="onCategoryChange(index)"
         />
         <Select
-          v-if="line.category === 'travel' || line.category === 'transport'"
+          v-if="needsPredoc(line)"
           :value="line.predocProcessInstanceId"
           class="w-56"
           :options="predocOptions(line.category)"
-          placeholder="已通过出差/外出"
+          placeholder="先选已通过出差/外出"
           allow-clear
           show-search
           option-filter-prop="label"
           @change="(v) => onPredocChange(index, v as string)"
         />
-        <Input v-model:value="line.remark" class="w-36" placeholder="说明" />
+        <template v-if="lineDetailsEnabled(line)">
+          <DatePicker
+            :value="line.feeDate ? dayjs(line.feeDate) : undefined"
+            class="w-36"
+            @change="(d) => (line.feeDate = d ? dayjs(d).format('YYYY-MM-DD') : undefined)"
+          />
+          <InputNumber v-model:value="line.amount" :min="0.01" :precision="2" placeholder="金额" />
+          <Input
+            v-if="line.category === 'travel' && needOverLimitReason(line)"
+            v-model:value="line.overLimitReason"
+            class="w-48"
+            placeholder="超标原因"
+          />
+          <FileUpload
+            v-if="!formData.proxyTicket"
+            class="w-48"
+            :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
+            :max-number="1"
+            :max-size="20"
+            :accept="['pdf', 'jpg', 'jpeg', 'png']"
+            help-text="发票"
+            :api="(file, progress) => uploadInvoice(index, file as File, progress)"
+            @update:value="(v) => onInvoiceUpload(index, v)"
+          />
+          <Input v-model:value="line.remark" class="w-36" placeholder="说明" />
+        </template>
+        <span v-else-if="needsPredoc(line)" class="text-xs text-gray-500">请先选择关联单</span>
         <Button danger size="small" @click="removeLine(index)">删</Button>
       </div>
       <Button size="small" @click="addLine">加一行</Button>
