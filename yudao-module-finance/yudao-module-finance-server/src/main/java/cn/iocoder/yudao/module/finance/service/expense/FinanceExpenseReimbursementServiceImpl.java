@@ -117,7 +117,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 throw exception(EXPENSE_REIMBURSEMENT_AMOUNT_INVALID);
             }
             validateInvoiceAndPredoc(line, proxy, invoiceMode, userId);
-            validateStayStandard(line);
+            validateStayStandard(line, userId);
             apply = apply.add(line.getAmount());
             i++;
         }
@@ -344,20 +344,27 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         }
     }
 
-    /** 差旅住宿标准只做超标说明，不卡控金额。 */
-    static void validateStayStandard(FinanceExpenseReimbursementLineReqVO line) {
+    /** 差旅住宿标准按出差/外出城市裁定，只做超标说明，不卡控金额。 */
+    void validateStayStandard(FinanceExpenseReimbursementLineReqVO line, Long userId) {
         String cat = line.getCategory() == null ? "" : line.getCategory().trim();
         if (!FinanceExpensePredocService.CAT_TRAVEL.equals(cat)) {
             return;
         }
-        String tier = StrUtil.trimToEmpty(line.getStayCityTier()).toUpperCase();
-        if (!FinanceExpenseReimbursementLineDO.STAY_TIER_T1.equals(tier)
-                && !FinanceExpenseReimbursementLineDO.STAY_TIER_OTHER.equals(tier)) {
+        String city = predocService.resolveCity(userId, line.getPredocType(), line.getPredocProcessInstanceId());
+        applyStayStandard(line, city);
+    }
+
+    static void applyStayStandard(FinanceExpenseReimbursementLineReqVO line, String city) {
+        String cat = line.getCategory() == null ? "" : line.getCategory().trim();
+        if (!FinanceExpensePredocService.CAT_TRAVEL.equals(cat)) {
+            return;
+        }
+        String tier = FinanceStayCityCaps.tier(city);
+        if (tier == null) {
             throw exception(EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED);
         }
-        java.math.BigDecimal cap = FinanceExpenseReimbursementLineDO.STAY_TIER_T1.equals(tier)
-                ? FinanceExpenseReimbursementLineDO.STAY_CAP_T1
-                : FinanceExpenseReimbursementLineDO.STAY_CAP_OTHER;
+        line.setStayCityTier(tier);
+        java.math.BigDecimal cap = FinanceStayCityCaps.cap(tier);
         if (line.getAmount() != null && line.getAmount().compareTo(cap) > 0
                 && StrUtil.isBlank(line.getOverLimitReason())) {
             throw exception(EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED);

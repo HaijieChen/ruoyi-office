@@ -206,7 +206,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       field: 'destination',
-      title: '出差地点',
+      title: '出差城市',
       minWidth: 140,
     },
     {
@@ -258,7 +258,7 @@ export function useDetailFormSchema(): DescriptionItemSchema[] {
       field: 'deptName',
     },
     {
-      label: '出差地点',
+      label: '出差城市',
       field: 'destination',
     },
     {

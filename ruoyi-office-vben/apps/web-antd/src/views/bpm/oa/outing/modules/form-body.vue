@@ -41,7 +41,7 @@ async function reset() {
 }
 const rules = {
   reason: [{ required: true, message: '请填写外出事由', trigger: 'blur' }],
-  location: [{ required: true, message: '请填写外出地点', trigger: 'blur' }],
+  location: [{ required: true, message: '请选择外出城市', trigger: 'change' }],
 };
 function onAttach(v) {
   formData.value.attachmentUrls = Array.isArray(v) ? v : (v ? [v] : []);
@@ -71,7 +71,9 @@ defineExpose({ reset: reset, submit: submit, getPredictVariables: getPredictVari
     <Form.Item label="申请人"><Input :value="formData.userNickname" disabled /></Form.Item>
     <Form.Item label="部门"><Input :value="formData.deptName" disabled /></Form.Item>
     <Form.Item label="外出事由" name="reason"><Input.TextArea v-model:value="formData.reason" :rows="3" placeholder="请输入外出事由" /></Form.Item>
-    <Form.Item label="外出地点" name="location"><Input v-model:value="formData.location" placeholder="请输入外出地点" /></Form.Item>
+    <Form.Item label="外出城市" name="location">
+      <Select v-model:value="formData.location" class="w-full" show-search option-filter-prop="label" :options="getDictOptions(DICT_TYPE.OA_TRAVEL_CITY, 'string')" placeholder="请选择外出城市" />
+    </Form.Item>
     <Form.Item label="起止时间" required>
       <DatePicker.RangePicker v-model:value="range" class="w-full" show-time format="YYYY-MM-DD HH:mm" @change="notifyPredict" />
     </Form.Item>

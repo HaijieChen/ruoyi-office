@@ -31,8 +31,8 @@ const emit = defineEmits<{
 const userStore = useUserStore();
 const formRef = ref();
 const submitting = ref(false);
-const tripOptions = ref<{ label: string; value: string; type: 'TRIP' }[]>([]);
-const outingOptions = ref<{ label: string; value: string; type: 'OUTING' }[]>([]);
+const tripOptions = ref<{ label: string; value: string; type: 'TRIP'; city?: string }[]>([]);
+const outingOptions = ref<{ label: string; value: string; type: 'OUTING'; city?: string }[]>([]);
 
 interface LineRow {
   category?: string;
@@ -80,14 +80,16 @@ async function loadPredocOptions() {
       .map((t) => ({
         value: String(t.processInstanceId),
         type: 'TRIP' as const,
-        label: `出差#${t.id} ${t.processInstanceId}`,
+        city: t.destination,
+        label: `出差#${t.id} ${t.destination || ''}`.trim(),
       }));
     outingOptions.value = (outings?.list || [])
       .filter((t) => Number(t.status) === 2 && t.processInstanceId)
       .map((t) => ({
         value: String(t.processInstanceId),
         type: 'OUTING' as const,
-        label: `外出#${t.id} ${t.processInstanceId}`,
+        city: t.location,
+        label: `外出#${t.id} ${t.location || ''}`.trim(),
       }));
   } catch {
     tripOptions.value = [];
@@ -107,19 +109,26 @@ function onPredocChange(index: number, processInstanceId?: string) {
   line.predocProcessInstanceId = processInstanceId;
   const hit = [...tripOptions.value, ...outingOptions.value].find((o) => o.value === processInstanceId);
   line.predocType = hit?.type;
+  line.stayCityTier = ['北京', '上海', '广州', '深圳'].includes(String(hit?.city || ''))
+    ? 'T1'
+    : hit?.city
+      ? 'OTHER'
+      : undefined;
 }
 
-const stayTierOptions = [
-  { label: '北上广深 400', value: 'T1' },
-  { label: '其他城市 300', value: 'OTHER' },
-];
+function predocCity(line: LineRow) {
+  return [...tripOptions.value, ...outingOptions.value].find(
+    (o) => o.value === line.predocProcessInstanceId,
+  )?.city;
+}
 
-function stayCap(tier?: string) {
-  return tier === 'T1' ? 400 : 300;
+function stayCapFromCity(city?: string) {
+  if (!city) return 300;
+  return ['北京', '上海', '广州', '深圳'].includes(city) ? 400 : 300;
 }
 
 function needOverLimitReason(line: LineRow) {
-  return line.category === 'travel' && Number(line.amount) > stayCap(line.stayCityTier);
+  return line.category === 'travel' && Number(line.amount) > stayCapFromCity(predocCity(line));
 }
 
 function addLine() {
@@ -184,10 +193,10 @@ async function submit(): Promise<void> {
     throw new Error('empty lines');
   }
   const stayMissing = formData.value.lines.find(
-    (l) => l.category === 'travel' && Number(l.amount) > 0 && !l.stayCityTier,
+    (l) => l.category === 'travel' && Number(l.amount) > 0 && !predocCity(l),
   );
   if (stayMissing) {
-    message.warning('差旅请选择住宿城市档（北上广深/其他）');
+    message.warning('差旅请选择带城市的出差/外出单');
     throw new Error('stay tier');
   }
   const over = formData.value.lines.find(
@@ -254,20 +263,12 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           @change="(d) => (line.feeDate = d ? dayjs(d).format('YYYY-MM-DD') : undefined)"
         />
         <InputNumber v-model:value="line.amount" :min="0.01" :precision="2" placeholder="金额" />
-        <template v-if="line.category === 'travel'">
-          <Select
-            v-model:value="line.stayCityTier"
-            class="w-36"
-            :options="stayTierOptions"
-            placeholder="住宿城市档"
-          />
-          <Input
-            v-if="needOverLimitReason(line)"
-            v-model:value="line.overLimitReason"
-            class="w-48"
-            placeholder="超标原因"
-          />
-        </template>
+        <Input
+          v-if="line.category === 'travel' && needOverLimitReason(line)"
+          v-model:value="line.overLimitReason"
+          class="w-48"
+          placeholder="超标原因"
+        />
         <Select
           v-if="line.category === 'travel' || line.category === 'transport'"
           :value="line.predocProcessInstanceId"
@@ -286,7 +287,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         v-if="formData.lines.some((l) => l.category === 'travel')"
         class="mt-1 text-xs text-amber-700"
       >
-        住宿标准：北上广深 400 元/晚，其他城市 300 元/晚。超标不拦提单，须填写超标原因。
+        住宿标准按出差/外出城市裁定：北上广深 400 元/晚，其他 300。超标不拦提单，须填超标原因。
       </div>
     </Form.Item>
   </Form>

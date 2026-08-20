@@ -10,4 +10,7 @@ public interface FinanceExpensePredocService {
     boolean isApprovedTrip(Long userId, String processInstanceId);
 
     boolean isApprovedOuting(Long userId, String processInstanceId);
+
+    /** 已通过出差 destination / 外出 location；没有则 null。 */
+    String resolveCity(Long userId, String predocType, String processInstanceId);
 }

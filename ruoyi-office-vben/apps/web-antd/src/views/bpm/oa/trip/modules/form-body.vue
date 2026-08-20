@@ -3,6 +3,8 @@ import type { Rule } from 'ant-design-vue/es/form';
 
 import { onMounted, ref } from 'vue';
 
+import { DICT_TYPE } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
 
 import { DatePicker, Form, Input, Select, message } from 'ant-design-vue';
@@ -49,7 +51,7 @@ async function reset(_opts?: { id?: number; mode?: string }) {
 }
 
 const rules: Record<string, Rule[]> = {
-  destination: [{ required: true, message: '请填写出差地点', trigger: 'blur' }],
+  destination: [{ required: true, message: '请选择出差城市', trigger: 'change' }],
   reason: [{ required: true, message: '请填写出差原因', trigger: 'blur' }],
   companionUserId: [{ required: true, message: '请选择同行人员', trigger: 'change' }],
   range: [{ required: true, message: '请选择开始和结束日期', trigger: 'change' }],
@@ -108,10 +110,14 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     <Form.Item label="部门">
       <Input :value="formData.deptName" disabled />
     </Form.Item>
-    <Form.Item label="出差地点" name="destination">
-      <Input
+    <Form.Item label="出差城市" name="destination">
+      <Select
         v-model:value="formData.destination"
-        placeholder="请填写出差地点"
+        class="w-full"
+        show-search
+        option-filter-prop="label"
+        :options="getDictOptions(DICT_TYPE.OA_TRAVEL_CITY, 'string')"
+        placeholder="请选择出差城市"
         @change="emit('predictChange', getPredictVariables())"
       />
     </Form.Item>

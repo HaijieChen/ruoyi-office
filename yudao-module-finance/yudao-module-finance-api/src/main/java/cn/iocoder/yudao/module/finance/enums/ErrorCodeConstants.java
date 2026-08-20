@@ -295,7 +295,7 @@ public interface ErrorCodeConstants {
     ErrorCode EXPENSE_REIMBURSEMENT_INVOICE_MODE_MISMATCH = new ErrorCode(1_040_008_020,
             "发票模式与发起入口不一致");
     ErrorCode EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED = new ErrorCode(1_040_008_021,
-            "差旅须选择住宿城市档：北上广深或其他");
+            "差旅须关联带城市的出差或外出单以裁定住宿标准");
     ErrorCode EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED = new ErrorCode(1_040_008_022,
             "差旅住宿超标须填写超标原因");
 
