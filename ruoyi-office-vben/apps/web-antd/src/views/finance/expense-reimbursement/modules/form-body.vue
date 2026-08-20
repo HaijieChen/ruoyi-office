@@ -360,7 +360,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
           :max-number="1"
           :max-size="20"
-          :accept="['.pdf', '.jpg', '.jpeg', '.png']"
+          :accept="['pdf', 'jpg', 'jpeg', 'png']"
           help-text="发票"
           :api="(file, progress) => uploadInvoice(index, file as File, progress)"
           @update:value="(v) => onInvoiceUpload(index, v)"
