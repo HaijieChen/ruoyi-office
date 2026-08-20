@@ -143,13 +143,11 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
   }
 }
 
+const pendingOcrFiles = new Map<number, File>();
+
 async function uploadInvoice(index: number, file: File, onUploadProgress?: any) {
-  const res = await httpRequest(file, onUploadProgress);
-  const url = typeof res === 'string' ? res : String((res as any)?.url || '');
-  const line = formData.value.lines[index];
-  if (line) line.invoiceFileUrl = url || undefined;
-  if (url) await runInvoiceOcr(index, url, file);
-  return res;
+  pendingOcrFiles.set(index, file);
+  return httpRequest(file, onUploadProgress);
 }
 
 async function onInvoiceUpload(index: number, val: string | string[]) {
@@ -157,6 +155,10 @@ async function onInvoiceUpload(index: number, val: string | string[]) {
   const line = formData.value.lines[index];
   if (!line) return;
   line.invoiceFileUrl = url || undefined;
+  if (!url) return;
+  const file = pendingOcrFiles.get(index);
+  pendingOcrFiles.delete(index);
+  await runInvoiceOcr(index, url, file);
 }
 
 function onPredocChange(index: number, processInstanceId?: string) {
