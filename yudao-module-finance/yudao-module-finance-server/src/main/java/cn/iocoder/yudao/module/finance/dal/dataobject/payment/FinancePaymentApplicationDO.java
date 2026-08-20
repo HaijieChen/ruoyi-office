@@ -24,6 +24,8 @@ public class FinancePaymentApplicationDO extends TenantBaseDO {
     private String applicationNo;
     private String processInstanceId;
     private String status;
+    /** COMPLETE / WAIT_INVOICE */
+    private String materialsStatus;
     /**
      * 业务类型：ORDINARY / SALARY / TAX。
      * 默认 ORDINARY 兼容历史单。

@@ -15,6 +15,8 @@ public class FinanceExpenseReimbursementLineReqVO {
     private String lineKind;
     @NotBlank
     private String category;
+    private String invoiceType;
+    private String subItem;
     @NotNull
     private LocalDate feeDate;
     @NotNull

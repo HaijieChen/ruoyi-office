@@ -80,6 +80,13 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       width: 100,
       formatter: ({ cellValue }) => STATUS_LABEL[cellValue] || cellValue,
     },
+    {
+      field: 'materialsStatus',
+      title: '资料',
+      width: 90,
+      formatter: ({ cellValue }) =>
+        cellValue === 'WAIT_INVOICE' ? '待补票' : '齐全',
+    },
     { field: 'currentNodeName', title: '当前节点', minWidth: 120 },
     { field: 'createTime', title: '创建时间', minWidth: 160 },
     {

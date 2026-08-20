@@ -6,6 +6,8 @@ export namespace FinanceExpenseApi {
   export interface Line {
     lineKind: 'NORMAL' | 'PROXY';
     category: string;
+    invoiceType?: string;
+    subItem?: string;
     feeDate: string;
     amount: number;
     attachments?: string[];
@@ -30,6 +32,8 @@ export namespace FinanceExpenseApi {
     status: string;
     processInstanceId?: string;
     applicantUserId?: number;
+    actualUserId?: number;
+    entityCompanyName?: string;
     applicantDeptId?: number;
     applyDate?: string;
     financeComment?: string;
@@ -41,6 +45,7 @@ export namespace FinanceExpenseApi {
   export interface CreateForm {
     periodLabel: string;
     proxyTicket: boolean;
+    actualUserId?: number;
     payeeAccountName: string;
     payeeAccountNo: string;
     lines: Line[];

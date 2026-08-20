@@ -15,6 +15,7 @@ public class FinancePaymentApplicationRespVO {
     private String applicationNo;
     private String processInstanceId;
     private String status;
+    private String materialsStatus;
     private String applicationKind;
     private String currentNodeKey;
     private String currentNodeName;

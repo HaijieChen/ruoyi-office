@@ -11,6 +11,7 @@ import java.util.List;
 @Data
 public class FinanceExpenseReimbursementCreateReqVO {
 
+    private Long actualUserId;
     @NotBlank
     private String periodLabel;
     @NotNull

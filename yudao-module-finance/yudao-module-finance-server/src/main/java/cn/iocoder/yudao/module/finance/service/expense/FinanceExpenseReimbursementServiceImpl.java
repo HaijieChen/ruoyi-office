@@ -104,6 +104,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (StrUtil.isBlank(reqVO.getPayeeAccountName()) || StrUtil.isBlank(reqVO.getPayeeAccountNo())) {
             throw exception(EXPENSE_REIMBURSEMENT_FIELD_REQUIRED);
         }
+        Long actualUserId = reqVO.getActualUserId() != null ? reqVO.getActualUserId() : userId;
         boolean proxy = Boolean.TRUE.equals(reqVO.getProxyTicket());
         String expectKind = proxy
                 ? FinanceExpenseReimbursementLineDO.KIND_PROXY
@@ -117,8 +118,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             if (line.getAmount() == null || line.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
                 throw exception(EXPENSE_REIMBURSEMENT_AMOUNT_INVALID);
             }
-            validateInvoiceAndPredoc(line, proxy, invoiceMode, userId);
-            validateStayStandard(line, userId);
+            validateInvoiceAndPredoc(line, proxy, invoiceMode, actualUserId);
+            validateStayStandard(line, actualUserId);
             if (StrUtil.isNotBlank(line.getInvoiceNo()) && invoiceNoUsed(line.getInvoiceNo())) {
                 throw exception(EXPENSE_REIMBURSEMENT_INVOICE_USED);
             }
@@ -129,11 +130,11 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             throw exception(EXPENSE_REIMBURSEMENT_AMOUNT_INVALID);
         }
         apply = apply.setScale(2, RoundingMode.HALF_UP);
-        AdminUserRespDTO user = requireUser(userId);
+        AdminUserRespDTO user = requireUser(actualUserId);
         if (user.getDeptId() == null) {
             throw exception(EXPENSE_REIMBURSEMENT_DEPT_REQUIRED);
         }
-        String nickname = StrUtil.blankToDefault(user.getNickname(), String.valueOf(userId));
+        String nickname = StrUtil.blankToDefault(user.getNickname(), String.valueOf(actualUserId));
         String title = "【报销】-" + nickname + "-" + reqVO.getPeriodLabel().trim() + "-" + apply.toPlainString();
 
         FinanceExpenseReimbursementDO header = FinanceExpenseReimbursementDO.builder()
@@ -147,6 +148,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .processKey(processKey)
                 .status(FinanceExpenseReimbursementDO.STATUS_PENDING)
                 .applicantUserId(userId)
+                .actualUserId(actualUserId)
                 .applicantDeptId(user.getDeptId())
                 .applyDate(LocalDate.now())
                 .build();
@@ -158,6 +160,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                     .reimbursementId(header.getId())
                     .lineKind(expectKind)
                     .category(line.getCategory().trim())
+                    .invoiceType(line.getInvoiceType())
+                    .subItem(line.getSubItem())
                     .feeDate(line.getFeeDate())
                     .amount(line.getAmount().setScale(2, RoundingMode.HALF_UP))
                     .attachments(line.getAttachments() == null ? null : String.join(",", line.getAttachments()))

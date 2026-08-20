@@ -52,11 +52,15 @@ interface LineRow {
   remark?: string;
   stayCityTier?: string;
   overLimitReason?: string;
+  invoiceType?: string;
+  subItem?: string;
 }
 
 const formData = ref<{
   userNickname?: string;
   deptName?: string;
+  entityCompanyName?: string;
+  actualUserId?: number;
   periodLabel?: string;
   proxyTicket: boolean;
   payeeAccountName?: string;
@@ -92,6 +96,16 @@ const outingOptions = ref<
   }[]
 >([]);
 const userSex = ref<Record<number, number>>({});
+const userOptionsAll = ref<{ label: string; value: number; deptName?: string }[]>([]);
+
+const invoiceTypeOptions = computed(() =>
+  getDictOptions('finance_invoice_type', 'string').map((d) => ({ label: d.label, value: String(d.value) })),
+);
+function subItemOptions(category?: string) {
+  return getDictOptions('finance_expense_subitem', 'string')
+    .filter((d) => !category || String(d.value).startsWith(String(category) + '.'))
+    .map((d) => ({ label: d.label, value: String(d.value) }));
+}
 
 const categoryOptions = computed(() =>
   getDictOptions('finance_expense_category', 'string').map((d) => ({
@@ -103,6 +117,16 @@ const categoryOptions = computed(() =>
 function applyLoginUser() {
   formData.value.userNickname = userStore.userInfo?.nickname || '';
   formData.value.deptName = (userStore.userInfo as any)?.deptName || '';
+  formData.value.actualUserId = Number(userStore.userInfo?.id);
+  formData.value.entityCompanyName = (userStore.userInfo as any)?.deptName || '';
+}
+
+function onActualUserChange(id?: number) {
+  const hit = userOptionsAll.value.find((u) => u.value === Number(id));
+  formData.value.deptName = hit?.deptName || formData.value.deptName;
+  formData.value.entityCompanyName = hit?.deptName || '';
+  const u = userOptionsAll.value.find((x) => x.value === Number(id));
+  if (u) formData.value.userNickname = u.label;
 }
 
 function expectedKind(): 'NORMAL' | 'PROXY' {
@@ -340,6 +364,8 @@ async function submit(): Promise<void> {
     .map((l) => ({
       lineKind: kind,
       category: String(l.category),
+      invoiceType: l.invoiceType,
+      subItem: l.subItem,
       feeDate: String(l.feeDate),
       amount: Number(l.amount),
       invoiceFileUrl: l.invoiceFileUrl,
@@ -378,6 +404,7 @@ async function submit(): Promise<void> {
     await createExpenseReimbursement({
       periodLabel: String(formData.value.periodLabel),
       proxyTicket: formData.value.proxyTicket,
+      actualUserId: formData.value.actualUserId,
       payeeAccountName: String(formData.value.payeeAccountName),
       payeeAccountNo: String(formData.value.payeeAccountNo),
       lines,
@@ -395,11 +422,16 @@ onMounted(async () => {
   try {
     const users = await getSimpleUserList();
     const map: Record<number, number> = {};
-    for (const u of users || []) {
+    userOptionsAll.value = (users || []).map((u) => {
       if (u.id != null && (u as any).sex != null) {
         map[Number(u.id)] = Number((u as any).sex);
       }
-    }
+      return {
+        label: u.nickname || String(u.id),
+        value: Number(u.id),
+        deptName: (u as any).deptName,
+      };
+    });
     userSex.value = map;
   } catch {
     userSex.value = {};
@@ -418,6 +450,20 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
   >
     <Form.Item label="申请人">
       <Input :value="formData.userNickname" disabled />
+    </Form.Item>
+    <Form.Item label="实际报销人">
+      <Select
+        v-model:value="formData.actualUserId"
+        class="w-full"
+        show-search
+        option-filter-prop="label"
+        :options="userOptionsAll"
+        placeholder="默认申请人，可改为被报销人"
+        @change="onActualUserChange"
+      />
+    </Form.Item>
+    <Form.Item label="主体公司">
+      <Input :value="formData.entityCompanyName" disabled />
     </Form.Item>
     <Form.Item label="部门">
       <Input :value="formData.deptName" disabled />
@@ -449,8 +495,23 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           v-model:value="line.category"
           class="w-28"
           :options="categoryOptions"
-          placeholder="分类"
+          placeholder="实际费用类型"
           @change="onCategoryChange(index)"
+        />
+        <Select
+          v-if="line.category && subItemOptions(line.category).length"
+          v-model:value="line.subItem"
+          class="w-32"
+          :options="subItemOptions(line.category)"
+          placeholder="子项目"
+          allow-clear
+        />
+        <Select
+          v-model:value="line.invoiceType"
+          class="w-28"
+          :options="invoiceTypeOptions"
+          placeholder="发票类型"
+          allow-clear
         />
         <Input
           v-else

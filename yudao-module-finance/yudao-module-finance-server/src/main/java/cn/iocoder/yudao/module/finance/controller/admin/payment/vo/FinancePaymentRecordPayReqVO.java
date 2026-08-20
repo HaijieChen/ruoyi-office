@@ -41,4 +41,7 @@ public class FinancePaymentRecordPayReqVO {
     @Schema(description = "是否在合计等于申请金额时 complete 出纳任务；默认 true")
     private Boolean completeWhenFullyPaid;
 
+    @Schema(description = "资料/发票是否完整；false 则付款后待补票")
+    private Boolean materialsComplete;
+
 }

@@ -97,11 +97,15 @@ onMounted(load);
 <template>
   <Page auto-content-height>
     <Spin :spinning="loading">
-      <div v-if="bill" class="mx-auto max-w-3xl p-4">
+      <div v-if="bill" class="mx-auto max-w-3xl p-4 print:max-w-none">
+        <div class="mb-2 text-right print:hidden">
+          <Button @click="window.print()">打印（仅发票明细）</Button>
+        </div>
         <Descriptions bordered :column="2" size="small">
           <Descriptions.Item label="标题">{{ bill.processTitle }}</Descriptions.Item>
           <Descriptions.Item label="状态">{{ bill.status }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ bill.periodLabel }}</Descriptions.Item>
+          <Descriptions.Item v-if="bill.entityCompanyName" label="主体公司">{{ bill.entityCompanyName }}</Descriptions.Item>
           <Descriptions.Item label="代票">{{ bill.proxyTicket ? "是" : "否" }}</Descriptions.Item>
           <Descriptions.Item label="收款户名">{{ bill.payeeAccountName }}</Descriptions.Item>
           <Descriptions.Item label="收款账号">{{ bill.payeeAccountNo }}</Descriptions.Item>
@@ -110,7 +114,9 @@ onMounted(load);
         </Descriptions>
         <div class="mt-3 text-sm">
           <div v-for="(line, i) in bill.lines || []" :key="i">
-            {{ line.feeDate }} · {{ line.category }} · {{ line.amount }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
+            {{ line.feeDate }} ·
+            <span class="print:hidden">实际 {{ line.category }}{{ line.subItem ? '/' + line.subItem : '' }} · </span>
+            发票 {{ line.invoiceType || '-' }} · {{ line.amount }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
             {{ line.stayCityTier === 'T1' ? ' · 北上广深' : line.stayCityTier === 'OTHER' ? ' · 其他城市' : '' }}
             {{ line.overLimitReason ? ` · 超标：${line.overLimitReason}` : "" }}
             {{ line.remark ? ` · ${line.remark}` : "" }}

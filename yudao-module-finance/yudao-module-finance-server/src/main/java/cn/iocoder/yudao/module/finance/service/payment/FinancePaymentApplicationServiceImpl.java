@@ -802,7 +802,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .eq("process_instance_id", application.getProcessInstanceId())
                     .set("actual_pay_date", reqVO.getActualPayDate())
                     .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
-                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null)));
+                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null))
+                    .set("materials_status", Boolean.FALSE.equals(reqVO.getMaterialsComplete()) ? "WAIT_INVOICE" : "COMPLETE"));
             if (updated == 0) {
                 throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
             }
@@ -1274,7 +1275,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .eq("id", application.getId())
                     .set("actual_pay_date", reqVO.getActualPayDate())
                     .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
-                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null)));
+                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null))
+                    .set("materials_status", Boolean.FALSE.equals(reqVO.getMaterialsComplete()) ? "WAIT_INVOICE" : "COMPLETE"));
         }
     }
 

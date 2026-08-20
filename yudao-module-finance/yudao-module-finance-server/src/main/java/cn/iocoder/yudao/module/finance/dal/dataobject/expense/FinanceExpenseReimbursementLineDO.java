@@ -26,6 +26,8 @@ public class FinanceExpenseReimbursementLineDO extends TenantBaseDO {
     private Long reimbursementId;
     private String lineKind;
     private String category;
+    private String invoiceType;
+    private String subItem;
     private LocalDate feeDate;
     private BigDecimal amount;
     private String attachments;

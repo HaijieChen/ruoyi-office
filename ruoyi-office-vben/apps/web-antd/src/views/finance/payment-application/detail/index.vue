@@ -330,6 +330,8 @@ watch(
           <span class="text-base font-medium">付款申请</span>
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>{{ detail.status }}</Tag>
+          <Tag v-if="detail.materialsStatus === 'WAIT_INVOICE'" color="red">待补票</Tag>
+          <Button class="print:hidden" size="small" @click="window.print()">打印</Button>
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
             {{ props.nodeKeyName || resolvedNodeKey }}
           </Tag>
@@ -487,7 +489,17 @@ watch(
           </Descriptions.Item>
           <Descriptions.Item label="支付日">{{ detail.actualPayDate || '-' }}</Descriptions.Item>
           <Descriptions.Item label="依据" :span="2">
-            {{ detail.evidenceFileUrls }}
+            <a
+              v-for="(u, i) in String(detail.evidenceFileUrls || '')
+                .split(/[,;]/)
+                .map((s) => s.trim())
+                .filter(Boolean)"
+              :key="i"
+              class="mr-2 text-blue-600"
+              :href="u"
+              target="_blank"
+              rel="noreferrer"
+            >预览{{ i + 1 }}</a>
           </Descriptions.Item>
         </Descriptions>
 

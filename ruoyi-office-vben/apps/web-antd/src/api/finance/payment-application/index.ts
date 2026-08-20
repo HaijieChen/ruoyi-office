@@ -109,6 +109,7 @@ export namespace FinancePaymentApplicationApi {
     erpVoucherNo?: string;
     /** 幂等键（必填；同一支付尝试内稳定复用） */
     idempotencyKey: string;
+    materialsComplete?: boolean;
   }
 }
 

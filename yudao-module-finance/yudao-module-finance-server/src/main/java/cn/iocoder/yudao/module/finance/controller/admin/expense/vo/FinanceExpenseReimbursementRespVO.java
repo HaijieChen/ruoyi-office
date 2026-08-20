@@ -20,7 +20,10 @@ public class FinanceExpenseReimbursementRespVO {
     private String status;
     private String processInstanceId;
     private Long applicantUserId;
+    private Long actualUserId;
     private Long applicantDeptId;
+    private Long entityCompanyDeptId;
+    private String entityCompanyName;
     private LocalDate applyDate;
     private String financeComment;
     private LocalDate actualPayDate;

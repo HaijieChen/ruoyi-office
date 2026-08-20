@@ -9,6 +9,7 @@ import {
   Input,
   InputNumber,
   Select,
+  Switch,
   message,
 } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -40,7 +41,8 @@ const form = ref<{
   salaryLines?: any[];
   taxLines?: any[];
   entityCompanyName?: string;
-}>({});
+  materialsComplete?: boolean;
+}>({ materialsComplete: true });
 
 const accountOptions = ref<{ label: string; value: number }[]>([]);
 
@@ -166,6 +168,7 @@ const [Modal, modalApi] = useVbenModal({
         payVoucherUrl: form.value.payVoucherUrl,
         erpVoucherNo: form.value.erpVoucherNo,
         idempotencyKey: form.value.idempotencyKey!,
+        materialsComplete: form.value.materialsComplete !== false,
       });
       message.success('出纳支付已登记');
       emit('success');
@@ -231,6 +234,10 @@ watch(
       </Form.Item>
       <Form.Item label="ERP 凭证号">
         <Input v-model:value="form.erpVoucherNo" />
+      </Form.Item>
+      <Form.Item label="资料/发票完整">
+        <Switch v-model:checked="form.materialsComplete" />
+        <div class="text-xs text-gray-500">关闭则付款已登记但单据为待补票</div>
       </Form.Item>
     </Form>
   </Modal>
