@@ -125,12 +125,20 @@ async function onInvoiceUpload(index: number, val: string | string[]) {
   if (!line) return;
   line.invoiceFileUrl = url || undefined;
   if (!url) return;
+  const hide = message.loading({ content: '正在识别发票...', duration: 0 });
   try {
     const ocr = await ocrExpenseInvoice(url);
     if (ocr?.feeDate) line.feeDate = String(ocr.feeDate).slice(0, 10);
     if (ocr?.amount != null) line.amount = Number(ocr.amount);
+    if (ocr?.feeDate || ocr?.amount != null) {
+      message.success('已识别日期/金额，请核对');
+    } else {
+      message.warning('未识别到日期或金额，请手填');
+    }
   } catch {
-    // OCR 失败手填
+    message.warning('识别失败，请手填日期和金额');
+  } finally {
+    hide();
   }
 }
 

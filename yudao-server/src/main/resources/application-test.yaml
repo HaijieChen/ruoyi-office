@@ -166,7 +166,7 @@ yudao:
   finance:
     invoice-ocr:
       base-url: http://10.20.32.1:8099
-      timeout-ms: 8000
+      timeout-ms: 60000
 
 justauth:
   enabled: true
