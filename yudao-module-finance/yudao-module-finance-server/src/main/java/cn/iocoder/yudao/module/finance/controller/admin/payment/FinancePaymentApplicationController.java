@@ -123,6 +123,15 @@ public class FinancePaymentApplicationController {
         return success(true);
     }
 
+    @PostMapping("/confirm-materials")
+    @Operation(summary = "出纳确认补票完成并办结出纳任务")
+    @PreAuthorize("@ss.hasPermission('finance:payment-application:record-pay')")
+    public CommonResult<Boolean> confirmMaterials(@RequestParam("id") Long id,
+                                                  @RequestParam("taskId") String taskId) {
+        paymentApplicationService.confirmMaterials(id, taskId, getLoginUserId());
+        return success(true);
+    }
+
     @PutMapping("/update-accounting-subject")
     @Operation(summary = "财务主管节点写入会计科目（F4；仅 ORDINARY）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:query') or @financePaymentAccess.canTaskContextOrOwnerRead(#id)")

@@ -176,6 +176,12 @@ export function recordPayPaymentApplication(
   );
 }
 
+export function confirmPaymentMaterials(id: number, taskId: string) {
+  return requestClient.post<boolean>('/finance/payment-application/confirm-materials', null, {
+    params: { id, taskId },
+  });
+}
+
 /** 财务主管节点写入费用科目/性质（F4） */
 export function updatePaymentAccountingSubject(
   id: number,

@@ -21,6 +21,7 @@ import dayjs from 'dayjs';
 import { getOutingPage } from '#/api/bpm/oa/outing';
 import { getTripPage } from '#/api/bpm/oa/trip';
 import { getSimpleUserList } from '#/api/system/user';
+import { getSimpleDeptList } from '#/api/system/dept';
 import {
   createExpenseReimbursement,
   ocrExpenseInvoice,
@@ -96,7 +97,20 @@ const outingOptions = ref<
   }[]
 >([]);
 const userSex = ref<Record<number, number>>({});
-const userOptionsAll = ref<{ label: string; value: number; deptName?: string }[]>([]);
+const userOptionsAll = ref<{ label: string; value: number; deptId?: number; deptName?: string }[]>([]);
+const deptById = ref<Record<number, { name?: string; parentId?: number; orgType?: string }>>({});
+
+function companyOfDept(deptId?: number) {
+  let id = deptId;
+  for (let i = 0; i < 16 && id; i++) {
+    const d = deptById.value[id];
+    if (!d) return undefined;
+    if (String(d.orgType) === '1') return d.name;
+    if (!d.parentId || d.parentId === id) return undefined;
+    id = d.parentId;
+  }
+  return undefined;
+}
 
 const invoiceTypeOptions = computed(() =>
   getDictOptions('finance_invoice_type', 'string').map((d) => ({ label: d.label, value: String(d.value) })),
@@ -118,15 +132,15 @@ function applyLoginUser() {
   formData.value.userNickname = userStore.userInfo?.nickname || '';
   formData.value.deptName = (userStore.userInfo as any)?.deptName || '';
   formData.value.actualUserId = Number(userStore.userInfo?.id);
-  formData.value.entityCompanyName = (userStore.userInfo as any)?.deptName || '';
+  formData.value.entityCompanyName =
+    companyOfDept(Number((userStore.userInfo as any)?.deptId)) || '';
 }
 
 function onActualUserChange(id?: number) {
   const hit = userOptionsAll.value.find((u) => u.value === Number(id));
   formData.value.deptName = hit?.deptName || formData.value.deptName;
-  formData.value.entityCompanyName = hit?.deptName || '';
-  const u = userOptionsAll.value.find((x) => x.value === Number(id));
-  if (u) formData.value.userNickname = u.label;
+  formData.value.entityCompanyName = companyOfDept(hit?.deptId) || '';
+  if (hit) formData.value.userNickname = hit.label;
 }
 
 function expectedKind(): 'NORMAL' | 'PROXY' {
@@ -359,6 +373,10 @@ const rules: Record<string, Rule[]> = {
 async function submit(): Promise<void> {
   await formRef.value?.validate();
   const kind = expectedKind();
+  if (formData.value.proxyTicket && formData.value.lines.some((l) => l.category && !l.invoiceType)) {
+    message.warning('代票请选择发票类型');
+    throw new Error('invoice type');
+  }
   const lines = formData.value.lines
     .filter((l) => l.category && l.feeDate && Number(l.amount) > 0)
     .map((l) => ({
@@ -420,7 +438,12 @@ applyLoginUser();
 onMounted(async () => {
   await loadPredocOptions();
   try {
-    const users = await getSimpleUserList();
+    const [users, depts] = await Promise.all([getSimpleUserList(), getSimpleDeptList()]);
+    const dmap: Record<number, { name?: string; parentId?: number; orgType?: string }> = {};
+    for (const d of depts || []) {
+      if (d.id != null) dmap[Number(d.id)] = d;
+    }
+    deptById.value = dmap;
     const map: Record<number, number> = {};
     userOptionsAll.value = (users || []).map((u) => {
       if (u.id != null && (u as any).sex != null) {
@@ -429,10 +452,12 @@ onMounted(async () => {
       return {
         label: u.nickname || String(u.id),
         value: Number(u.id),
+        deptId: u.deptId,
         deptName: (u as any).deptName,
       };
     });
     userSex.value = map;
+    onActualUserChange(formData.value.actualUserId);
   } catch {
     userSex.value = {};
   }
@@ -491,22 +516,14 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         class="mb-2 flex flex-wrap items-center gap-2"
       >
         <Select
-          v-if="!formData.proxyTicket"
           v-model:value="line.category"
           class="w-28"
           :options="categoryOptions"
-          placeholder="实际费用类型"
-          @change="onCategoryChange(index)"
-        />
-        <Input
-          v-else
-          v-model:value="line.category"
-          class="w-28"
           placeholder="费用类型"
           @change="onCategoryChange(index)"
         />
         <Select
-          v-if="!formData.proxyTicket && line.category && subItemOptions(line.category).length"
+          v-if="line.category && subItemOptions(line.category).length"
           v-model:value="line.subItem"
           class="w-32"
           :options="subItemOptions(line.category)"
@@ -514,12 +531,11 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
         />
         <Select
-          v-if="!formData.proxyTicket"
+          v-if="formData.proxyTicket"
           v-model:value="line.invoiceType"
           class="w-28"
           :options="invoiceTypeOptions"
           placeholder="发票类型"
-          allow-clear
         />
         <Select
           v-if="needsPredoc(line)"

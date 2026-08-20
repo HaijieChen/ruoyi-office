@@ -10,7 +10,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useTabs } from '@vben/hooks';
-import { useUserStore } from '@vben/stores';
+import { useAccessStore, useUserStore } from '@vben/stores';
 
 import {
   Alert,
@@ -30,6 +30,7 @@ import {
 import dayjs, { type Dayjs } from 'dayjs';
 
 import {
+  confirmPaymentMaterials,
   getPaymentApplication,
   recordPayPaymentApplication,
   updatePaymentAccountingSubject,
@@ -136,6 +137,33 @@ const resolvedNodeKey = computed(() => resolveNodeKey());
 const resolvedTaskId = computed(() => resolveTaskId());
 const isFinanceNode = computed(() => FINANCE_KEYS.has(resolvedNodeKey.value));
 const isCashierNode = computed(() => CASHIER_KEYS.has(resolvedNodeKey.value));
+const accessStore = useAccessStore();
+
+async function onConfirmMaterials() {
+  const id = detail.value?.id;
+  const tid = resolvedTaskId.value;
+  if (!id || !tid) {
+    message.error('缺少任务 id');
+    return;
+  }
+  await confirmPaymentMaterials(id, tid);
+  message.success('已确认资料齐全');
+  await loadData();
+}
+
+async function previewEvidence(url: string) {
+  const token = accessStore.accessToken;
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, { method: 'GET', headers, credentials: 'include' });
+  if (!res.ok) {
+    message.error('预览失败');
+    return;
+  }
+  const blob = await res.blob();
+  const obj = URL.createObjectURL(blob);
+  window.open(obj, '_blank');
+}
 
 const canResubmit = computed(() => {
   const d = detail.value;
@@ -331,6 +359,13 @@ watch(
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>{{ detail.status }}</Tag>
           <Tag v-if="detail.materialsStatus === 'WAIT_INVOICE'" color="red">待补票</Tag>
+          <Button
+            v-if="detail.materialsStatus === 'WAIT_INVOICE' && isCashierNode"
+            class="print:hidden"
+            size="small"
+            type="primary"
+            @click="onConfirmMaterials"
+          >确认资料齐全</Button>
           <Button class="print:hidden" size="small" @click="window.print()">打印</Button>
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
             {{ props.nodeKeyName || resolvedNodeKey }}
@@ -495,10 +530,8 @@ watch(
                 .map((s) => s.trim())
                 .filter(Boolean)"
               :key="i"
-              class="mr-2 text-blue-600"
-              :href="u"
-              target="_blank"
-              rel="noreferrer"
+              class="mr-2 cursor-pointer text-blue-600"
+              @click.prevent="previewEvidence(u)"
             >预览{{ i + 1 }}</a>
           </Descriptions.Item>
         </Descriptions>

@@ -99,7 +99,7 @@ onMounted(load);
     <Spin :spinning="loading">
       <div v-if="bill" class="mx-auto max-w-3xl p-4 print:max-w-none">
         <div class="mb-2 text-right print:hidden">
-          <Button @click="window.print()">打印（仅发票明细）</Button>
+          <Button @click="window.print()">打印</Button>
         </div>
         <Descriptions bordered :column="2" size="small">
           <Descriptions.Item label="标题">{{ bill.processTitle }}</Descriptions.Item>
@@ -115,8 +115,9 @@ onMounted(load);
         <div class="mt-3 text-sm">
           <div v-for="(line, i) in bill.lines || []" :key="i">
             {{ line.feeDate }} ·
-            <span class="print:hidden">实际 {{ line.category }}{{ line.subItem ? '/' + line.subItem : '' }} · </span>
-            发票 {{ line.invoiceType || '-' }} · {{ line.amount }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
+            <span :class="bill.proxyTicket ? 'print:hidden' : ''">{{ line.category }}{{ line.subItem ? '/' + line.subItem : '' }}</span>
+            <span v-if="bill.proxyTicket"> · 发票 {{ line.invoiceType || '-' }}</span>
+            · {{ line.amount }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
             {{ line.stayCityTier === 'T1' ? ' · 北上广深' : line.stayCityTier === 'OTHER' ? ' · 其他城市' : '' }}
             {{ line.overLimitReason ? ` · 超标：${line.overLimitReason}` : "" }}
             {{ line.remark ? ` · ${line.remark}` : "" }}

@@ -64,9 +64,17 @@ class FinanceExpenseReimbursementServiceImplTest {
         FinanceExpensePredocService predoc = mock(FinanceExpensePredocService.class);
         when(predoc.isApprovedTrip(anyLong(), any())).thenReturn(true);
         when(predoc.isApprovedOuting(anyLong(), any())).thenReturn(true);
+        cn.iocoder.yudao.module.system.api.dept.DeptApi deptApi =
+                mock(cn.iocoder.yudao.module.system.api.dept.DeptApi.class);
+        cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO company =
+                new cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO();
+        company.setId(10L);
+        company.setName("测试公司");
+        company.setOrgType("1");
+        when(deptApi.getDept(10L)).thenReturn(CommonResult.success(company));
         service = new FinanceExpenseReimbursementServiceImpl(mapper, lineMapper, users, bpm,
                 mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class),
-                predoc);
+                predoc, deptApi);
     }
 
     @Test

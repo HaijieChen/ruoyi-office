@@ -16,6 +16,8 @@ import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimburse
 import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementMapper;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
+import cn.iocoder.yudao.module.system.api.dept.DeptApi;
+import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.springframework.stereotype.Service;
@@ -64,19 +66,22 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private final FinanceBpmProcessInstanceApi processInstanceApi;
     private final FinanceCompanyBankAccountService companyBankAccountService;
     private final FinanceExpensePredocService predocService;
+    private final DeptApi deptApi;
 
     public FinanceExpenseReimbursementServiceImpl(FinanceExpenseReimbursementMapper mapper,
                                                   FinanceExpenseReimbursementLineMapper lineMapper,
                                                   AdminUserApi adminUserApi,
                                                   FinanceBpmProcessInstanceApi processInstanceApi,
                                                   FinanceCompanyBankAccountService companyBankAccountService,
-                                                  FinanceExpensePredocService predocService) {
+                                                  FinanceExpensePredocService predocService,
+                                                  DeptApi deptApi) {
         this.mapper = mapper;
         this.lineMapper = lineMapper;
         this.adminUserApi = adminUserApi;
         this.processInstanceApi = processInstanceApi;
         this.companyBankAccountService = companyBankAccountService;
         this.predocService = predocService;
+        this.deptApi = deptApi;
     }
 
     @Override
@@ -134,6 +139,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (user.getDeptId() == null) {
             throw exception(EXPENSE_REIMBURSEMENT_DEPT_REQUIRED);
         }
+        DeptRespDTO company = resolveCompany(user.getDeptId());
         String nickname = StrUtil.blankToDefault(user.getNickname(), String.valueOf(actualUserId));
         String title = "【报销】-" + nickname + "-" + reqVO.getPeriodLabel().trim() + "-" + apply.toPlainString();
 
@@ -150,6 +156,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .applicantUserId(userId)
                 .actualUserId(actualUserId)
                 .applicantDeptId(user.getDeptId())
+                .entityCompanyDeptId(company == null ? null : company.getId())
+                .entityCompanyName(company == null ? null : company.getName())
                 .applyDate(LocalDate.now())
                 .build();
         mapper.insert(header);
@@ -426,6 +434,26 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         String t = url.trim();
         return t.startsWith("http://") || t.startsWith("https://")
                 || t.startsWith("/") || t.contains("/admin-api/infra/file/");
+    }
+
+    private DeptRespDTO resolveCompany(Long deptId) {
+        Long id = deptId;
+        for (int i = 0; i < 16 && id != null && id != 0L; i++) {
+            CommonResult<DeptRespDTO> r = deptApi.getDept(id);
+            DeptRespDTO d = r == null ? null : r.getCheckedData();
+            if (d == null) {
+                return null;
+            }
+            if ("1".equals(String.valueOf(d.getOrgType()))) {
+                return d;
+            }
+            Long parent = d.getParentId();
+            if (parent == null || parent.equals(id)) {
+                return null;
+            }
+            id = parent;
+        }
+        return null;
     }
 
     private AdminUserRespDTO requireUser(Long userId) {

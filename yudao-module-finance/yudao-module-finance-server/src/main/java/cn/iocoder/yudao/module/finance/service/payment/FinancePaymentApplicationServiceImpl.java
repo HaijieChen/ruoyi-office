@@ -808,6 +808,9 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
             }
             boolean complete = reqVO.getCompleteWhenFullyPaid() == null || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
+            if (Boolean.FALSE.equals(reqVO.getMaterialsComplete())) {
+                complete = false;
+            }
             if (complete) {
                 completeCashierTask(task);
             }
@@ -815,6 +818,22 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
         }
         // 未足额：仅落支付明细，不 complete（允许多笔）
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmMaterials(Long id, String taskId, Long userId) {
+        FinancePaymentApplicationDO application = applicationMapper.selectByIdForUpdate(id);
+        if (application == null) {
+            throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
+        }
+        applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+                .eq("id", id)
+                .set("materials_status", "COMPLETE"));
+        if (StrUtil.isNotBlank(taskId)) {
+            Task task = requireCashierTask(taskId, application, userId);
+            completeCashierTask(task);
+        }
     }
 
     @Override

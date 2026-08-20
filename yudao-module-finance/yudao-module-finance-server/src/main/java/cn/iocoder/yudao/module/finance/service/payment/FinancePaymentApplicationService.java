@@ -77,6 +77,9 @@ public interface FinancePaymentApplicationService {
 
     void recordPay(FinancePaymentRecordPayReqVO reqVO, Long userId);
 
+    /** 出纳确认补票完成并 complete 出纳任务（已付款） */
+    void confirmMaterials(Long id, String taskId, Long userId);
+
     List<FinancePaymentPayLineRespVO> listPayLines(Long paymentApplicationId);
 
     List<FinancePaymentSalaryLineRespVO> listSalaryLines(Long paymentApplicationId);
