@@ -143,11 +143,17 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
   }
 }
 
-const pendingOcrFiles = new Map<number, File>();
+function rawUploadFile(file: File) {
+  const inner = (file as any)?.originFileObj;
+  return inner instanceof Blob ? inner : file;
+}
 
 async function uploadInvoice(index: number, file: File, onUploadProgress?: any) {
-  pendingOcrFiles.set(index, file);
-  return httpRequest(file, onUploadProgress);
+  const raw = rawUploadFile(file);
+  const res = await httpRequest(raw, onUploadProgress);
+  const url = typeof res === 'string' ? res : String((res as any)?.url || '');
+  if (raw instanceof Blob) await runInvoiceOcr(index, url, raw);
+  return res;
 }
 
 async function onInvoiceUpload(index: number, val: string | string[]) {
@@ -155,10 +161,6 @@ async function onInvoiceUpload(index: number, val: string | string[]) {
   const line = formData.value.lines[index];
   if (!line) return;
   line.invoiceFileUrl = url || undefined;
-  if (!url) return;
-  const file = pendingOcrFiles.get(index);
-  pendingOcrFiles.delete(index);
-  await runInvoiceOcr(index, url, file);
 }
 
 function onPredocChange(index: number, processInstanceId?: string) {

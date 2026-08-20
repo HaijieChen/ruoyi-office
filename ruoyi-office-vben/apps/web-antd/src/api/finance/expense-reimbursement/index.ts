@@ -63,12 +63,14 @@ export function createNoInvoiceExpense(data: FinanceExpenseApi.CreateForm) {
 }
 
 export function ocrExpenseInvoice(fileUrl: string, file?: File) {
-  if (file) {
-    const data = new FormData();
-    data.append('file', file);
+  const raw =
+    file && (file as any).originFileObj instanceof Blob
+      ? (file as any).originFileObj
+      : file;
+  if (raw instanceof Blob) {
     return requestClient.upload<{ feeDate?: string; amount?: number }>(
       '/finance/expense-reimbursement/ocr-invoice',
-      data,
+      { file: raw },
     );
   }
   return requestClient.post<{ feeDate?: string; amount?: number }>(
