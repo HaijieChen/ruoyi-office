@@ -344,17 +344,51 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         }
     }
 
-    /** 差旅住宿标准按出差/外出城市裁定，只做超标说明，不卡控金额。 */
+    /** 差旅住宿标准：房间数×城市标准×天数，只做超标说明，不卡控金额。 */
     void validateStayStandard(FinanceExpenseReimbursementLineReqVO line, Long userId) {
         String cat = line.getCategory() == null ? "" : line.getCategory().trim();
         if (!FinanceExpensePredocService.CAT_TRAVEL.equals(cat)) {
             return;
         }
-        String city = predocService.resolveCity(userId, line.getPredocType(), line.getPredocProcessInstanceId());
-        applyStayStandard(line, city);
+        FinanceExpensePredocService.StayStay stay = predocService.resolveStay(
+                userId, line.getPredocType(), line.getPredocProcessInstanceId());
+        if (stay == null) {
+            applyStayStandard(line, null);
+            return;
+        }
+        java.util.LinkedHashSet<Long> people = new java.util.LinkedHashSet<>();
+        if (stay.applicantId() != null) {
+            people.add(stay.applicantId());
+        }
+        if (stay.companionIds() != null) {
+            people.addAll(stay.companionIds());
+        }
+        java.util.List<Integer> sexes = new java.util.ArrayList<>();
+        if (!people.isEmpty()) {
+            CommonResult<java.util.List<AdminUserRespDTO>> users = adminUserApi.getUserList(people);
+            java.util.Map<Long, AdminUserRespDTO> map = new java.util.HashMap<>();
+            if (users != null && users.getData() != null) {
+                for (AdminUserRespDTO u : users.getData()) {
+                    if (u != null && u.getId() != null) {
+                        map.put(u.getId(), u);
+                    }
+                }
+            }
+            for (Long id : people) {
+                AdminUserRespDTO u = map.get(id);
+                sexes.add(u == null ? null : u.getSex());
+            }
+        }
+        int rooms = Math.max(1, FinanceStayCityCaps.rooms(sexes));
+        int nights = FinanceStayCityCaps.nights(stay.start(), stay.end());
+        applyStayStandard(line, stay.city(), rooms, nights);
     }
 
     static void applyStayStandard(FinanceExpenseReimbursementLineReqVO line, String city) {
+        applyStayStandard(line, city, 1, 1);
+    }
+
+    static void applyStayStandard(FinanceExpenseReimbursementLineReqVO line, String city, int rooms, int nights) {
         String cat = line.getCategory() == null ? "" : line.getCategory().trim();
         if (!FinanceExpensePredocService.CAT_TRAVEL.equals(cat)) {
             return;
@@ -364,7 +398,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             throw exception(EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED);
         }
         line.setStayCityTier(tier);
-        java.math.BigDecimal cap = FinanceStayCityCaps.cap(tier);
+        java.math.BigDecimal cap = FinanceStayCityCaps.stayCap(tier, rooms, nights);
         if (line.getAmount() != null && line.getAmount().compareTo(cap) > 0
                 && StrUtil.isBlank(line.getOverLimitReason())) {
             throw exception(EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED);

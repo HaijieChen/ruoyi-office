@@ -66,17 +66,21 @@ public class BpmOATripServiceImpl implements BpmOATripService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createTrip(Long userId, BpmOATripCreateReqVO createReqVO) {
+        java.util.List<Long> companionIds = resolveCompanionIds(createReqVO);
         if (StrUtil.isBlank(createReqVO.getDestination()) || StrUtil.isBlank(createReqVO.getReason())
-                || createReqVO.getCompanionUserId() == null) {
+                || companionIds.isEmpty()) {
             throw exception(OA_TRIP_FIELD_REQUIRED);
         }
-        if (Objects.equals(createReqVO.getCompanionUserId(), userId)) {
+        if (companionIds.contains(userId)) {
             throw exception(OA_TRIP_COMPANION_INVALID);
         }
-        CommonResult<AdminUserRespDTO> companion = adminUserApi.getUser(createReqVO.getCompanionUserId());
-        if (companion == null || companion.getData() == null) {
+        CommonResult<java.util.List<AdminUserRespDTO>> companions = adminUserApi.getUserList(companionIds);
+        java.util.List<AdminUserRespDTO> companionUsers = companions == null ? null : companions.getData();
+        if (companionUsers == null || companionUsers.size() != companionIds.size()) {
             throw exception(OA_TRIP_COMPANION_INVALID);
         }
+        createReqVO.setCompanionUserIds(companionIds);
+        createReqVO.setCompanionUserId(companionIds.get(0));
 
         BigDecimal hours = OaDurationHours.calc(createReqVO.getStartTime(), createReqVO.getEndTime())
                 .orElseThrow(() -> exception(OA_DURATION_INVALID));
@@ -86,6 +90,8 @@ public class BpmOATripServiceImpl implements BpmOATripService {
                 .setHours(hours)
                 .setStatus(BpmTaskStatusEnum.RUNNING.getStatus())
                 .setAttendanceSyncStatus(OaAttendanceSyncStatusEnum.NOT_SYNCED.getStatus());
+        trip.setCompanionUserIds(companionIds);
+        trip.setCompanionUserId(companionIds.get(0));
         tripMapper.insert(trip);
 
         Map<String, Object> processInstanceVariables = new HashMap<>();
@@ -133,6 +139,21 @@ public class BpmOATripServiceImpl implements BpmOATripService {
     public PageResult<BpmOATripDO> getTripPage(Long userId, BpmOATripPageReqVO pageReqVO) {
         Long filterUserId = securityFrameworkService.hasPermission(QUERY_PERMISSION) ? null : userId;
         return tripMapper.selectPage(filterUserId, pageReqVO);
+    }
+
+    static java.util.List<Long> resolveCompanionIds(BpmOATripCreateReqVO vo) {
+        java.util.LinkedHashSet<Long> ids = new java.util.LinkedHashSet<>();
+        if (vo.getCompanionUserIds() != null) {
+            for (Long id : vo.getCompanionUserIds()) {
+                if (id != null) {
+                    ids.add(id);
+                }
+            }
+        }
+        if (ids.isEmpty() && vo.getCompanionUserId() != null) {
+            ids.add(vo.getCompanionUserId());
+        }
+        return new java.util.ArrayList<>(ids);
     }
 
 }

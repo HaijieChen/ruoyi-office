@@ -29,7 +29,7 @@ const formData = ref<{
   deptName?: string;
   destination?: string;
   reason?: string;
-  companionUserId?: number;
+  companionUserIds?: number[];
   range?: [Dayjs, Dayjs];
 }>({});
 
@@ -53,7 +53,7 @@ async function reset(_opts?: { id?: number; mode?: string }) {
 const rules: Record<string, Rule[]> = {
   destination: [{ required: true, message: '请选择出差城市', trigger: 'change' }],
   reason: [{ required: true, message: '请填写出差原因', trigger: 'blur' }],
-  companionUserId: [{ required: true, message: '请选择同行人员', trigger: 'change' }],
+  companionUserIds: [{ required: true, type: 'array', min: 1, message: '请选择同行人员', trigger: 'change' }],
   range: [{ required: true, message: '请选择开始和结束日期', trigger: 'change' }],
 };
 
@@ -64,7 +64,8 @@ async function submit(): Promise<void> {
     message.warning('结束日期不能早于开始日期');
     throw new Error('invalid range');
   }
-  if (formData.value.companionUserId === userStore.userInfo?.id) {
+  const companionUserIds = (formData.value.companionUserIds || []).map(Number).filter(Boolean);
+  if (companionUserIds.length === 0 || companionUserIds.includes(Number(userStore.userInfo?.id))) {
     message.warning('同行人员须为组织内其他人员');
     throw new Error('companion');
   }
@@ -73,7 +74,7 @@ async function submit(): Promise<void> {
     await createTrip({
       destination: String(formData.value.destination).trim(),
       reason: String(formData.value.reason).trim(),
-      companionUserId: Number(formData.value.companionUserId),
+      companionUserIds,
       startTime: range[0].startOf('day').valueOf(),
       endTime: range[1].endOf('day').valueOf(),
     });
@@ -132,14 +133,15 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     <Form.Item label="出差原因" name="reason">
       <Input.TextArea v-model:value="formData.reason" :rows="3" placeholder="请填写出差原因" />
     </Form.Item>
-    <Form.Item label="同行人员" name="companionUserId">
+    <Form.Item label="同行人员" name="companionUserIds">
       <Select
-        v-model:value="formData.companionUserId"
+        v-model:value="formData.companionUserIds"
         class="w-full"
+        mode="multiple"
         show-search
         option-filter-prop="label"
         :options="userOptions"
-        placeholder="从组织架构选择 1 人"
+        placeholder="可选择多人"
       />
     </Form.Item>
   </Form>

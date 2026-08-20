@@ -81,6 +81,9 @@ public class BpmOATripController {
             if (vo.getCompanionUserId() != null) {
                 userIds.add(vo.getCompanionUserId());
             }
+            if (vo.getCompanionUserIds() != null) {
+                userIds.addAll(vo.getCompanionUserIds());
+            }
         }
         Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(userIds);
         Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(convertSet(userMap.values(), AdminUserRespDTO::getDeptId));
@@ -90,9 +93,21 @@ public class BpmOATripController {
                 continue;
             }
             vo.setUserNickname(user.getNickname());
-            AdminUserRespDTO companion = userMap.get(vo.getCompanionUserId());
-            if (companion != null) {
-                vo.setCompanionNickname(companion.getNickname());
+            java.util.List<Long> companionIds = vo.getCompanionUserIds();
+            if ((companionIds == null || companionIds.isEmpty()) && vo.getCompanionUserId() != null) {
+                companionIds = java.util.List.of(vo.getCompanionUserId());
+                vo.setCompanionUserIds(companionIds);
+            }
+            if (companionIds != null && !companionIds.isEmpty()) {
+                java.util.List<String> names = new java.util.ArrayList<>();
+                for (Long cid : companionIds) {
+                    AdminUserRespDTO companion = userMap.get(cid);
+                    if (companion != null) {
+                        names.add(companion.getNickname());
+                    }
+                }
+                vo.setCompanionNicknames(names);
+                vo.setCompanionNickname(String.join("、", names));
             }
             DeptRespDTO dept = deptMap.get(user.getDeptId());
             if (dept != null) {

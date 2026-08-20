@@ -28,6 +28,8 @@ public class BpmOATripRespVO {
     private String reason;
     private Long companionUserId;
     private String companionNickname;
+    private java.util.List<Long> companionUserIds;
+    private java.util.List<String> companionNicknames;
 
     @Schema(description = "开始时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime startTime;

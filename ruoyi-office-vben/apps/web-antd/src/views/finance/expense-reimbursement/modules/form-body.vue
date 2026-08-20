@@ -20,6 +20,7 @@ import dayjs from 'dayjs';
 
 import { getOutingPage } from '#/api/bpm/oa/outing';
 import { getTripPage } from '#/api/bpm/oa/trip';
+import { getSimpleUserList } from '#/api/system/user';
 import {
   createExpenseReimbursement,
   ocrExpenseInvoice,
@@ -66,8 +67,30 @@ const formData = ref<{
   lines: [{}],
 });
 
-const tripOptions = ref<{ label: string; value: string; type: 'TRIP'; city?: string }[]>([]);
-const outingOptions = ref<{ label: string; value: string; type: 'OUTING'; city?: string }[]>([]);
+const tripOptions = ref<
+  {
+    label: string;
+    value: string;
+    type: 'TRIP';
+    city?: string;
+    startTime?: number;
+    endTime?: number;
+    userId?: number;
+    companionUserIds?: number[];
+  }[]
+>([]);
+const outingOptions = ref<
+  {
+    label: string;
+    value: string;
+    type: 'OUTING';
+    city?: string;
+    startTime?: number;
+    endTime?: number;
+    userId?: number;
+  }[]
+>([]);
+const userSex = ref<Record<number, number>>({});
 
 const categoryOptions = computed(() =>
   getDictOptions('finance_expense_category', 'string').map((d) => ({
@@ -103,6 +126,10 @@ async function loadPredocOptions() {
         value: String(t.processInstanceId),
         type: 'TRIP' as const,
         city: t.destination,
+        startTime: t.startTime,
+        endTime: t.endTime,
+        userId: t.userId,
+        companionUserIds: t.companionUserIds || (t.companionUserId ? [t.companionUserId] : []),
         label: `出差#${t.id} ${t.destination || ''}`.trim(),
       }));
     outingOptions.value = (outings?.list || [])
@@ -111,6 +138,9 @@ async function loadPredocOptions() {
         value: String(t.processInstanceId),
         type: 'OUTING' as const,
         city: t.location,
+        startTime: t.startTime,
+        endTime: t.endTime,
+        userId: t.userId,
         label: `外出#${t.id} ${t.location || ''}`.trim(),
       }));
   } catch {
@@ -186,13 +216,48 @@ function predocCity(line: LineRow) {
   )?.city;
 }
 
-function stayCapFromCity(city?: string) {
+function stayRate(city?: string) {
   if (!city) return 300;
   return ['北京', '上海', '广州', '深圳'].includes(city) ? 400 : 300;
 }
 
+function roomsForSameGender(n: number) {
+  if (n <= 0) return 0;
+  return n % 2 === 0 ? n / 2 : (n + 1) / 2;
+}
+
+function stayRooms(userIds: number[]) {
+  let male = 0;
+  let female = 0;
+  let unknown = 0;
+  for (const id of userIds) {
+    const sex = userSex.value[id];
+    if (sex === 1) male += 1;
+    else if (sex === 2) female += 1;
+    else unknown += 1;
+  }
+  return Math.max(1, roomsForSameGender(male) + roomsForSameGender(female) + unknown);
+}
+
+function stayNights(start?: number, end?: number) {
+  if (!start || !end) return 1;
+  const days = dayjs(end).startOf('day').diff(dayjs(start).startOf('day'), 'day');
+  return Math.max(1, days);
+}
+
+function stayCapForLine(line: LineRow) {
+  const hit = [...tripOptions.value, ...outingOptions.value].find(
+    (o) => o.value === line.predocProcessInstanceId,
+  );
+  const rate = stayRate(hit?.city);
+  const nights = stayNights(hit?.startTime, hit?.endTime);
+  const people = [hit?.userId, ...((hit as any)?.companionUserIds || [])].filter(Boolean).map(Number);
+  const rooms = stayRooms(people.length ? people : [Number(userStore.userInfo?.id)]);
+  return rate * rooms * nights;
+}
+
 function needOverLimitReason(line: LineRow) {
-  return line.category === 'travel' && Number(line.amount) > stayCapFromCity(predocCity(line));
+  return line.category === 'travel' && Number(line.amount) > stayCapForLine(line);
 }
 
 function addLine() {
@@ -294,7 +359,21 @@ async function submit(): Promise<void> {
 }
 
 applyLoginUser();
-onMounted(loadPredocOptions);
+onMounted(async () => {
+  await loadPredocOptions();
+  try {
+    const users = await getSimpleUserList();
+    const map: Record<number, number> = {};
+    for (const u of users || []) {
+      if (u.id != null && (u as any).sex != null) {
+        map[Number(u.id)] = Number((u as any).sex);
+      }
+    }
+    userSex.value = map;
+  } catch {
+    userSex.value = {};
+  }
+});
 defineExpose({ reset, submit, getPredictVariables, submitting });
 </script>
 
@@ -390,7 +469,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         v-if="formData.lines.some((l) => l.category === 'travel')"
         class="mt-1 text-xs text-amber-700"
       >
-        住宿标准按出差/外出城市裁定：北上广深 400 元/晚，其他 300。超标不拦提单，须填超标原因。
+        住宿上限＝同性房间数×城市标准×天数（结束日-开始日，至少 1 天）。男女分开算房间；奇数 (n+1)/2 间、偶数 n/2 间。北上广深 400、其他 300。超标须填原因，不拦金额。
       </div>
     </Form.Item>
   </Form>

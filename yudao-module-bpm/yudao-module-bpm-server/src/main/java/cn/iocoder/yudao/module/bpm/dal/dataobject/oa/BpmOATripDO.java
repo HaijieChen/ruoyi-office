@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.yudao.module.bpm.enums.OaAttendanceSyncStatusEnum;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
@@ -17,7 +18,7 @@ import java.time.LocalDateTime;
 /**
  * OA 出差申请 DO
  */
-@TableName("bpm_oa_business_trip")
+@TableName(value = "bpm_oa_business_trip", autoResultMap = true)
 @KeySequence("bpm_oa_business_trip_seq")
 @Data
 @Builder
@@ -38,6 +39,9 @@ public class BpmOATripDO extends BaseDO {
     private String destination;
     private String reason;
     private Long companionUserId;
+    /** 同行人员用户编号，逗号分隔 */
+    @TableField(typeHandler = cn.iocoder.yudao.framework.mybatis.core.type.LongListTypeHandler.class)
+    private java.util.List<Long> companionUserIds;
     /**
      * 开始时间
      */

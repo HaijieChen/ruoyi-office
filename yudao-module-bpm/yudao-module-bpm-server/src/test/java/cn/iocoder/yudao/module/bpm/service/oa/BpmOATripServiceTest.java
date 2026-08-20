@@ -74,6 +74,7 @@ class BpmOATripServiceTest {
         companion.setId(2L);
         companion.setNickname("李四");
         when(adminUserApi.getUser(2L)).thenReturn(CommonResult.success(companion));
+        when(adminUserApi.getUserList(org.mockito.ArgumentMatchers.any())).thenReturn(CommonResult.success(java.util.List.of(companion)));
         service = new BpmOATripServiceImpl();
         ReflectionTestUtils.setField(service, "tripMapper", tripMapper);
         ReflectionTestUtils.setField(service, "processInstanceApi", processInstanceApi);
@@ -102,6 +103,7 @@ class BpmOATripServiceTest {
         assertEquals("北京", inserted.getDestination());
         assertEquals("客户拜访", inserted.getReason());
         assertEquals(2L, inserted.getCompanionUserId());
+        assertEquals(java.util.List.of(2L), inserted.getCompanionUserIds());
         assertEquals(0, new BigDecimal("1.5").compareTo(inserted.getHours()));
         assertEquals(BpmTaskStatusEnum.RUNNING.getStatus(), inserted.getStatus());
         assertEquals(OaAttendanceSyncStatusEnum.NOT_SYNCED.getStatus(), inserted.getAttendanceSyncStatus());

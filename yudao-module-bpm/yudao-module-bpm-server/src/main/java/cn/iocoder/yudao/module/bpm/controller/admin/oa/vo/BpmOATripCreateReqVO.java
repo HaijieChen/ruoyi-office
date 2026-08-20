@@ -28,9 +28,11 @@ public class BpmOATripCreateReqVO {
     @NotBlank(message = "出差原因不能为空")
     private String reason;
 
-    @Schema(description = "同行人员用户编号", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "同行人员不能为空")
+    @Schema(description = "同行人员用户编号（兼容旧单选）")
     private Long companionUserId;
+
+    @Schema(description = "同行人员用户编号列表", requiredMode = Schema.RequiredMode.REQUIRED)
+    private java.util.List<Long> companionUserIds;
 
     @Schema(description = "开始时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "开始时间不能为空")

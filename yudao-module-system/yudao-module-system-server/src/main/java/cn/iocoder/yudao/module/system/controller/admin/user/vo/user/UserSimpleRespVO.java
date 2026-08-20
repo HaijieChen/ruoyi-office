@@ -32,4 +32,7 @@ public class UserSimpleRespVO {
     @Schema(description = "用户名称", example = "芋艿")
     private String username;
 
+    @Schema(description = "用户性别", example = "1")
+    private Integer sex;
+
 }

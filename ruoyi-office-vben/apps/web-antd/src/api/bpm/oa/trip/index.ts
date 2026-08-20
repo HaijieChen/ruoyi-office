@@ -14,6 +14,8 @@ export namespace BpmOATripApi {
     reason?: string;
     companionUserId?: number;
     companionNickname?: string;
+    companionUserIds?: number[];
+    companionNicknames?: string[];
     startTime: number;
     endTime: number;
     hours?: number;
@@ -25,7 +27,8 @@ export namespace BpmOATripApi {
   export interface TripCreate {
     destination: string;
     reason: string;
-    companionUserId: number;
+    companionUserId?: number;
+    companionUserIds: number[];
     startTime: number;
     endTime: number;
   }
