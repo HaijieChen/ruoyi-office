@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
@@ -56,7 +57,12 @@ public class FinanceExpenseReimbursementController {
 
     @PostMapping("/ocr-invoice")
     @Operation(summary = "识别发票日期与金额（失败返回空字段）")
-    public CommonResult<FinanceInvoiceOcrClient.Result> ocrInvoice(@RequestParam("fileUrl") String fileUrl) {
+    public CommonResult<FinanceInvoiceOcrClient.Result> ocrInvoice(
+            @RequestParam(value = "fileUrl", required = false) String fileUrl,
+            @RequestParam(value = "file", required = false) MultipartFile file) throws Exception {
+        if (file != null && !file.isEmpty()) {
+            return success(invoiceOcrClient.recognizeBytes(file.getBytes()));
+        }
         return success(invoiceOcrClient.recognize(fileUrl));
     }
 

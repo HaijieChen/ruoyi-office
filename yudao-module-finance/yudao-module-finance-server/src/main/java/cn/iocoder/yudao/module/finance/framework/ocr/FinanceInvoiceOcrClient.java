@@ -27,25 +27,23 @@ public class FinanceInvoiceOcrClient {
     }
 
     public Result recognize(String invoiceFileUrl) {
-        if (properties.getBaseUrl() == null || properties.getBaseUrl().isBlank()) {
-            return Result.empty();
-        }
         if (StrUtil.isBlank(invoiceFileUrl)) {
             return Result.empty();
         }
+        return recognizeBytes(download(invoiceFileUrl.trim()));
+    }
+
+    public Result recognizeBytes(byte[] bytes) {
+        if (properties.getBaseUrl() == null || properties.getBaseUrl().isBlank()) {
+            return Result.empty();
+        }
+        if (bytes == null || bytes.length == 0) {
+            return Result.empty();
+        }
         try {
-            byte[] bytes = download(invoiceFileUrl.trim());
             String endpoint = properties.getBaseUrl().replaceAll("/+$", "") + "/ocr/invoice";
             JSONObject payload = new JSONObject();
-            if (bytes != null && bytes.length > 0) {
-                payload.set("fileBase64", java.util.Base64.getEncoder().encodeToString(bytes));
-            } else {
-                String abs = invoiceFileUrl.trim();
-                if (abs.startsWith("/")) {
-                    abs = "http://127.0.0.1:48080" + abs;
-                }
-                payload.set("fileUrl", abs);
-            }
+            payload.set("fileBase64", java.util.Base64.getEncoder().encodeToString(bytes));
             HttpResponse resp = HttpRequest.post(endpoint)
                     .timeout(Math.max(properties.getTimeoutMs(), 15000))
                     .body(JSONUtil.toJsonStr(payload))
@@ -58,21 +56,42 @@ public class FinanceInvoiceOcrClient {
             JSONObject json = JSONUtil.parseObj(resp.body());
             return new Result(parseDate(json.getStr("feeDate")), json.getBigDecimal("amount"), json.getStr("rawText"));
         } catch (Exception ex) {
-            log.warn("[ocr] failed url={}: {}", invoiceFileUrl, ex.toString());
+            log.warn("[ocr] failed: {}", ex.toString());
             return Result.empty();
         }
     }
 
     private byte[] download(String url) {
-        String abs = url;
-        if (abs.startsWith("/")) {
-            abs = "http://127.0.0.1:48080" + abs;
-        }
-        HttpResponse resp = HttpRequest.get(abs).timeout(10000).execute();
+        String abs = encodeUrl(url.startsWith("/") ? "http://127.0.0.1:48080" + url : url);
+        HttpResponse resp = HttpRequest.get(abs).timeout(15000).execute();
         if (!resp.isOk()) {
+            log.warn("[ocr] download http={} url={}", resp.getStatus(), abs);
             return null;
         }
         return resp.bodyBytes();
+    }
+
+    static String encodeUrl(String url) {
+        try {
+            java.net.URL u = new java.net.URL(url);
+            String[] segs = u.getPath().split("/", -1);
+            StringBuilder path = new StringBuilder();
+            for (int i = 0; i < segs.length; i++) {
+                if (i > 0) {
+                    path.append('/');
+                }
+                if (!segs[i].isEmpty()) {
+                    path.append(java.net.URLEncoder.encode(segs[i], java.nio.charset.StandardCharsets.UTF_8)
+                            .replace("+", "%20"));
+                }
+            }
+            int port = u.getPort();
+            String host = port > 0 ? u.getHost() + ":" + port : u.getHost();
+            String q = u.getQuery() == null ? "" : "?" + u.getQuery();
+            return u.getProtocol() + "://" + host + path + q;
+        } catch (Exception e) {
+            return url;
+        }
     }
 
     static LocalDate parseDate(String raw) {

@@ -25,6 +25,7 @@ import {
   ocrExpenseInvoice,
 } from '#/api/finance/expense-reimbursement';
 import { FileUpload } from '#/components/upload';
+import { useUpload } from '#/components/upload/use-upload';
 
 defineOptions({ name: 'FinanceExpenseReimbursementFormBody' });
 
@@ -36,6 +37,7 @@ const emit = defineEmits<{
 const userStore = useUserStore();
 const formRef = ref();
 const submitting = ref(false);
+const { httpRequest } = useUpload();
 
 interface LineRow {
   lineKind: 'NORMAL' | 'PROXY';
@@ -121,15 +123,12 @@ function predocOptions(category?: string) {
   return [];
 }
 
-async function onInvoiceUpload(index: number, val: string | string[]) {
-  const url = Array.isArray(val) ? String(val[0] || '') : String(val || '');
+async function runInvoiceOcr(index: number, url: string, file?: File) {
   const line = formData.value.lines[index];
   if (!line) return;
-  line.invoiceFileUrl = url || undefined;
-  if (!url) return;
   const hide = message.loading({ content: '正在识别发票...', duration: 0 });
   try {
-    const ocr = await ocrExpenseInvoice(url);
+    const ocr = await ocrExpenseInvoice(url, file);
     if (ocr?.feeDate) line.feeDate = String(ocr.feeDate).slice(0, 10);
     if (ocr?.amount != null) line.amount = Number(ocr.amount);
     if (ocr?.feeDate || ocr?.amount != null) {
@@ -142,6 +141,22 @@ async function onInvoiceUpload(index: number, val: string | string[]) {
   } finally {
     hide();
   }
+}
+
+async function uploadInvoice(index: number, file: File, onUploadProgress?: any) {
+  const res = await httpRequest(file, onUploadProgress);
+  const url = typeof res === 'string' ? res : String((res as any)?.url || '');
+  const line = formData.value.lines[index];
+  if (line) line.invoiceFileUrl = url || undefined;
+  if (url) await runInvoiceOcr(index, url, file);
+  return res;
+}
+
+async function onInvoiceUpload(index: number, val: string | string[]) {
+  const url = Array.isArray(val) ? String(val[0] || '') : String(val || '');
+  const line = formData.value.lines[index];
+  if (!line) return;
+  line.invoiceFileUrl = url || undefined;
 }
 
 function onPredocChange(index: number, processInstanceId?: string) {
@@ -345,7 +360,9 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
           :max-number="1"
           :max-size="20"
+          :accept="['.pdf', '.jpg', '.jpeg', '.png']"
           help-text="发票"
+          :api="(file, progress) => uploadInvoice(index, file as File, progress)"
           @update:value="(v) => onInvoiceUpload(index, v)"
         />
         <Select
