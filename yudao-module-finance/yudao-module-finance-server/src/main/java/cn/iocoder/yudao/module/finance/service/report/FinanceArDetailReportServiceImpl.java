@@ -6,6 +6,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.report.vo.FinanceArDetai
 import cn.iocoder.yudao.module.finance.controller.admin.report.vo.FinanceArDetailReportRespVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.report.FinanceArDetailReportMapper;
+import cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -18,9 +19,12 @@ import java.util.List;
 public class FinanceArDetailReportServiceImpl implements FinanceArDetailReportService {
 
     private final FinanceArDetailReportMapper arDetailReportMapper;
+    private final FinanceExchangeRateService exchangeRateService;
 
-    public FinanceArDetailReportServiceImpl(FinanceArDetailReportMapper arDetailReportMapper) {
+    public FinanceArDetailReportServiceImpl(FinanceArDetailReportMapper arDetailReportMapper,
+                                            FinanceExchangeRateService exchangeRateService) {
         this.arDetailReportMapper = arDetailReportMapper;
+        this.exchangeRateService = exchangeRateService;
     }
 
     @Override
@@ -47,10 +51,6 @@ public class FinanceArDetailReportServiceImpl implements FinanceArDetailReportSe
         long excludedNonCnyCount = 0L;
         List<FinanceArDetailReportRespVO> rows = new ArrayList<>();
         for (FinanceBusinessOrderDO order : orders) {
-            if (!FinanceArDetailCalculator.isCny(order.getCurrency())) {
-                excludedNonCnyCount++;
-                continue;
-            }
             FinanceArDetailReportRespVO row = toRow(order);
             if (Boolean.TRUE.equals(reqVO.getUninvoicedOnly())
                     && row.getUninvoicedAmount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -79,7 +79,11 @@ public class FinanceArDetailReportServiceImpl implements FinanceArDetailReportSe
         return rows.subList(from, Math.min(from + pageSize, rows.size()));
     }
 
-    private static FinanceArDetailReportRespVO toRow(FinanceBusinessOrderDO order) {
+    private FinanceArDetailReportRespVO toRow(FinanceBusinessOrderDO order) {
+        java.time.LocalDate day = order.getOrderDate() != null ? order.getOrderDate() : order.getImportDate();
+        BigDecimal settle = exchangeRateService.toCny(order.getSettlementAmount(), order.getCurrency(), day);
+        BigDecimal invoiced = exchangeRateService.toCny(order.getInvoicedOccupiedAmount(), order.getCurrency(), day);
+        BigDecimal claimed = exchangeRateService.toCny(order.getConfirmedClaimedAmount(), order.getCurrency(), day);
         FinanceArDetailReportRespVO row = new FinanceArDetailReportRespVO();
         row.setId(order.getId());
         row.setOrderNo(order.getOrderNo());
@@ -87,15 +91,12 @@ public class FinanceArDetailReportServiceImpl implements FinanceArDetailReportSe
         row.setEntityCompanyName(order.getEntityCompanyName());
         row.setProductType(FinanceArDetailCalculator.effectiveProductType(
                 order.getProductTypeSnapshot(), order.getProductName()));
-        row.setSettlementAmount(FinanceArDetailCalculator.nz(order.getSettlementAmount()));
-        row.setInvoicedOccupiedAmount(FinanceArDetailCalculator.nz(order.getInvoicedOccupiedAmount()));
-        row.setConfirmedClaimedAmount(FinanceArDetailCalculator.nz(order.getConfirmedClaimedAmount()));
-        row.setUninvoicedAmount(FinanceArDetailCalculator.uninvoiced(
-                order.getSettlementAmount(), order.getInvoicedOccupiedAmount()));
-        row.setInvoicedArAmount(FinanceArDetailCalculator.invoicedAr(
-                order.getInvoicedOccupiedAmount(), order.getConfirmedClaimedAmount()));
-        row.setArTotalAmount(FinanceArDetailCalculator.arTotal(
-                order.getSettlementAmount(), order.getConfirmedClaimedAmount()));
+        row.setSettlementAmount(FinanceArDetailCalculator.nz(settle));
+        row.setInvoicedOccupiedAmount(FinanceArDetailCalculator.nz(invoiced));
+        row.setConfirmedClaimedAmount(FinanceArDetailCalculator.nz(claimed));
+        row.setUninvoicedAmount(FinanceArDetailCalculator.uninvoiced(settle, invoiced));
+        row.setInvoicedArAmount(FinanceArDetailCalculator.invoicedAr(invoiced, claimed));
+        row.setArTotalAmount(FinanceArDetailCalculator.arTotal(settle, claimed));
         row.setCurrency("CNY");
         return row;
     }

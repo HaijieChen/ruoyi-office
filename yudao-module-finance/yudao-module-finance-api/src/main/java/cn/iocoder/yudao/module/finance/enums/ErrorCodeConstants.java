@@ -307,6 +307,8 @@ public interface ErrorCodeConstants {
     /** 关联单据币种必须一致（本期不做折算） */
     ErrorCode CURRENCY_MISMATCH = new ErrorCode(1_040_000_031,
             "关联单据币种不一致，本期不支持跨币种折算");
+    ErrorCode EXCHANGE_RATE_MISSING = new ErrorCode(1_040_000_032,
+            "缺少当月汇率，请先在汇率维护中录入");
 
     // ========== 部门费用分摊 1-040-008-000 ==========
     ErrorCode DEPT_ALLOCATION_IMPORT_EMPTY = new ErrorCode(1_040_009_000, "分摊导入数据不能为空");

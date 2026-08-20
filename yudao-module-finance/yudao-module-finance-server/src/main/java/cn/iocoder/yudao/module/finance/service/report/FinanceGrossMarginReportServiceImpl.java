@@ -12,6 +12,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayL
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper;
+import cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.springframework.stereotype.Service;
@@ -35,15 +36,18 @@ public class FinanceGrossMarginReportServiceImpl implements FinanceGrossMarginRe
     private final FinancePaymentPayLineMapper payLineMapper;
     private final FinancePaymentApplicationMapper paymentApplicationMapper;
     private final AdminUserApi adminUserApi;
+    private final FinanceExchangeRateService exchangeRateService;
 
     public FinanceGrossMarginReportServiceImpl(FinanceBusinessOrderMapper businessOrderMapper,
                                                FinancePaymentPayLineMapper payLineMapper,
                                                FinancePaymentApplicationMapper paymentApplicationMapper,
-                                               AdminUserApi adminUserApi) {
+                                               AdminUserApi adminUserApi,
+                                               FinanceExchangeRateService exchangeRateService) {
         this.businessOrderMapper = businessOrderMapper;
         this.payLineMapper = payLineMapper;
         this.paymentApplicationMapper = paymentApplicationMapper;
         this.adminUserApi = adminUserApi;
+        this.exchangeRateService = exchangeRateService;
     }
 
     @Override
@@ -93,10 +97,6 @@ public class FinanceGrossMarginReportServiceImpl implements FinanceGrossMarginRe
         Map<String, FinanceGrossMarginReportRespVO> acc = FinanceGrossMarginCalculator.newAcc();
         long excluded = 0L;
         for (FinanceBusinessOrderDO order : orders) {
-            if (!FinanceGrossMarginCalculator.isCny(order.getCurrency())) {
-                excluded++;
-                continue;
-            }
             String ym = FinanceGrossMarginCalculator.yearMonth(order.getOrderDate());
             if (ym == null || !inMonthRange(ym, reqVO)) {
                 continue;
@@ -112,7 +112,8 @@ public class FinanceGrossMarginReportServiceImpl implements FinanceGrossMarginRe
             FinanceGrossMarginReportRespVO row = acc.computeIfAbsent(
                     FinanceGrossMarginCalculator.key(ym, deptId, product),
                     k -> FinanceGrossMarginCalculator.row(ym, deptId, null, product));
-            FinanceGrossMarginCalculator.addIncome(row, order.getSettlementAmount());
+            FinanceGrossMarginCalculator.addIncome(row,
+                    exchangeRateService.toCny(order.getSettlementAmount(), order.getCurrency(), order.getOrderDate()));
         }
         for (FinancePaymentPayLineDO line : lines) {
             FinancePaymentApplicationDO payment = payments.get(line.getPaymentApplicationId());
@@ -121,11 +122,6 @@ public class FinanceGrossMarginReportServiceImpl implements FinanceGrossMarginRe
             }
             String kind = payment.getApplicationKind();
             if (kind != null && !kind.isBlank() && !"ORDINARY".equalsIgnoreCase(kind)) {
-                continue;
-            }
-            if (!FinanceGrossMarginCalculator.isCny(
-                    line.getCurrencySnapshot() != null ? line.getCurrencySnapshot() : payment.getCurrency())) {
-                excluded++;
                 continue;
             }
             String ym = FinanceGrossMarginCalculator.yearMonth(line.getActualPayDate());
@@ -141,7 +137,10 @@ public class FinanceGrossMarginReportServiceImpl implements FinanceGrossMarginRe
             FinanceGrossMarginReportRespVO row = acc.computeIfAbsent(
                     FinanceGrossMarginCalculator.key(ym, deptId, product),
                     k -> FinanceGrossMarginCalculator.row(ym, deptId, null, product));
-            FinanceGrossMarginCalculator.addCost(row, line.getPayAmount());
+            FinanceGrossMarginCalculator.addCost(row, exchangeRateService.toCny(
+                    line.getPayAmount(),
+                    line.getCurrencySnapshot() != null ? line.getCurrencySnapshot() : payment.getCurrency(),
+                    line.getActualPayDate()));
         }
         return new Result(FinanceGrossMarginCalculator.toSortedRows(acc), excluded);
     }

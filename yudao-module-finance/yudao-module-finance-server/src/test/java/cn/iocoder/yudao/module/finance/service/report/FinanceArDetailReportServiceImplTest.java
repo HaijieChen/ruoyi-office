@@ -31,7 +31,14 @@ class FinanceArDetailReportServiceImplTest {
     @BeforeEach
     void setUp() {
         mapper = mock(FinanceArDetailReportMapper.class);
-        service = new FinanceArDetailReportServiceImpl(mapper);
+        cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService fx =
+                mock(cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService.class);
+        org.mockito.Mockito.when(fx.toCny(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> {
+            java.math.BigDecimal a = inv.getArgument(0);
+            return a == null ? java.math.BigDecimal.ZERO : a;
+        });
+        service = new FinanceArDetailReportServiceImpl(mapper, fx);
     }
 
     @Test
@@ -96,7 +103,7 @@ class FinanceArDetailReportServiceImplTest {
     }
 
     @Test
-    void shouldExcludeNonCnyAndCountThem() {
+    void shouldConvertNonCnyToCny() {
         when(mapper.selectReportList(any(), eq(STAFF_ID))).thenReturn(List.of(
                 order(1L, STAFF_ID, "cny", "100", "40", "10"),
                 order(2L, STAFF_ID, "USD", "100", "40", "10"),
@@ -106,10 +113,9 @@ class FinanceArDetailReportServiceImplTest {
 
         FinanceArDetailReportPageRespVO page = service.getPage(pageReq(), STAFF_ID, false);
 
-        assertEquals(1L, page.getTotal());
-        assertEquals(4L, page.getExcludedNonCnyCount());
-        assertEquals(1, page.getList().size());
-        assertEquals(1L, page.getList().get(0).getId());
+        assertEquals(5L, page.getTotal());
+        assertEquals(0L, page.getExcludedNonCnyCount());
+        assertEquals(5, page.getList().size());
         assertEquals("CNY", page.getList().get(0).getCurrency());
     }
 
@@ -148,7 +154,7 @@ class FinanceArDetailReportServiceImplTest {
 
         List<FinanceArDetailReportRespVO> rows = service.listForExport(pageReq(), STAFF_ID, false);
 
-        assertEquals(1, rows.size());
+        assertEquals(2, rows.size());
         assertEquals(0, new BigDecimal("60").compareTo(rows.get(0).getUninvoicedAmount()));
         assertEquals("CNY", rows.get(0).getCurrency());
     }

@@ -8,4 +8,6 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.fx.FinanceExchangeRateDO;
 public interface FinanceExchangeRateService {
     Long save(FinanceExchangeRateSaveReqVO reqVO);
     PageResult<FinanceExchangeRateDO> getPage(FinanceExchangeRatePageReqVO reqVO);
+
+    java.math.BigDecimal toCny(java.math.BigDecimal amount, String currency, java.time.LocalDate date);
 }

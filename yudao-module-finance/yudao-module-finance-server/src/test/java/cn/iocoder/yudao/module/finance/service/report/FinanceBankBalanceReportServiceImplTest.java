@@ -28,12 +28,20 @@ class FinanceBankBalanceReportServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService fx =
+                mock(cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService.class);
+        org.mockito.Mockito.when(fx.toCny(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> {
+            java.math.BigDecimal a = inv.getArgument(0);
+            return a == null ? java.math.BigDecimal.ZERO : a;
+        });
         service = new FinanceBankBalanceReportServiceImpl(
                 mock(FinanceCompanyBankAccountMapper.class),
                 mock(FinanceBankOpeningBalanceMapper.class),
                 mock(FinanceBankReceiptMapper.class),
                 mock(FinancePaymentPayLineMapper.class),
-                mock(FinanceExpenseReimbursementMapper.class));
+                mock(FinanceExpenseReimbursementMapper.class),
+                fx);
     }
 
     @Test
@@ -69,7 +77,7 @@ class FinanceBankBalanceReportServiceImplTest {
     }
 
     @Test
-    void usdReceiptExcluded() {
+    void usdReceiptConvertedToCny() {
         FinanceCompanyBankAccountDO account = account(1L, 20L, "基本户", "62220001");
         FinanceReceiptDO receipt = FinanceReceiptDO.builder()
                 .entityCompanyDeptId(20L)
@@ -81,8 +89,8 @@ class FinanceBankBalanceReportServiceImplTest {
         FinanceBankBalanceReportRespVO resp = service.aggregate(
                 List.of(account), List.of(), List.of(receipt), List.of(), List.of(),
                 LocalDate.of(2026, 8, 31));
-        assertEquals(BigDecimal.ZERO, resp.getList().get(0).getIncomeAmount());
-        assertEquals(1L, resp.getExcludedFxCount());
+        assertEquals(new BigDecimal("50.00"), resp.getList().get(0).getIncomeAmount());
+        assertEquals(0L, resp.getExcludedFxCount());
     }
 
     @Test

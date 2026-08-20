@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayL
 import cn.iocoder.yudao.module.finance.dal.mysql.allocation.FinanceDeptCostAllocationMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper;
+import cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -33,15 +34,18 @@ public class FinanceDeptProfitReportServiceImpl implements FinanceDeptProfitRepo
     private final FinanceDeptCostAllocationMapper allocationMapper;
     private final FinancePaymentPayLineMapper payLineMapper;
     private final FinancePaymentApplicationMapper paymentApplicationMapper;
+    private final FinanceExchangeRateService exchangeRateService;
 
     public FinanceDeptProfitReportServiceImpl(FinanceGrossMarginReportService grossMarginReportService,
                                               FinanceDeptCostAllocationMapper allocationMapper,
                                               FinancePaymentPayLineMapper payLineMapper,
-                                              FinancePaymentApplicationMapper paymentApplicationMapper) {
+                                              FinancePaymentApplicationMapper paymentApplicationMapper,
+                                              FinanceExchangeRateService exchangeRateService) {
         this.grossMarginReportService = grossMarginReportService;
         this.allocationMapper = allocationMapper;
         this.payLineMapper = payLineMapper;
         this.paymentApplicationMapper = paymentApplicationMapper;
+        this.exchangeRateService = exchangeRateService;
     }
 
     @Override
@@ -150,11 +154,10 @@ public class FinanceDeptProfitReportServiceImpl implements FinanceDeptProfitRepo
             if (payment == null || !isSalaryOrTax(payment.getApplicationKind())) {
                 continue;
             }
-            if (!FinanceArDetailCalculator.isCny(line.getCurrencySnapshot() != null
-                    ? line.getCurrencySnapshot() : payment.getCurrency())) {
-                continue;
-            }
-            sum = sum.add(FinanceDeptProfitCalculator.nz(line.getPayAmount()));
+            sum = sum.add(exchangeRateService.toCny(
+                    line.getPayAmount(),
+                    line.getCurrencySnapshot() != null ? line.getCurrencySnapshot() : payment.getCurrency(),
+                    line.getActualPayDate()));
         }
         return sum;
     }

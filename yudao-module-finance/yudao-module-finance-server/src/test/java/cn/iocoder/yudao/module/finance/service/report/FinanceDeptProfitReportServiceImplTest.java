@@ -25,7 +25,8 @@ class FinanceDeptProfitReportServiceImplTest {
                 mock(FinanceGrossMarginReportService.class),
                 mock(FinanceDeptCostAllocationMapper.class),
                 mock(FinancePaymentPayLineMapper.class),
-                mock(FinancePaymentApplicationMapper.class));
+                mock(FinancePaymentApplicationMapper.class),
+                mock(cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService.class));
     }
 
     @Test

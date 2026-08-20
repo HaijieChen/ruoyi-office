@@ -32,11 +32,19 @@ class FinanceGrossMarginReportServiceImplTest {
     @BeforeEach
     void setUp() {
         adminUserApi = mock(AdminUserApi.class);
+        cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService fx =
+                mock(cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService.class);
+        when(fx.toCny(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> {
+            java.math.BigDecimal a = inv.getArgument(0);
+            return a == null ? java.math.BigDecimal.ZERO : a;
+        });
         service = new FinanceGrossMarginReportServiceImpl(
                 mock(FinanceBusinessOrderMapper.class),
                 mock(FinancePaymentPayLineMapper.class),
                 mock(FinancePaymentApplicationMapper.class),
-                adminUserApi);
+                adminUserApi,
+                fx);
         AdminUserRespDTO user = new AdminUserRespDTO();
         user.setId(1L);
         user.setDeptId(10L);
@@ -108,7 +116,7 @@ class FinanceGrossMarginReportServiceImplTest {
     }
 
     @Test
-    void usdBusinessOrderExcluded() {
+    void usdBusinessOrderConverted() {
         FinanceBusinessOrderDO order = FinanceBusinessOrderDO.builder()
                 .importerId(1L)
                 .orderDate(LocalDate.of(2026, 8, 2))
@@ -118,8 +126,8 @@ class FinanceGrossMarginReportServiceImplTest {
                 .build();
         var result = service.aggregate(List.of(order), List.of(), Map.of(),
                 new FinanceGrossMarginReportPageReqVO());
-        assertEquals(0, result.rows().size());
-        assertEquals(1L, result.excludedNonCnyCount());
+        assertEquals(1, result.rows().size());
+        assertEquals(0L, result.excludedNonCnyCount());
     }
 
     @Test

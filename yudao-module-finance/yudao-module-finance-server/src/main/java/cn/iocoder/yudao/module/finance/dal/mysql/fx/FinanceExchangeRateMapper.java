@@ -17,4 +17,11 @@ public interface FinanceExchangeRateMapper extends BaseMapperX<FinanceExchangeRa
                 .orderByDesc(FinanceExchangeRateDO::getPeriodLabel)
                 .orderByDesc(FinanceExchangeRateDO::getId));
     }
+
+    default FinanceExchangeRateDO selectPair(String periodLabel, String fromCurrency, String toCurrency) {
+        return selectOne(new LambdaQueryWrapperX<FinanceExchangeRateDO>()
+                .eq(FinanceExchangeRateDO::getPeriodLabel, periodLabel)
+                .eq(FinanceExchangeRateDO::getFromCurrency, fromCurrency)
+                .eq(FinanceExchangeRateDO::getToCurrency, toCurrency));
+    }
 }

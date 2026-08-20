@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.opening.FinanceBankOpeningBalan
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentPayLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.receipt.FinanceBankReceiptMapper;
 import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
+import cn.iocoder.yudao.module.finance.service.fx.FinanceExchangeRateService;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -33,17 +34,20 @@ public class FinanceBankBalanceReportServiceImpl implements FinanceBankBalanceRe
     private final FinanceBankReceiptMapper receiptMapper;
     private final FinancePaymentPayLineMapper payLineMapper;
     private final FinanceExpenseReimbursementMapper expenseMapper;
+    private final FinanceExchangeRateService exchangeRateService;
 
     public FinanceBankBalanceReportServiceImpl(FinanceCompanyBankAccountMapper accountMapper,
                                                FinanceBankOpeningBalanceMapper openingMapper,
                                                FinanceBankReceiptMapper receiptMapper,
                                                FinancePaymentPayLineMapper payLineMapper,
-                                               FinanceExpenseReimbursementMapper expenseMapper) {
+                                               FinanceExpenseReimbursementMapper expenseMapper,
+                                               FinanceExchangeRateService exchangeRateService) {
         this.accountMapper = accountMapper;
         this.openingMapper = openingMapper;
         this.receiptMapper = receiptMapper;
         this.payLineMapper = payLineMapper;
         this.expenseMapper = expenseMapper;
+        this.exchangeRateService = exchangeRateService;
     }
 
     @Override
@@ -72,7 +76,8 @@ public class FinanceBankBalanceReportServiceImpl implements FinanceBankBalanceRe
             FinanceBankOpeningBalanceDO opening = openingByAccount.get(account.getId());
             LocalDate openDate = opening == null ? null : opening.getAsOfDate();
             BigDecimal openingAmt = opening == null || opening.getAmount() == null
-                    ? BigDecimal.ZERO : opening.getAmount();
+                    ? BigDecimal.ZERO
+                    : exchangeRateService.toCny(opening.getAmount(), opening.getCurrency(), opening.getAsOfDate());
             BigDecimal income = BigDecimal.ZERO;
             BigDecimal pay = BigDecimal.ZERO;
             BigDecimal reimburse = BigDecimal.ZERO;
@@ -80,28 +85,20 @@ public class FinanceBankBalanceReportServiceImpl implements FinanceBankBalanceRe
                 if (!FinanceBankBalanceMatcher.matchesAccount(receipt, account)) {
                     continue;
                 }
-                if (!FinanceArDetailCalculator.isCny(receipt.getCurrency())) {
-                    excludedFx++;
-                    continue;
-                }
                 LocalDate day = FinanceBankBalanceMatcher.toLocalDate(receipt.getTransactionDate());
                 if (!FinanceBankBalanceMatcher.inWindow(day, openDate, asOf)) {
                     continue;
                 }
-                income = income.add(nz(receipt.getTransactionAmount()));
+                income = income.add(exchangeRateService.toCny(receipt.getTransactionAmount(), receipt.getCurrency(), day));
             }
             for (FinancePaymentPayLineDO line : payLines) {
                 if (!account.getId().equals(line.getCompanyBankAccountId())) {
                     continue;
                 }
-                if (!FinanceArDetailCalculator.isCny(line.getCurrencySnapshot())) {
-                    excludedFx++;
-                    continue;
-                }
                 if (!FinanceBankBalanceMatcher.inWindow(line.getActualPayDate(), openDate, asOf)) {
                     continue;
                 }
-                pay = pay.add(nz(line.getPayAmount()));
+                pay = pay.add(exchangeRateService.toCny(line.getPayAmount(), line.getCurrencySnapshot(), line.getActualPayDate()));
             }
             for (FinanceExpenseReimbursementDO bill : reimbursements) {
                 if (!account.getId().equals(bill.getCompanyBankAccountId())) {
@@ -113,8 +110,9 @@ public class FinanceBankBalanceReportServiceImpl implements FinanceBankBalanceRe
                 if (!FinanceBankBalanceMatcher.inWindow(bill.getActualPayDate(), openDate, asOf)) {
                     continue;
                 }
-                reimburse = reimburse.add(nz(bill.getApprovedAmount() != null
-                        ? bill.getApprovedAmount() : bill.getApplyAmount()));
+                reimburse = reimburse.add(exchangeRateService.toCny(
+                        bill.getApprovedAmount() != null ? bill.getApprovedAmount() : bill.getApplyAmount(),
+                        "CNY", bill.getActualPayDate()));
             }
             FinanceBankBalanceReportRespVO.Row row = new FinanceBankBalanceReportRespVO.Row();
             row.setAccountId(account.getId());
