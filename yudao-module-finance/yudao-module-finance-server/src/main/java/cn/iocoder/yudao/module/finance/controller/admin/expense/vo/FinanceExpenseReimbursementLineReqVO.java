@@ -24,4 +24,6 @@ public class FinanceExpenseReimbursementLineReqVO {
     private String predocType;
     private String predocProcessInstanceId;
     private String remark;
+    private String stayCityTier;
+    private String overLimitReason;
 }

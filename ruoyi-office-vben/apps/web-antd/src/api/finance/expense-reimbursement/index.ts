@@ -13,6 +13,8 @@ export namespace FinanceExpenseApi {
     predocType?: string;
     predocProcessInstanceId?: string;
     remark?: string;
+    stayCityTier?: string;
+    overLimitReason?: string;
   }
 
   export interface Bill {

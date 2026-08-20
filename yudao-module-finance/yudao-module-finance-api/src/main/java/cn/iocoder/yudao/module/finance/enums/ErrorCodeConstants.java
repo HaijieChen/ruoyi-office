@@ -294,6 +294,10 @@ public interface ErrorCodeConstants {
             "该事由分类不得关联出差或外出单");
     ErrorCode EXPENSE_REIMBURSEMENT_INVOICE_MODE_MISMATCH = new ErrorCode(1_040_008_020,
             "发票模式与发起入口不一致");
+    ErrorCode EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED = new ErrorCode(1_040_008_021,
+            "差旅须选择住宿城市档：北上广深或其他");
+    ErrorCode EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED = new ErrorCode(1_040_008_022,
+            "差旅住宿超标须填写超标原因");
 
     // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
     /** 交易币种仅允许 CNY/USD/HKD */

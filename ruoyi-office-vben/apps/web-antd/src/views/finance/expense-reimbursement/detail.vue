@@ -111,6 +111,8 @@ onMounted(load);
         <div class="mt-3 text-sm">
           <div v-for="(line, i) in bill.lines || []" :key="i">
             {{ line.feeDate }} · {{ line.category }} · {{ line.amount }}
+            {{ line.stayCityTier === 'T1' ? ' · 北上广深' : line.stayCityTier === 'OTHER' ? ' · 其他城市' : '' }}
+            {{ line.overLimitReason ? ` · 超标：${line.overLimitReason}` : "" }}
             {{ line.remark ? ` · ${line.remark}` : "" }}
           </div>
         </div>

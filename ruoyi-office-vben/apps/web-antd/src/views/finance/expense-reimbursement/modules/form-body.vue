@@ -46,6 +46,8 @@ interface LineRow {
   predocType?: string;
   predocProcessInstanceId?: string;
   remark?: string;
+  stayCityTier?: string;
+  overLimitReason?: string;
 }
 
 const formData = ref<{
@@ -152,6 +154,19 @@ function onPredocChange(index: number, processInstanceId?: string) {
   line.predocType = hit?.type;
 }
 
+const stayTierOptions = [
+  { label: '北上广深 400', value: 'T1' },
+  { label: '其他城市 300', value: 'OTHER' },
+];
+
+function stayCap(tier?: string) {
+  return tier === 'T1' ? 400 : 300;
+}
+
+function needOverLimitReason(line: LineRow) {
+  return line.category === 'travel' && Number(line.amount) > stayCap(line.stayCityTier);
+}
+
 function addLine() {
   formData.value.lines.push({ lineKind: expectedKind() });
 }
@@ -213,10 +228,26 @@ async function submit(): Promise<void> {
             : undefined,
       predocProcessInstanceId: l.predocProcessInstanceId,
       remark: l.remark,
+      stayCityTier: l.category === 'travel' ? l.stayCityTier : undefined,
+      overLimitReason: l.category === 'travel' ? l.overLimitReason : undefined,
     }));
   if (lines.length === 0) {
     message.warning('请至少填写一行完整明细');
     throw new Error('empty lines');
+  }
+  const stayMissing = formData.value.lines.find(
+    (l) => l.category === 'travel' && Number(l.amount) > 0 && !l.stayCityTier,
+  );
+  if (stayMissing) {
+    message.warning('差旅请选择住宿城市档（北上广深/其他）');
+    throw new Error('stay tier');
+  }
+  const over = formData.value.lines.find(
+    (l) => needOverLimitReason(l) && !String(l.overLimitReason || '').trim(),
+  );
+  if (over) {
+    message.warning('住宿超标请填写超标原因（不拦金额）');
+    throw new Error('over limit reason');
   }
   submitting.value = true;
   try {
@@ -294,6 +325,20 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           @change="(d) => (line.feeDate = d ? dayjs(d).format('YYYY-MM-DD') : undefined)"
         />
         <InputNumber v-model:value="line.amount" :min="0.01" :precision="2" placeholder="金额" />
+        <template v-if="line.category === 'travel'">
+          <Select
+            v-model:value="line.stayCityTier"
+            class="w-36"
+            :options="stayTierOptions"
+            placeholder="住宿城市档"
+          />
+          <Input
+            v-if="needOverLimitReason(line)"
+            v-model:value="line.overLimitReason"
+            class="w-48"
+            placeholder="超标原因"
+          />
+        </template>
         <FileUpload
           v-if="!formData.proxyTicket"
           class="w-48"
@@ -319,6 +364,12 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
       </div>
       <Button size="small" @click="addLine">加一行</Button>
       <div class="mt-1 text-xs text-gray-500">合计 {{ lineTotal().toFixed(2) }}</div>
+      <div
+        v-if="formData.lines.some((l) => l.category === 'travel')"
+        class="mt-1 text-xs text-amber-700"
+      >
+        住宿标准：北上广深 400 元/晚，其他城市 300 元/晚。超标不拦提单，须填写超标原因。
+      </div>
     </Form.Item>
   </Form>
 </template>

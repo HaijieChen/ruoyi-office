@@ -33,5 +33,13 @@ public class FinanceExpenseReimbursementLineDO extends TenantBaseDO {
     private String predocType;
     private String predocProcessInstanceId;
     private String remark;
+    /** T1=北上广深 400；OTHER=其他 300 */
+    private String stayCityTier;
+    private String overLimitReason;
     private Integer sort;
+
+    public static final String STAY_TIER_T1 = "T1";
+    public static final String STAY_TIER_OTHER = "OTHER";
+    public static final java.math.BigDecimal STAY_CAP_T1 = new java.math.BigDecimal("400");
+    public static final java.math.BigDecimal STAY_CAP_OTHER = new java.math.BigDecimal("300");
 }

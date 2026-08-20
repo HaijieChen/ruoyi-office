@@ -50,6 +50,8 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_INVALID;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED;
 
 @Service
 @Validated
@@ -115,6 +117,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 throw exception(EXPENSE_REIMBURSEMENT_AMOUNT_INVALID);
             }
             validateInvoiceAndPredoc(line, proxy, invoiceMode, userId);
+            validateStayStandard(line);
             apply = apply.add(line.getAmount());
             i++;
         }
@@ -158,6 +161,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                     .predocType(line.getPredocType())
                     .predocProcessInstanceId(line.getPredocProcessInstanceId())
                     .remark(line.getRemark())
+                    .stayCityTier(line.getStayCityTier())
+                    .overLimitReason(line.getOverLimitReason())
                     .sort(sort++)
                     .build());
         }
@@ -228,6 +233,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             lv.setFeeDate(line.getFeeDate());
             lv.setAmount(line.getAmount());
             lv.setRemark(line.getRemark());
+            lv.setStayCityTier(line.getStayCityTier());
+            lv.setOverLimitReason(line.getOverLimitReason());
+            lv.setInvoiceFileUrl(line.getInvoiceFileUrl());
             lines.add(lv);
         }
         vo.setLines(lines);
@@ -333,6 +341,26 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         }
         if (predocType != null || predocId != null) {
             throw exception(EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN);
+        }
+    }
+
+    /** 差旅住宿标准只做超标说明，不卡控金额。 */
+    static void validateStayStandard(FinanceExpenseReimbursementLineReqVO line) {
+        String cat = line.getCategory() == null ? "" : line.getCategory().trim();
+        if (!FinanceExpensePredocService.CAT_TRAVEL.equals(cat)) {
+            return;
+        }
+        String tier = StrUtil.trimToEmpty(line.getStayCityTier()).toUpperCase();
+        if (!FinanceExpenseReimbursementLineDO.STAY_TIER_T1.equals(tier)
+                && !FinanceExpenseReimbursementLineDO.STAY_TIER_OTHER.equals(tier)) {
+            throw exception(EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED);
+        }
+        java.math.BigDecimal cap = FinanceExpenseReimbursementLineDO.STAY_TIER_T1.equals(tier)
+                ? FinanceExpenseReimbursementLineDO.STAY_CAP_T1
+                : FinanceExpenseReimbursementLineDO.STAY_CAP_OTHER;
+        if (line.getAmount() != null && line.getAmount().compareTo(cap) > 0
+                && StrUtil.isBlank(line.getOverLimitReason())) {
+            throw exception(EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED);
         }
     }
 
