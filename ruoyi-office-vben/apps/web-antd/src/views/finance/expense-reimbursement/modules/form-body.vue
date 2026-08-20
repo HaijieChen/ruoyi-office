@@ -498,8 +498,15 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           placeholder="实际费用类型"
           @change="onCategoryChange(index)"
         />
+        <Input
+          v-else
+          v-model:value="line.category"
+          class="w-28"
+          placeholder="费用类型"
+          @change="onCategoryChange(index)"
+        />
         <Select
-          v-if="line.category && subItemOptions(line.category).length"
+          v-if="!formData.proxyTicket && line.category && subItemOptions(line.category).length"
           v-model:value="line.subItem"
           class="w-32"
           :options="subItemOptions(line.category)"
@@ -507,18 +514,12 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
         />
         <Select
+          v-if="!formData.proxyTicket"
           v-model:value="line.invoiceType"
           class="w-28"
           :options="invoiceTypeOptions"
           placeholder="发票类型"
           allow-clear
-        />
-        <Input
-          v-else
-          v-model:value="line.category"
-          class="w-28"
-          placeholder="费用类型"
-          @change="onCategoryChange(index)"
         />
         <Select
           v-if="needsPredoc(line)"
