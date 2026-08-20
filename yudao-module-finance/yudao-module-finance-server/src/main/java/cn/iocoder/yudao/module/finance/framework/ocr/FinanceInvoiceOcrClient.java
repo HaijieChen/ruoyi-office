@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.finance.framework.ocr;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
@@ -121,7 +123,7 @@ public class FinanceInvoiceOcrClient {
         }
     }
 
-    public record Result(LocalDate feeDate, BigDecimal amount, String rawText) {
+    public record Result(@JsonFormat(pattern = "yyyy-MM-dd") LocalDate feeDate, BigDecimal amount, String rawText) {
         static Result empty() {
             return new Result(null, null, null);
         }
