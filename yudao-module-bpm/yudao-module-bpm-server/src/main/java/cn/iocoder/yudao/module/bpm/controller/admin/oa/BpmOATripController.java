@@ -76,7 +76,13 @@ public class BpmOATripController {
         if (CollUtil.isEmpty(list)) {
             return;
         }
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(convertSet(list, BpmOATripRespVO::getUserId));
+        java.util.Set<Long> userIds = convertSet(list, BpmOATripRespVO::getUserId);
+        for (BpmOATripRespVO vo : list) {
+            if (vo.getCompanionUserId() != null) {
+                userIds.add(vo.getCompanionUserId());
+            }
+        }
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(userIds);
         Map<Long, DeptRespDTO> deptMap = deptApi.getDeptMap(convertSet(userMap.values(), AdminUserRespDTO::getDeptId));
         for (BpmOATripRespVO vo : list) {
             AdminUserRespDTO user = userMap.get(vo.getUserId());
@@ -84,6 +90,10 @@ public class BpmOATripController {
                 continue;
             }
             vo.setUserNickname(user.getNickname());
+            AdminUserRespDTO companion = userMap.get(vo.getCompanionUserId());
+            if (companion != null) {
+                vo.setCompanionNickname(companion.getNickname());
+            }
             DeptRespDTO dept = deptMap.get(user.getDeptId());
             if (dept != null) {
                 vo.setDeptName(dept.getName());

@@ -18,6 +18,8 @@ public interface ErrorCodeConstants {
     ErrorCode OA_DURATION_INVALID = new ErrorCode(1_009_001_004, "开始结束时间无效或时长小于等于 0");
     ErrorCode OA_TRIP_ACCESS_DENIED = new ErrorCode(1_009_001_005, "无权查看该出差申请");
     ErrorCode OA_OUTING_ACCESS_DENIED = new ErrorCode(1_009_001_006, "无权查看该外出申请");
+    ErrorCode OA_TRIP_FIELD_REQUIRED = new ErrorCode(1_009_001_010, "出差地点、出差原因、同行人员不能为空");
+    ErrorCode OA_TRIP_COMPANION_INVALID = new ErrorCode(1_009_001_011, "同行人员须为组织内其他人员");
 
     // ========== 流程模型 1-009-002-000 ==========
     ErrorCode MODEL_KEY_EXISTS = new ErrorCode(1_009_002_000, "已经存在流程标识为【{}】的流程");

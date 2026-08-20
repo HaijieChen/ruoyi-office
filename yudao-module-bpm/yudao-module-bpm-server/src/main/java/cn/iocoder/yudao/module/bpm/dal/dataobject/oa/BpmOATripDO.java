@@ -35,6 +35,9 @@ public class BpmOATripDO extends BaseDO {
      * 出差类型：1市内 2省内 3省外 4国外
      */
     private Integer type;
+    private String destination;
+    private String reason;
+    private Long companionUserId;
     /**
      * 开始时间
      */

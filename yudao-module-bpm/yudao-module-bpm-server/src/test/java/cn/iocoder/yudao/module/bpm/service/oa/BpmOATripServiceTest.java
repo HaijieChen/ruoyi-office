@@ -67,11 +67,19 @@ class BpmOATripServiceTest {
         oaBillAccessPermission = new OaBillAccessPermission();
         ReflectionTestUtils.setField(oaBillAccessPermission, "taskServiceProvider", taskServiceProvider);
 
+        cn.iocoder.yudao.module.system.api.user.AdminUserApi adminUserApi =
+                mock(cn.iocoder.yudao.module.system.api.user.AdminUserApi.class);
+        cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO companion =
+                new cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO();
+        companion.setId(2L);
+        companion.setNickname("李四");
+        when(adminUserApi.getUser(2L)).thenReturn(CommonResult.success(companion));
         service = new BpmOATripServiceImpl();
         ReflectionTestUtils.setField(service, "tripMapper", tripMapper);
         ReflectionTestUtils.setField(service, "processInstanceApi", processInstanceApi);
         ReflectionTestUtils.setField(service, "securityFrameworkService", securityFrameworkService);
         ReflectionTestUtils.setField(service, "oaBillAccessPermission", oaBillAccessPermission);
+        ReflectionTestUtils.setField(service, "adminUserApi", adminUserApi);
     }
 
     @Test
@@ -91,7 +99,9 @@ class BpmOATripServiceTest {
         verify(tripMapper).insert(insertCaptor.capture());
         BpmOATripDO inserted = insertCaptor.getValue();
         assertEquals(1L, inserted.getUserId());
-        assertEquals(1, inserted.getType());
+        assertEquals("北京", inserted.getDestination());
+        assertEquals("客户拜访", inserted.getReason());
+        assertEquals(2L, inserted.getCompanionUserId());
         assertEquals(0, new BigDecimal("1.5").compareTo(inserted.getHours()));
         assertEquals(BpmTaskStatusEnum.RUNNING.getStatus(), inserted.getStatus());
         assertEquals(OaAttendanceSyncStatusEnum.NOT_SYNCED.getStatus(), inserted.getAttendanceSyncStatus());
@@ -103,7 +113,7 @@ class BpmOATripServiceTest {
         assertEquals(BpmOATripServiceImpl.PROCESS_KEY, dto.getProcessDefinitionKey());
         assertEquals("oa_business_trip", dto.getProcessDefinitionKey());
         assertEquals("5", dto.getBusinessKey());
-        assertEquals(1, dto.getVariables().get("type"));
+        assertEquals("北京", dto.getVariables().get("destination"));
         assertEquals(0, new BigDecimal("1.5").compareTo((BigDecimal) dto.getVariables().get("hours")));
         assertNull(dto.getStartUserSelectAssignees());
 
@@ -230,7 +240,9 @@ class BpmOATripServiceTest {
 
     private static BpmOATripCreateReqVO validCreateReq() {
         BpmOATripCreateReqVO req = new BpmOATripCreateReqVO();
-        req.setType(1);
+        req.setDestination("北京");
+        req.setReason("客户拜访");
+        req.setCompanionUserId(2L);
         req.setStartTime(START);
         req.setEndTime(START.plusMinutes(90));
         return req;

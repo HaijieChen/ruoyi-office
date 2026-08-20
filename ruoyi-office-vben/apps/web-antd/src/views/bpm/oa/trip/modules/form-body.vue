@@ -1,17 +1,15 @@
 <script lang="ts" setup>
 import type { Rule } from 'ant-design-vue/es/form';
 
-import { computed, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
-import { DICT_TYPE } from '@vben/constants';
-import { getDictOptions } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
 
-import { DatePicker, Form, Input, InputNumber, Select, message } from 'ant-design-vue';
+import { DatePicker, Form, Input, Select, message } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
 
 import { createTrip } from '#/api/bpm/oa/trip';
-import { calcTripHours } from '../data';
+import { getSimpleUserList } from '#/api/system/user';
 
 defineOptions({ name: 'BpmOATripFormBody' });
 
@@ -23,35 +21,19 @@ const emit = defineEmits<{
 const userStore = useUserStore();
 const formRef = ref();
 const submitting = ref(false);
+const userOptions = ref<{ label: string; value: number }[]>([]);
 const formData = ref<{
   userNickname?: string;
   deptName?: string;
-  type?: number;
+  destination?: string;
+  reason?: string;
+  companionUserId?: number;
   range?: [Dayjs, Dayjs];
-  hours?: number;
 }>({});
 
-const typeOptions = computed(() =>
-  getDictOptions(DICT_TYPE.BPM_OA_TRIP_TYPE, 'number').map((d) => ({
-    label: d.label,
-    value: d.value as number,
-  })),
-);
-
-function syncHours() {
-  const range = formData.value.range;
-  if (!range?.[0] || !range?.[1]) {
-    formData.value.hours = undefined;
-    return;
-  }
-  formData.value.hours = calcTripHours(range[0].valueOf(), range[1].valueOf());
-}
-
 function getPredictVariables(): Record<string, unknown> {
-  syncHours();
   const vars: Record<string, unknown> = {};
-  if (formData.value.hours != null) vars.hours = formData.value.hours;
-  if (formData.value.type != null) vars.type = formData.value.type;
+  if (formData.value.destination) vars.destination = formData.value.destination;
   return vars;
 }
 
@@ -67,24 +49,31 @@ async function reset(_opts?: { id?: number; mode?: string }) {
 }
 
 const rules: Record<string, Rule[]> = {
-  type: [{ required: true, message: '请选择出差类型', trigger: 'change' }],
-  range: [{ required: true, message: '请选择开始和结束时间', trigger: 'change' }],
+  destination: [{ required: true, message: '请填写出差地点', trigger: 'blur' }],
+  reason: [{ required: true, message: '请填写出差原因', trigger: 'blur' }],
+  companionUserId: [{ required: true, message: '请选择同行人员', trigger: 'change' }],
+  range: [{ required: true, message: '请选择开始和结束日期', trigger: 'change' }],
 };
 
 async function submit(): Promise<void> {
   await formRef.value?.validate();
-  syncHours();
   const range = formData.value.range;
-  if (!range?.[0] || !range?.[1] || formData.value.hours == null) {
-    message.warning('结束时间必须晚于开始时间，且时长须大于 0');
+  if (!range?.[0] || !range?.[1] || range[1].isBefore(range[0], 'day')) {
+    message.warning('结束日期不能早于开始日期');
     throw new Error('invalid range');
+  }
+  if (formData.value.companionUserId === userStore.userInfo?.id) {
+    message.warning('同行人员须为组织内其他人员');
+    throw new Error('companion');
   }
   submitting.value = true;
   try {
     await createTrip({
-      type: Number(formData.value.type),
-      startTime: range[0].valueOf(),
-      endTime: range[1].valueOf(),
+      destination: String(formData.value.destination).trim(),
+      reason: String(formData.value.reason).trim(),
+      companionUserId: Number(formData.value.companionUserId),
+      startTime: range[0].startOf('day').valueOf(),
+      endTime: range[1].endOf('day').valueOf(),
     });
     message.success('提交成功');
     emit('success');
@@ -92,6 +81,15 @@ async function submit(): Promise<void> {
     submitting.value = false;
   }
 }
+
+onMounted(async () => {
+  applyLoginUser();
+  const users = await getSimpleUserList();
+  const selfId = userStore.userInfo?.id;
+  userOptions.value = (users || [])
+    .filter((u) => u.id !== selfId)
+    .map((u) => ({ label: u.nickname || String(u.id), value: Number(u.id) }));
+});
 
 defineExpose({ reset, submit, getPredictVariables, submitting });
 </script>
@@ -110,26 +108,33 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     <Form.Item label="部门">
       <Input :value="formData.deptName" disabled />
     </Form.Item>
-    <Form.Item label="出差类型" name="type">
-      <Select
-        v-model:value="formData.type"
-        class="w-full"
-        :options="typeOptions"
-        placeholder="请选择"
+    <Form.Item label="出差地点" name="destination">
+      <Input
+        v-model:value="formData.destination"
+        placeholder="请填写出差地点"
         @change="emit('predictChange', getPredictVariables())"
       />
     </Form.Item>
-    <Form.Item label="起止时间" name="range">
+    <Form.Item label="出差日期" name="range">
       <DatePicker.RangePicker
         v-model:value="formData.range"
         class="w-full"
-        show-time
-        format="YYYY-MM-DD HH:mm"
+        format="YYYY-MM-DD"
         @change="emit('predictChange', getPredictVariables())"
       />
     </Form.Item>
-    <Form.Item label="出差时长">
-      <InputNumber :value="formData.hours" class="w-full" disabled :precision="1" />
+    <Form.Item label="出差原因" name="reason">
+      <Input.TextArea v-model:value="formData.reason" :rows="3" placeholder="请填写出差原因" />
+    </Form.Item>
+    <Form.Item label="同行人员" name="companionUserId">
+      <Select
+        v-model:value="formData.companionUserId"
+        class="w-full"
+        show-search
+        option-filter-prop="label"
+        :options="userOptions"
+        placeholder="从组织架构选择 1 人"
+      />
     </Form.Item>
   </Form>
 </template>

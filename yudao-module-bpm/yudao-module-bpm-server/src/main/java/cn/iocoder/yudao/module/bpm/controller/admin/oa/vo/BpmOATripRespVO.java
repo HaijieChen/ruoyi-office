@@ -24,6 +24,10 @@ public class BpmOATripRespVO {
 
     @Schema(description = "出差类型：1市内 2省内 3省外 4国外", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private Integer type;
+    private String destination;
+    private String reason;
+    private Long companionUserId;
+    private String companionNickname;
 
     @Schema(description = "开始时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime startTime;

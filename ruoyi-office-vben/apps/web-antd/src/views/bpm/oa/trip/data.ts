@@ -205,23 +205,24 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       },
     },
     {
-      field: 'type',
-      title: '出差类型',
+      field: 'destination',
+      title: '出差地点',
+      minWidth: 140,
+    },
+    {
+      field: 'companionNickname',
+      title: '同行人员',
       minWidth: 100,
-      cellRender: {
-        name: 'CellDict',
-        props: { type: DICT_TYPE.BPM_OA_TRIP_TYPE },
-      },
     },
     {
       field: 'startTime',
-      title: '开始时间',
+      title: '开始日期',
       minWidth: 180,
       formatter: 'formatDate',
     },
     {
       field: 'endTime',
-      title: '结束时间',
+      title: '结束日期',
       minWidth: 180,
       formatter: 'formatDate',
     },
@@ -257,27 +258,26 @@ export function useDetailFormSchema(): DescriptionItemSchema[] {
       field: 'deptName',
     },
     {
-      label: '出差类型',
-      field: 'type',
-      render: (val) =>
-        h(DictTag, {
-          type: DICT_TYPE.BPM_OA_TRIP_TYPE,
-          value: val,
-        }),
+      label: '出差地点',
+      field: 'destination',
     },
     {
-      label: '开始时间',
+      label: '出差原因',
+      field: 'reason',
+    },
+    {
+      label: '同行人员',
+      field: 'companionNickname',
+    },
+    {
+      label: '开始日期',
       field: 'startTime',
       render: (val) => formatDate(val) as string,
     },
     {
-      label: '结束时间',
+      label: '结束日期',
       field: 'endTime',
       render: (val) => formatDate(val) as string,
-    },
-    {
-      label: '出差时长(小时)',
-      field: 'hours',
     },
   ];
 }

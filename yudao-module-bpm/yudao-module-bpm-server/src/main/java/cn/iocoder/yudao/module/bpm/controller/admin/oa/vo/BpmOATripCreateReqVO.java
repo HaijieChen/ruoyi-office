@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.bpm.controller.admin.oa.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,9 +17,20 @@ import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_
 @Data
 public class BpmOATripCreateReqVO {
 
-    @Schema(description = "出差类型：1市内 2省内 3省外 4国外", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
-    @NotNull(message = "出差类型不能为空")
+    @Schema(description = "出差类型（历史，新单可不填）", example = "1")
     private Integer type;
+
+    @Schema(description = "出差地点", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "出差地点不能为空")
+    private String destination;
+
+    @Schema(description = "出差原因", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "出差原因不能为空")
+    private String reason;
+
+    @Schema(description = "同行人员用户编号", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "同行人员不能为空")
+    private Long companionUserId;
 
     @Schema(description = "开始时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "开始时间不能为空")

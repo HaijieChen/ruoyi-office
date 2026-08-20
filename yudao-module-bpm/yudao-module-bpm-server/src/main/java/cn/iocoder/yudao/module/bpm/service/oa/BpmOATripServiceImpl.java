@@ -23,8 +23,15 @@ import java.util.Map;
 import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
+
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_DURATION_INVALID;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_ACCESS_DENIED;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_COMPANION_INVALID;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_FIELD_REQUIRED;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_NOT_EXISTS;
 
 /**
@@ -53,9 +60,24 @@ public class BpmOATripServiceImpl implements BpmOATripService {
     @Resource
     private OaBillAccessPermission oaBillAccessPermission;
 
+    @Resource
+    private AdminUserApi adminUserApi;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createTrip(Long userId, BpmOATripCreateReqVO createReqVO) {
+        if (StrUtil.isBlank(createReqVO.getDestination()) || StrUtil.isBlank(createReqVO.getReason())
+                || createReqVO.getCompanionUserId() == null) {
+            throw exception(OA_TRIP_FIELD_REQUIRED);
+        }
+        if (Objects.equals(createReqVO.getCompanionUserId(), userId)) {
+            throw exception(OA_TRIP_COMPANION_INVALID);
+        }
+        CommonResult<AdminUserRespDTO> companion = adminUserApi.getUser(createReqVO.getCompanionUserId());
+        if (companion == null || companion.getData() == null) {
+            throw exception(OA_TRIP_COMPANION_INVALID);
+        }
+
         BigDecimal hours = OaDurationHours.calc(createReqVO.getStartTime(), createReqVO.getEndTime())
                 .orElseThrow(() -> exception(OA_DURATION_INVALID));
 
@@ -68,7 +90,10 @@ public class BpmOATripServiceImpl implements BpmOATripService {
 
         Map<String, Object> processInstanceVariables = new HashMap<>();
         processInstanceVariables.put("hours", hours);
-        processInstanceVariables.put("type", createReqVO.getType());
+        processInstanceVariables.put("destination", createReqVO.getDestination().trim());
+        if (createReqVO.getType() != null) {
+            processInstanceVariables.put("type", createReqVO.getType());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)
                         .setVariables(processInstanceVariables).setBusinessKey(String.valueOf(trip.getId())))
