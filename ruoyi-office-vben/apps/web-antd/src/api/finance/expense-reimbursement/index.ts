@@ -66,7 +66,7 @@ export function ocrExpenseInvoice(fileUrl: string, file?: File) {
   if (file) {
     const data = new FormData();
     data.append('file', file);
-    return requestClient.post<{ feeDate?: string; amount?: number }>(
+    return requestClient.upload<{ feeDate?: string; amount?: number }>(
       '/finance/expense-reimbursement/ocr-invoice',
       data,
     );
