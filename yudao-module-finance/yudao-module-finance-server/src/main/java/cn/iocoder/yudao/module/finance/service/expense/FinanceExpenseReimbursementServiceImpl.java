@@ -50,6 +50,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_INVALID;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_USED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED;
 
@@ -118,6 +119,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             }
             validateInvoiceAndPredoc(line, proxy, invoiceMode, userId);
             validateStayStandard(line, userId);
+            if (StrUtil.isNotBlank(line.getInvoiceNo()) && invoiceNoUsed(line.getInvoiceNo())) {
+                throw exception(EXPENSE_REIMBURSEMENT_INVOICE_USED);
+            }
             apply = apply.add(line.getAmount());
             i++;
         }
@@ -158,6 +162,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                     .amount(line.getAmount().setScale(2, RoundingMode.HALF_UP))
                     .attachments(line.getAttachments() == null ? null : String.join(",", line.getAttachments()))
                     .invoiceFileUrl(line.getInvoiceFileUrl())
+                    .invoiceNo(line.getInvoiceNo())
                     .predocType(line.getPredocType())
                     .predocProcessInstanceId(line.getPredocProcessInstanceId())
                     .remark(line.getRemark())
@@ -342,6 +347,11 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (predocType != null || predocId != null) {
             throw exception(EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN);
         }
+    }
+
+    @Override
+    public boolean invoiceNoUsed(String invoiceNo) {
+        return lineMapper.existsInvoiceNo(invoiceNo);
     }
 
     /** 差旅住宿标准：房间数×城市标准×天数，只做超标说明，不卡控金额。 */

@@ -56,7 +56,12 @@ public class FinanceInvoiceOcrClient {
                 return Result.empty();
             }
             JSONObject json = JSONUtil.parseObj(resp.body());
-            return new Result(parseDate(json.getStr("feeDate")), json.getBigDecimal("amount"), json.getStr("rawText"));
+            String invoiceNo = json.getStr("invoiceNo");
+            if (StrUtil.isBlank(invoiceNo)) {
+                invoiceNo = parseInvoiceNo(json.getStr("rawText"));
+            }
+            return new Result(parseDate(json.getStr("feeDate")), json.getBigDecimal("amount"),
+                    json.getStr("rawText"), invoiceNo, false);
         } catch (Exception ex) {
             log.warn("[ocr] failed: {}", ex.toString());
             return Result.empty();
@@ -123,9 +128,25 @@ public class FinanceInvoiceOcrClient {
         }
     }
 
-    public record Result(@JsonFormat(pattern = "yyyy-MM-dd") LocalDate feeDate, BigDecimal amount, String rawText) {
+    static String parseInvoiceNo(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("发票号码[:：]?\\s*([0-9]{8,20})").matcher(raw);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return null;
+    }
+
+    public record Result(@JsonFormat(pattern = "yyyy-MM-dd") LocalDate feeDate, BigDecimal amount, String rawText,
+                         String invoiceNo, boolean used) {
         static Result empty() {
-            return new Result(null, null, null);
+            return new Result(null, null, null, null, false);
+        }
+
+        public Result withUsed(boolean usedFlag) {
+            return new Result(feeDate, amount, rawText, invoiceNo, usedFlag);
         }
     }
 }

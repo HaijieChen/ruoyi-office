@@ -30,6 +30,7 @@ public class FinanceExpenseReimbursementLineDO extends TenantBaseDO {
     private BigDecimal amount;
     private String attachments;
     private String invoiceFileUrl;
+    private String invoiceNo;
     private String predocType;
     private String predocProcessInstanceId;
     private String remark;

@@ -298,6 +298,8 @@ public interface ErrorCodeConstants {
             "差旅须关联带城市的出差或外出单以裁定住宿标准");
     ErrorCode EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED = new ErrorCode(1_040_008_022,
             "差旅住宿超标须填写超标原因");
+    ErrorCode EXPENSE_REIMBURSEMENT_INVOICE_USED = new ErrorCode(1_040_008_023,
+            "发票已被使用");
 
     // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
     /** 交易币种仅允许 CNY/USD/HKD */

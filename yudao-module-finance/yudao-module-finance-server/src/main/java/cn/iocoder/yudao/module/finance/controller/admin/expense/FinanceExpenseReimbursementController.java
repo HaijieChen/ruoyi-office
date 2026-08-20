@@ -60,10 +60,14 @@ public class FinanceExpenseReimbursementController {
     public CommonResult<FinanceInvoiceOcrClient.Result> ocrInvoice(
             @RequestParam(value = "fileUrl", required = false) String fileUrl,
             @RequestParam(value = "file", required = false) MultipartFile file) throws Exception {
-        if (file != null && !file.isEmpty()) {
-            return success(invoiceOcrClient.recognizeBytes(file.getBytes()));
+        FinanceInvoiceOcrClient.Result result = file != null && !file.isEmpty()
+                ? invoiceOcrClient.recognizeBytes(file.getBytes())
+                : invoiceOcrClient.recognize(fileUrl);
+        if (result != null && result.invoiceNo() != null
+                && expenseReimbursementService.invoiceNoUsed(result.invoiceNo())) {
+            result = result.withUsed(true);
         }
-        return success(invoiceOcrClient.recognize(fileUrl));
+        return success(result);
     }
 
     @GetMapping("/get")

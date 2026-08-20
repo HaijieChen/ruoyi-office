@@ -25,4 +25,11 @@ class FinanceInvoiceOcrClientTest {
         assertEquals(LocalDate.of(2026, 8, 1), FinanceInvoiceOcrClient.parseDate("2026/8/1"));
         assertNull(FinanceInvoiceOcrClient.parseDate(""));
     }
+
+    @Test
+    void parseInvoiceNo() {
+        assertEquals("26317000002934677164",
+                FinanceInvoiceOcrClient.parseInvoiceNo("电子发票 发票号码：26317000002934677164 开票日期"));
+        assertNull(FinanceInvoiceOcrClient.parseInvoiceNo("无号码"));
+    }
 }

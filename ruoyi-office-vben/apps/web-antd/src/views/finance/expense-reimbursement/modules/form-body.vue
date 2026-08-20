@@ -46,6 +46,7 @@ interface LineRow {
   feeDate?: string;
   amount?: number;
   invoiceFileUrl?: string;
+  invoiceNo?: string;
   predocType?: string;
   predocProcessInstanceId?: string;
   remark?: string;
@@ -180,14 +181,24 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
   const hide = message.loading({ content: '正在识别发票...', duration: 0 });
   try {
     const ocr = await ocrExpenseInvoice(url, file);
+    if (ocr?.used || formData.value.lines.some((l, i) => i !== index && l.invoiceNo && l.invoiceNo === ocr?.invoiceNo)) {
+      message.error(`发票 ${ocr.invoiceNo || ''} 已被使用`);
+      throw new Error('invoice used');
+    }
+    if (ocr?.invoiceNo) line.invoiceNo = String(ocr.invoiceNo);
     if (ocr?.feeDate) line.feeDate = String(ocr.feeDate).slice(0, 10);
     if (ocr?.amount != null) line.amount = Number(ocr.amount);
-    if (ocr?.feeDate || ocr?.amount != null) {
-      message.success('已识别日期/金额，请核对');
+    if (ocr?.invoiceNo || ocr?.feeDate || ocr?.amount != null) {
+      message.success(
+        `已识别${ocr.invoiceNo ? '票号 ' + ocr.invoiceNo : ''}${ocr.feeDate || ocr.amount != null ? ' 日期/金额' : ''}，请核对`,
+      );
     } else {
-      message.warning('未识别到日期或金额，请手填');
+      message.warning('未识别到票号/日期/金额，请手填');
     }
-  } catch {
+  } catch (e: any) {
+    if (String(e?.message || '').includes('invoice used')) {
+      throw e;
+    }
     message.warning('识别失败，请手填日期和金额');
   } finally {
     hide();
@@ -201,10 +212,10 @@ function rawUploadFile(file: File) {
 
 async function uploadInvoice(index: number, file: File, onUploadProgress?: any) {
   const raw = rawUploadFile(file);
-  const res = await httpRequest(raw, onUploadProgress);
-  const url = typeof res === 'string' ? res : String((res as any)?.url || '');
-  if (raw instanceof Blob) await runInvoiceOcr(index, url, raw);
-  return res;
+  if (raw instanceof Blob) {
+    await runInvoiceOcr(index, '', raw as File);
+  }
+  return httpRequest(raw, onUploadProgress);
 }
 
 async function onInvoiceUpload(index: number, val: string | string[]) {
@@ -332,6 +343,7 @@ async function submit(): Promise<void> {
       feeDate: String(l.feeDate),
       amount: Number(l.amount),
       invoiceFileUrl: l.invoiceFileUrl,
+        invoiceNo: l.invoiceNo,
       predocType:
         l.category === 'travel'
           ? 'TRIP'
@@ -482,6 +494,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             :api="(file, progress) => uploadInvoice(index, file as File, progress)"
             @update:value="(v) => onInvoiceUpload(index, v)"
           />
+          <span v-if="line.invoiceNo" class="text-xs text-gray-600">票号 {{ line.invoiceNo }}</span>
           <Input v-model:value="line.remark" class="w-36" placeholder="说明" />
         </template>
         <span v-else-if="needsPredoc(line)" class="text-xs text-gray-500">请先选择关联单</span>

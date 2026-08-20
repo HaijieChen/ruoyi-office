@@ -16,4 +16,12 @@ public interface FinanceExpenseReimbursementLineMapper extends BaseMapperX<Finan
                 .orderByAsc(FinanceExpenseReimbursementLineDO::getSort)
                 .orderByAsc(FinanceExpenseReimbursementLineDO::getId));
     }
+
+    default boolean existsInvoiceNo(String invoiceNo) {
+        if (invoiceNo == null || invoiceNo.isBlank()) {
+            return false;
+        }
+        return selectCount(new LambdaQueryWrapperX<FinanceExpenseReimbursementLineDO>()
+                .eq(FinanceExpenseReimbursementLineDO::getInvoiceNo, invoiceNo.trim())) > 0;
+    }
 }

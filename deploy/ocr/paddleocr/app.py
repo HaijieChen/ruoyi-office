@@ -37,7 +37,11 @@ def parse_text(joined):
     if dates:
         fee = dates[0].replace("年", "-").replace("月", "-").replace(".", "-").replace("/", "-")[:10]
     amt = amounts[-1] if amounts else None
-    return fee, amt, joined[:2000]
+    nos = re.findall(r"发票号码[:：]?\s*([0-9]{8,20})", joined)
+    if not nos:
+        nos = re.findall(r"号码[:：]\s*([0-9]{10,20})", joined)
+    no = nos[0] if nos else None
+    return fee, amt, no, joined[:2000]
 
 
 def pdf_text(path):
@@ -88,11 +92,11 @@ def invoice(req: Req):
             urllib.request.urlretrieve(encoded, tmp.name)
             path = tmp.name
         else:
-            return {"feeDate": None, "amount": None, "rawText": "missing file"}
-        fee, amt, joined = recognize_file(path)
-        return {"feeDate": fee, "amount": amt, "rawText": joined}
+            return {"feeDate": None, "amount": None, "invoiceNo": None, "rawText": "missing file"}
+        fee, amt, no, joined = recognize_file(path)
+        return {"feeDate": fee, "amount": amt, "invoiceNo": no, "rawText": joined}
     except Exception as e:
-        return {"feeDate": None, "amount": None, "rawText": str(e)[:500]}
+        return {"feeDate": None, "amount": None, "invoiceNo": None, "rawText": str(e)[:500]}
     finally:
         if tmp and os.path.exists(tmp.name):
             os.unlink(tmp.name)

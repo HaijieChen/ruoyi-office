@@ -25,4 +25,6 @@ public interface FinanceExpenseReimbursementService {
     void approve(FinanceExpenseApproveReqVO reqVO, Long userId);
 
     void recordPay(FinanceExpenseRecordPayReqVO reqVO, Long userId);
+
+    boolean invoiceNoUsed(String invoiceNo);
 }
