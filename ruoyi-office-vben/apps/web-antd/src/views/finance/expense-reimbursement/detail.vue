@@ -24,6 +24,7 @@ import {
 } from '#/api/finance/expense-reimbursement';
 import type { FinanceExpenseApi } from '#/api/finance/expense-reimbursement';
 import { FileUpload } from '#/components/upload';
+import PrintVoucher from './modules/print-voucher.vue';
 
 defineOptions({ name: 'FinanceExpenseReimbursementDetail' });
 
@@ -98,8 +99,8 @@ onMounted(load);
   <Page auto-content-height>
     <Spin :spinning="loading">
       <div v-if="bill" class="mx-auto max-w-3xl p-4 print:max-w-none">
-        <div class="mb-2 text-right print:hidden">
-          <Button @click="window.print()">打印</Button>
+        <div class="mb-2 print:hidden">
+          <PrintVoucher :bill="bill" />
         </div>
         <Descriptions bordered :column="2" size="small">
           <Descriptions.Item label="标题">{{ bill.processTitle }}</Descriptions.Item>

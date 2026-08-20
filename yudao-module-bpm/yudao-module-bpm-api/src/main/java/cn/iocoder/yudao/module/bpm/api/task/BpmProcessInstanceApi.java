@@ -58,4 +58,10 @@ public interface BpmProcessInstanceApi {
             @RequestParam(value = "forbiddenTaskDefinitionKeys", required = false)
             Collection<String> forbiddenTaskDefinitionKeys);
 
+    @PostMapping(PREFIX + "/return-current-to-start-user-task")
+    @Operation(summary = "将当前任务退回到最早可退回的发起人节点")
+    CommonResult<Boolean> returnCurrentTaskToStartUserTask(@RequestParam("userId") Long userId,
+                                                           @RequestParam("taskId") String taskId,
+                                                           @RequestParam("reason") String reason);
+
 }

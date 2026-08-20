@@ -810,6 +810,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             boolean complete = reqVO.getCompleteWhenFullyPaid() == null || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
             if (Boolean.FALSE.equals(reqVO.getMaterialsComplete())) {
                 complete = false;
+                processInstanceApi.returnCurrentTaskToStartUserTask(
+                        userId, task.getId(), "发票/资料不齐，退回发起人补传");
             }
             if (complete) {
                 completeCashierTask(task);

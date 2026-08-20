@@ -3,7 +3,11 @@ package cn.iocoder.yudao.module.bpm.api.task;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.instance.BpmProcessInstanceCancelReqVO;
+import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.task.BpmTaskReturnReqVO;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceService;
+import cn.iocoder.yudao.module.bpm.service.task.BpmTaskService;
+import org.flowable.bpmn.model.UserTask;
+import cn.hutool.core.collection.CollUtil;
 import org.springframework.context.annotation.Primary;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,6 +33,8 @@ public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
 
     @Resource
     private BpmProcessInstanceService processInstanceService;
+    @Resource
+    private BpmTaskService taskService;
 
     @Override
     public CommonResult<String> createProcessInstance(Long userId, @Valid BpmProcessInstanceCreateReqDTO reqDTO) {
@@ -57,6 +63,21 @@ public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
         cancelReqVO.setReason(reason);
         processInstanceService.cancelProcessInstanceByStartUser(
                 userId, cancelReqVO, forbiddenTaskDefinitionKeys);
+        return success(true);
+    }
+
+    @Override
+    public CommonResult<Boolean> returnCurrentTaskToStartUserTask(Long userId, String taskId, String reason) {
+        java.util.List<UserTask> previous = taskService.getUserTaskListByReturn(taskId);
+        if (CollUtil.isEmpty(previous)) {
+            return success(false);
+        }
+        UserTask target = previous.get(previous.size() - 1);
+        BpmTaskReturnReqVO req = new BpmTaskReturnReqVO();
+        req.setId(taskId);
+        req.setTargetTaskDefinitionKey(target.getId());
+        req.setReason(reason);
+        taskService.returnTask(userId, req);
         return success(true);
     }
 

@@ -104,4 +104,7 @@ public interface FileService {
      */
     byte[] getFileContentAllowPrivate(Long configId, String path) throws Exception;
 
+    /** 按访问 URL 或 path 解析文件记录 */
+    FileDO getFileByUrl(String url);
+
 }

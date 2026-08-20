@@ -1,9 +1,11 @@
 package cn.iocoder.yudao.module.infra.service.file;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.util.URLUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
@@ -240,6 +242,34 @@ public class FileServiceImpl implements FileService {
             throw exception(FILE_NOT_EXISTS);
         }
         return fileDO;
+    }
+
+    @Override
+    public FileDO getFileByUrl(String url) {
+        if (StrUtil.isBlank(url)) {
+            return null;
+        }
+        String raw = url.trim();
+        List<FileDO> hit = fileMapper.selectListByUrlBinary(raw);
+        if (CollUtil.isEmpty(hit)) {
+            int q = raw.indexOf('?');
+            if (q > 0) {
+                hit = fileMapper.selectListByUrlBinary(raw.substring(0, q));
+            }
+        }
+        if (CollUtil.isEmpty(hit) && raw.contains("/get/")) {
+            String path = StrUtil.subAfter(raw, "/get/", true);
+            if (StrUtil.isNotBlank(path)) {
+                hit = fileMapper.selectListByPathBinary(URLUtil.decode(path));
+            }
+        }
+        if (CollUtil.isEmpty(hit)) {
+            String path = StrUtil.subAfter(raw, "/", true);
+            if (StrUtil.isNotBlank(path)) {
+                hit = fileMapper.selectListByPathBinary(URLUtil.decode(path));
+            }
+        }
+        return CollUtil.isEmpty(hit) ? null : hit.get(0);
     }
 
     @Override

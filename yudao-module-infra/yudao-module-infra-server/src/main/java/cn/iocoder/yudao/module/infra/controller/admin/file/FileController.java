@@ -164,6 +164,22 @@ public class FileController {
         writeAttachment(response, path, content);
     }
 
+    @GetMapping("/preview")
+    @Operation(summary = "登录后按 URL 预览文件（从存储器读取，不直连 MinIO）")
+    public void preview(@RequestParam("url") String url, HttpServletResponse response) throws Exception {
+        FileDO file = fileService.getFileByUrl(url);
+        if (file == null) {
+            response.setStatus(HttpStatus.NOT_FOUND.value());
+            return;
+        }
+        byte[] content = fileService.getFileContent(file.getConfigId(), file.getPath());
+        if (content == null) {
+            response.setStatus(HttpStatus.NOT_FOUND.value());
+            return;
+        }
+        writeAttachment(response, StrUtil.blankToDefault(file.getName(), file.getPath()), content);
+    }
+
     @GetMapping("/page")
     @Operation(summary = "获得文件分页")
     @PreAuthorize("@ss.hasPermission('infra:file:query')")

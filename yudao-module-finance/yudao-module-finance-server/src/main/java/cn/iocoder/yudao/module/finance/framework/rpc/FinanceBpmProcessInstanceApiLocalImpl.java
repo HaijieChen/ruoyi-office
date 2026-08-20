@@ -66,6 +66,11 @@ public class FinanceBpmProcessInstanceApiLocalImpl implements FinanceBpmProcessI
                 userId, processInstanceId, reason, forbiddenTaskDefinitionKeys);
     }
 
+    @Override
+    public CommonResult<Boolean> returnCurrentTaskToStartUserTask(Long userId, String taskId, String reason) {
+        return delegate.returnCurrentTaskToStartUserTask(userId, taskId, reason);
+    }
+
     private <T> T withFinanceAuthority(java.util.function.Supplier<T> action) {
         Authentication original = SecurityContextHolder.getContext().getAuthentication();
         try {

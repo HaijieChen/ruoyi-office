@@ -10,7 +10,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { useTabs } from '@vben/hooks';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { useUserStore } from '@vben/stores';
 
 import {
   Alert,
@@ -40,6 +40,8 @@ import type { DefaultOptionType } from 'ant-design-vue/es/select';
 
 import { getDictOptions } from '@vben/hooks';
 import { FileUpload } from '#/components/upload';
+import { previewAuthUrl } from '#/utils/file-preview';
+import PrintVoucher from '../modules/print-voucher.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationBpmDetail' });
 
@@ -137,7 +139,6 @@ const resolvedNodeKey = computed(() => resolveNodeKey());
 const resolvedTaskId = computed(() => resolveTaskId());
 const isFinanceNode = computed(() => FINANCE_KEYS.has(resolvedNodeKey.value));
 const isCashierNode = computed(() => CASHIER_KEYS.has(resolvedNodeKey.value));
-const accessStore = useAccessStore();
 
 async function onConfirmMaterials() {
   const id = detail.value?.id;
@@ -152,24 +153,19 @@ async function onConfirmMaterials() {
 }
 
 async function previewEvidence(url: string) {
-  const token = accessStore.accessToken;
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(url, { method: 'GET', headers, credentials: 'include' });
-  if (!res.ok) {
-    message.error('预览失败');
-    return;
+  try {
+    await previewAuthUrl(url);
+  } catch (e: any) {
+    message.error(e?.message || '预览失败');
   }
-  const blob = await res.blob();
-  const obj = URL.createObjectURL(blob);
-  window.open(obj, '_blank');
 }
 
 const canResubmit = computed(() => {
   const d = detail.value;
-  if (!d || d.status !== 'REJECTED') return false;
+  if (!d) return false;
   const uid = userStore.userInfo?.id;
-  return uid != null && Number(d.applicantUserId) === Number(uid);
+  if (uid == null || Number(d.applicantUserId) !== Number(uid)) return false;
+  return d.status === 'REJECTED' || d.materialsStatus === 'WAIT_INVOICE';
 });
 
 const remainingPay = computed(() => {
@@ -366,7 +362,7 @@ watch(
             type="primary"
             @click="onConfirmMaterials"
           >确认资料齐全</Button>
-          <Button class="print:hidden" size="small" @click="window.print()">打印</Button>
+          <PrintVoucher class="print:hidden" :detail="detail" />
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
             {{ props.nodeKeyName || resolvedNodeKey }}
           </Tag>
@@ -377,8 +373,8 @@ watch(
           class="mb-4"
           type="warning"
           show-icon
-          message="本单已驳回"
-          description="请修改后重提，将整链重批。"
+          :message="detail.materialsStatus === 'WAIT_INVOICE' ? '待补票' : '本单已驳回'"
+          :description="detail.materialsStatus === 'WAIT_INVOICE' ? '请补传发票/结算单后从待办提交，将回流至出纳确认。' : '请修改后重提，将整链重批。'"
         >
           <template #action>
             <Button type="primary" @click="handleGoResubmit">修改并重提</Button>
