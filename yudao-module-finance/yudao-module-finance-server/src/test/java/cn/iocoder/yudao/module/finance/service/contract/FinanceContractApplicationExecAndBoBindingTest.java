@@ -55,8 +55,12 @@ class FinanceContractApplicationExecAndBoBindingTest {
         FinanceEntityCompanyResolver entityResolver = mock(FinanceEntityCompanyResolver.class);
         when(entityResolver.requireByDeptId(anyLong()))
                 .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(COMPANY_DEPT_ID, "示例主体公司", "CNY"));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<FinanceApprovedSalesBusinessOrderService> autoBo =
+                mock(ObjectProvider.class);
+        when(autoBo.getIfAvailable()).thenReturn(null);
         contractService = new FinanceContractApplicationServiceImpl(
-                contractMapper, noDao, bpm, customer, entityResolver, taskProvider, dictDataApi);
+                contractMapper, noDao, bpm, customer, entityResolver, taskProvider, dictDataApi, autoBo);
 
         boMapper = mock(FinanceBusinessOrderMapper.class);
         FinanceBusinessOrderNoRedisDAO boNo = mock(FinanceBusinessOrderNoRedisDAO.class);

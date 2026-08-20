@@ -71,6 +71,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private final FinanceEntityCompanyResolver entityCompanyResolver;
     private final ObjectProvider<TaskService> taskServiceProvider;
     private final DictDataApi dictDataApi;
+    private final ObjectProvider<FinanceApprovedSalesBusinessOrderService> autoBusinessOrderProvider;
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(FinanceContractApplicationServiceImpl.class);
 
     public FinanceContractApplicationServiceImpl(FinanceContractApplicationMapper applicationMapper,
                                                  FinanceContractApplicationNoRedisDAO applicationNoRedisDAO,
@@ -79,7 +82,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                                                  FinanceCustomerCompanyService customerCompanyService,
                                                  FinanceEntityCompanyResolver entityCompanyResolver,
                                                  ObjectProvider<TaskService> taskServiceProvider,
-                                                 DictDataApi dictDataApi) {
+                                                 DictDataApi dictDataApi,
+                                                 ObjectProvider<FinanceApprovedSalesBusinessOrderService> autoBusinessOrderProvider) {
         this.applicationMapper = applicationMapper;
         this.applicationNoRedisDAO = applicationNoRedisDAO;
         this.processInstanceApi = processInstanceApi;
@@ -87,6 +91,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         this.entityCompanyResolver = entityCompanyResolver;
         this.taskServiceProvider = taskServiceProvider;
         this.dictDataApi = dictDataApi;
+        this.autoBusinessOrderProvider = autoBusinessOrderProvider;
     }
 
     @Override
@@ -260,6 +265,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
             uw.set("voided", Boolean.TRUE);
         }
         int rows = applicationMapper.update(null, uw);
+        if (rows > 0 && FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(normalized)) {
+            tryCreateSalesBusinessOrder(appId);
+        }
         if (rows == 0) {
             FinanceContractApplicationDO again = getApplication(appId);
             if (Objects.equals(again.getApprovalStatus(), normalized)) {
@@ -271,6 +279,18 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 return;
             }
             throw exception(CONTRACT_APPLICATION_APPROVAL_OUTCOME_INVALID);
+        }
+    }
+
+    private void tryCreateSalesBusinessOrder(Long appId) {
+        FinanceApprovedSalesBusinessOrderService autoBo = autoBusinessOrderProvider.getIfAvailable();
+        if (autoBo == null) {
+            return;
+        }
+        try {
+            autoBo.createIfEligible(getApplication(appId));
+        } catch (Exception ex) {
+            log.warn("[auto-bo] contract {} generate business order failed: {}", appId, ex.toString());
         }
     }
 

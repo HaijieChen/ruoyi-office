@@ -61,9 +61,13 @@ class FinanceContractApplicationServiceImplTest {
         when(taskServiceProvider.getIfAvailable()).thenReturn(null);
         when(entityCompanyResolver.requireByDeptId(20L))
                 .thenReturn(new FinanceEntityCompanyResolver.ResolvedCompany(20L, "A公司", "CNY"));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<FinanceApprovedSalesBusinessOrderService> autoBo =
+                mock(ObjectProvider.class);
+        when(autoBo.getIfAvailable()).thenReturn(null);
         service = new FinanceContractApplicationServiceImpl(
                 applicationMapper, applicationNoRedisDAO, processInstanceApi, customerCompanyService,
-                entityCompanyResolver, taskServiceProvider, dictDataApi);
+                entityCompanyResolver, taskServiceProvider, dictDataApi, autoBo);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("CT-20260731-1");
         when(customerCompanyService.getEnabledCustomerCompany(50L)).thenReturn(
