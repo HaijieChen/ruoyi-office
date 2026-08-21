@@ -31,7 +31,7 @@ public class BpmFormDataSourceContextResolver {
      * 服务端保留参数名，浏览器端不允许覆盖
      */
     private static final Set<String> RESERVED_PARAMS = Set.of(
-            "tenantId", "userId", "deptId", "companyId"
+            "tenantId", "userId", "deptId", "companyId", "sharedInstanceIds"
     );
 
     /**

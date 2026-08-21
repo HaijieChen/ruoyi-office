@@ -21,7 +21,7 @@ import {
 } from '@vben/icons';
 import { useUserStore } from '@vben/stores';
 
-import { Card, Col, message, Row, TabPane, Tabs } from 'ant-design-vue';
+import { Button, Card, Col, message, Row, TabPane, Tabs } from 'ant-design-vue';
 
 import {
   getApprovalDetail as getApprovalDetailApi,
@@ -36,6 +36,7 @@ import { registerComponent } from '#/utils';
 
 import { isFinanceApprovalPShellViewPath } from '../constants';
 
+import ProcessInstanceShareDialog from './modules/share-dialog.vue';
 import ProcessInstanceBpmnViewer from './modules/bpm-viewer.vue';
 import ProcessInstanceOperationButton from './modules/operation-button.vue';
 import ProcessInstanceSimpleViewer from './modules/simple-bpm-viewer.vue';
@@ -352,6 +353,14 @@ watch(
 );
 
 /** 初始化 */
+const shareOpen = ref(false);
+const canShare = computed(() => {
+  const inst = processInstance.value;
+  if (!inst) return false;
+  if (inst.status !== BpmProcessInstanceStatus.APPROVE) return false;
+  return inst.startUser?.id === userStore.userInfo?.id;
+});
+
 const userOptions = ref<SystemUserApi.User[]>([]); // 用户列表
 onMounted(async () => {
   await getDetail();
@@ -371,12 +380,19 @@ onMounted(async () => {
     >
       <div class="flex h-full flex-col">
         <div class="flex flex-col gap-2">
+          <div v-if="canShare" class="px-4 pt-3">
+            <Button type="primary" ghost @click="shareOpen = true">分享</Button>
+          </div>
           <component
             v-if="processInstance?.status"
             :is="auditIconsMap[processInstance?.status]"
             class="absolute right-5 top-2.5 size-28"
           />
         </div>
+        <ProcessInstanceShareDialog
+          v-model:open="shareOpen"
+          :process-instance-id="String(id)"
+        />
 
         <div class="process-tabs-container flex flex-1 flex-col">
           <Tabs v-model:active-key="activeTab" class="mt-0 h-full">

@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplica
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.finance.enums.FinancePurchaseProcessConstants;
+import cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.ProcessEngineConfiguration;
 import org.flowable.engine.history.HistoricProcessInstance;
@@ -21,9 +22,11 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
@@ -39,29 +42,42 @@ public class FinancePaymentPredocServiceImpl implements FinancePaymentPredocServ
 
     private final ObjectProvider<HistoryService> historyServiceProvider;
     private final FinanceContractApplicationMapper contractApplicationMapper;
+    private final FinanceRelatedProcessAccess relatedProcessAccess;
 
     public FinancePaymentPredocServiceImpl(ObjectProvider<HistoryService> historyServiceProvider,
-                                           FinanceContractApplicationMapper contractApplicationMapper) {
+                                           FinanceContractApplicationMapper contractApplicationMapper,
+                                           FinanceRelatedProcessAccess relatedProcessAccess) {
         this.historyServiceProvider = historyServiceProvider;
         this.contractApplicationMapper = contractApplicationMapper;
+        this.relatedProcessAccess = relatedProcessAccess;
     }
 
     @Override
     public List<FinancePurchaseInstanceRespVO> listSelectablePurchaseInstances(Long userId) {
         HistoryService historyService = requireHistoryService();
         List<FinancePurchaseInstanceRespVO> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        Set<String> sharedIds = relatedProcessAccess.listSharedInstanceIds(userId);
         for (String key : FinancePurchaseProcessConstants.PURCHASE_PROCESS_KEYS) {
-            HistoricProcessInstanceQuery query = historyService.createHistoricProcessInstanceQuery()
+            HistoricProcessInstanceQuery own = historyService.createHistoricProcessInstanceQuery()
                     .processDefinitionKey(key)
                     .startedBy(String.valueOf(userId))
                     .variableValueEquals(PROCESS_STATUS_VAR, BpmProcessInstanceStatusEnum.APPROVE.getStatus())
                     .includeProcessVariables()
                     .orderByProcessInstanceEndTime()
                     .desc();
-            applyTenantFilter(query);
-            List<HistoricProcessInstance> list = query.list();
-            for (HistoricProcessInstance hi : list) {
-                result.add(toPurchaseResp(hi));
+            applyTenantFilter(own);
+            addPurchase(result, seen, own.list());
+            if (!sharedIds.isEmpty()) {
+                HistoricProcessInstanceQuery shared = historyService.createHistoricProcessInstanceQuery()
+                        .processDefinitionKey(key)
+                        .processInstanceIds(sharedIds)
+                        .variableValueEquals(PROCESS_STATUS_VAR, BpmProcessInstanceStatusEnum.APPROVE.getStatus())
+                        .includeProcessVariables()
+                        .orderByProcessInstanceEndTime()
+                        .desc();
+                applyTenantFilter(shared);
+                addPurchase(result, seen, shared.list());
             }
         }
         return result;
@@ -84,7 +100,7 @@ public class FinancePaymentPredocServiceImpl implements FinancePaymentPredocServ
         if (!FinancePurchaseProcessConstants.isPurchaseProcessKey(hi.getProcessDefinitionKey())) {
             throw exception(PAYMENT_PURCHASE_REF_INVALID);
         }
-        if (!Objects.equals(String.valueOf(userId), hi.getStartUserId())) {
+        if (!relatedProcessAccess.canAccessRelated(userId, processInstanceId.trim())) {
             throw exception(PAYMENT_PURCHASE_REF_INVALID);
         }
         Object status = hi.getProcessVariables() != null
@@ -99,11 +115,17 @@ public class FinancePaymentPredocServiceImpl implements FinancePaymentPredocServ
 
     @Override
     public List<FinanceContractApplicationDO> listSelectableLeaseContracts(Long userId) {
+        Set<String> sharedIds = relatedProcessAccess.listSharedInstanceIds(userId);
         return contractApplicationMapper.selectList(new LambdaQueryWrapperX<FinanceContractApplicationDO>()
                 .eq(FinanceContractApplicationDO::getApprovalStatus,
                         FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                 .eq(FinanceContractApplicationDO::getFileType, LEASE_FILE_TYPE)
-                .eq(FinanceContractApplicationDO::getApplicantUserId, userId)
+                .and(w -> {
+                    w.eq(FinanceContractApplicationDO::getApplicantUserId, userId);
+                    if (!sharedIds.isEmpty()) {
+                        w.or().in(FinanceContractApplicationDO::getProcessInstanceId, sharedIds);
+                    }
+                })
                 .and(w -> w.eq(FinanceContractApplicationDO::getVoided, Boolean.FALSE)
                         .or()
                         .isNull(FinanceContractApplicationDO::getVoided))
@@ -119,7 +141,7 @@ public class FinancePaymentPredocServiceImpl implements FinancePaymentPredocServ
         if (app == null) {
             throw exception(PAYMENT_LEASE_REF_INVALID);
         }
-        if (!Objects.equals(userId, app.getApplicantUserId())) {
+        if (!relatedProcessAccess.canAccessContract(userId, app)) {
             throw exception(PAYMENT_LEASE_REF_INVALID);
         }
         if (!FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(app.getApprovalStatus())) {
@@ -132,6 +154,19 @@ public class FinancePaymentPredocServiceImpl implements FinancePaymentPredocServ
             throw exception(PAYMENT_LEASE_REF_INVALID);
         }
         return app;
+    }
+
+    private static void addPurchase(List<FinancePurchaseInstanceRespVO> result, Set<String> seen,
+                                    List<HistoricProcessInstance> list) {
+        if (list == null) {
+            return;
+        }
+        for (HistoricProcessInstance hi : list) {
+            if (hi == null || hi.getId() == null || !seen.add(hi.getId())) {
+                continue;
+            }
+            result.add(toPurchaseResp(hi));
+        }
     }
 
     private HistoryService requireHistoryService() {

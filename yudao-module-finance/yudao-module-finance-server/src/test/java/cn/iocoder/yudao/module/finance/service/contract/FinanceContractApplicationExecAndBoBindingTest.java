@@ -48,6 +48,8 @@ class FinanceContractApplicationExecAndBoBindingTest {
         contractMapper = mock(FinanceContractApplicationMapper.class);
         FinanceContractApplicationNoRedisDAO noDao = mock(FinanceContractApplicationNoRedisDAO.class);
         FinanceBpmProcessInstanceApi bpm = mock(FinanceBpmProcessInstanceApi.class);
+        when(bpm.listSharedInstanceIds(any())).thenReturn(
+                cn.iocoder.yudao.framework.common.pojo.CommonResult.success(java.util.Set.of()));
         FinanceCustomerCompanyService customer = mock(FinanceCustomerCompanyService.class);
         ObjectProvider<TaskService> taskProvider = mock(ObjectProvider.class);
         DictDataApi dictDataApi = mock(DictDataApi.class);
@@ -68,7 +70,14 @@ class FinanceContractApplicationExecAndBoBindingTest {
         when(boNo.generate(any(LocalDate.class))).thenReturn("BO-1");
         when(companyResolver.requireByDeptId(anyLong())).thenReturn(
                 new FinanceEntityCompanyResolver.ResolvedCompany(COMPANY_DEPT_ID, "示例主体公司"));
-        boService = new FinanceBusinessOrderServiceImpl(boMapper, boNo, contractMapper, companyResolver);
+        cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess related =
+                mock(cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess.class);
+        when(related.canAccessContract(any(), any())).thenAnswer(inv -> {
+            Long uid = inv.getArgument(0);
+            FinanceContractApplicationDO c = inv.getArgument(1);
+            return c != null && java.util.Objects.equals(c.getApplicantUserId(), uid);
+        });
+        boService = new FinanceBusinessOrderServiceImpl(boMapper, boNo, contractMapper, companyResolver, related);
     }
 
     @Test

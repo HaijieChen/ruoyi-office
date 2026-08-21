@@ -1,0 +1,11 @@
+-- 在 BPM 表单数据源设计器对 bpm_approved_processes（及同类流程列表）发布新版本。
+-- 不要 UPDATE 已发布行；saveDraft + publish。
+-- 执行层会注入 :sharedInstanceIds（空时为占位 '__none__'）。
+--
+-- 身份条件示例（按实际表字段改）：
+--   AND (
+--     START_USER_ID_ = :userId
+--     OR ID_ IN (:sharedInstanceIds)
+--   )
+-- 已通过条件保持原 SQL 不变。
+-- TENANT_ID_ = :tenantId 保持。

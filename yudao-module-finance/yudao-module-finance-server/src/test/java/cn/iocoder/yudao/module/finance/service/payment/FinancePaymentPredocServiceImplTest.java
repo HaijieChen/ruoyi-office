@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractAp
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePurchaseProcessConstants;
+import cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.history.HistoricProcessInstanceQuery;
@@ -29,6 +30,7 @@ class FinancePaymentPredocServiceImplTest {
     private HistoryService historyService;
     private HistoricProcessInstanceQuery query;
     private FinanceContractApplicationMapper contractMapper;
+    private FinanceRelatedProcessAccess relatedProcessAccess;
     private FinancePaymentPredocServiceImpl service;
 
     @BeforeEach
@@ -36,16 +38,22 @@ class FinancePaymentPredocServiceImplTest {
         historyService = mock(HistoryService.class);
         query = mock(HistoricProcessInstanceQuery.class);
         contractMapper = mock(FinanceContractApplicationMapper.class);
+        relatedProcessAccess = mock(FinanceRelatedProcessAccess.class);
+        when(relatedProcessAccess.listSharedInstanceIds(any())).thenReturn(java.util.Set.of());
+        when(relatedProcessAccess.canAccessRelated(eq(1L), anyString())).thenReturn(true);
+        when(relatedProcessAccess.canAccessRelated(eq(1L), eq("pi-3"))).thenReturn(false);
+        when(relatedProcessAccess.canAccessContract(eq(1L), any())).thenReturn(true);
 
         @SuppressWarnings("unchecked")
         ObjectProvider<HistoryService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(historyService);
 
-        service = new FinancePaymentPredocServiceImpl(provider, contractMapper);
+        service = new FinancePaymentPredocServiceImpl(provider, contractMapper, relatedProcessAccess);
 
         when(historyService.createHistoricProcessInstanceQuery()).thenReturn(query);
         when(query.processDefinitionKey(anyString())).thenReturn(query);
         when(query.processInstanceId(anyString())).thenReturn(query);
+        when(query.processInstanceIds(any())).thenReturn(query);
         when(query.startedBy(anyString())).thenReturn(query);
         when(query.variableValueEquals(anyString(), any())).thenReturn(query);
         when(query.includeProcessVariables()).thenReturn(query);
@@ -110,6 +118,17 @@ class FinancePaymentPredocServiceImplTest {
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.validateAndSummarizePurchaseRef("pi-3", 1L));
         assertEquals(PAYMENT_PURCHASE_REF_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void validatePurchaseAllowsSharedRecipient() {
+        HistoricProcessInstance hi = mockHistoric("pi-share", FinancePurchaseProcessConstants.OA_PURCHASE_APPLY,
+                "99", BpmProcessInstanceStatusEnum.APPROVE.getStatus(), "分享采购");
+        when(query.singleResult()).thenReturn(hi);
+        when(relatedProcessAccess.canAccessRelated(1L, "pi-share")).thenReturn(true);
+
+        String summary = service.validateAndSummarizePurchaseRef("pi-share", 1L);
+        assertTrue(summary.contains("分享采购"));
     }
 
     @Test
