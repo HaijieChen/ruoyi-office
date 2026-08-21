@@ -135,6 +135,20 @@ SET @hrm_employee_info_menu_count = (SELECT COUNT(*) FROM `system_menu` WHERE `d
 SET @hrm_employee_info_menu_id = (SELECT MIN(`id`) FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'hrm/employee/info/index');
 CALL `__tmp_hr_admin_assert_single`('hrm employee detail page', @hrm_employee_info_menu_count);
 
+-- 薪酬菜单可选：未执行 hrm_payroll_menu.sql 时跳过，不 SIGNAL
+SET @hrm_payroll_batch_menu_id = (
+    SELECT MIN(`id`) FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/batch/index'
+);
+SET @hrm_min_wage_menu_id = (
+    SELECT MIN(`id`) FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/min-wage/index'
+);
+SET @hrm_payslip_menu_id = (
+    SELECT MIN(`id`) FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/payslip/index'
+);
+
 SET @hrm_management_dir_menu_count = (
     SELECT COUNT(*) FROM `system_menu`
     WHERE `deleted` = b'0' AND `parent_id` = @hrm_root_menu_id AND `path` = 'personnel-management'
@@ -285,7 +299,10 @@ WHERE r.`id` = @hr_admin_role_id
             @hrm_entry_menu_id, @hrm_entry_info_menu_id,
             @hrm_regular_menu_id, @hrm_regular_info_menu_id,
             @hrm_resignation_menu_id, @hrm_resignation_info_menu_id,
-            @hrm_transfer_menu_id, @hrm_transfer_info_menu_id
+            @hrm_transfer_menu_id, @hrm_transfer_info_menu_id,
+            IFNULL(@hrm_payroll_batch_menu_id, -1),
+            IFNULL(@hrm_min_wage_menu_id, -1),
+            IFNULL(@hrm_payslip_menu_id, -1)
         )
         -- 组织架构维护按钮（不授予系统管理根/用户/角色/岗位/租户菜单）
      OR m.`permission` IN (
@@ -324,7 +341,12 @@ WHERE r.`id` = @hr_admin_role_id
             'hrm:employee-transfer-bill:query', 'hrm:employee-transfer-bill:create',
             'hrm:employee-transfer-bill:update', 'hrm:employee-transfer-bill:delete',
             'hrm:employee-transfer-bill:export', 'hrm:employee-transfer-bill:submit',
-            'hrm:employee-transfer-bill:withdraw'
+            'hrm:employee-transfer-bill:withdraw',
+            'hrm:payroll-batch:query', 'hrm:payroll-batch:create',
+            'hrm:payroll-batch:update', 'hrm:payroll-batch:publish',
+            'hrm:payroll-batch:withdraw', 'hrm:payroll-batch:export',
+            'hrm:min-wage:query', 'hrm:min-wage:update',
+            'hrm:payroll-payslip:query'
         )
   );
 
