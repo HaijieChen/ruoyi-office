@@ -12,6 +12,7 @@ import {
   getPayrollBatch,
   listPayrollLines,
   publishPayrollBatch,
+  downloadPunchTemplate,
   uploadPayrollPunch,
   withdrawPayrollBatch,
   type PayrollBatchApi,
@@ -59,6 +60,11 @@ async function onExport() {
   downloadFileFromBlobPart({ fileName: `${yearMonth.value}工资表.xls`, source: data });
 }
 
+async function onDownloadTemplate() {
+  const data = await downloadPunchTemplate();
+  downloadFileFromBlobPart({ fileName: '打卡导入模板.xls', source: data });
+}
+
 function onUploadPunch(file: File) {
   void (async () => {
     const result = await uploadPayrollPunch(yearMonth.value, file);
@@ -78,6 +84,7 @@ onMounted(reload);
       <InputNumber v-model:value="yearMonth" :min="202001" />
       <span>状态：{{ status }}</span>
       <Button type="primary" @click="onGenerate">生成草稿</Button>
+      <Button @click="onDownloadTemplate">下载打卡模板</Button>
       <Upload :show-upload-list="false" :before-upload="onUploadPunch" accept=".xls,.xlsx">
         <Button>上传打卡并合并</Button>
       </Upload>

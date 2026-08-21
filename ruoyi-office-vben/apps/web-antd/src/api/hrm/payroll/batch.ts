@@ -51,6 +51,10 @@ export function exportPayrollBatch(yearMonth: number) {
   return requestClient.download('/hrm/payroll-batch/export', { params: { yearMonth } });
 }
 
+export function downloadPunchTemplate() {
+  return requestClient.download('/hrm/payroll-batch/punch-template');
+}
+
 export function uploadPayrollPunch(yearMonth: number, file: File) {
   const data = new FormData();
   data.append('file', file);

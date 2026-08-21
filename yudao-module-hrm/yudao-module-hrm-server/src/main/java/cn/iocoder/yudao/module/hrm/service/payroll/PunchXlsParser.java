@@ -15,7 +15,7 @@ import java.util.Set;
 
 public class PunchXlsParser {
 
-    public record PunchRow(String name, String date, boolean absence, boolean late) {
+    public record PunchRow(String employeeNo, String name, String date, boolean absence, boolean late) {
     }
 
     public record ParseResult(List<String> headers, List<PunchRow> rows, Set<String> names) {
@@ -32,6 +32,7 @@ public class PunchXlsParser {
                     headers.add(formatter.formatCellValue(header.getCell(c)).trim());
                 }
             }
+            int noIdx = firstIndex(headers, "工号", "员工编号");
             int nameIdx = indexOf(headers, "姓名");
             int dateIdx = indexOf(headers, "日期");
             int absenceIdx = indexOf(headers, "是否旷工");
@@ -43,14 +44,18 @@ public class PunchXlsParser {
                 if (row == null) {
                     continue;
                 }
+                String employeeNo = cell(formatter, row, noIdx);
                 String name = cell(formatter, row, nameIdx);
-                if (name.isEmpty()) {
+                if (employeeNo.isEmpty() && name.isEmpty()) {
                     continue;
                 }
-                names.add(name);
+                if (!name.isEmpty()) {
+                    names.add(name);
+                }
                 String late = cell(formatter, row, lateIdx);
                 String absence = cell(formatter, row, absenceIdx);
                 rows.add(new PunchRow(
+                        employeeNo,
                         name,
                         cell(formatter, row, dateIdx),
                         isTrue(absence),
@@ -59,6 +64,16 @@ public class PunchXlsParser {
             }
             return new ParseResult(headers, rows, names);
         }
+    }
+
+    private static int firstIndex(List<String> headers, String... names) {
+        for (String name : names) {
+            int i = indexOf(headers, name);
+            if (i >= 0) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static int indexOf(List<String> headers, String name) {

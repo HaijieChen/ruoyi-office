@@ -12,34 +12,49 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PayrollPunchApplyTest {
 
     @Test
-    void uniqueNameMatchesAndDuplicateGoesUnmatched() {
+    void matchByEmployeeNoEvenWhenNamesDuplicate() {
         PunchXlsParser.ParseResult punch = new PunchXlsParser.ParseResult(
-                List.of("姓名"),
-                List.of(
-                        new PunchXlsParser.PunchRow("张三", "2026/8/10", true, false),
-                        new PunchXlsParser.PunchRow("李四", "2026/8/10", false, false)
-                ),
-                Set.of("张三", "李四", "王五")
-        );
-        PayrollPunchApply.Result r = PayrollPunchApply.apply(
-                List.of(new PayrollPunchApply.EmployeeName(1L, "张三"),
-                        new PayrollPunchApply.EmployeeName(2L, "张三")),
-                punch);
-        assertTrue(r.unmatched().contains("张三") || r.unmatched().contains("王五"));
-        assertTrue(r.unmatched().contains("王五"));
-    }
-
-    @Test
-    void absenceDaysCollectedForUniqueMatch() {
-        PunchXlsParser.ParseResult punch = new PunchXlsParser.ParseResult(
-                List.of("姓名"),
-                List.of(new PunchXlsParser.PunchRow("张三", "2026/8/9", true, false),
-                        new PunchXlsParser.PunchRow("张三", "2026/8/10", true, false)),
+                List.of("工号", "姓名"),
+                List.of(new PunchXlsParser.PunchRow("E01", "张三", "2026/8/10", true, false)),
                 Set.of("张三")
         );
         PayrollPunchApply.Result r = PayrollPunchApply.apply(
-                List.of(new PayrollPunchApply.EmployeeName(9L, "张三")), punch);
+                List.of(
+                        new PayrollPunchApply.EmployeeName(1L, "张三", "E01"),
+                        new PayrollPunchApply.EmployeeName(2L, "张三", "E02")),
+                punch);
         assertEquals(1, r.matched());
-        assertEquals(new BigDecimal("2"), r.absenceByEmployeeId().get(9L));
+        assertEquals(new BigDecimal("1"), r.absenceByEmployeeId().get(1L));
+        assertTrue(r.unmatched().isEmpty());
+    }
+
+    @Test
+    void fallbackToUniqueNameWhenEmployeeNoMissing() {
+        PunchXlsParser.ParseResult punch = new PunchXlsParser.ParseResult(
+                List.of("工号", "姓名"),
+                List.of(new PunchXlsParser.PunchRow("", "李四", "2026/8/10", true, false)),
+                Set.of("李四")
+        );
+        PayrollPunchApply.Result r = PayrollPunchApply.apply(
+                List.of(new PayrollPunchApply.EmployeeName(9L, "李四", "E09")),
+                punch);
+        assertEquals(1, r.matched());
+        assertEquals(new BigDecimal("1"), r.absenceByEmployeeId().get(9L));
+    }
+
+    @Test
+    void missingNoAndDuplicateNameUnmatched() {
+        PunchXlsParser.ParseResult punch = new PunchXlsParser.ParseResult(
+                List.of("工号", "姓名"),
+                List.of(new PunchXlsParser.PunchRow("", "张三", "2026/8/10", false, false)),
+                Set.of("张三")
+        );
+        PayrollPunchApply.Result r = PayrollPunchApply.apply(
+                List.of(
+                        new PayrollPunchApply.EmployeeName(1L, "张三", "E01"),
+                        new PayrollPunchApply.EmployeeName(2L, "张三", "E02")),
+                punch);
+        assertEquals(0, r.matched());
+        assertTrue(r.unmatched().contains("姓名=张三"));
     }
 }

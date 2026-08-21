@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import cn.iocoder.yudao.module.hrm.controller.admin.payroll.vo.PayrollExportExcelVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.payroll.vo.PunchTemplateExcelVO;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +50,13 @@ public class PayrollBatchController {
     @PreAuthorize("@ss.hasPermission('hrm:payroll-batch:create')")
     public CommonResult<PayrollBatchDO> generate(@RequestParam Integer yearMonth) {
         return success(payrollBatchService.generate(yearMonth));
+    }
+
+    @GetMapping("/punch-template")
+    @Operation(summary = "下载打卡导入模板（含工号）")
+    @PreAuthorize("@ss.hasPermission('hrm:payroll-batch:query')")
+    public void punchTemplate(HttpServletResponse response) throws IOException {
+        ExcelUtils.write(response, "打卡导入模板.xls", "打卡", PunchTemplateExcelVO.class, List.of());
     }
 
     @PostMapping("/upload-punch")

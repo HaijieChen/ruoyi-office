@@ -102,7 +102,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 .notIn(EmployeeDO::getEmployeeStatus, 6, 7));
         PayrollPunchApply.Result applied = PayrollPunchApply.apply(
                 employees.stream()
-                        .map(e -> new PayrollPunchApply.EmployeeName(e.getId(), e.getName()))
+                        .map(e -> new PayrollPunchApply.EmployeeName(e.getId(), e.getName(), e.getEmployeeNo()))
                         .toList(),
                 parsed);
         Map<Long, EmployeeDO> byId = employees.stream().collect(Collectors.toMap(EmployeeDO::getId, e -> e));
