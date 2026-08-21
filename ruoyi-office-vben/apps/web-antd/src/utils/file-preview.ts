@@ -7,7 +7,7 @@ import { resolveRequestTenantId } from '#/constants/tenant';
 export async function previewAuthUrl(url: string) {
   const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
   const accessStore = useAccessStore();
-  const base = (apiURL || '').replace(//$/, '');
+  const base = (apiURL || '').endsWith('/') ? (apiURL || '').slice(0, -1) : (apiURL || '');
   const preview = base + '/infra/file/preview?url=' + encodeURIComponent(url);
   const headers: Record<string, string> = {};
   if (accessStore.accessToken) {
