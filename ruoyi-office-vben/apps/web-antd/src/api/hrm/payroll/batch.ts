@@ -51,6 +51,16 @@ export function exportPayrollBatch(yearMonth: number) {
   return requestClient.download('/hrm/payroll-batch/export', { params: { yearMonth } });
 }
 
+export function uploadPayrollPunch(yearMonth: number, file: File) {
+  const data = new FormData();
+  data.append('file', file);
+  return requestClient.post<{ matched: number; unmatched: string[] }>(
+    '/hrm/payroll-batch/upload-punch',
+    data,
+    { params: { yearMonth } },
+  );
+}
+
 export function listMyPayslips() {
   return requestClient.get<PayrollBatchApi.Line[]>('/hrm/payroll-payslip/list');
 }

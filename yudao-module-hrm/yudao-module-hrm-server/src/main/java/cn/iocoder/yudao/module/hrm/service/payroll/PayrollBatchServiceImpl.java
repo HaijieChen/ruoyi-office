@@ -13,11 +13,13 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Validated
@@ -90,6 +92,52 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
             payrollLineMapper.insert(line);
         }
         return batch;
+    }
+
+    @Override
+    public PunchUploadVO uploadPunch(int yearMonth, InputStream in) throws Exception {
+        generate(yearMonth);
+        PunchXlsParser.ParseResult parsed = new PunchXlsParser().parse(in);
+        List<EmployeeDO> employees = employeeMapper.selectList(new LambdaQueryWrapperX<EmployeeDO>()
+                .notIn(EmployeeDO::getEmployeeStatus, 6, 7));
+        PayrollPunchApply.Result applied = PayrollPunchApply.apply(
+                employees.stream()
+                        .map(e -> new PayrollPunchApply.EmployeeName(e.getId(), e.getName()))
+                        .toList(),
+                parsed);
+        Map<Long, EmployeeDO> byId = employees.stream().collect(Collectors.toMap(EmployeeDO::getId, e -> e));
+        BigDecimal minWage = minWageService.effectiveOn(yearMonth);
+        if (minWage == null) {
+            minWage = BigDecimal.ZERO;
+        }
+        PayrollBatchDO batch = require(yearMonth);
+        List<PayrollLineDO> lines = payrollLineMapper.selectList(new LambdaQueryWrapperX<PayrollLineDO>()
+                .eq(PayrollLineDO::getBatchId, batch.getId())
+                .eq(PayrollLineDO::getSnapshot, false));
+        for (PayrollLineDO line : lines) {
+            BigDecimal absence = applied.absenceByEmployeeId().get(line.getEmployeeId());
+            if (absence == null) {
+                continue;
+            }
+            EmployeeDO emp = byId.get(line.getEmployeeId());
+            if (emp == null) {
+                continue;
+            }
+            BigDecimal wage = emp.getRegularSalary() != null ? emp.getRegularSalary() : emp.getProbationSalary();
+            if (wage == null) {
+                wage = BigDecimal.ZERO;
+            }
+            int tenure = tenureYears(emp.getEntryDate(), yearMonth);
+            PayrollCalculator.Result calc = calculator.calculate(new PayrollCalculator.Input(
+                    wage, new BigDecimal("200"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    wage, wage, line.getTax(), BigDecimal.ZERO, BigDecimal.ZERO, absence,
+                    BigDecimal.ZERO, false, tenure, minWage));
+            line.setPayable(calc.payable());
+            line.setNet(calc.net());
+            line.setPunchName(emp.getName());
+            payrollLineMapper.updateById(line);
+        }
+        return new PunchUploadVO(applied.matched(), applied.unmatched());
     }
 
     @Override

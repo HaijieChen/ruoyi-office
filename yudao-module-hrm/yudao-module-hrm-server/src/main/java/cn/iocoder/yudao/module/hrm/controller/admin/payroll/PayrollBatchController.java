@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -48,6 +49,15 @@ public class PayrollBatchController {
     @PreAuthorize("@ss.hasPermission('hrm:payroll-batch:create')")
     public CommonResult<PayrollBatchDO> generate(@RequestParam Integer yearMonth) {
         return success(payrollBatchService.generate(yearMonth));
+    }
+
+    @PostMapping("/upload-punch")
+    @Operation(summary = "上传打卡并合并旷工")
+    @PreAuthorize("@ss.hasPermission('hrm:payroll-batch:update')")
+    public CommonResult<PayrollBatchService.PunchUploadVO> uploadPunch(
+            @RequestParam Integer yearMonth,
+            @RequestParam("file") MultipartFile file) throws Exception {
+        return success(payrollBatchService.uploadPunch(yearMonth, file.getInputStream()));
     }
 
     @PostMapping("/publish")
