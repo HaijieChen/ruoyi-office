@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmProcessDefinitio
 import cn.iocoder.yudao.module.bpm.service.definition.BpmCategoryService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceService;
+import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceShareService;
 import cn.iocoder.yudao.module.bpm.service.task.BpmTaskService;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
@@ -50,6 +51,8 @@ public class BpmProcessInstanceController {
 
     @Resource
     private BpmProcessInstanceService processInstanceService;
+    @Resource
+    private BpmProcessInstanceShareService processInstanceShareService;
     @Resource
     private BpmTaskService taskService;
     @Resource
@@ -133,6 +136,7 @@ public class BpmProcessInstanceController {
     @Parameter(name = "id", description = "流程实例的编号", required = true)
     @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
     public CommonResult<BpmProcessInstanceRespVO> getProcessInstance(@RequestParam("id") String id) {
+        processInstanceShareService.assertCanViewDetail(getLoginUserId(), id);
         HistoricProcessInstance processInstance = processInstanceService.getHistoricProcessInstance(id);
         if (processInstance == null) {
             return success(null);
@@ -176,6 +180,9 @@ public class BpmProcessInstanceController {
     @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
     @SuppressWarnings("unchecked")
     public CommonResult<BpmApprovalDetailRespVO> getApprovalDetail(@Valid BpmApprovalDetailReqVO reqVO) {
+        if (StrUtil.isNotEmpty(reqVO.getProcessInstanceId())) {
+            processInstanceShareService.assertCanViewDetail(getLoginUserId(), reqVO.getProcessInstanceId());
+        }
         if (StrUtil.isNotEmpty(reqVO.getProcessVariablesStr())) {
             reqVO.setProcessVariables(JsonUtils.parseObject(reqVO.getProcessVariablesStr(), Map.class));
         }
@@ -187,6 +194,9 @@ public class BpmProcessInstanceController {
     @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
     @SuppressWarnings("unchecked")
     public CommonResult<List<BpmApprovalDetailRespVO.ActivityNode>> getNextApprovalNodes(@Valid BpmApprovalDetailReqVO reqVO) {
+        if (StrUtil.isNotEmpty(reqVO.getProcessInstanceId())) {
+            processInstanceShareService.assertCanViewDetail(getLoginUserId(), reqVO.getProcessInstanceId());
+        }
         if (StrUtil.isNotEmpty(reqVO.getProcessVariablesStr())) {
             reqVO.setProcessVariables(JsonUtils.parseObject(reqVO.getProcessVariablesStr(), Map.class));
         }
@@ -198,6 +208,7 @@ public class BpmProcessInstanceController {
     @Parameter(name = "id", description = "流程实例的编号", required = true)
     public CommonResult<BpmProcessInstanceBpmnModelViewRespVO> getProcessInstanceBpmnModelView(
             @RequestParam(value = "id") String id) {
+        processInstanceShareService.assertCanViewDetail(getLoginUserId(), id);
         return success(processInstanceService.getProcessInstanceBpmnModelView(id));
     }
 
@@ -207,6 +218,7 @@ public class BpmProcessInstanceController {
     @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
     public CommonResult<BpmProcessPrintDataRespVO> getProcessInstancePrintData(
             @RequestParam("processInstanceId") String processInstanceId) {
+        processInstanceShareService.assertCanViewDetail(getLoginUserId(), processInstanceId);
         HistoricProcessInstance historicProcessInstance = processInstanceService.getHistoricProcessInstance(processInstanceId);
         if (historicProcessInstance == null) {
             throw exception(PROCESS_INSTANCE_NOT_EXISTS);

@@ -71,6 +71,16 @@ public class FinanceBpmProcessInstanceApiLocalImpl implements FinanceBpmProcessI
         return delegate.returnCurrentTaskToStartUserTask(userId, taskId, reason);
     }
 
+    @Override
+    public CommonResult<Boolean> canAccessRelated(Long userId, String processInstanceId) {
+        return delegate.canAccessRelated(userId, processInstanceId);
+    }
+
+    @Override
+    public CommonResult<java.util.Set<String>> listSharedInstanceIds(Long userId) {
+        return delegate.listSharedInstanceIds(userId);
+    }
+
     private <T> T withFinanceAuthority(java.util.function.Supplier<T> action) {
         Authentication original = SecurityContextHolder.getContext().getAuthentication();
         try {

@@ -459,10 +459,16 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     @Override
     public List<FinanceContractApplicationDO> listSelectableForBo(Long applicantUserId) {
         // EXP-70：可选合同须产品类型非空，否则无法派生商务单快照
+        Set<String> sharedIds = processInstanceApi.listSharedInstanceIds(applicantUserId).getCheckedData();
         return applicationMapper.selectList(new LambdaQueryWrapperX<FinanceContractApplicationDO>()
                 .eq(FinanceContractApplicationDO::getApprovalStatus,
                         FinanceContractApprovalStatusEnum.APPROVED.getStatus())
-                .eq(FinanceContractApplicationDO::getApplicantUserId, applicantUserId)
+                .and(w -> {
+                    w.eq(FinanceContractApplicationDO::getApplicantUserId, applicantUserId);
+                    if (sharedIds != null && !sharedIds.isEmpty()) {
+                        w.or().in(FinanceContractApplicationDO::getProcessInstanceId, sharedIds);
+                    }
+                })
                 .eq(FinanceContractApplicationDO::getVoided, Boolean.FALSE)
                 .isNotNull(FinanceContractApplicationDO::getProductType)
                 .ne(FinanceContractApplicationDO::getProductType, "")

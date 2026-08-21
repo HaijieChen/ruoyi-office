@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.*;
@@ -81,6 +82,17 @@ class BpmFormDataSourceContextResolverTest {
         LoginUser user = buildLoginUser(100L, 1L, "200", 300L);
         Map<String, Object> request = new HashMap<>();
         request.put("companyId", 999L);
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> resolver.resolve(request, user));
+        assertEquals(BPM_DATA_SOURCE_PARAM_RESERVED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void rejectsClientOverrideOfSharedInstanceIds() {
+        LoginUser user = buildLoginUser(100L, 1L, "200", 300L);
+        Map<String, Object> request = new HashMap<>();
+        request.put("sharedInstanceIds", List.of("hack"));
 
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> resolver.resolve(request, user));

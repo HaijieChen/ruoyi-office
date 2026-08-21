@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.finance.service.expense;
 
+import cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -9,31 +10,42 @@ public class FinanceExpensePredocServiceImpl implements FinanceExpensePredocServ
     private static final int APPROVE = 2;
 
     private final JdbcTemplate jdbcTemplate;
+    private final FinanceRelatedProcessAccess relatedProcessAccess;
 
-    public FinanceExpensePredocServiceImpl(JdbcTemplate jdbcTemplate) {
+    public FinanceExpensePredocServiceImpl(JdbcTemplate jdbcTemplate,
+                                           FinanceRelatedProcessAccess relatedProcessAccess) {
         this.jdbcTemplate = jdbcTemplate;
+        this.relatedProcessAccess = relatedProcessAccess;
     }
 
     @Override
     public boolean isApprovedTrip(Long userId, String processInstanceId) {
-        if (userId == null || processInstanceId == null || processInstanceId.isBlank()) {
-            return false;
-        }
-        Integer n = jdbcTemplate.queryForObject(
-                "SELECT COUNT(1) FROM bpm_oa_business_trip WHERE process_instance_id = ? AND user_id = ? AND status = ? AND deleted = 0",
-                Integer.class, processInstanceId.trim(), userId, APPROVE);
-        return n != null && n > 0;
+        return isApprovedPredoc("bpm_oa_business_trip", userId, processInstanceId);
     }
 
     @Override
     public boolean isApprovedOuting(Long userId, String processInstanceId) {
+        return isApprovedPredoc("bpm_oa_outing", userId, processInstanceId);
+    }
+
+    private boolean isApprovedPredoc(String table, Long userId, String processInstanceId) {
         if (userId == null || processInstanceId == null || processInstanceId.isBlank()) {
             return false;
         }
+        String pid = processInstanceId.trim();
         Integer n = jdbcTemplate.queryForObject(
-                "SELECT COUNT(1) FROM bpm_oa_outing WHERE process_instance_id = ? AND user_id = ? AND status = ? AND deleted = 0",
-                Integer.class, processInstanceId.trim(), userId, APPROVE);
-        return n != null && n > 0;
+                "SELECT COUNT(1) FROM " + table + " WHERE process_instance_id = ? AND user_id = ? AND status = ? AND deleted = 0",
+                Integer.class, pid, userId, APPROVE);
+        if (n != null && n > 0) {
+            return true;
+        }
+        if (!relatedProcessAccess.canAccessRelated(userId, pid)) {
+            return false;
+        }
+        Integer shared = jdbcTemplate.queryForObject(
+                "SELECT COUNT(1) FROM " + table + " WHERE process_instance_id = ? AND status = ? AND deleted = 0",
+                Integer.class, pid, APPROVE);
+        return shared != null && shared > 0;
     }
 
     @Override
@@ -49,8 +61,17 @@ public class FinanceExpensePredocServiceImpl implements FinanceExpensePredocServ
         } else {
             return null;
         }
-        return jdbcTemplate.query(sql, rs -> rs.next() ? rs.getString(1) : null,
-                processInstanceId.trim(), userId, APPROVE);
+        String pid = processInstanceId.trim();
+        String city = jdbcTemplate.query(sql, rs -> rs.next() ? rs.getString(1) : null,
+                pid, userId, APPROVE);
+        if (city != null) {
+            return city;
+        }
+        if (!relatedProcessAccess.canAccessRelated(userId, pid)) {
+            return null;
+        }
+        String sharedSql = sql.replace(" AND user_id = ?", "");
+        return jdbcTemplate.query(sharedSql, rs -> rs.next() ? rs.getString(1) : null, pid, APPROVE);
     }
 
     @Override
@@ -58,46 +79,81 @@ public class FinanceExpensePredocServiceImpl implements FinanceExpensePredocServ
         if (userId == null || processInstanceId == null || processInstanceId.isBlank() || predocType == null) {
             return null;
         }
+        String pid = processInstanceId.trim();
         if (TYPE_TRIP.equals(predocType)) {
-            return jdbcTemplate.query(
-                    "SELECT destination, start_time, end_time, user_id, companion_user_ids, companion_user_id "
-                            + "FROM bpm_oa_business_trip WHERE process_instance_id = ? AND user_id = ? AND status = ? AND deleted = 0 LIMIT 1",
-                    rs -> {
-                        if (!rs.next()) {
-                            return null;
-                        }
-                        java.util.List<Long> companions = parseIds(rs.getString("companion_user_ids"));
-                        if (companions.isEmpty()) {
-                            long legacy = rs.getLong("companion_user_id");
-                            if (!rs.wasNull()) {
-                                companions.add(legacy);
-                            }
-                        }
-                        java.sql.Timestamp start = rs.getTimestamp("start_time");
-                        java.sql.Timestamp end = rs.getTimestamp("end_time");
-                        return new StayStay(rs.getString("destination"),
-                                start == null ? null : start.toLocalDateTime().toLocalDate(),
-                                end == null ? null : end.toLocalDateTime().toLocalDate(),
-                                rs.getLong("user_id"), companions);
-                    }, processInstanceId.trim(), userId, APPROVE);
+            StayStay own = queryTripStay(pid, userId);
+            if (own != null) {
+                return own;
+            }
+            return relatedProcessAccess.canAccessRelated(userId, pid) ? queryTripStayShared(pid) : null;
         }
         if (TYPE_OUTING.equals(predocType)) {
-            return jdbcTemplate.query(
-                    "SELECT location, start_time, end_time, user_id FROM bpm_oa_outing "
-                            + "WHERE process_instance_id = ? AND user_id = ? AND status = ? AND deleted = 0 LIMIT 1",
-                    rs -> {
-                        if (!rs.next()) {
-                            return null;
-                        }
-                        java.sql.Timestamp start = rs.getTimestamp("start_time");
-                        java.sql.Timestamp end = rs.getTimestamp("end_time");
-                        return new StayStay(rs.getString("location"),
-                                start == null ? null : start.toLocalDateTime().toLocalDate(),
-                                end == null ? null : end.toLocalDateTime().toLocalDate(),
-                                rs.getLong("user_id"), java.util.List.of());
-                    }, processInstanceId.trim(), userId, APPROVE);
+            StayStay own = queryOutingStay(pid, userId);
+            if (own != null) {
+                return own;
+            }
+            return relatedProcessAccess.canAccessRelated(userId, pid) ? queryOutingStayShared(pid) : null;
         }
         return null;
+    }
+
+    private StayStay queryTripStay(String pid, Long userId) {
+        return jdbcTemplate.query(
+                "SELECT destination, start_time, end_time, user_id, companion_user_ids, companion_user_id "
+                        + "FROM bpm_oa_business_trip WHERE process_instance_id = ? AND user_id = ? AND status = ? AND deleted = 0 LIMIT 1",
+                this::mapTripStay, pid, userId, APPROVE);
+    }
+
+    private StayStay queryTripStayShared(String pid) {
+        return jdbcTemplate.query(
+                "SELECT destination, start_time, end_time, user_id, companion_user_ids, companion_user_id "
+                        + "FROM bpm_oa_business_trip WHERE process_instance_id = ? AND status = ? AND deleted = 0 LIMIT 1",
+                this::mapTripStay, pid, APPROVE);
+    }
+
+    private StayStay queryOutingStay(String pid, Long userId) {
+        return jdbcTemplate.query(
+                "SELECT location, start_time, end_time, user_id FROM bpm_oa_outing "
+                        + "WHERE process_instance_id = ? AND user_id = ? AND status = ? AND deleted = 0 LIMIT 1",
+                this::mapOutingStay, pid, userId, APPROVE);
+    }
+
+    private StayStay queryOutingStayShared(String pid) {
+        return jdbcTemplate.query(
+                "SELECT location, start_time, end_time, user_id FROM bpm_oa_outing "
+                        + "WHERE process_instance_id = ? AND status = ? AND deleted = 0 LIMIT 1",
+                this::mapOutingStay, pid, APPROVE);
+    }
+
+    private StayStay mapTripStay(java.sql.ResultSet rs) throws java.sql.SQLException {
+        if (!rs.next()) {
+            return null;
+        }
+        java.util.List<Long> companions = parseIds(rs.getString("companion_user_ids"));
+        if (companions.isEmpty()) {
+            long legacy = rs.getLong("companion_user_id");
+            if (!rs.wasNull()) {
+                companions.add(legacy);
+            }
+        }
+        java.sql.Timestamp start = rs.getTimestamp("start_time");
+        java.sql.Timestamp end = rs.getTimestamp("end_time");
+        return new StayStay(rs.getString("destination"),
+                start == null ? null : start.toLocalDateTime().toLocalDate(),
+                end == null ? null : end.toLocalDateTime().toLocalDate(),
+                rs.getLong("user_id"), companions);
+    }
+
+    private StayStay mapOutingStay(java.sql.ResultSet rs) throws java.sql.SQLException {
+        if (!rs.next()) {
+            return null;
+        }
+        java.sql.Timestamp start = rs.getTimestamp("start_time");
+        java.sql.Timestamp end = rs.getTimestamp("end_time");
+        return new StayStay(rs.getString("location"),
+                start == null ? null : start.toLocalDateTime().toLocalDate(),
+                end == null ? null : end.toLocalDateTime().toLocalDate(),
+                rs.getLong("user_id"), java.util.List.of());
     }
 
     static java.util.List<Long> parseIds(String raw) {

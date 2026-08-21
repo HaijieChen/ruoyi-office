@@ -108,6 +108,15 @@ export namespace BpmProcessInstanceApi {
     taskId: string;
   }
 
+  export interface ProcessInstanceShareRespVO {
+    id: number;
+    processInstanceId: string;
+    processInstanceName: string;
+    startUserId: number;
+    recipientUserId: number;
+    createTime: string;
+  }
+
   /** 流程实例的打印数据响应 */
   export interface ProcessPrintDataRespVO {
     printTemplateEnable: boolean;
@@ -177,6 +186,35 @@ export async function getProcessInstance(id: number) {
   return requestClient.get<BpmProcessInstanceApi.ProcessInstance>(
     `/bpm/process-instance/get?id=${id}`,
   );
+}
+
+export async function shareProcessInstance(data: {
+  processInstanceId: string;
+  recipientUserIds: number[];
+}) {
+  return requestClient.post('/bpm/process-instance/share/create', data);
+}
+
+export async function revokeProcessInstanceShare(data: {
+  processInstanceId: string;
+  recipientUserId: number;
+}) {
+  return requestClient.post('/bpm/process-instance/share/revoke', data);
+}
+
+export async function getProcessInstanceShareRecipients(
+  processInstanceId: string,
+) {
+  return requestClient.get<BpmProcessInstanceApi.ProcessInstanceShareRespVO[]>(
+    '/bpm/process-instance/share/recipients',
+    { params: { processInstanceId } },
+  );
+}
+
+export async function getProcessInstanceShareMyPage(params: PageParam) {
+  return requestClient.get<
+    PageResult<BpmProcessInstanceApi.ProcessInstanceShareRespVO>
+  >('/bpm/process-instance/share/my-page', { params });
 }
 
 /** 查询复制流程实例分页 */

@@ -63,6 +63,11 @@ public interface ErrorCodeConstants {
     /** PAY-R19：付款申请须走领域 cancel，禁止流程详情通用发起人取消（同步落账） */
     ErrorCode PROCESS_INSTANCE_CANCEL_FAIL_USE_PAYMENT_DOMAIN = new ErrorCode(1_009_004_010,
             "付款申请请从「付款申请」台账撤回，不能使用流程通用取消");
+    ErrorCode PROCESS_INSTANCE_SHARE_NOT_INITIATOR = new ErrorCode(1_009_004_013, "只有发起人可以分享或收回该流程");
+    ErrorCode PROCESS_INSTANCE_SHARE_NOT_APPROVED = new ErrorCode(1_009_004_014, "只能分享已通过的流程");
+    ErrorCode PROCESS_INSTANCE_SHARE_USER_INVALID = new ErrorCode(1_009_004_015, "分享对象须为本租户在职用户");
+    ErrorCode PROCESS_INSTANCE_SHARE_SELF = new ErrorCode(1_009_004_016, "不能分享给自己");
+    ErrorCode PROCESS_INSTANCE_ACCESS_DENIED = new ErrorCode(1_009_004_017, "无权查看该流程");
 
     // ========== 流程任务 1-009-005-000 ==========
     ErrorCode TASK_OPERATE_FAIL_ASSIGN_NOT_SELF = new ErrorCode(1_009_005_001, "操作失败，原因：该任务的审批人不是你");

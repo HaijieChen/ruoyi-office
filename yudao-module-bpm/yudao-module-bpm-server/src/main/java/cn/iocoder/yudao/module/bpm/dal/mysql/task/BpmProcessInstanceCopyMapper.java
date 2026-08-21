@@ -22,4 +22,10 @@ public interface BpmProcessInstanceCopyMapper extends BaseMapperX<BpmProcessInst
         delete(BpmProcessInstanceCopyDO::getProcessInstanceId, processInstanceId);
     }
 
+    default boolean existsByInstanceAndUser(String processInstanceId, Long userId) {
+        return selectCount(new LambdaQueryWrapperX<BpmProcessInstanceCopyDO>()
+                .eq(BpmProcessInstanceCopyDO::getProcessInstanceId, processInstanceId)
+                .eq(BpmProcessInstanceCopyDO::getUserId, userId)) > 0;
+    }
+
 }

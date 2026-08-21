@@ -5,6 +5,7 @@ import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.instance.BpmProcessInstanceCancelReqVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.task.BpmTaskReturnReqVO;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceService;
+import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceShareService;
 import cn.iocoder.yudao.module.bpm.service.task.BpmTaskService;
 import org.flowable.bpmn.model.UserTask;
 import cn.hutool.core.collection.CollUtil;
@@ -33,6 +34,8 @@ public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
 
     @Resource
     private BpmProcessInstanceService processInstanceService;
+    @Resource
+    private BpmProcessInstanceShareService processInstanceShareService;
     @Resource
     private BpmTaskService taskService;
 
@@ -79,6 +82,16 @@ public class BpmProcessInstanceApiImpl implements BpmProcessInstanceApi {
         req.setReason(reason);
         taskService.returnTask(userId, req);
         return success(true);
+    }
+
+    @Override
+    public CommonResult<Boolean> canAccessRelated(Long userId, String processInstanceId) {
+        return success(processInstanceShareService.canAccessRelated(userId, processInstanceId));
+    }
+
+    @Override
+    public CommonResult<java.util.Set<String>> listSharedInstanceIds(Long userId) {
+        return success(processInstanceShareService.listActiveSharedInstanceIds(userId));
     }
 
 }

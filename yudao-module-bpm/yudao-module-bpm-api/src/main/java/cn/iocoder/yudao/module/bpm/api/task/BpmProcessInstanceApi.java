@@ -7,12 +7,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import jakarta.validation.Valid;
 import java.util.Collection;
+import java.util.Set;
 
 /**
  * 基线 BPM 流程实例 Feign 客户端。
@@ -63,5 +65,14 @@ public interface BpmProcessInstanceApi {
     CommonResult<Boolean> returnCurrentTaskToStartUserTask(@RequestParam("userId") Long userId,
                                                            @RequestParam("taskId") String taskId,
                                                            @RequestParam("reason") String reason);
+
+    @GetMapping(PREFIX + "/can-access-related")
+    @Operation(summary = "是否可将该流程实例作为关联（发起人或有效分享）")
+    CommonResult<Boolean> canAccessRelated(@RequestParam("userId") Long userId,
+                                           @RequestParam("processInstanceId") String processInstanceId);
+
+    @GetMapping(PREFIX + "/list-shared-instance-ids")
+    @Operation(summary = "当前用户被分享且未收回的流程实例编号")
+    CommonResult<Set<String>> listSharedInstanceIds(@RequestParam("userId") Long userId);
 
 }

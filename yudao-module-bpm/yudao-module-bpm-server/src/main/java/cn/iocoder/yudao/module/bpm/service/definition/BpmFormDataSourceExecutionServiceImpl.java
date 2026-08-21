@@ -16,6 +16,8 @@ import cn.iocoder.yudao.module.bpm.framework.datasource.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceShareService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -48,7 +50,7 @@ public class BpmFormDataSourceExecutionServiceImpl implements BpmFormDataSourceE
     private static final int MAX_REQUEST_COLLECTION_SIZE = 200;
     private static final int MAX_REQUEST_STRING_LENGTH = 4096;
     private static final long MAX_REQUEST_APPROXIMATE_BYTES = 64L * 1024L;
-    private static final Set<String> RESERVED_PARAMS = Set.of("tenantId", "userId", "deptId", "companyId");
+    private static final Set<String> RESERVED_PARAMS = Set.of("tenantId", "userId", "deptId", "companyId", "sharedInstanceIds");
 
     private final BpmFormDataSourceMapper dataSourceMapper;
     private final BpmFormDataSourceVersionMapper versionMapper;
@@ -57,6 +59,9 @@ public class BpmFormDataSourceExecutionServiceImpl implements BpmFormDataSourceE
     private final Map<Integer, BpmFormDataSourceProvider> providers;
     private final StringRedisTemplate redisTemplate;
     private final BpmFormDataSourceProperties properties;
+
+    @Autowired(required = false)
+    private BpmProcessInstanceShareService processInstanceShareService;
 
     public BpmFormDataSourceExecutionServiceImpl(BpmFormDataSourceMapper dataSourceMapper,
                                                  BpmFormDataSourceVersionMapper versionMapper,
@@ -116,6 +121,8 @@ public class BpmFormDataSourceExecutionServiceImpl implements BpmFormDataSourceE
             Map<String, Object> parameters = contextResolver.resolve(requestParameters, effectiveUser);
             parameterDigest = digest(parameters);
             validateParameters(parameterFields, parameters);
+            injectSharedInstanceIds(parameters, effectiveUser);
+            parameterDigest = digest(parameters);
             BpmFormDataSourceProvider provider = providers.get(source.getType());
             if (provider == null) {
                 throw ServiceExceptionUtil.exception(BPM_DATA_SOURCE_CONFIG_INVALID);
@@ -395,6 +402,16 @@ public class BpmFormDataSourceExecutionServiceImpl implements BpmFormDataSourceE
         } catch (NumberFormatException | DateTimeParseException ex) {
             return false;
         }
+    }
+
+    private void injectSharedInstanceIds(Map<String, Object> parameters, LoginUser user) {
+        if (processInstanceShareService == null || user == null || user.getId() == null) {
+            parameters.put("sharedInstanceIds", List.of("__none__"));
+            return;
+        }
+        Set<String> ids = processInstanceShareService.listActiveSharedInstanceIds(user.getId());
+        parameters.put("sharedInstanceIds",
+                ids == null || ids.isEmpty() ? List.of("__none__") : new ArrayList<>(ids));
     }
 
     private BpmFormDataSourceQueryResult getCached(String key, Integer cacheSeconds) {

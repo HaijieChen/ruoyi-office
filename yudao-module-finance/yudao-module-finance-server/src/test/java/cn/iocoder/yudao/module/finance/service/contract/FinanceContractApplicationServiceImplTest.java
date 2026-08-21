@@ -53,6 +53,7 @@ class FinanceContractApplicationServiceImplTest {
         applicationMapper = mock(FinanceContractApplicationMapper.class);
         applicationNoRedisDAO = mock(FinanceContractApplicationNoRedisDAO.class);
         processInstanceApi = mock(FinanceBpmProcessInstanceApi.class);
+        when(processInstanceApi.listSharedInstanceIds(any())).thenReturn(CommonResult.success(java.util.Set.of()));
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
         entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         taskServiceProvider = mock(ObjectProvider.class);

@@ -15,6 +15,7 @@ import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisD
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
+import cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -49,15 +50,18 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
     private final FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO;
     private final FinanceContractApplicationMapper contractApplicationMapper;
     private final FinanceEntityCompanyResolver entityCompanyResolver;
+    private final FinanceRelatedProcessAccess relatedProcessAccess;
 
     public FinanceBusinessOrderServiceImpl(FinanceBusinessOrderMapper businessOrderMapper,
                                            FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO,
                                            FinanceContractApplicationMapper contractApplicationMapper,
-                                           FinanceEntityCompanyResolver entityCompanyResolver) {
+                                           FinanceEntityCompanyResolver entityCompanyResolver,
+                                           FinanceRelatedProcessAccess relatedProcessAccess) {
         this.businessOrderMapper = businessOrderMapper;
         this.businessOrderNoRedisDAO = businessOrderNoRedisDAO;
         this.contractApplicationMapper = contractApplicationMapper;
         this.entityCompanyResolver = entityCompanyResolver;
+        this.relatedProcessAccess = relatedProcessAccess;
     }
 
     @Override
@@ -272,7 +276,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         if (contract == null
                 || !FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(contract.getApprovalStatus())
                 || Boolean.TRUE.equals(contract.getVoided())
-                || !Objects.equals(contract.getApplicantUserId(), userId)) {
+                || !relatedProcessAccess.canAccessContract(userId, contract)) {
             throw exception(BUSINESS_ORDER_CONTRACT_INVALID);
         }
         return contract;
@@ -287,7 +291,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         if (contract == null
                 || !FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(contract.getApprovalStatus())
                 || Boolean.TRUE.equals(contract.getVoided())
-                || !Objects.equals(contract.getApplicantUserId(), userId)) {
+                || !relatedProcessAccess.canAccessContract(userId, contract)) {
             throw exception(BUSINESS_ORDER_CONTRACT_INVALID);
         }
         return contract;

@@ -47,8 +47,16 @@ class FinanceBusinessOrderImportTest {
         businessOrderNoRedisDAO = mock(FinanceBusinessOrderNoRedisDAO.class);
         contractApplicationMapper = mock(FinanceContractApplicationMapper.class);
         entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
+        cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess related =
+                mock(cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess.class);
+        when(related.canAccessContract(any(), any())).thenAnswer(inv -> {
+            Long uid = inv.getArgument(0);
+            cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO c = inv.getArgument(1);
+            return c != null && java.util.Objects.equals(c.getApplicantUserId(), uid);
+        });
         businessOrderService = new FinanceBusinessOrderServiceImpl(
-                businessOrderMapper, businessOrderNoRedisDAO, contractApplicationMapper, entityCompanyResolver);
+                businessOrderMapper, businessOrderNoRedisDAO, contractApplicationMapper, entityCompanyResolver,
+                related);
         when(businessOrderNoRedisDAO.generate(any(LocalDate.class))).thenReturn("BO-20260723-1");
         when(contractApplicationMapper.selectByApplicationNo(anyString())).thenReturn(
                 FinanceContractApplicationDO.builder()
