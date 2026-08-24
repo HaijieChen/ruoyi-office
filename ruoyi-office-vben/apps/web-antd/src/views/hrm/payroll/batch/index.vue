@@ -37,11 +37,11 @@ const minWageRows = ref<MinWageApi.MinWageRow[]>([]);
 const minWageLoading = ref(false);
 
 const lineColumns = [
+  { title: '姓名', dataIndex: 'employeeName', width: 110 },
   { title: '年月', dataIndex: 'yearMonth', width: 90 },
   { title: '公司', dataIndex: 'companyName', width: 100 },
   { title: '部门', dataIndex: 'deptName', width: 100 },
   { title: '岗位', dataIndex: 'jobPost', width: 100 },
-  { title: '姓名', dataIndex: 'employeeName', width: 90, fixed: 'left' as const },
   { title: '入职日期', dataIndex: 'entryDate', width: 110 },
   { title: '工资', dataIndex: 'wage', width: 90 },
   { title: '社保基数', dataIndex: 'socialBase', width: 90 },
@@ -65,7 +65,7 @@ const lineColumns = [
   { title: '社保扣除', dataIndex: 'socialDeduct', width: 90 },
   { title: '公积金扣除', dataIndex: 'housingDeduct', width: 100 },
   { title: '个人所得税', dataIndex: 'tax', width: 100 },
-  { title: '实发工资', dataIndex: 'net', width: 90, fixed: 'right' as const },
+  { title: '实发工资', dataIndex: 'net', width: 90 },
   { title: '银行卡号', dataIndex: 'bankAccount', width: 160 },
   { title: '开户支行', dataIndex: 'bankName', width: 140 },
   { title: '手机号码', dataIndex: 'mobile', width: 120 },
@@ -151,7 +151,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page>
     <Card size="small" title="最低工资" class="mb-3">
       <Space wrap>
         <span>金额</span>
@@ -199,7 +199,7 @@ onMounted(async () => {
         :data-source="lines"
         :loading="loading"
         row-key="id"
-        :scroll="{ x: 3600, y: 480 }"
+        :scroll="{ x: 3600 }"
         :pagination="false"
         :columns="lineColumns"
       />
