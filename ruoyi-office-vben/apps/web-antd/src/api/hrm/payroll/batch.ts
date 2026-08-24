@@ -94,6 +94,20 @@ export function uploadPayrollPunch(yearMonth: number, file: File) {
   );
 }
 
+export function downloadDeductTemplate() {
+  return requestClient.download('/hrm/payroll-batch/deduct-template');
+}
+
+export function uploadPayrollDeduct(yearMonth: number, file: File) {
+  const data = new FormData();
+  data.append('file', file);
+  return requestClient.post<{ matched: number; unmatched: string[] }>(
+    '/hrm/payroll-batch/upload-deduct',
+    data,
+    { params: { yearMonth } },
+  );
+}
+
 export function listMyPayslips() {
   return requestClient.get<PayrollBatchApi.Line[]>('/hrm/payroll-payslip/list');
 }

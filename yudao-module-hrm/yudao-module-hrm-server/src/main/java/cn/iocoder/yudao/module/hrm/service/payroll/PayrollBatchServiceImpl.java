@@ -16,6 +16,7 @@ import org.springframework.validation.annotation.Validated;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,6 +140,70 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
             payrollLineMapper.updateById(line);
         }
         return new PunchUploadVO(applied.matched(), applied.unmatched());
+    }
+
+    @Override
+    public PunchUploadVO uploadDeduct(int yearMonth, InputStream in) throws Exception {
+        PayrollBatchDO batch = require(yearMonth);
+        if (!PayrollBatchRules.canEdit(batch.getStatus())) {
+            throw new IllegalStateException("published batch is locked");
+        }
+        List<DeductXlsParser.DeductRow> rows = new DeductXlsParser().parse(in);
+        List<EmployeeDO> employees = employeeMapper.selectList(new LambdaQueryWrapperX<EmployeeDO>()
+                .notIn(EmployeeDO::getEmployeeStatus, 6, 7));
+        Map<String, Long> byNo = new java.util.LinkedHashMap<>();
+        Map<String, Integer> noCounts = new java.util.LinkedHashMap<>();
+        Map<String, Long> byName = new java.util.LinkedHashMap<>();
+        List<String> names = new ArrayList<>();
+        for (EmployeeDO emp : employees) {
+            if (emp.getEmployeeNo() != null && !emp.getEmployeeNo().isBlank()) {
+                String no = emp.getEmployeeNo().trim();
+                noCounts.merge(no, 1, Integer::sum);
+                byNo.put(no, emp.getId());
+            }
+            if (emp.getName() != null) {
+                names.add(emp.getName());
+                byName.put(emp.getName(), emp.getId());
+            }
+        }
+        List<PayrollLineDO> lines = payrollLineMapper.selectList(new LambdaQueryWrapperX<PayrollLineDO>()
+                .eq(PayrollLineDO::getBatchId, batch.getId())
+                .eq(PayrollLineDO::getSnapshot, false));
+        Map<Long, PayrollLineDO> lineByEmp = lines.stream()
+                .collect(Collectors.toMap(PayrollLineDO::getEmployeeId, l -> l, (a, b) -> a));
+        int matched = 0;
+        List<String> unmatched = new ArrayList<>();
+        for (DeductXlsParser.DeductRow row : rows) {
+            Long id = PayrollPunchApply.resolve(
+                    new PunchXlsParser.PunchRow(row.employeeNo(), row.name(), "", false, false),
+                    byNo, noCounts, names, byName);
+            if (id == null) {
+                unmatched.add(row.employeeNo() != null && !row.employeeNo().isBlank()
+                        ? "工号=" + row.employeeNo() : "姓名=" + row.name());
+                continue;
+            }
+            PayrollLineDO line = lineByEmp.get(id);
+            if (line == null) {
+                unmatched.add(row.name() == null ? String.valueOf(id) : row.name());
+                continue;
+            }
+            if (row.tax() != null) {
+                line.setTax(row.tax());
+            }
+            if (row.social() != null) {
+                line.setSocialDeduct(row.social());
+            }
+            if (row.housing() != null) {
+                line.setHousingDeduct(row.housing());
+            }
+            line.setNet(nz(line.getPayable())
+                    .subtract(nz(line.getSocialDeduct()))
+                    .subtract(nz(line.getHousingDeduct()))
+                    .subtract(nz(line.getTax())));
+            payrollLineMapper.updateById(line);
+            matched++;
+        }
+        return new PunchUploadVO(matched, unmatched);
     }
 
     @Override

@@ -8,12 +8,14 @@ import { Button, Card, Drawer, Form, Input, InputNumber, Radio, RadioGroup, Spac
 
 import {
   adjustPayrollLine,
+  downloadDeductTemplate,
   downloadPunchTemplate,
   exportPayrollBatch,
   generatePayrollBatch,
   getPayrollBatch,
   listPayrollLines,
   publishPayrollBatch,
+  uploadPayrollDeduct,
   uploadPayrollPunch,
   withdrawPayrollBatch,
   type PayrollBatchApi,
@@ -247,6 +249,21 @@ function onUploadPunch(file: File) {
   return false;
 }
 
+async function onDownloadDeductTemplate() {
+  const data = await downloadDeductTemplate();
+  downloadFileFromBlobPart({ fileName: '扣除导入模板.xls', source: data });
+}
+
+function onUploadDeduct(file: File) {
+  void (async () => {
+    const result = await uploadPayrollDeduct(yearMonth.value, file);
+    unmatched.value = result?.unmatched ?? [];
+    message.success(`扣除已导入，匹配 ${result?.matched ?? 0} 人`);
+    await reload();
+  })();
+  return false;
+}
+
 onMounted(async () => {
   await Promise.all([reload(), loadMinWage()]);
 });
@@ -267,6 +284,10 @@ onMounted(async () => {
           <Button @click="onDownloadTemplate">下载打卡模板</Button>
           <Upload :show-upload-list="false" :before-upload="onUploadPunch" accept=".xls,.xlsx">
             <Button>上传打卡并合并</Button>
+          </Upload>
+          <Button @click="onDownloadDeductTemplate">下载扣除模板</Button>
+          <Upload :show-upload-list="false" :before-upload="onUploadDeduct" accept=".xls,.xlsx">
+            <Button>导入个税社保公积金</Button>
           </Upload>
           <Button @click="onPublish">确认下发</Button>
           <Button @click="onWithdraw">撤回</Button>

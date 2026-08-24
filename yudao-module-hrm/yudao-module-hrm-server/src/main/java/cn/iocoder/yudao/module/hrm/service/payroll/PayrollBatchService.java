@@ -27,4 +27,6 @@ public interface PayrollBatchService {
     void updateAdjust(Long lineId, PayrollLineDO patch);
 
     PunchUploadVO uploadPunch(int yearMonth, InputStream in) throws Exception;
+
+    PunchUploadVO uploadDeduct(int yearMonth, InputStream in) throws Exception;
 }

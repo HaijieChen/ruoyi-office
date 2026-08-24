@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import cn.iocoder.yudao.module.hrm.controller.admin.payroll.vo.DeductTemplateExcelVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.payroll.vo.PayrollExportExcelVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.payroll.vo.PunchTemplateExcelVO;
 
@@ -66,6 +67,22 @@ public class PayrollBatchController {
             @RequestParam Integer yearMonth,
             @RequestParam("file") MultipartFile file) throws Exception {
         return success(payrollBatchService.uploadPunch(yearMonth, file.getInputStream()));
+    }
+
+    @GetMapping("/deduct-template")
+    @Operation(summary = "下载个税社保公积金导入模板")
+    @PreAuthorize("@ss.hasPermission('hrm:payroll-batch:query')")
+    public void deductTemplate(HttpServletResponse response) throws IOException {
+        ExcelUtils.write(response, "扣除导入模板.xls", "扣除", DeductTemplateExcelVO.class, List.of());
+    }
+
+    @PostMapping("/upload-deduct")
+    @Operation(summary = "导入个税/社保/公积金扣除")
+    @PreAuthorize("@ss.hasPermission('hrm:payroll-batch:update')")
+    public CommonResult<PayrollBatchService.PunchUploadVO> uploadDeduct(
+            @RequestParam Integer yearMonth,
+            @RequestParam("file") MultipartFile file) throws Exception {
+        return success(payrollBatchService.uploadDeduct(yearMonth, file.getInputStream()));
     }
 
     @PostMapping("/publish")
