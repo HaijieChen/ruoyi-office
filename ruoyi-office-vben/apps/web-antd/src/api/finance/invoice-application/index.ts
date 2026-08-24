@@ -187,6 +187,17 @@ export function getInvoiceApplication(id: number) {
   );
 }
 
+export function importInvoiceApplicationTemplate() {
+  return requestClient.download('/finance/invoice-application/get-import-template');
+}
+
+export function importInvoiceApplication(file: File) {
+  return requestClient.upload<{
+    createdNos: string[];
+    failureRows: Record<number, string>;
+  }>('/finance/invoice-application/import', { file });
+}
+
 export function getInvoiceApplicationPage(
   params: FinanceInvoiceApplicationApi.PageQuery,
 ) {

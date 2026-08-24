@@ -316,4 +316,16 @@ public interface ErrorCodeConstants {
             "来源类型必须为薪资、云服务或其他");
     ErrorCode DEPT_ALLOCATION_IMPORT_INVALID = new ErrorCode(1_040_009_002, "分摊导入校验失败：{}");
 
+    // ========== 开票红冲 1-040-010-000 ==========
+    ErrorCode INVOICE_REDFUSH_REASON_REQUIRED = new ErrorCode(1_040_010_000, "红冲原因不能为空");
+    ErrorCode INVOICE_REDFUSH_PREDECESSOR_INVALID = new ErrorCode(1_040_010_001,
+            "只能红冲已办完票、无认领、未锁定的开票申请");
+    ErrorCode INVOICE_REDFUSH_AMOUNT_MISMATCH = new ErrorCode(1_040_010_002,
+            "红冲金额必须与原开票申请一致");
+    ErrorCode INVOICE_REDFUSH_LOCK_FAILED = new ErrorCode(1_040_010_003,
+            "原开票申请已被锁定或不可红冲，请刷新后重试");
+    ErrorCode INVOICE_REDFUSH_NOT_EXISTS = new ErrorCode(1_040_010_004, "红冲申请不存在");
+    ErrorCode INVOICE_REDFUSH_STATUS_INVALID = new ErrorCode(1_040_010_005,
+            "当前审批状态不允许执行该操作");
+
 }

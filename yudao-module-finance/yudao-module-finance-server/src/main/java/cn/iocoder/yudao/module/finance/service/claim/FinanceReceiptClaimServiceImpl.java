@@ -438,6 +438,9 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
         if (Boolean.TRUE.equals(app.getVoided())) {
             return false;
         }
+        if (Boolean.TRUE.equals(app.getRedFlushed()) || app.getRedFlushLockApplicationId() != null) {
+            return false;
+        }
         BigDecimal remaining = defaultZero(app.getTotalAmount())
                 .subtract(defaultZero(app.getConfirmedClaimedAmount()))
                 .subtract(defaultZero(app.getPendingClaimedAmount()));

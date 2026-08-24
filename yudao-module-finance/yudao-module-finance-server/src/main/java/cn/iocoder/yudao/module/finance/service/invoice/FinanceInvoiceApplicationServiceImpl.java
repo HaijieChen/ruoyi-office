@@ -491,6 +491,24 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         return applicationMapper.selectPage(pageReqVO);
     }
 
+    @Override
+    public List<FinanceInvoiceApplicationDO> listSelectableForRedFlush() {
+        return applicationMapper.selectSelectableForRedFlush().stream()
+                .filter(FinanceInvoiceRedflushEligibility::isSelectablePredecessor)
+                .toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void releaseOccupyForRedFlush(Long predecessorApplicationId) {
+        FinanceInvoiceApplicationDO predecessor = getApplication(predecessorApplicationId);
+        if (Boolean.TRUE.equals(predecessor.getRedFlushed())) {
+            return;
+        }
+        releaseAllOccupyForApplication(predecessorApplicationId);
+        applicationMapper.markRedFlushed(predecessorApplicationId);
+    }
+
     /**
      * 按申请当前明细汇总释放 BO 占用（用于 REJECTED/CANCELLED）。
      */

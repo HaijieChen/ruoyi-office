@@ -36,6 +36,12 @@ public final class BpmEmbedProcessStartPermissionRegistry {
         map.put("finance_invoice_apply", new Entry(
                 "finance:invoice-application:create",
                 "无开票发起权限，请联系管理员分配商务发起角色"));
+        map.put("oa_expense_no_invoice", new Entry(
+                "finance:expense-no-invoice:create",
+                "无无票报销发起权限，请联系管理员分配发起角色"));
+        map.put("finance_invoice_redflush_apply", new Entry(
+                "finance:invoice-application:create",
+                "无开票红冲发起权限，请联系管理员分配商务发起角色"));
         REGISTRY = Collections.unmodifiableMap(map);
     }
 

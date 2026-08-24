@@ -18,6 +18,10 @@ export async function previewAuthUrl(url: string) {
   }
   const res = await fetch(preview, { method: 'GET', headers, credentials: 'include' });
   if (!res.ok) {
+    if (res.status === 404 && /^https?:\/\//i.test(url)) {
+      window.open(url, '_blank');
+      return;
+    }
     throw new Error('预览失败 HTTP ' + res.status);
   }
   const blob = await res.blob();

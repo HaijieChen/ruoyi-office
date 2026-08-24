@@ -263,9 +263,28 @@ public class FileServiceImpl implements FileService {
                 hit = fileMapper.selectListByPathBinary(URLUtil.decode(path));
             }
         }
+        if (CollUtil.isEmpty(hit) && !StrUtil.startWithIgnoreCase(raw, "http")) {
+            hit = fileMapper.selectListByPathBinary(URLUtil.decode(raw));
+        }
+        if (CollUtil.isEmpty(hit) && StrUtil.startWithIgnoreCase(raw, "http")) {
+            String noQuery = raw.indexOf('?') > 0 ? raw.substring(0, raw.indexOf('?')) : raw;
+            int scheme = noQuery.indexOf("://");
+            int slash = scheme >= 0 ? noQuery.indexOf('/', scheme + 3) : -1;
+            if (slash > 0 && slash < noQuery.length() - 1) {
+                String afterHost = URLUtil.decode(noQuery.substring(slash + 1));
+                hit = fileMapper.selectListByPathBinary(afterHost);
+                if (CollUtil.isEmpty(hit) && afterHost.contains("/")) {
+                    hit = fileMapper.selectListByPathBinary(StrUtil.subAfter(afterHost, "/", false));
+                }
+            }
+        }
         if (CollUtil.isEmpty(hit)) {
             String path = StrUtil.subAfter(raw, "/", true);
             if (StrUtil.isNotBlank(path)) {
+                int q = path.indexOf('?');
+                if (q > 0) {
+                    path = path.substring(0, q);
+                }
                 hit = fileMapper.selectListByPathBinary(URLUtil.decode(path));
             }
         }

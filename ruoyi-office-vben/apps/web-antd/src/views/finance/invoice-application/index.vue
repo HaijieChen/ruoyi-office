@@ -15,6 +15,7 @@ import {
 import { message } from 'ant-design-vue';
 
 import FormModal from './modules/form.vue';
+import ImportModal from './modules/import-modal.vue';
 import DetailModal from './modules/info.vue';
 import IssueModal from './modules/issue-form.vue';
 
@@ -35,6 +36,11 @@ const [IssueFormModal, issueModalApi] = useVbenModal({
 
 const [InfoModal, infoModalApi] = useVbenModal({
   connectedComponent: DetailModal,
+  destroyOnClose: true,
+});
+
+const [InvoiceImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportModal,
   destroyOnClose: true,
 });
 
@@ -191,6 +197,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <CreateModal @success="handleRefresh" />
     <IssueFormModal @success="handleRefresh" />
     <InfoModal />
+    <InvoiceImportModal @success="handleRefresh" />
     <Grid table-title="开票申请">
       <template #toolbar-tools>
         <TableAction
@@ -201,6 +208,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['finance:invoice-application:create'],
               onClick: handleCreate,
+            },
+            {
+              label: '导入历史',
+              auth: ['finance:invoice-application:import'],
+              onClick: () => importModalApi.open(),
             },
           ]"
         />

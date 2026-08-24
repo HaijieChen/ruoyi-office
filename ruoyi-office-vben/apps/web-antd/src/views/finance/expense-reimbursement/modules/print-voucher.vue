@@ -18,7 +18,7 @@ const printObj = {
 
 <template>
   <div>
-    <Button v-print="printObj">打印报销单</Button>
+    <Button v-print="printObj" class="print:hidden">打印报销单</Button>
     <div id="expensePrintVoucher" class="mt-3 bg-white p-6 text-sm text-black">
       <h2 class="mb-2 text-center text-xl font-bold">费用报销单</h2>
       <div class="mb-2 flex justify-between">
@@ -27,7 +27,6 @@ const printObj = {
       </div>
       <div class="mb-2 flex justify-between">
         <span>主体公司：{{ bill.entityCompanyName || '-' }}</span>
-        <span>代票：{{ bill.proxyTicket ? '是' : '否' }}</span>
       </div>
       <div class="mb-2 flex justify-between">
         <span>收款户名：{{ bill.payeeAccountName }}</span>

@@ -278,6 +278,16 @@ class FinanceReceiptClaimServiceImplTest {
         assertFalse(FinanceReceiptClaimServiceImpl.isClaimAllowed(app));
     }
 
+    @Test
+    void claimAllowedRejectsRedFlushedAndLocked() {
+        FinanceInvoiceApplicationDO app = approvedApp(1L, 1L, "100.00");
+        app.setRedFlushed(Boolean.TRUE);
+        assertFalse(FinanceReceiptClaimServiceImpl.isClaimAllowed(app));
+        app.setRedFlushed(Boolean.FALSE);
+        app.setRedFlushLockApplicationId(9L);
+        assertFalse(FinanceReceiptClaimServiceImpl.isClaimAllowed(app));
+    }
+
     // ---------- helpers ----------
 
     private void stubInvoiceSources(Long applicantId, String unclaimed, String receiptPending,
