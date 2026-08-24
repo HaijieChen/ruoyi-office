@@ -44,14 +44,26 @@ function openOriginal() {
   infoOpen.value = true;
 }
 
-async function onSubmit() {
+async function reset() {
+  predecessorId.value = undefined;
+  reason.value = '';
+  specialNote.value = '';
+  snapshot.value = undefined;
+  await loadOptions();
+}
+
+function getPredictVariables() {
+  return { totalAmount: snapshot.value?.totalAmount };
+}
+
+async function submit(ctx?: { startUserSelectAssignees?: Record<string, number[]> }) {
   if (!predecessorId.value) {
     message.warning('请选择前置开票申请');
-    return;
+    throw new Error('请选择前置开票申请');
   }
   if (!reason.value.trim()) {
     message.warning('请填写红冲原因');
-    return;
+    throw new Error('请填写红冲原因');
   }
   submitting.value = true;
   try {
@@ -60,6 +72,7 @@ async function onSubmit() {
       reason: reason.value.trim(),
       specialNote: specialNote.value || undefined,
       totalAmount: snapshot.value?.totalAmount,
+      startUserSelectAssignees: ctx?.startUserSelectAssignees,
     });
     message.success('已提交红冲申请');
     emit('success');
@@ -67,6 +80,12 @@ async function onSubmit() {
     submitting.value = false;
   }
 }
+
+async function onSubmit() {
+  await submit();
+}
+
+defineExpose({ reset, submit, getPredictVariables, submitting });
 
 loadOptions();
 </script>

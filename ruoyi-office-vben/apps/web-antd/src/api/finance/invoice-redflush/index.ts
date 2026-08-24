@@ -8,6 +8,7 @@ export namespace FinanceInvoiceRedflushApi {
     reason: string;
     specialNote?: string;
     totalAmount?: number;
+    startUserSelectAssignees?: Record<string, number[]>;
   }
 }
 

@@ -1,24 +1,49 @@
 <script lang="ts" setup>
 import type { FinanceExpenseApi } from '#/api/finance/expense-reimbursement';
 
+import { getDictLabel } from '@vben/hooks';
+
 import { Button } from 'ant-design-vue';
-// @ts-ignore
-import vPrint from 'vue3-print-nb';
+import dayjs from 'dayjs';
 
 defineOptions({ name: 'ExpensePrintVoucher' });
 defineProps<{ bill: FinanceExpenseApi.Bill }>();
 
-const printObj = {
-  id: 'expensePrintVoucher',
-  popTitle: '费用报销单',
-  extraHead: '',
-  zIndex: 20003,
-};
+function formatFeeDate(v: unknown) {
+  if (v == null || v === '') return '';
+  if (Array.isArray(v) && v.length >= 3) {
+    return `${v[0]}-${String(v[1]).padStart(2, '0')}-${String(v[2]).padStart(2, '0')}`;
+  }
+  if (typeof v === 'number') {
+    return dayjs(v < 1e12 ? v * 1000 : v).format('YYYY-MM-DD');
+  }
+  const s = String(v);
+  if (/^\d{10,13}$/.test(s)) {
+    const n = Number(s);
+    return dayjs(n < 1e12 ? n * 1000 : n).format('YYYY-MM-DD');
+  }
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+function categoryText(bill: FinanceExpenseApi.Bill, line: FinanceExpenseApi.Line) {
+  if (bill.proxyTicket) {
+    return line.invoiceType || '-';
+  }
+  const cat = getDictLabel('finance_expense_category', line.category) || line.category || '';
+  const sub = line.subItem
+    ? getDictLabel('finance_expense_subitem', line.subItem) || line.subItem
+    : '';
+  return [cat, sub].filter(Boolean).join('/');
+}
+
+function onPrint() {
+  window.print();
+}
 </script>
 
 <template>
   <div>
-    <Button v-print="printObj" class="print:hidden">打印报销单</Button>
+    <Button class="print:hidden" @click="onPrint">打印报销单</Button>
     <div id="expensePrintVoucher" class="mt-3 bg-white p-6 text-sm text-black">
       <h2 class="mb-2 text-center text-xl font-bold">费用报销单</h2>
       <div class="mb-2 flex justify-between">
@@ -44,14 +69,8 @@ const printObj = {
         </thead>
         <tbody>
           <tr v-for="(line, i) in bill.lines || []" :key="i">
-            <td class="border border-black p-1">{{ line.feeDate }}</td>
-            <td class="border border-black p-1">
-              {{
-                bill.proxyTicket
-                  ? line.invoiceType || '-'
-                  : [line.category, line.subItem].filter(Boolean).join('/')
-              }}
-            </td>
+            <td class="border border-black p-1">{{ formatFeeDate(line.feeDate) }}</td>
+            <td class="border border-black p-1">{{ categoryText(bill, line) }}</td>
             <td class="border border-black p-1 text-right">{{ line.amount }}</td>
             <td class="border border-black p-1">{{ line.invoiceNo || '' }}</td>
             <td class="border border-black p-1">{{ line.remark || '' }}</td>

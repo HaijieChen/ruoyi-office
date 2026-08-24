@@ -23,6 +23,8 @@ import {
   recordPayExpenseReimbursement,
 } from '#/api/finance/expense-reimbursement';
 import type { FinanceExpenseApi } from '#/api/finance/expense-reimbursement';
+import { getDictLabel } from '@vben/hooks';
+
 import { FileUpload } from '#/components/upload';
 import PrintVoucher from './modules/print-voucher.vue';
 
@@ -92,6 +94,34 @@ function onVoucher(v: string | string[]) {
   payVoucherUrl.value = Array.isArray(v) ? String(v[0] || '') : String(v || '');
 }
 
+function formatFeeDate(v: unknown) {
+  if (v == null || v === '') return '';
+  if (Array.isArray(v) && v.length >= 3) {
+    const y = v[0];
+    const m = String(v[1]).padStart(2, '0');
+    const d = String(v[2]).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof v === 'number') {
+    const ms = v < 1e12 ? v * 1000 : v;
+    return dayjs(ms).format('YYYY-MM-DD');
+  }
+  const s = String(v);
+  if (/^\d{10,13}$/.test(s)) {
+    const n = Number(s);
+    return dayjs(n < 1e12 ? n * 1000 : n).format('YYYY-MM-DD');
+  }
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+function categoryLabel(line: FinanceExpenseApi.Line) {
+  const cat = getDictLabel('finance_expense_category', line.category) || line.category || '';
+  const sub = line.subItem
+    ? getDictLabel('finance_expense_subitem', line.subItem) || line.subItem
+    : '';
+  return [cat, sub].filter(Boolean).join('/');
+}
+
 onMounted(load);
 </script>
 
@@ -107,7 +137,6 @@ onMounted(load);
           <Descriptions.Item label="状态">{{ bill.status }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ bill.periodLabel }}</Descriptions.Item>
           <Descriptions.Item v-if="bill.entityCompanyName" label="主体公司">{{ bill.entityCompanyName }}</Descriptions.Item>
-          <Descriptions.Item label="代票">{{ bill.proxyTicket ? "是" : "否" }}</Descriptions.Item>
           <Descriptions.Item label="收款户名">{{ bill.payeeAccountName }}</Descriptions.Item>
           <Descriptions.Item label="收款账号">{{ bill.payeeAccountNo }}</Descriptions.Item>
           <Descriptions.Item label="申请金额">{{ bill.applyAmount }}</Descriptions.Item>
@@ -115,8 +144,8 @@ onMounted(load);
         </Descriptions>
         <div class="mt-3 text-sm print:hidden">
           <div v-for="(line, i) in bill.lines || []" :key="i">
-            {{ line.feeDate }} ·
-            <span :class="bill.proxyTicket ? 'print:hidden' : ''">{{ line.category }}{{ line.subItem ? '/' + line.subItem : '' }}</span>
+            {{ formatFeeDate(line.feeDate) }} ·
+            <span :class="bill.proxyTicket ? 'print:hidden' : ''">{{ categoryLabel(line) }}</span>
             <span v-if="bill.proxyTicket"> · 发票 {{ line.invoiceType || '-' }}</span>
             · {{ line.amount }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
             {{ line.stayCityTier === 'T1' ? ' · 北上广深' : line.stayCityTier === 'OTHER' ? ' · 其他城市' : '' }}
