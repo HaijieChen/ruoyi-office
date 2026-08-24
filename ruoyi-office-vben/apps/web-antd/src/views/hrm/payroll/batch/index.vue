@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { h, onMounted, ref } from 'vue';
+import { computed, h, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
@@ -28,6 +28,15 @@ defineOptions({ name: 'HrmPayrollBatch' });
 
 const yearMonth = ref(202608);
 const status = ref('DRAFT');
+const statusLabel = computed(() => {
+  if (status.value === 'PUBLISHED') {
+    return '已下发';
+  }
+  if (status.value === 'DRAFT') {
+    return '草稿';
+  }
+  return status.value || '草稿';
+});
 const lines = ref<PayrollBatchApi.Line[]>([]);
 const loading = ref(false);
 const unmatched = ref<string[]>([]);
@@ -239,7 +248,7 @@ onMounted(async () => {
         <Space wrap>
           <span>年月</span>
           <InputNumber v-model:value="yearMonth" :min="202001" />
-          <span>状态：{{ status }}</span>
+          <span>状态：{{ statusLabel }}</span>
           <Button type="primary" @click="onGenerate">生成草稿</Button>
           <Button @click="onDownloadTemplate">下载打卡模板</Button>
           <Upload :show-upload-list="false" :before-upload="onUploadPunch" accept=".xls,.xlsx">
