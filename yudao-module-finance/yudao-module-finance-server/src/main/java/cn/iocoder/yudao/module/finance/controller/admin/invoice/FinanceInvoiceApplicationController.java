@@ -11,7 +11,15 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceAppl
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
+import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
+import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationImportService;
 import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationService;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.Arrays;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,9 +47,37 @@ public class FinanceInvoiceApplicationController {
     @Resource
     private FinanceInvoiceApplicationService invoiceApplicationService;
     @Resource
+    private FinanceInvoiceApplicationImportService invoiceApplicationImportService;
+    @Resource
     private FinanceBusinessOrderMapper businessOrderMapper;
     @Resource
     private FinanceContractApplicationMapper contractApplicationMapper;
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得开票申请历史导入模板")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:import')")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        ExcelUtils.write(response, "开票申请历史导入模板.xls", "开票申请",
+                FinanceInvoiceApplicationImportExcelVO.class,
+                Arrays.asList(FinanceInvoiceApplicationImportExcelVO.builder()
+                        .applicationNo("INV-H-001")
+                        .applicantUsername("admin")
+                        .buyerName("示例客户")
+                        .totalAmount(new BigDecimal("1000.00"))
+                        .currency("CNY")
+                        .businessOrderNo("BO-001")
+                        .invoiceNo("12345678")
+                        .build()));
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "导入历史开票申请（已通过且办票完成，不启流程、不占商务单）")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:import')")
+    public CommonResult<FinanceInvoiceApplicationImportRespVO> importHistorical(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return success(invoiceApplicationImportService.importHistorical(
+                ExcelUtils.read(file, FinanceInvoiceApplicationImportExcelVO.class)));
+    }
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建开票申请并启动审批（无草稿）")

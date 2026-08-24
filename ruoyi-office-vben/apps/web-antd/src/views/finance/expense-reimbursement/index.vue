@@ -55,6 +55,11 @@ const [Grid] = useVbenVxeGrid({
         <TableAction
           :actions="[
             { label: '发起报销', type: 'primary', onClick: handleCreate },
+            {
+              label: '发起无票报销',
+              onClick: () =>
+                router.push({ path: '/finance/expense-reimbursement/no-invoice-create' }),
+            },
           ]"
         />
       </template>

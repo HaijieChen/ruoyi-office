@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * 开票申请 Service。
- * <p>商务单 {@code invoiced_occupied_amount} 仅由 createAndStart / resubmit / onApprovalOutcome 释占写路径变更。
+ * <p>商务单 {@code invoiced_occupied_amount} 由 createAndStart / resubmit / onApprovalOutcome 释占，以及红冲办票 {@link #releaseOccupyForRedFlush} 写。
  * <p>{@code issue_status}：主路径 {@link #completeIssue} 写 FULL；兼容路径 {@link #updateIssueProgress} 保留。
  */
 public interface FinanceInvoiceApplicationService {
@@ -58,5 +58,15 @@ public interface FinanceInvoiceApplicationService {
     List<FinanceInvoiceApplicationFileDO> getApplicationFiles(Long applicationId);
 
     PageResult<FinanceInvoiceApplicationDO> getApplicationPage(FinanceInvoiceApplicationPageReqVO pageReqVO);
+
+    /**
+     * 红冲可选前置开票申请（R1）。
+     */
+    List<FinanceInvoiceApplicationDO> listSelectableForRedFlush();
+
+    /**
+     * 红冲办票：按原单明细释放商务单占用，标记已红冲并清锁。已红冲则幂等。
+     */
+    void releaseOccupyForRedFlush(Long predecessorApplicationId);
 
 }

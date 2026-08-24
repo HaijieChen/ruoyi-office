@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  开票申请-红冲 finance_invoice_redflush_apply
+  部门负责人 → 财务审批 → end
+  结束：${financeInvoiceRedFlushApprovalOutcomeDelegate}（只解锁，不释占）
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://www.iocoder.cn/finance">
+
+  <process id="finance_invoice_redflush_apply" name="开票申请-红冲" isExecutable="true">
+    <startEvent id="startEvent" name="开始"/>
+    <userTask id="taskDeptHead" name="部门负责人审批"
+              flowable:candidateStrategy="37" flowable:candidateParam="1">
+      <extensionElements>
+        <flowable:candidateStrategy>37</flowable:candidateStrategy>
+        <flowable:candidateParam>1</flowable:candidateParam>
+      </extensionElements>
+    </userTask>
+    <userTask id="taskFinance" name="财务审批"
+              flowable:candidateStrategy="10" flowable:candidateParam="finance_admin">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>finance_admin</flowable:candidateParam>
+      </extensionElements>
+    </userTask>
+    <endEvent id="endEvent" name="结束">
+      <extensionElements>
+        <flowable:executionListener event="end" delegateExpression="${financeInvoiceRedFlushApprovalOutcomeDelegate}"/>
+      </extensionElements>
+    </endEvent>
+    <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskDeptHead"/>
+    <sequenceFlow id="flow2" sourceRef="taskDeptHead" targetRef="taskFinance"/>
+    <sequenceFlow id="flow3" sourceRef="taskFinance" targetRef="endEvent"/>
+  </process>
+</definitions>

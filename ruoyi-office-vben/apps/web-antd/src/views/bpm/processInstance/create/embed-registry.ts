@@ -17,6 +17,8 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
     import('#/views/finance/contract-application/modules/form-body.vue'),
   finance_invoice_apply: () =>
     import('#/views/finance/invoice-application/modules/form-body.vue'),
+  finance_invoice_redflush_apply: () =>
+    import('#/views/finance/invoice-redflush/modules/form-body.vue'),
   finance_salary_payment_apply: () =>
     import('#/views/finance/salary-payment/modules/form-body.vue'),
   finance_tax_payment_apply: () =>

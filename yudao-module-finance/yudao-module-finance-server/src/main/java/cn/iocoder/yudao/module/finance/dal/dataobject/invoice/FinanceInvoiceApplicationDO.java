@@ -68,5 +68,13 @@ public class FinanceInvoiceApplicationDO extends BaseDO {
     private String evidenceFileUrl;
     private String remark;
     private Boolean voided;
+    /**
+     * 已红冲：不可再选、不可再认领。
+     */
+    private Boolean redFlushed;
+    /**
+     * 进行中的红冲申请 id；非空则锁定，不可再选、不可新认领。
+     */
+    private Long redFlushLockApplicationId;
 
 }

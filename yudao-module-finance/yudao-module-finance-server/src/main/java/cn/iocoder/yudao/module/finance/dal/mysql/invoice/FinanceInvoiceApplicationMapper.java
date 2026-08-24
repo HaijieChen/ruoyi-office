@@ -29,6 +29,11 @@ public interface FinanceInvoiceApplicationMapper extends BaseMapperX<FinanceInvo
                 .orderByDesc(FinanceInvoiceApplicationDO::getId));
     }
 
+    default FinanceInvoiceApplicationDO selectByApplicationNo(String applicationNo) {
+        return selectOne(new LambdaQueryWrapperX<FinanceInvoiceApplicationDO>()
+                .eq(FinanceInvoiceApplicationDO::getApplicationNo, applicationNo));
+    }
+
     default List<FinanceInvoiceApplicationDO> selectListByIds(Collection<Long> ids) {
         return selectList(new LambdaQueryWrapperX<FinanceInvoiceApplicationDO>()
                 .in(FinanceInvoiceApplicationDO::getId, ids));
@@ -42,6 +47,8 @@ public interface FinanceInvoiceApplicationMapper extends BaseMapperX<FinanceInvo
             "update_time = NOW() " +
             "WHERE id = #{id} AND approval_status = 'APPROVED' AND (voided = b'0' OR voided IS NULL) " +
             "AND deleted = b'0' " +
+            "AND (red_flushed = b'0' OR red_flushed IS NULL) " +
+            "AND red_flush_lock_application_id IS NULL " +
             "AND IFNULL(pending_claimed_amount, 0) + IFNULL(confirmed_claimed_amount, 0) + #{amount} <= total_amount")
     int increasePendingClaimedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
 
@@ -72,5 +79,46 @@ public interface FinanceInvoiceApplicationMapper extends BaseMapperX<FinanceInvo
             "WHERE id = #{id} AND deleted = b'0' " +
             "AND IFNULL(confirmed_claimed_amount, 0) >= #{amount}")
     int decreaseConfirmedClaimedAmount(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
+    /**
+     * 红冲可选原单：已通过、办票完成、未作废、未红冲、未锁定、无认领。
+     */
+    default List<FinanceInvoiceApplicationDO> selectSelectableForRedFlush() {
+        return selectList(new LambdaQueryWrapperX<FinanceInvoiceApplicationDO>()
+                .eq(FinanceInvoiceApplicationDO::getApprovalStatus, "APPROVED")
+                .eq(FinanceInvoiceApplicationDO::getIssueStatus, 2)
+                .and(w -> w.eq(FinanceInvoiceApplicationDO::getVoided, false)
+                        .or()
+                        .isNull(FinanceInvoiceApplicationDO::getVoided))
+                .and(w -> w.eq(FinanceInvoiceApplicationDO::getRedFlushed, false)
+                        .or()
+                        .isNull(FinanceInvoiceApplicationDO::getRedFlushed))
+                .isNull(FinanceInvoiceApplicationDO::getRedFlushLockApplicationId)
+                .and(w -> w.apply("IFNULL(pending_claimed_amount,0) = 0")
+                        .apply("IFNULL(confirmed_claimed_amount,0) = 0"))
+                .orderByDesc(FinanceInvoiceApplicationDO::getId));
+    }
+
+    @Update("UPDATE finance_invoice_application SET " +
+            "red_flush_lock_application_id = #{lockId}, update_time = NOW() " +
+            "WHERE id = #{id} AND deleted = b'0' " +
+            "AND approval_status = 'APPROVED' AND issue_status = 2 " +
+            "AND (voided = b'0' OR voided IS NULL) " +
+            "AND (red_flushed = b'0' OR red_flushed IS NULL) " +
+            "AND red_flush_lock_application_id IS NULL " +
+            "AND IFNULL(pending_claimed_amount, 0) = 0 " +
+            "AND IFNULL(confirmed_claimed_amount, 0) = 0")
+    int tryLockForRedFlush(@Param("id") Long id, @Param("lockId") Long lockId);
+
+    @Update("UPDATE finance_invoice_application SET " +
+            "red_flush_lock_application_id = NULL, update_time = NOW() " +
+            "WHERE id = #{id} AND deleted = b'0' " +
+            "AND red_flush_lock_application_id = #{lockId}")
+    int unlockRedFlush(@Param("id") Long id, @Param("lockId") Long lockId);
+
+    @Update("UPDATE finance_invoice_application SET " +
+            "red_flushed = b'1', red_flush_lock_application_id = NULL, update_time = NOW() " +
+            "WHERE id = #{id} AND deleted = b'0'")
+    int markRedFlushed(@Param("id") Long id);
 
 }

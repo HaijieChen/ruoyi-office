@@ -54,8 +54,15 @@ function handleResubmit(row: FinanceTaxPaymentApi.Application) {
 }
 
 function handleDetail(row: FinanceTaxPaymentApi.Application) {
+  if (row.processInstanceId) {
+    router.push({
+      path: '/bpm/process-instance/detail',
+      query: { id: row.processInstanceId },
+    });
+    return;
+  }
   router.push({
-    path: '/finance/tax-payment/detail/index',
+    path: '/finance/tax-payment/detail',
     query: { id: String(row.id) },
   });
 }

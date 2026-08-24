@@ -34,7 +34,7 @@ WHERE id=5184 AND deleted=b'0';
 INSERT INTO system_menu
   (name, permission, type, sort, parent_id, path, icon, component, component_name,
    status, visible, keep_alive, always_show, creator, create_time, updater, update_time, deleted)
-SELECT '用印申请', '', 2, 2, @legal, '/finance/seal-apply', '', 'oa/seal/sealapply/list/index', 'OaSealApplyList',
+SELECT '用印申请', '', 2, 2, @legal, '/finance/seal-apply', 'ep:stamp', 'oa/seal/sealapply/list/index', 'OaSealApplyList',
        0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 FROM DUAL
 WHERE @legal IS NOT NULL

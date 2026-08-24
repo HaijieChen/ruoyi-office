@@ -99,10 +99,10 @@ onMounted(load);
   <Page auto-content-height>
     <Spin :spinning="loading">
       <div v-if="bill" class="mx-auto max-w-3xl p-4 print:max-w-none">
-        <div class="mb-2 print:hidden">
+        <div class="mb-2">
           <PrintVoucher :bill="bill" />
         </div>
-        <Descriptions bordered :column="2" size="small">
+        <Descriptions bordered :column="2" size="small" class="print:hidden">
           <Descriptions.Item label="标题">{{ bill.processTitle }}</Descriptions.Item>
           <Descriptions.Item label="状态">{{ bill.status }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ bill.periodLabel }}</Descriptions.Item>
@@ -113,7 +113,7 @@ onMounted(load);
           <Descriptions.Item label="申请金额">{{ bill.applyAmount }}</Descriptions.Item>
           <Descriptions.Item label="实报金额">{{ bill.approvedAmount }}</Descriptions.Item>
         </Descriptions>
-        <div class="mt-3 text-sm">
+        <div class="mt-3 text-sm print:hidden">
           <div v-for="(line, i) in bill.lines || []" :key="i">
             {{ line.feeDate }} ·
             <span :class="bill.proxyTicket ? 'print:hidden' : ''">{{ line.category }}{{ line.subItem ? '/' + line.subItem : '' }}</span>

@@ -54,8 +54,15 @@ function handleResubmit(row: FinanceSalaryPaymentApi.Application) {
 }
 
 function handleDetail(row: FinanceSalaryPaymentApi.Application) {
+  if (row.processInstanceId) {
+    router.push({
+      path: '/bpm/process-instance/detail',
+      query: { id: row.processInstanceId },
+    });
+    return;
+  }
   router.push({
-    path: '/finance/salary-payment/detail/index',
+    path: '/finance/salary-payment/detail',
     query: { id: String(row.id) },
   });
 }
