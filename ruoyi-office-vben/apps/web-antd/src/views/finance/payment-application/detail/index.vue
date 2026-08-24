@@ -41,6 +41,7 @@ import type { DefaultOptionType } from 'ant-design-vue/es/select';
 import { getDictOptions } from '@vben/hooks';
 import { FileUpload } from '#/components/upload';
 import { previewAuthUrl } from '#/utils/file-preview';
+import { displayDate } from '#/utils/display-time';
 import PrintVoucher from '../modules/print-voucher.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationBpmDetail' });
@@ -362,7 +363,7 @@ watch(
             type="primary"
             @click="onConfirmMaterials"
           >确认资料齐全</Button>
-          <PrintVoucher class="print:hidden" :detail="detail" />
+          <PrintVoucher :detail="detail" />
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
             {{ props.nodeKeyName || resolvedNodeKey }}
           </Tag>
@@ -518,7 +519,7 @@ watch(
           <Descriptions.Item label="已登记支付合计">
             {{ detail.paidLineSum ?? 0 }}
           </Descriptions.Item>
-          <Descriptions.Item label="支付日">{{ detail.actualPayDate || '-' }}</Descriptions.Item>
+          <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
           <Descriptions.Item label="依据" :span="2">
             <a
               v-for="(u, i) in String(detail.evidenceFileUrls || '')

@@ -3,15 +3,21 @@ import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { Descriptions, Spin } from 'ant-design-vue';
+import { Button, Descriptions, Spin } from 'ant-design-vue';
 
 import { getPaymentApplication } from '#/api/finance/payment-application';
 import type { FinancePaymentApplicationApi } from '#/api/finance/payment-application';
+import { displayDate } from '#/utils/display-time';
+import { printFormElement } from '#/utils/print-form';
 
 defineOptions({ name: 'FinancePaymentApplicationDetail' });
 
 const detail = ref<FinancePaymentApplicationApi.Application | null>(null);
 const loading = ref(false);
+
+function onPrint() {
+  printFormElement(document.getElementById('paymentDetailPrint'), '付款申请');
+}
 
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
@@ -34,7 +40,10 @@ const [Modal, modalApi] = useVbenModal({
 <template>
   <Modal title="付款申请详情" class="w-[720px]" :show-confirm-button="false">
     <Spin :spinning="loading">
-      <Descriptions v-if="detail" bordered :column="1" size="small">
+      <div v-if="detail" class="mb-3">
+        <Button type="primary" @click="onPrint">打印</Button>
+      </div>
+      <Descriptions id="paymentDetailPrint" v-if="detail" bordered :column="1" size="small">
         <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
         <Descriptions.Item label="标题">{{ detail.processTitle }}</Descriptions.Item>
         <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
@@ -54,7 +63,7 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="租赁合同">{{ detail.leaseContractApplicationId || '-' }}</Descriptions.Item>
         <Descriptions.Item label="累计已支付">{{ detail.cumulativePaid }}</Descriptions.Item>
         <Descriptions.Item label="本次后累计">{{ detail.cumulativeAfter }}</Descriptions.Item>
-        <Descriptions.Item label="支付日">{{ detail.actualPayDate || '-' }}</Descriptions.Item>
+        <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
         <Descriptions.Item label="支付凭证">{{ detail.payVoucherUrl || '-' }}</Descriptions.Item>
       </Descriptions>
     </Spin>

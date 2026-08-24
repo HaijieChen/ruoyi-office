@@ -3,6 +3,7 @@ import type { FinancePaymentApplicationApi } from '#/api/finance/payment-applica
 
 import { Button } from 'ant-design-vue';
 
+import { displayDate } from '#/utils/display-time';
 import { printFormElement } from '#/utils/print-form';
 
 defineOptions({ name: 'PaymentPrintVoucher' });
@@ -15,8 +16,8 @@ function onPrint() {
 
 <template>
   <div>
-    <Button size="small" class="print:hidden" @click="onPrint">打印付款单</Button>
-    <div id="paymentPrintVoucher" class="mt-3 bg-white p-6 text-sm text-black">
+    <Button type="primary" class="print:hidden" @click="onPrint">打印</Button>
+    <div id="paymentPrintVoucher" class="hidden">
       <h2 class="mb-2 text-center text-xl font-bold">付款申请单</h2>
       <table class="w-full border-collapse">
         <tbody>
@@ -44,7 +45,7 @@ function onPrint() {
           </tr>
           <tr>
             <td class="border border-black p-1">支付日</td>
-            <td class="border border-black p-1">{{ detail.actualPayDate || '-' }}</td>
+            <td class="border border-black p-1">{{ displayDate(detail.actualPayDate) }}</td>
             <td class="border border-black p-1">资料</td>
             <td class="border border-black p-1">
               {{ detail.materialsStatus === 'WAIT_INVOICE' ? '待补票' : '齐全' }}

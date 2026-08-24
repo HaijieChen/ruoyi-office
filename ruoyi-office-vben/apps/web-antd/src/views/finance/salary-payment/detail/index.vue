@@ -39,8 +39,14 @@ import type { DefaultOptionType } from 'ant-design-vue/es/select';
 
 import { getDictOptions } from '@vben/hooks';
 import { FileUpload } from '#/components/upload';
+import { displayDate } from '#/utils/display-time';
+import { printFormElement } from '#/utils/print-form';
 
 defineOptions({ name: 'FinanceSalaryPaymentBpmDetail' });
+
+function onPrintForm() {
+  printFormElement(document.getElementById('salaryPrintForm'), '薪资付款申请');
+}
 
 function dictOptions(dictType: string): DefaultOptionType[] {
   return getDictOptions(dictType).map((d) => ({
@@ -329,6 +335,9 @@ watch(
       <template v-if="detail">
         <div class="mb-4 flex flex-wrap items-center gap-2">
           <span class="text-base font-medium">薪资付款申请</span>
+          <Button type="primary" size="small" class="print:hidden" @click="onPrintForm">
+            打印
+          </Button>
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>{{ detail.status }}</Tag>
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
@@ -461,7 +470,7 @@ watch(
           </div>
         </Card>
 
-        <Descriptions bordered :column="2" size="small" class="mb-4">
+        <Descriptions id="salaryPrintForm" bordered :column="2" size="small" class="mb-4">
           <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
           <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
           <Descriptions.Item label="主体公司">
@@ -480,7 +489,7 @@ watch(
           <Descriptions.Item label="已登记支付合计">
             {{ detail.paidLineSum ?? 0 }}
           </Descriptions.Item>
-          <Descriptions.Item label="支付日">{{ detail.actualPayDate || '-' }}</Descriptions.Item>
+          <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
           <Descriptions.Item label="依据" :span="2">
             {{ detail.evidenceFileUrls }}
           </Descriptions.Item>

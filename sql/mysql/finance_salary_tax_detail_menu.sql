@@ -7,17 +7,16 @@ INSERT INTO `system_menu`
 SELECT t.name, '', 2, t.sort, p.id, t.path, '', t.component, t.cname,
        0, b'0', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
 FROM (
-    SELECT '薪资付款详情' name, 4 sort, 'salary-payment/detail' path,
+    SELECT '薪资付款详情' name, 92 sort, 'salary-payment/detail' path,
            'finance/salary-payment/detail/index' component, 'FinanceSalaryPaymentDetail' cname
-    UNION ALL SELECT '税金付款详情', 5, 'tax-payment/detail',
+    UNION ALL SELECT '税金付款详情', 93, 'tax-payment/detail',
            'finance/tax-payment/detail/index', 'FinanceTaxPaymentDetail'
 ) t
 JOIN `system_menu` p
-  ON p.`deleted` = b'0'
- AND p.`component` = CASE t.component
-        WHEN 'finance/salary-payment/detail/index' THEN 'finance/salary-payment/index'
-        WHEN 'finance/tax-payment/detail/index' THEN 'finance/tax-payment/index'
-     END
+  ON p.`deleted` = b'0' AND p.`path` = 'fin-biz'
+ AND p.`parent_id` IN (
+      SELECT id FROM `system_menu` WHERE `deleted` = b'0' AND `parent_id` = 0 AND `path` IN ('finance', '/finance')
+    )
 WHERE NOT EXISTS (
     SELECT 1 FROM `system_menu` m WHERE m.`deleted` = b'0' AND m.`component` = t.component
 );

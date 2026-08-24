@@ -1,4 +1,4 @@
--- 兼容旧文件名：详情页与列表同级挂 fin-biz，不能当列表子页
+-- 隐藏详情页必须和列表同级（挂 fin-biz），不能当列表子页，否则点列表会落到详情
 SET NAMES utf8mb4;
 
 SET @fin_biz := (
@@ -11,13 +11,22 @@ SET @fin_biz := (
 );
 
 UPDATE `system_menu`
-SET `parent_id` = @fin_biz, `sort` = 91, `visible` = b'0', `update_time` = NOW()
+SET `parent_id` = @fin_biz,
+    `sort` = 91,
+    `visible` = b'0',
+    `update_time` = NOW()
 WHERE `deleted` = b'0' AND `component` = 'finance/invoice-redflush/info/index';
 
 UPDATE `system_menu`
-SET `parent_id` = @fin_biz, `sort` = 92, `visible` = b'0', `update_time` = NOW()
+SET `parent_id` = @fin_biz,
+    `sort` = 92,
+    `visible` = b'0',
+    `update_time` = NOW()
 WHERE `deleted` = b'0' AND `component` = 'finance/salary-payment/detail/index';
 
 UPDATE `system_menu`
-SET `parent_id` = @fin_biz, `sort` = 93, `visible` = b'0', `update_time` = NOW()
+SET `parent_id` = @fin_biz,
+    `sort` = 93,
+    `visible` = b'0',
+    `update_time` = NOW()
 WHERE `deleted` = b'0' AND `component` = 'finance/tax-payment/detail/index';
