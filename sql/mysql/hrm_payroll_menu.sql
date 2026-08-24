@@ -22,18 +22,6 @@ WHERE @hrm_menu_id IS NOT NULL
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`)
-SELECT '最低工资', 'hrm:min-wage:query', 2, 41, @hrm_menu_id, 'min-wage',
-       'ep:coin', 'hrm/payroll/min-wage/index', 'HrmMinWage',
-       0, b'1', b'1', b'1'
-WHERE @hrm_menu_id IS NOT NULL
-  AND NOT EXISTS (
-      SELECT 1 FROM `system_menu`
-      WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/min-wage/index'
-  );
-
-INSERT INTO `system_menu`
-    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
-     `status`, `visible`, `keep_alive`, `always_show`)
 SELECT '我的工资条', 'hrm:payroll-payslip:query', 2, 42, @hrm_menu_id, 'payslip',
        'ep:ticket', 'hrm/payroll/payslip/index', 'HrmPayrollPayslip',
        0, b'1', b'1', b'1'
@@ -44,8 +32,12 @@ WHERE @hrm_menu_id IS NOT NULL
   );
 
 SET @batch_menu_id = (SELECT MIN(`id`) FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/batch/index');
-SET @min_wage_menu_id = (SELECT MIN(`id`) FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/min-wage/index');
 SET @payslip_menu_id = (SELECT MIN(`id`) FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/payslip/index');
+
+-- 最低工资并入核算页，隐藏独立菜单
+UPDATE `system_menu`
+SET `deleted` = b'1', `visible` = b'0'
+WHERE `deleted` = b'0' AND `component` = 'hrm/payroll/min-wage/index';
 
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
@@ -59,8 +51,8 @@ FROM (
     UNION ALL SELECT '工资核算下发', 'hrm:payroll-batch:publish', 4, @batch_menu_id
     UNION ALL SELECT '工资核算撤回', 'hrm:payroll-batch:withdraw', 5, @batch_menu_id
     UNION ALL SELECT '工资核算导出', 'hrm:payroll-batch:export', 6, @batch_menu_id
-    UNION ALL SELECT '最低工资查询', 'hrm:min-wage:query', 1, @min_wage_menu_id
-    UNION ALL SELECT '最低工资更新', 'hrm:min-wage:update', 2, @min_wage_menu_id
+    UNION ALL SELECT '最低工资查询', 'hrm:min-wage:query', 7, @batch_menu_id
+    UNION ALL SELECT '最低工资更新', 'hrm:min-wage:update', 8, @batch_menu_id
 ) p
 WHERE p.`parent_id` IS NOT NULL
   AND NOT EXISTS (

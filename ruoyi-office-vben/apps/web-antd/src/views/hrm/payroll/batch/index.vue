@@ -4,19 +4,35 @@ import { onMounted, ref } from 'vue';
 import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, InputNumber, Space, Table, Upload, message } from 'ant-design-vue';
+import {
+  Button,
+  Form,
+  FormItem,
+  InputNumber,
+  Radio,
+  RadioGroup,
+  Space,
+  Table,
+  Upload,
+  message,
+} from 'ant-design-vue';
 
 import {
+  downloadPunchTemplate,
   exportPayrollBatch,
   generatePayrollBatch,
   getPayrollBatch,
   listPayrollLines,
   publishPayrollBatch,
-  downloadPunchTemplate,
   uploadPayrollPunch,
   withdrawPayrollBatch,
   type PayrollBatchApi,
 } from '#/api/hrm/payroll/batch';
+import {
+  createMinWage,
+  getMinWageHistory,
+  type MinWageApi,
+} from '#/api/hrm/payroll/min-wage';
 
 defineOptions({ name: 'HrmPayrollBatch' });
 
@@ -25,6 +41,11 @@ const status = ref('DRAFT');
 const lines = ref<PayrollBatchApi.Line[]>([]);
 const loading = ref(false);
 const unmatched = ref<string[]>([]);
+
+const minWageAmount = ref<number | null>(null);
+const minWageNextMonth = ref(false);
+const minWageRows = ref<MinWageApi.MinWageRow[]>([]);
+const minWageLoading = ref(false);
 
 async function reload() {
   loading.value = true;
@@ -35,6 +56,27 @@ async function reload() {
   } finally {
     loading.value = false;
   }
+}
+
+async function loadMinWage() {
+  minWageLoading.value = true;
+  try {
+    minWageRows.value = (await getMinWageHistory()) ?? [];
+  } finally {
+    minWageLoading.value = false;
+  }
+}
+
+async function onSaveMinWage() {
+  if (minWageAmount.value == null) {
+    message.warning('请输入最低工资');
+    return;
+  }
+  await createMinWage({ amount: minWageAmount.value, nextMonth: minWageNextMonth.value });
+  message.success('最低工资已保存');
+  minWageAmount.value = null;
+  minWageNextMonth.value = false;
+  await loadMinWage();
 }
 
 async function onGenerate() {
@@ -75,11 +117,41 @@ function onUploadPunch(file: File) {
   return false;
 }
 
-onMounted(reload);
+onMounted(async () => {
+  await Promise.all([reload(), loadMinWage()]);
+});
 </script>
 
 <template>
   <Page title="月度工资核算">
+    <Form layout="inline" class="mb-4">
+      <FormItem label="最低工资">
+        <InputNumber v-model:value="minWageAmount" :min="0" :precision="2" />
+      </FormItem>
+      <FormItem label="生效">
+        <RadioGroup v-model:value="minWageNextMonth">
+          <Radio :value="false">当月</Radio>
+          <Radio :value="true">下月</Radio>
+        </RadioGroup>
+      </FormItem>
+      <FormItem>
+        <Button @click="onSaveMinWage">保存最低工资</Button>
+      </FormItem>
+    </Form>
+    <Table
+      class="mb-6"
+      size="small"
+      :data-source="minWageRows"
+      :loading="minWageLoading"
+      row-key="id"
+      :pagination="{ pageSize: 5 }"
+      :columns="[
+        { title: '生效年月', dataIndex: 'effectiveMonth' },
+        { title: '金额', dataIndex: 'amount' },
+        { title: '录入时间', dataIndex: 'createTime' },
+      ]"
+    />
+
     <Space class="mb-4">
       <InputNumber v-model:value="yearMonth" :min="202001" />
       <span>状态：{{ status }}</span>
