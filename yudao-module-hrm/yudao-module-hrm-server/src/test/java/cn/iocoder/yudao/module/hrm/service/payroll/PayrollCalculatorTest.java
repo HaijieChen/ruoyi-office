@@ -47,6 +47,7 @@ class PayrollCalculatorTest {
                 .minWage(new BigDecimal("2690"))
                 .build());
         assertEquals(new BigDecimal("2690.00"), r.sickPay());
+        assertEquals(new BigDecimal("2690.00"), r.payable());
     }
 
     @Test

@@ -53,14 +53,22 @@ public class PayrollCalculator {
                 && nz(in.sickDays()).compareTo(BigDecimal.ZERO) == 0;
         BigDecimal bonusPaid = bonus ? nz(in.fullAttendanceBonus()) : BigDecimal.ZERO;
         BigDecimal sickPay = sickPay(in, daily);
-        BigDecimal payable = nz(in.monthlyWage())
-                .subtract(daily.multiply(nz(in.sickDays())))
-                .add(sickPay)
-                .add(bonusPaid)
-                .add(nz(in.subsidies()))
-                .add(nz(in.overtime()))
-                .add(nz(in.otherPlusMinus()))
-                .subtract(personalDeduction);
+        BigDecimal payable;
+        if (in.allScheduledDaysSick()) {
+            payable = nz(in.minWage())
+                    .add(nz(in.subsidies()))
+                    .add(nz(in.overtime()))
+                    .add(nz(in.otherPlusMinus()));
+        } else {
+            payable = nz(in.monthlyWage())
+                    .subtract(daily.multiply(nz(in.sickDays())))
+                    .add(sickPay)
+                    .add(bonusPaid)
+                    .add(nz(in.subsidies()))
+                    .add(nz(in.overtime()))
+                    .add(nz(in.otherPlusMinus()))
+                    .subtract(personalDeduction);
+        }
         BigDecimal social = nz(in.socialBase()).multiply(SOCIAL_RATE);
         BigDecimal housing = nz(in.housingBase()).multiply(HOUSING_RATE);
         BigDecimal net = payable.subtract(social).subtract(housing).subtract(nz(in.tax()));
