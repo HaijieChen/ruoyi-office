@@ -315,9 +315,9 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 .add(nz(line.getBonus()))
                 .add(nz(line.getSubsidy()))
                 .add(overtime)
-                .add(nz(line.getSickPay()))
                 .add(nz(line.getTripSubsidy()))
                 .add(nz(line.getOtherAdjust()))
+                .subtract(nz(line.getSickPay()))
                 .subtract(nz(line.getPersonalLeavePay()));
         line.setPayable(payable);
         line.setNet(payable.subtract(nz(line.getSocialDeduct())).subtract(nz(line.getHousingDeduct())).subtract(nz(line.getTax())));
@@ -427,7 +427,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         line.setWeekdayOvertimePay(BigDecimal.ZERO);
         line.setSickDays(sickDays);
         line.setSickRate(calc.sickRate());
-        line.setSickPay(calc.sickPay());
+        line.setSickPay(calc.sickDeduction());
         line.setPersonalAbsenceDays(absence);
         line.setPersonalLeavePay(calc.personalLeaveDeduction());
         line.setTripSubsidy(BigDecimal.ZERO);

@@ -41,7 +41,8 @@ public class PayrollCalculator {
             BigDecimal socialDeduction,
             BigDecimal housingDeduction,
             BigDecimal net,
-            BigDecimal sickRate
+            BigDecimal sickRate,
+            BigDecimal sickDeduction
     ) {
     }
 
@@ -72,6 +73,9 @@ public class PayrollCalculator {
         BigDecimal social = nz(in.socialBase()).multiply(SOCIAL_RATE);
         BigDecimal housing = nz(in.housingBase()).multiply(HOUSING_RATE);
         BigDecimal net = payable.subtract(social).subtract(housing).subtract(nz(in.tax()));
+        BigDecimal sickDeduction = in.allScheduledDaysSick()
+                ? nz(in.monthlyWage()).subtract(nz(in.minWage())).max(BigDecimal.ZERO)
+                : daily.multiply(nz(in.sickDays())).subtract(sickPay).max(BigDecimal.ZERO);
         return new Result(
                 daily,
                 sickPay.setScale(2, RoundingMode.HALF_UP),
@@ -82,7 +86,8 @@ public class PayrollCalculator {
                 social.setScale(2, RoundingMode.HALF_UP),
                 housing.setScale(2, RoundingMode.HALF_UP),
                 net.setScale(2, RoundingMode.HALF_UP),
-                tenureRate(in.tenureYears())
+                tenureRate(in.tenureYears()),
+                sickDeduction.setScale(2, RoundingMode.HALF_UP)
         );
     }
 

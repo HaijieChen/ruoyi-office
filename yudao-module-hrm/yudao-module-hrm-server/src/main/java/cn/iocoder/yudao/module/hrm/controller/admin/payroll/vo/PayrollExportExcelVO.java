@@ -47,11 +47,11 @@ public class PayrollExportExcelVO {
     private BigDecimal sickDays;
     @ExcelProperty("病假系数")
     private BigDecimal sickRate;
-    @ExcelProperty("病假工资")
+    @ExcelProperty("病假扣除")
     private BigDecimal sickPay;
     @ExcelProperty("事假/缺勤天数")
     private BigDecimal personalAbsenceDays;
-    @ExcelProperty("事假工资")
+    @ExcelProperty("事假扣除")
     private BigDecimal personalLeavePay;
     @ExcelProperty("出差补贴")
     private BigDecimal tripSubsidy;

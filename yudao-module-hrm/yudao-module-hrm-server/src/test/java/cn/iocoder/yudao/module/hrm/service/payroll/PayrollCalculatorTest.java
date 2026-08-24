@@ -26,6 +26,7 @@ class PayrollCalculatorTest {
                 .yearToDateSickBeforeMonth(BigDecimal.ZERO)
                 .build());
         assertEquals(new BigDecimal("720.00"), r.sickPay());
+        assertEquals(new BigDecimal("480.00"), r.sickDeduction());
         assertEquals(0, r.bonusPaid().compareTo(BigDecimal.ZERO));
     }
 
@@ -47,6 +48,7 @@ class PayrollCalculatorTest {
                 .minWage(new BigDecimal("2690"))
                 .build());
         assertEquals(new BigDecimal("2690.00"), r.sickPay());
+        assertEquals(new BigDecimal("6010.00"), r.sickDeduction());
         assertEquals(new BigDecimal("2690.00"), r.payable());
     }
 
