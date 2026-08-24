@@ -26,6 +26,11 @@ public interface BpmProcessStartEligibilityService {
      */
     boolean shouldHideFromStartList(String processKey);
 
+    /** 财务管理员浏览发起目录时不按 canStart 隐藏 */
+    default boolean shouldHideFromStartList(String processKey, boolean catalogAdmin) {
+        return !catalogAdmin && shouldHideFromStartList(processKey);
+    }
+
     /**
      * 启动/创建流程前强制校验（通用通道）；失败抛出带友好文案的业务异常。
      * 薪税在通用通道<strong>恒拒绝</strong>（即使目录可见）。

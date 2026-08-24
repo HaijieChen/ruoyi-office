@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.bpm.controller.admin.definition;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.process.BpmProcessDefinitionPageReqVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.process.BpmProcessDefinitionRespVO;
@@ -53,6 +54,8 @@ public class BpmProcessDefinitionController {
     private BpmCategoryService categoryService;
     @Resource
     private BpmProcessStartEligibilityService processStartEligibilityService;
+    @Resource
+    private SecurityFrameworkService securityFrameworkService;
 
     @GetMapping("/page")
     @Operation(summary = "获得流程定义分页")
@@ -94,12 +97,17 @@ public class BpmProcessDefinitionController {
         Map<String, BpmProcessDefinitionInfoDO> processDefinitionMap = processDefinitionService.getProcessDefinitionInfoMap(
                 convertSet(list, ProcessDefinition::getId));
         Long userId = getLoginUserId();
+        boolean catalogAdmin = securityFrameworkService.hasRole("finance_admin");
         list.removeIf(processDefinition -> {
             BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionMap.get(processDefinition.getId());
-            return processDefinitionInfo == null // 不存在
-                    || Boolean.FALSE.equals(processDefinitionInfo.getVisible()) // visible 不可见
-                    || !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId) // 用户/部门白名单
-                    || processStartEligibilityService.shouldHideFromStartList(processDefinition.getKey()); // 嵌入式业务 create 权限
+            if (processDefinitionInfo == null || Boolean.FALSE.equals(processDefinitionInfo.getVisible())) {
+                return true;
+            }
+            if (catalogAdmin) {
+                return false;
+            }
+            return !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId)
+                    || processStartEligibilityService.shouldHideFromStartList(processDefinition.getKey());
         });
 
         // 2. 拼接 VO 返回（列表仅含可发起项；仍填充 canStart 元数据供前端防御性消费）

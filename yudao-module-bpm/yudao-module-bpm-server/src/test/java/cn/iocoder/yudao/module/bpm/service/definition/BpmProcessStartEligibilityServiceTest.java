@@ -224,6 +224,14 @@ class BpmProcessStartEligibilityServiceTest {
         }
     }
 
+    @Test
+    void catalogAdmin_doesNotHideEvenWithoutPermission() {
+        when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
+                .thenReturn(false);
+        assertTrue(service.shouldHideFromStartList("finance_payment_apply"));
+        assertFalse(service.shouldHideFromStartList("finance_payment_apply", true));
+    }
+
     private static boolean StrUtilSafe(String s) {
         return s != null && !s.isBlank();
     }

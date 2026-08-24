@@ -15,7 +15,6 @@ import {
   message,
   Row,
   Space,
-  Tabs,
   Tooltip,
 } from 'ant-design-vue';
 
@@ -243,65 +242,64 @@ onMounted(() => {
           </div>
         </template>
 
-        <div v-if="filteredProcessDefinitionList?.length" class="-ml-6">
-          <Tabs v-model:active-key="activeCategory" tab-position="left">
-            <Tabs.TabPane
-              v-for="category in availableCategories"
-              :key="category.code"
-              :tab="category.name"
-            >
-              <Row :gutter="[16, 16]" :wrap="true">
-                <Col
-                  v-for="definition in processDefinitionGroup[category.code]"
-                  :key="definition.id"
-                  :xs="24"
-                  :sm="12"
-                  :md="8"
-                  :lg="8"
-                  :xl="6"
-                  @click="handleSelect(definition)"
+        <div v-if="filteredProcessDefinitionList?.length">
+          <div
+            v-for="category in availableCategories"
+            :key="category.code"
+            class="mb-6"
+          >
+            <div class="mb-3 text-sm text-gray-500">{{ category.name }}</div>
+            <Row :gutter="[16, 16]" :wrap="true">
+              <Col
+                v-for="definition in processDefinitionGroup[category.code]"
+                :key="definition.id"
+                :xs="24"
+                :sm="12"
+                :md="8"
+                :lg="6"
+                :xl="5"
+                @click="handleSelect(definition)"
+              >
+                <Card
+                  hoverable
+                  class="w-full cursor-pointer"
+                  :class="{
+                    'animate-bounce-once !bg-[rgb(63_115_247_/_10%)]':
+                      searchName.trim().length > 0,
+                  }"
+                  :body-style="{
+                    width: '100%',
+                    padding: '16px',
+                  }"
                 >
-                  <Card
-                    hoverable
-                    class="w-full cursor-pointer"
-                    :class="{
-                      'animate-bounce-once !bg-[rgb(63_115_247_/_10%)]':
-                        searchName.trim().length > 0,
-                    }"
-                    :body-style="{
-                      width: '100%',
-                      padding: '16px',
-                    }"
-                  >
-                    <div class="flex items-center">
-                      <img
-                        v-if="definition.icon"
-                        :src="definition.icon"
-                        class="size-12 rounded object-contain"
-                        alt="流程图标"
-                      />
-                      <div
-                        v-else
-                        class="flex size-12 flex-shrink-0 items-center justify-center rounded bg-primary"
-                      >
-                        <span class="text-xs text-white">
-                          {{ definition.name?.slice(0, 2) }}
-                        </span>
-                      </div>
-                      <span class="ml-3 flex-1 truncate text-base">
-                        <Tooltip
-                          placement="topLeft"
-                          :title="`${definition.description}`"
-                        >
-                          {{ definition.name }}
-                        </Tooltip>
+                  <div class="flex items-center">
+                    <img
+                      v-if="definition.icon"
+                      :src="definition.icon"
+                      class="size-10 rounded object-contain"
+                      alt="流程图标"
+                    />
+                    <div
+                      v-else
+                      class="flex size-10 flex-shrink-0 items-center justify-center rounded bg-primary"
+                    >
+                      <span class="text-xs text-white">
+                        {{ definition.name?.slice(0, 2) }}
                       </span>
                     </div>
-                  </Card>
-                </Col>
-              </Row>
-            </Tabs.TabPane>
-          </Tabs>
+                    <span class="ml-3 flex-1 truncate text-base">
+                      <Tooltip
+                        placement="topLeft"
+                        :title="`${definition.description || definition.name}`"
+                      >
+                        {{ definition.name }}
+                      </Tooltip>
+                    </span>
+                  </div>
+                </Card>
+              </Col>
+            </Row>
+          </div>
         </div>
         <div v-else class="!py-48 text-center">
           <Space direction="vertical" size="large">
