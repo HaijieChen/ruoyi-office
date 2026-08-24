@@ -309,6 +309,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         line.setBatchId(batch.getId());
         line.setEmployeeId(emp.getId());
         line.setYearMonth(batch.getYearMonth());
+        line.setCompanyName(emp.getCompanyName());
+        line.setDeptName(emp.getDeptName());
         line.setJobPost(emp.getJobPost());
         line.setEmployeeName(emp.getName());
         line.setEntryDate(emp.getEntryDate());

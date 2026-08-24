@@ -4,7 +4,7 @@ import { computed, h, onMounted, ref } from 'vue';
 import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, Card, Drawer, Form, InputNumber, Radio, RadioGroup, Space, Table, Upload, message } from 'ant-design-vue';
+import { Button, Card, Drawer, Form, Input, InputNumber, Radio, RadioGroup, Space, Table, Upload, message } from 'ant-design-vue';
 
 import {
   adjustPayrollLine,
@@ -38,6 +38,20 @@ const statusLabel = computed(() => {
   return status.value || '草稿';
 });
 const lines = ref<PayrollBatchApi.Line[]>([]);
+const keyword = ref('');
+const filteredLines = computed(() => {
+  const q = keyword.value.trim().toLowerCase();
+  if (!q) {
+    return lines.value;
+  }
+  return lines.value.filter((row) => {
+    const hay = [row.employeeName, row.companyName, row.deptName, row.jobPost, row.mobile]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return hay.includes(q);
+  });
+});
 const loading = ref(false);
 const unmatched = ref<string[]>([]);
 
@@ -258,6 +272,12 @@ onMounted(async () => {
           <Button @click="onWithdraw">撤回</Button>
           <Button @click="onExport">导出</Button>
           <Button @click="reload">刷新</Button>
+          <Input
+            v-model:value="keyword"
+            allow-clear
+            placeholder="检索姓名/公司/部门/岗位/手机"
+            style="width: 240px"
+          />
         </Space>
         <p v-if="unmatched.length" class="mt-2 mb-0">未匹配打卡姓名：{{ unmatched.join('、') }}</p>
         <p v-if="status === 'DRAFT'" class="mt-2 mb-0 text-gray-500">草稿可点单元格改补贴/加班/个税等，失焦保存并重算应付与实发。</p>
@@ -265,7 +285,7 @@ onMounted(async () => {
       <Table
         class="payroll-line-table"
         size="small"
-        :data-source="lines"
+        :data-source="filteredLines"
         :loading="loading"
         row-key="id"
         :pagination="false"
