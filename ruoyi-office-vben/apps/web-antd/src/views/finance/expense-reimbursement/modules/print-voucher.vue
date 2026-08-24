@@ -6,6 +6,8 @@ import { getDictLabel } from '@vben/hooks';
 import { Button } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
+import { printFormElement } from '#/utils/print-form';
+
 defineOptions({ name: 'ExpensePrintVoucher' });
 defineProps<{ bill: FinanceExpenseApi.Bill }>();
 
@@ -37,7 +39,7 @@ function categoryText(bill: FinanceExpenseApi.Bill, line: FinanceExpenseApi.Line
 }
 
 function onPrint() {
-  window.print();
+  printFormElement(document.getElementById('expensePrintVoucher'), '费用报销单');
 }
 </script>
 
@@ -81,3 +83,23 @@ function onPrint() {
     </div>
   </div>
 </template>
+
+<style>
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #expensePrintVoucher,
+  #expensePrintVoucher * {
+    visibility: visible !important;
+  }
+  #expensePrintVoucher {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+}
+</style>

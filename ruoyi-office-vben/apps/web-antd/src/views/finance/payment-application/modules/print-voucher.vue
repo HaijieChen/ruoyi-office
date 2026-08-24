@@ -2,23 +2,20 @@
 import type { FinancePaymentApplicationApi } from '#/api/finance/payment-application';
 
 import { Button } from 'ant-design-vue';
-// @ts-ignore
-import vPrint from 'vue3-print-nb';
+
+import { printFormElement } from '#/utils/print-form';
 
 defineOptions({ name: 'PaymentPrintVoucher' });
 defineProps<{ detail: any }>();
 
-const printObj = {
-  id: 'paymentPrintVoucher',
-  popTitle: '付款单',
-  extraHead: '',
-  zIndex: 20003,
-};
+function onPrint() {
+  printFormElement(document.getElementById('paymentPrintVoucher'), '付款申请单');
+}
 </script>
 
 <template>
   <div>
-    <Button v-print="printObj" size="small">打印付款单</Button>
+    <Button size="small" class="print:hidden" @click="onPrint">打印付款单</Button>
     <div id="paymentPrintVoucher" class="mt-3 bg-white p-6 text-sm text-black">
       <h2 class="mb-2 text-center text-xl font-bold">付款申请单</h2>
       <table class="w-full border-collapse">

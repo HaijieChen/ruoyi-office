@@ -10,8 +10,8 @@ import { useUserStore } from '@vben/stores';
 import { formatDate } from '@vben/utils';
 
 import { Button } from 'ant-design-vue';
-// @ts-ignore - 安装 vue3-print-nb 局部指令 v-print
-import vPrint from 'vue3-print-nb';
+
+import { printFormElement } from '#/utils/print-form';
 
 import { getProcessInstancePrintData } from '#/api/bpm/processInstance';
 import { decodeFields } from '#/components/form-create';
@@ -24,14 +24,9 @@ const printTime = ref(formatDate(new Date(), 'YYYY-MM-DD HH:mm'));
 const formFields = ref<any[]>([]);
 const printDataMap = ref<Record<string, any>>({});
 
-/** 打印配置 */
-const printObj = ref({
-  id: 'printDivTag',
-  popTitle: '&nbsp;',
-  extraCss: '/print.css',
-  extraHead: '',
-  zIndex: 20_003,
-});
+function onPrint() {
+  printFormElement(document.getElementById('printDivTag'), '打印流程');
+}
 
 const [Modal, modalApi] = useVbenModal({
   closable: true,
@@ -293,7 +288,7 @@ function getPrintTemplateHTML() {
     <template #footer>
       <div class="flex justify-end gap-2">
         <Button @click="modalApi.close()">取 消</Button>
-        <Button v-print="printObj" type="primary">打 印</Button>
+        <Button type="primary" @click="onPrint">打 印</Button>
       </div>
     </template>
   </Modal>
