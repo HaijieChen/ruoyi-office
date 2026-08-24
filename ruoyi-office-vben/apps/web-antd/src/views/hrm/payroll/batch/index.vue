@@ -4,7 +4,7 @@ import { computed, h, onMounted, ref } from 'vue';
 import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, Card, InputNumber, Radio, RadioGroup, Space, Table, Upload, message } from 'ant-design-vue';
+import { Button, Card, Drawer, InputNumber, Radio, RadioGroup, Space, Table, Upload, message } from 'ant-design-vue';
 
 import {
   adjustPayrollLine,
@@ -41,10 +41,12 @@ const lines = ref<PayrollBatchApi.Line[]>([]);
 const loading = ref(false);
 const unmatched = ref<string[]>([]);
 
+const minWageOpen = ref(false);
 const minWageAmount = ref<number | null>(null);
 const minWageWhen = ref<'current' | 'next'>('current');
 const minWageRows = ref<MinWageApi.MinWageRow[]>([]);
 const minWageLoading = ref(false);
+const currentMinWage = computed(() => minWageRows.value[0]?.amount ?? null);
 
 const editableKeys = new Set([
   'housingSubsidy',
@@ -217,38 +219,15 @@ onMounted(async () => {
 
 <template>
   <Page>
-    <Card size="small" title="最低工资" class="mb-4">
-      <Space wrap>
-        <span>金额</span>
-        <InputNumber v-model:value="minWageAmount" :min="0" :precision="2" />
-        <span>生效</span>
-        <RadioGroup v-model:value="minWageWhen">
-          <Radio value="current">当月</Radio>
-          <Radio value="next">下月</Radio>
-        </RadioGroup>
-        <Button @click="onSaveMinWage">保存最低工资</Button>
-      </Space>
-      <Table
-        class="mt-3"
-        size="small"
-        :data-source="minWageRows"
-        :loading="minWageLoading"
-        row-key="id"
-        :pagination="false"
-        :columns="[
-          { title: '生效年月', dataIndex: 'effectiveMonth' },
-          { title: '金额', dataIndex: 'amount' },
-          { title: '录入时间', dataIndex: 'createTime' },
-        ]"
-      />
-    </Card>
-
     <Card size="small" title="月度核算">
       <div class="mb-4 bg-white" style="position: relative; z-index: 5">
         <Space wrap>
           <span>年月</span>
           <InputNumber v-model:value="yearMonth" :min="202001" />
           <span>状态：{{ statusLabel }}</span>
+          <Button @click="minWageOpen = true">
+            最低工资{{ currentMinWage == null ? '' : ` ${currentMinWage}` }}
+          </Button>
           <Button type="primary" @click="onGenerate">生成草稿</Button>
           <Button @click="onDownloadTemplate">下载打卡模板</Button>
           <Upload :show-upload-list="false" :before-upload="onUploadPunch" accept=".xls,.xlsx">
@@ -273,6 +252,37 @@ onMounted(async () => {
         :columns="lineColumns"
       />
     </Card>
+
+    <Drawer
+      v-model:open="minWageOpen"
+      title="最低工资设置"
+      placement="right"
+      :width="480"
+      destroy-on-close
+    >
+      <Space wrap class="mb-4">
+        <span>金额</span>
+        <InputNumber v-model:value="minWageAmount" :min="0" :precision="2" />
+        <span>生效</span>
+        <RadioGroup v-model:value="minWageWhen">
+          <Radio value="current">当月</Radio>
+          <Radio value="next">下月</Radio>
+        </RadioGroup>
+        <Button type="primary" @click="onSaveMinWage">保存</Button>
+      </Space>
+      <Table
+        size="small"
+        :data-source="minWageRows"
+        :loading="minWageLoading"
+        row-key="id"
+        :pagination="false"
+        :columns="[
+          { title: '生效年月', dataIndex: 'effectiveMonth' },
+          { title: '金额', dataIndex: 'amount' },
+          { title: '录入时间', dataIndex: 'createTime' },
+        ]"
+      />
+    </Drawer>
   </Page>
 </template>
 
