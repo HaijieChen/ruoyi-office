@@ -77,18 +77,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                     wage, wage, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     BigDecimal.ZERO, false, tenure, minWage));
             PayrollLineDO line = new PayrollLineDO();
-            line.setBatchId(batch.getId());
-            line.setEmployeeId(emp.getId());
-            line.setEmployeeName(emp.getName());
-            line.setPayable(calc.payable());
-            line.setNet(calc.net());
-            line.setTax(BigDecimal.ZERO);
-            line.setOvertime(BigDecimal.ZERO);
-            line.setIdCard(emp.getIdCard());
-            line.setBankAccount(emp.getBankAccount());
+            fillTemplateLine(line, batch, emp, wage, calc, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
             line.setSnapshot(false);
-            line.setUserId(emp.getUserId());
-            line.setSickDays(BigDecimal.ZERO);
             payrollLineMapper.insert(line);
         }
         return batch;
@@ -132,8 +122,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                     wage, new BigDecimal("200"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     wage, wage, line.getTax(), BigDecimal.ZERO, BigDecimal.ZERO, absence,
                     BigDecimal.ZERO, false, tenure, minWage));
-            line.setPayable(calc.payable());
-            line.setNet(calc.net());
+            fillTemplateLine(line, batch, emp, wage, calc, BigDecimal.ZERO, absence, line.getTax());
             line.setPunchName(emp.getName());
             payrollLineMapper.updateById(line);
         }
@@ -152,17 +141,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 .eq(PayrollLineDO::getBatchId, batch.getId())
                 .eq(PayrollLineDO::getSnapshot, false));
         for (PayrollLineDO hr : hrLines) {
-            PayrollLineDO snap = new PayrollLineDO();
-            snap.setBatchId(hr.getBatchId());
-            snap.setEmployeeId(hr.getEmployeeId());
-            snap.setEmployeeName(hr.getEmployeeName());
-            snap.setPayable(hr.getPayable());
-            snap.setNet(hr.getNet());
-            snap.setTax(hr.getTax());
-            snap.setOvertime(hr.getOvertime());
-            snap.setSnapshot(true);
-            snap.setUserId(hr.getUserId());
-            snap.setSickDays(hr.getSickDays());
+            PayrollLineDO snap = copyPayslip(hr);
             payrollLineMapper.insert(snap);
             if (hr.getUserId() != null) {
                 notify(hr.getUserId(), yearMonth);
@@ -249,6 +228,85 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
             throw new IllegalStateException("batch not found");
         }
         return batch;
+    }
+
+    private void fillTemplateLine(PayrollLineDO line, PayrollBatchDO batch, EmployeeDO emp, BigDecimal wage,
+                                  PayrollCalculator.Result calc, BigDecimal sickDays, BigDecimal absence,
+                                  BigDecimal tax) {
+        line.setBatchId(batch.getId());
+        line.setEmployeeId(emp.getId());
+        line.setYearMonth(batch.getYearMonth());
+        line.setJobPost(emp.getJobPost());
+        line.setEmployeeName(emp.getName());
+        line.setEntryDate(emp.getEntryDate());
+        line.setWage(wage);
+        line.setSocialBase(wage);
+        line.setHousingBase(wage);
+        line.setFullAttendanceBonus(calc.bonusPaid());
+        line.setHousingSubsidy(BigDecimal.ZERO);
+        line.setPerformance(BigDecimal.ZERO);
+        line.setBonus(BigDecimal.ZERO);
+        line.setSubsidy(BigDecimal.ZERO);
+        line.setHolidayOvertimeDays(BigDecimal.ZERO);
+        line.setHolidayOvertimePay(BigDecimal.ZERO);
+        line.setWeekdayOvertimePay(BigDecimal.ZERO);
+        line.setSickDays(sickDays);
+        line.setSickRate(calc.sickRate());
+        line.setSickPay(calc.sickPay());
+        line.setPersonalAbsenceDays(absence);
+        line.setPersonalLeavePay(calc.personalLeaveDeduction());
+        line.setTripSubsidy(BigDecimal.ZERO);
+        line.setOtherAdjust(BigDecimal.ZERO);
+        line.setPayable(calc.payable());
+        line.setSocialDeduct(calc.socialDeduction());
+        line.setHousingDeduct(calc.housingDeduction());
+        line.setTax(tax == null ? BigDecimal.ZERO : tax);
+        line.setOvertime(BigDecimal.ZERO);
+        line.setNet(calc.net());
+        line.setBankAccount(emp.getBankAccount());
+        line.setBankName(emp.getBankName());
+        line.setMobile(emp.getMobile());
+        line.setIdCard(emp.getIdCard());
+        line.setUserId(emp.getUserId());
+    }
+
+    private static PayrollLineDO copyPayslip(PayrollLineDO hr) {
+        PayrollLineDO snap = new PayrollLineDO();
+        snap.setBatchId(hr.getBatchId());
+        snap.setEmployeeId(hr.getEmployeeId());
+        snap.setYearMonth(hr.getYearMonth());
+        snap.setCompanyName(hr.getCompanyName());
+        snap.setDeptName(hr.getDeptName());
+        snap.setJobPost(hr.getJobPost());
+        snap.setEmployeeName(hr.getEmployeeName());
+        snap.setEntryDate(hr.getEntryDate());
+        snap.setWage(hr.getWage());
+        snap.setSocialBase(hr.getSocialBase());
+        snap.setHousingBase(hr.getHousingBase());
+        snap.setFullAttendanceBonus(hr.getFullAttendanceBonus());
+        snap.setHousingSubsidy(hr.getHousingSubsidy());
+        snap.setPerformance(hr.getPerformance());
+        snap.setBonus(hr.getBonus());
+        snap.setSubsidy(hr.getSubsidy());
+        snap.setHolidayOvertimeDays(hr.getHolidayOvertimeDays());
+        snap.setHolidayOvertimePay(hr.getHolidayOvertimePay());
+        snap.setWeekdayOvertimePay(hr.getWeekdayOvertimePay());
+        snap.setSickDays(hr.getSickDays());
+        snap.setSickRate(hr.getSickRate());
+        snap.setSickPay(hr.getSickPay());
+        snap.setPersonalAbsenceDays(hr.getPersonalAbsenceDays());
+        snap.setPersonalLeavePay(hr.getPersonalLeavePay());
+        snap.setTripSubsidy(hr.getTripSubsidy());
+        snap.setOtherAdjust(hr.getOtherAdjust());
+        snap.setPayable(hr.getPayable());
+        snap.setSocialDeduct(hr.getSocialDeduct());
+        snap.setHousingDeduct(hr.getHousingDeduct());
+        snap.setTax(hr.getTax());
+        snap.setOvertime(hr.getOvertime());
+        snap.setNet(hr.getNet());
+        snap.setSnapshot(true);
+        snap.setUserId(hr.getUserId());
+        return snap;
     }
 
     static int tenureYears(LocalDate entry, int yearMonth) {

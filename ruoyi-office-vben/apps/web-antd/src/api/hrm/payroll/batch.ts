@@ -8,11 +8,40 @@ export namespace PayrollBatchApi {
   }
   export interface Line {
     id?: number;
+    yearMonth?: number;
+    companyName?: string;
+    deptName?: string;
+    jobPost?: string;
     employeeName?: string;
+    entryDate?: string;
+    wage?: number;
+    socialBase?: number;
+    housingBase?: number;
+    fullAttendanceBonus?: number;
+    housingSubsidy?: number;
+    performance?: number;
+    bonus?: number;
+    subsidy?: number;
+    holidayOvertimeDays?: number;
+    holidayOvertimePay?: number;
+    weekdayOvertimePay?: number;
+    sickDays?: number;
+    sickRate?: number;
+    sickPay?: number;
+    personalAbsenceDays?: number;
+    personalLeavePay?: number;
+    tripSubsidy?: number;
+    otherAdjust?: number;
     payable?: number;
-    net?: number;
+    socialDeduct?: number;
+    housingDeduct?: number;
     tax?: number;
     overtime?: number;
+    net?: number;
+    bankAccount?: string;
+    bankName?: string;
+    mobile?: string;
+    idCard?: string;
     snapshot?: boolean;
   }
 }

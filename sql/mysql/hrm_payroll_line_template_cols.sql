@@ -1,0 +1,30 @@
+-- 工资行对齐「工资系统模板」全部栏位。已有列会报 duplicate，新环境跳过已存在即可。
+SET NAMES utf8mb4;
+
+ALTER TABLE `hrm_payroll_line`
+    ADD COLUMN `year_month` int DEFAULT NULL COMMENT 'YYYYMM' AFTER `employee_id`,
+    ADD COLUMN `company_name` varchar(128) DEFAULT NULL AFTER `year_month`,
+    ADD COLUMN `dept_name` varchar(128) DEFAULT NULL AFTER `company_name`,
+    ADD COLUMN `job_post` varchar(64) DEFAULT NULL AFTER `dept_name`,
+    ADD COLUMN `entry_date` date DEFAULT NULL AFTER `employee_name`,
+    ADD COLUMN `wage` decimal(12, 2) DEFAULT NULL AFTER `entry_date`,
+    ADD COLUMN `social_base` decimal(12, 2) DEFAULT NULL AFTER `wage`,
+    ADD COLUMN `housing_base` decimal(12, 2) DEFAULT NULL AFTER `social_base`,
+    ADD COLUMN `full_attendance_bonus` decimal(12, 2) DEFAULT NULL AFTER `housing_base`,
+    ADD COLUMN `housing_subsidy` decimal(12, 2) DEFAULT NULL AFTER `full_attendance_bonus`,
+    ADD COLUMN `performance` decimal(12, 2) DEFAULT NULL AFTER `housing_subsidy`,
+    ADD COLUMN `bonus` decimal(12, 2) DEFAULT NULL AFTER `performance`,
+    ADD COLUMN `subsidy` decimal(12, 2) DEFAULT NULL AFTER `bonus`,
+    ADD COLUMN `holiday_overtime_days` decimal(8, 2) DEFAULT NULL AFTER `subsidy`,
+    ADD COLUMN `holiday_overtime_pay` decimal(12, 2) DEFAULT NULL AFTER `holiday_overtime_days`,
+    ADD COLUMN `weekday_overtime_pay` decimal(12, 2) DEFAULT NULL AFTER `holiday_overtime_pay`,
+    ADD COLUMN `sick_rate` decimal(8, 4) DEFAULT NULL AFTER `sick_days`,
+    ADD COLUMN `sick_pay` decimal(12, 2) DEFAULT NULL AFTER `sick_rate`,
+    ADD COLUMN `personal_absence_days` decimal(8, 2) DEFAULT NULL AFTER `sick_pay`,
+    ADD COLUMN `personal_leave_pay` decimal(12, 2) DEFAULT NULL AFTER `personal_absence_days`,
+    ADD COLUMN `trip_subsidy` decimal(12, 2) DEFAULT NULL AFTER `personal_leave_pay`,
+    ADD COLUMN `other_adjust` decimal(12, 2) DEFAULT NULL AFTER `trip_subsidy`,
+    ADD COLUMN `social_deduct` decimal(12, 2) DEFAULT NULL AFTER `payable`,
+    ADD COLUMN `housing_deduct` decimal(12, 2) DEFAULT NULL AFTER `social_deduct`,
+    ADD COLUMN `bank_name` varchar(128) DEFAULT NULL AFTER `bank_account`,
+    ADD COLUMN `mobile` varchar(32) DEFAULT NULL AFTER `bank_name`;

@@ -40,7 +40,8 @@ public class PayrollCalculator {
             BigDecimal payable,
             BigDecimal socialDeduction,
             BigDecimal housingDeduction,
-            BigDecimal net
+            BigDecimal net,
+            BigDecimal sickRate
     ) {
     }
 
@@ -72,7 +73,8 @@ public class PayrollCalculator {
                 payable.setScale(2, RoundingMode.HALF_UP),
                 social.setScale(2, RoundingMode.HALF_UP),
                 housing.setScale(2, RoundingMode.HALF_UP),
-                net.setScale(2, RoundingMode.HALF_UP)
+                net.setScale(2, RoundingMode.HALF_UP),
+                tenureRate(in.tenureYears())
         );
     }
 
