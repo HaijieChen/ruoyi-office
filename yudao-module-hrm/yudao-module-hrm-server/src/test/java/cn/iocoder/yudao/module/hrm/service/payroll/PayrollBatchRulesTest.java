@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.hrm.service.payroll;
 
+import cn.iocoder.yudao.module.hrm.dal.dataobject.payroll.PayrollBatchDO;
+import com.baomidou.mybatisplus.annotation.TableField;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -36,5 +38,11 @@ class PayrollBatchRulesTest {
                 new BigDecimal("1")
         );
         assertEquals(new BigDecimal("10"), ytd);
+    }
+
+    @Test
+    void yearMonthColumnIsEscapedForMysqlKeyword() throws Exception {
+        TableField field = PayrollBatchDO.class.getDeclaredField("yearMonth").getAnnotation(TableField.class);
+        assertEquals("`year_month`", field.value());
     }
 }
