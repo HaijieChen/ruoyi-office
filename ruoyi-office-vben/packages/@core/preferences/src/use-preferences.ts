@@ -63,45 +63,41 @@ function usePreferences() {
 
   /**
    * @zh_CN 是否侧边导航模式
+   * 必须看生效后的 layout：手机端会强制 sidebar-nav，
+   * 若仍读配置值，mixed-nav 会继续拆菜单，汉堡栏只剩当前模块。
    */
-  const isSideNav = computed(
-    () => appPreferences.value.layout === 'sidebar-nav',
-  );
+  const isSideNav = computed(() => layout.value === 'sidebar-nav');
 
   /**
    * @zh_CN 是否侧边混合模式
    */
   const isSideMixedNav = computed(
-    () => appPreferences.value.layout === 'sidebar-mixed-nav',
+    () => layout.value === 'sidebar-mixed-nav',
   );
 
   /**
    * @zh_CN 是否为头部导航模式
    */
-  const isHeaderNav = computed(
-    () => appPreferences.value.layout === 'header-nav',
-  );
+  const isHeaderNav = computed(() => layout.value === 'header-nav');
 
   /**
    * @zh_CN 是否为头部混合导航模式
    */
   const isHeaderMixedNav = computed(
-    () => appPreferences.value.layout === 'header-mixed-nav',
+    () => layout.value === 'header-mixed-nav',
   );
 
   /**
    * @zh_CN 是否为顶部通栏+侧边导航模式
    */
   const isHeaderSidebarNav = computed(
-    () => appPreferences.value.layout === 'header-sidebar-nav',
+    () => layout.value === 'header-sidebar-nav',
   );
 
   /**
    * @zh_CN 是否为混合导航模式
    */
-  const isMixedNav = computed(
-    () => appPreferences.value.layout === 'mixed-nav',
-  );
+  const isMixedNav = computed(() => layout.value === 'mixed-nav');
 
   /**
    * @zh_CN 是否包含侧边导航模式
