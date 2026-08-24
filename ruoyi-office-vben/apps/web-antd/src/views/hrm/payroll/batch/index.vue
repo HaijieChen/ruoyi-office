@@ -4,7 +4,7 @@ import { computed, h, onMounted, ref } from 'vue';
 import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-import { Button, Card, Drawer, InputNumber, Radio, RadioGroup, Space, Table, Upload, message } from 'ant-design-vue';
+import { Button, Card, Drawer, Form, InputNumber, Radio, RadioGroup, Space, Table, Upload, message } from 'ant-design-vue';
 
 import {
   adjustPayrollLine,
@@ -47,6 +47,27 @@ const minWageWhen = ref<'current' | 'next'>('current');
 const minWageRows = ref<MinWageApi.MinWageRow[]>([]);
 const minWageLoading = ref(false);
 const currentMinWage = computed(() => minWageRows.value[0]?.amount ?? null);
+
+function formatYearMonth(value: unknown) {
+  const text = String(value ?? '');
+  if (/^\d{6}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4)}`;
+  }
+  return text || '—';
+}
+
+function formatDateTime(value: unknown) {
+  if (value == null || value === '') {
+    return '—';
+  }
+  const n = typeof value === 'number' ? value : Number(value);
+  const date = Number.isFinite(n) && n > 10_000_000_000 ? new Date(n) : new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  const pad = (v: number) => String(v).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 const editableKeys = new Set([
   'housingSubsidy',
@@ -257,19 +278,28 @@ onMounted(async () => {
       v-model:open="minWageOpen"
       title="最低工资设置"
       placement="right"
-      :width="480"
+      :width="440"
       destroy-on-close
     >
-      <Space wrap class="mb-4">
-        <span>金额</span>
-        <InputNumber v-model:value="minWageAmount" :min="0" :precision="2" />
-        <span>生效</span>
-        <RadioGroup v-model:value="minWageWhen">
-          <Radio value="current">当月</Radio>
-          <Radio value="next">下月</Radio>
-        </RadioGroup>
-        <Button type="primary" @click="onSaveMinWage">保存</Button>
-      </Space>
+      <Form layout="vertical" class="mb-6">
+        <Form.Item label="金额">
+          <InputNumber
+            v-model:value="minWageAmount"
+            class="w-full"
+            :min="0"
+            :precision="2"
+            placeholder="请输入最低工资"
+          />
+        </Form.Item>
+        <Form.Item label="生效时间">
+          <RadioGroup v-model:value="minWageWhen">
+            <Radio value="current">当月生效</Radio>
+            <Radio value="next">下月生效</Radio>
+          </RadioGroup>
+        </Form.Item>
+        <Button type="primary" block @click="onSaveMinWage">保存</Button>
+      </Form>
+      <div class="mb-2 text-sm text-gray-500">历史记录</div>
       <Table
         size="small"
         :data-source="minWageRows"
@@ -277,9 +307,9 @@ onMounted(async () => {
         row-key="id"
         :pagination="false"
         :columns="[
-          { title: '生效年月', dataIndex: 'effectiveMonth' },
+          { title: '生效年月', dataIndex: 'effectiveMonth', customRender: ({ text }) => formatYearMonth(text) },
           { title: '金额', dataIndex: 'amount' },
-          { title: '录入时间', dataIndex: 'createTime' },
+          { title: '录入时间', dataIndex: 'createTime', customRender: ({ text }) => formatDateTime(text) },
         ]"
       />
     </Drawer>
