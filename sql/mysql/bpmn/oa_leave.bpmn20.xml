@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  请假申请 oa_leave（设计师导入种子，不自动 INSERT 流程定义）
-  语义同出差：发起人连续多级部门负责人 → 人事 hr_admin 或签 → end
+  请假申请 oa_leave
+  部门负责人 → 人事 → (day > 3) 总经理 → end
+  day 为含首尾的请假天数，由业务变量传入。
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -35,35 +36,71 @@
       </multiInstanceLoopCharacteristics>
     </userTask>
 
+    <exclusiveGateway id="gatewayGm" name="是否超过3天"/>
+
+    <userTask id="taskGm" name="总经理审批"
+              flowable:candidateGroups="gm" flowable:candidateStrategy="10" flowable:candidateParam="gm">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>gm</flowable:candidateParam>
+        <flowable:approveMethod>3</flowable:approveMethod>
+      </extensionElements>
+      <multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${coll_userList}">
+        <completionCondition xsi:type="tFormalExpression"><![CDATA[${ nrOfCompletedInstances > 0 }]]></completionCondition>
+      </multiInstanceLoopCharacteristics>
+    </userTask>
+
     <endEvent id="endEvent" name="结束"/>
 
     <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskDeptLeaderMulti"/>
     <sequenceFlow id="flow2" sourceRef="taskDeptLeaderMulti" targetRef="taskHr"/>
-    <sequenceFlow id="flow3" sourceRef="taskHr" targetRef="endEvent"/>
+    <sequenceFlow id="flow3" sourceRef="taskHr" targetRef="gatewayGm"/>
+    <sequenceFlow id="flowNeedGm" sourceRef="gatewayGm" targetRef="taskGm">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${day > 3}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flowSkipGm" sourceRef="gatewayGm" targetRef="endEvent">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${day <= 3}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flowGmEnd" sourceRef="taskGm" targetRef="endEvent"/>
   </process>
 
   <bpmndi:BPMNDiagram id="BPMNDiagram_oa_leave">
     <bpmndi:BPMNPlane id="BPMNPlane_oa_leave" bpmnElement="oa_leave">
       <bpmndi:BPMNShape id="shape_startEvent" bpmnElement="startEvent">
-        <omgdc:Bounds x="100" y="162" width="36" height="36"/>
+        <omgdc:Bounds x="80" y="162" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_taskDeptLeaderMulti" bpmnElement="taskDeptLeaderMulti">
-        <omgdc:Bounds x="180" y="140" width="130" height="80"/>
+        <omgdc:Bounds x="150" y="140" width="130" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_taskHr" bpmnElement="taskHr">
-        <omgdc:Bounds x="360" y="140" width="110" height="80"/>
+        <omgdc:Bounds x="320" y="140" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gatewayGm" bpmnElement="gatewayGm">
+        <omgdc:Bounds x="470" y="155" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskGm" bpmnElement="taskGm">
+        <omgdc:Bounds x="560" y="80" width="110" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_endEvent" bpmnElement="endEvent">
-        <omgdc:Bounds x="520" y="162" width="36" height="36"/>
+        <omgdc:Bounds x="720" y="162" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="edge_flow1" bpmnElement="flow1">
-        <omgdi:waypoint x="136" y="180"/><omgdi:waypoint x="180" y="180"/>
+        <omgdi:waypoint x="116" y="180"/><omgdi:waypoint x="150" y="180"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_flow2" bpmnElement="flow2">
-        <omgdi:waypoint x="310" y="180"/><omgdi:waypoint x="360" y="180"/>
+        <omgdi:waypoint x="280" y="180"/><omgdi:waypoint x="320" y="180"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_flow3" bpmnElement="flow3">
-        <omgdi:waypoint x="470" y="180"/><omgdi:waypoint x="520" y="180"/>
+        <omgdi:waypoint x="430" y="180"/><omgdi:waypoint x="470" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flowNeedGm" bpmnElement="flowNeedGm">
+        <omgdi:waypoint x="495" y="155"/><omgdi:waypoint x="495" y="120"/><omgdi:waypoint x="560" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flowSkipGm" bpmnElement="flowSkipGm">
+        <omgdi:waypoint x="520" y="180"/><omgdi:waypoint x="720" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flowGmEnd" bpmnElement="flowGmEnd">
+        <omgdi:waypoint x="670" y="120"/><omgdi:waypoint x="738" y="120"/><omgdi:waypoint x="738" y="162"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

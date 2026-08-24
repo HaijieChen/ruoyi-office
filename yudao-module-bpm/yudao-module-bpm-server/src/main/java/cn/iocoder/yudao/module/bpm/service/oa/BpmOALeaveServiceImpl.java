@@ -1,6 +1,5 @@
 package cn.iocoder.yudao.module.bpm.service.oa;
 
-import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
@@ -15,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,7 +46,8 @@ public class BpmOALeaveServiceImpl implements BpmOALeaveService {
     @Transactional(rollbackFor = Exception.class)
     public Long createLeave(Long userId, BpmOALeaveCreateReqVO createReqVO) {
         // 插入 OA 请假单
-        long day = LocalDateTimeUtil.between(createReqVO.getStartTime(), createReqVO.getEndTime()).toDays();
+        long day = Math.max(1, ChronoUnit.DAYS.between(
+                createReqVO.getStartTime().toLocalDate(), createReqVO.getEndTime().toLocalDate()) + 1);
         BpmOALeaveDO leave = BeanUtils.toBean(createReqVO, BpmOALeaveDO.class)
                 .setUserId(userId).setDay(day).setStatus(BpmTaskStatusEnum.RUNNING.getStatus());
         leaveMapper.insert(leave);
