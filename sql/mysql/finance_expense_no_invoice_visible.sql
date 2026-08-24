@@ -2,7 +2,7 @@
 SET NAMES utf8mb4;
 
 UPDATE `system_menu`
-SET `visible` = b'1',
+SET `visible` = b'0',
     `name` = '无票费用报销',
     `update_time` = NOW()
 WHERE `deleted` = b'0'
