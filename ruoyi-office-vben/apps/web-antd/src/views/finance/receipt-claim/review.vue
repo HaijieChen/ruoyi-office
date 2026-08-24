@@ -5,6 +5,7 @@ import type { FinanceReceiptClaimApi } from '#/api/finance/receipt-claim';
 import { ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
+import { formatDateTime } from '@vben/utils';
 
 import { Form, FormItem, Input, Modal, Table } from 'ant-design-vue';
 
@@ -115,7 +116,7 @@ const auditColumns = [
     }: {
       text?: string;
       record: FinanceReceiptClaimApi.AuditLog;
-    }) => text || record.revokeTime || '—',
+    }) => formatDateTime((text || record.revokeTime) as any) || '—',
   },
 ];
 

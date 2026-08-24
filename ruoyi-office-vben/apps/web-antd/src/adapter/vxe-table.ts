@@ -11,7 +11,7 @@ import {
   AsyncVxeTable,
   createRequiredValidation,
   setupVbenVxeTable,
-  useVbenVxeGrid,
+  useVbenVxeGrid as useVbenVxeGridBase,
 } from '@vben/plugins/vxe-table';
 import {
   erpCountInputFormatter,
@@ -620,6 +620,37 @@ export function createRouterLinkColumn(config: {
       },
     },
   };
+}
+
+function decorateTimeColumns(columns?: Recordable[]) {
+  if (!columns?.length) return columns;
+  return columns.map((col) => {
+    const next: Recordable = { ...col };
+    if (Array.isArray(next.children)) {
+      next.children = decorateTimeColumns(next.children);
+    }
+    const field = String(next.field || '');
+    const hasOwnFormat =
+      next.formatter || next.cellRender || next.slots?.default;
+    if (field && !hasOwnFormat && /(?:Time|Date)$/.test(field)) {
+      next.formatter = /Date$/.test(field) ? 'formatDate' : 'formatDateTime';
+    }
+    return next;
+  });
+}
+
+function useVbenVxeGrid(...args: Parameters<typeof useVbenVxeGridBase>) {
+  const options = args[0] as Recordable | undefined;
+  if (options?.gridOptions?.columns) {
+    args[0] = {
+      ...options,
+      gridOptions: {
+        ...options.gridOptions,
+        columns: decorateTimeColumns(options.gridOptions.columns),
+      },
+    };
+  }
+  return useVbenVxeGridBase(...args);
 }
 
 export { createRequiredValidation, useVbenVxeGrid };

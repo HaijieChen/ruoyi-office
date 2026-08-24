@@ -10,6 +10,8 @@ import type { FinanceInvoiceApplicationApi } from '#/api/finance/invoice-applica
 import { onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
+import { formatDateTime } from '@vben/utils';
+
 import { Descriptions, DescriptionsItem, Spin, Table, Tag, message } from 'ant-design-vue';
 
 import { getInvoiceApplication } from '#/api/finance/invoice-application';
@@ -41,6 +43,11 @@ function resolveId(): number | undefined {
     return Number.isFinite(n) ? n : undefined;
   }
   return undefined;
+}
+
+function displayTime(val?: null | number | string) {
+  if (val == null || val === '') return '-';
+  return (formatDateTime(val as any) as string) || String(val);
 }
 
 const approvalLabel: Record<string, string> = {
@@ -229,7 +236,7 @@ watch(
             {{ detail.remark || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="创建时间">
-            {{ detail.createTime || '-' }}
+            {{ displayTime(detail.createTime) }}
           </DescriptionsItem>
           <DescriptionsItem label="流程实例">
             {{ detail.processInstanceId || '-' }}

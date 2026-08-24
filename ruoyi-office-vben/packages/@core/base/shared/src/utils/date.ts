@@ -19,13 +19,27 @@ type Format =
   | 'YYYY-MM-DD HH:mm:ss'
   | (string & {});
 
+function coerceTime(time: unknown): FormatDate | undefined {
+  if (time == null || time === '') return undefined;
+  if (Array.isArray(time) && time.length >= 3) {
+    const [y, m, d, hh = 0, mm = 0, ss = 0] = time as number[];
+    // Jackson LocalDate/Time 月份从 1 起
+    return new Date(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss));
+  }
+  if (typeof time === 'number' && time > 0 && time < 1e12) {
+    return time * 1000;
+  }
+  return time as FormatDate;
+}
+
 export function formatDate(time?: FormatDate, format: Format = 'YYYY-MM-DD') {
+  const value = coerceTime(time);
   // 日期不存在，则返回空
-  if (!time) {
+  if (!value) {
     return '';
   }
   try {
-    const date = dayjs.isDayjs(time) ? time : dayjs(time);
+    const date = dayjs.isDayjs(value) ? value : dayjs(value);
     if (!date.isValid()) {
       throw new Error('Invalid date');
     }
