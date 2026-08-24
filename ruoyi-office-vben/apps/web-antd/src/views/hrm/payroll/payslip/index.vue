@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue';
+import { h, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -11,6 +11,47 @@ defineOptions({ name: 'HrmPayrollPayslip' });
 
 const lines = ref<PayrollBatchApi.Line[]>([]);
 const loading = ref(false);
+
+function col(title: string, dataIndex: string, width: number, fixed?: 'left' | 'right') {
+  return {
+    title: () => h('span', { style: { whiteSpace: 'nowrap' } }, title),
+    dataIndex,
+    width,
+    fixed,
+  };
+}
+
+const columns = [
+  col('姓名', 'employeeName', 120, 'left'),
+  col('年月', 'yearMonth', 90),
+  col('公司', 'companyName', 80),
+  col('部门', 'deptName', 80),
+  col('岗位', 'jobPost', 80),
+  col('入职日期', 'entryDate', 110),
+  col('工资', 'wage', 90),
+  col('社保基数', 'socialBase', 90),
+  col('公积金基数', 'housingBase', 100),
+  col('全勤奖', 'fullAttendanceBonus', 80),
+  col('住房补贴', 'housingSubsidy', 90),
+  col('绩效', 'performance', 80),
+  col('奖金', 'bonus', 80),
+  col('补贴', 'subsidy', 80),
+  col('法定节假日加班', 'holidayOvertimeDays', 130),
+  col('法定节假日加班费', 'holidayOvertimePay', 140),
+  col('工作日加班补贴', 'weekdayOvertimePay', 130),
+  col('病假天数', 'sickDays', 90),
+  col('病假系数', 'sickRate', 90),
+  col('病假工资', 'sickPay', 90),
+  col('事假/缺勤天数', 'personalAbsenceDays', 130),
+  col('事假工资', 'personalLeavePay', 90),
+  col('出差补贴', 'tripSubsidy', 90),
+  col('其它加减', 'otherAdjust', 90),
+  col('应付工资', 'payable', 90),
+  col('社保扣除', 'socialDeduct', 90),
+  col('公积金扣除', 'housingDeduct', 100),
+  col('个人所得税', 'tax', 110),
+  col('实发工资', 'net', 110, 'right'),
+];
 
 onMounted(async () => {
   loading.value = true;
@@ -25,41 +66,18 @@ onMounted(async () => {
 <template>
   <Page title="我的工资条">
     <Table
+      class="payroll-line-table"
       :data-source="lines"
       :loading="loading"
       row-key="id"
-      :scroll="{ x: 2800 }"
-      :columns="[
-        { title: '年月', dataIndex: 'yearMonth', width: 90 },
-        { title: '公司', dataIndex: 'companyName', width: 100 },
-        { title: '部门', dataIndex: 'deptName', width: 100 },
-        { title: '岗位', dataIndex: 'jobPost', width: 100 },
-        { title: '姓名', dataIndex: 'employeeName', width: 90 },
-        { title: '入职日期', dataIndex: 'entryDate', width: 110 },
-        { title: '工资', dataIndex: 'wage', width: 90 },
-        { title: '社保基数', dataIndex: 'socialBase', width: 90 },
-        { title: '公积金基数', dataIndex: 'housingBase', width: 100 },
-        { title: '全勤奖', dataIndex: 'fullAttendanceBonus', width: 80 },
-        { title: '住房补贴', dataIndex: 'housingSubsidy', width: 90 },
-        { title: '绩效', dataIndex: 'performance', width: 80 },
-        { title: '奖金', dataIndex: 'bonus', width: 80 },
-        { title: '补贴', dataIndex: 'subsidy', width: 80 },
-        { title: '法定节假日加班', dataIndex: 'holidayOvertimeDays', width: 120 },
-        { title: '法定节假日加班费', dataIndex: 'holidayOvertimePay', width: 130 },
-        { title: '工作日加班补贴', dataIndex: 'weekdayOvertimePay', width: 120 },
-        { title: '病假天数', dataIndex: 'sickDays', width: 90 },
-        { title: '病假系数', dataIndex: 'sickRate', width: 90 },
-        { title: '病假工资', dataIndex: 'sickPay', width: 90 },
-        { title: '事假/缺勤天数', dataIndex: 'personalAbsenceDays', width: 120 },
-        { title: '事假工资', dataIndex: 'personalLeavePay', width: 90 },
-        { title: '出差补贴', dataIndex: 'tripSubsidy', width: 90 },
-        { title: '其它加减', dataIndex: 'otherAdjust', width: 90 },
-        { title: '应付工资', dataIndex: 'payable', width: 90 },
-        { title: '社保扣除', dataIndex: 'socialDeduct', width: 90 },
-        { title: '公积金扣除', dataIndex: 'housingDeduct', width: 100 },
-        { title: '个人所得税', dataIndex: 'tax', width: 100 },
-        { title: '实发工资', dataIndex: 'net', width: 90 },
-      ]"
+      :scroll="{ x: 3200 }"
+      :columns="columns"
     />
   </Page>
 </template>
+
+<style scoped>
+.payroll-line-table :deep(.ant-table-thead > tr > th) {
+  white-space: nowrap;
+}
+</style>

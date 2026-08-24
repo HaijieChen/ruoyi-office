@@ -61,11 +61,17 @@ async function saveCell(record: PayrollBatchApi.Line, key: string, value: number
   await reload();
 }
 
-function col(title: string, dataIndex: string, width = 110) {
+function col(
+  title: string,
+  dataIndex: string,
+  width = 110,
+  fixed?: 'left' | 'right',
+) {
   return {
-    title,
+    title: () => h('span', { style: { whiteSpace: 'nowrap' } }, title),
     dataIndex,
     width,
+    fixed,
     customRender: ({ record }: { record: PayrollBatchApi.Line }) => {
       const current = (record as Record<string, unknown>)[dataIndex];
       if (!editableKeys.has(dataIndex) || status.value !== 'DRAFT') {
@@ -87,11 +93,11 @@ function col(title: string, dataIndex: string, width = 110) {
 }
 
 const lineColumns = [
-  col('姓名', 'employeeName', 110),
+  col('姓名', 'employeeName', 120, 'left'),
   col('年月', 'yearMonth', 90),
-  col('公司', 'companyName', 100),
-  col('部门', 'deptName', 100),
-  col('岗位', 'jobPost', 100),
+  col('公司', 'companyName', 80),
+  col('部门', 'deptName', 80),
+  col('岗位', 'jobPost', 80),
   col('入职日期', 'entryDate', 110),
   col('工资', 'wage', 90),
   col('社保基数', 'socialBase', 90),
@@ -101,25 +107,25 @@ const lineColumns = [
   col('绩效', 'performance', 80),
   col('奖金', 'bonus', 80),
   col('补贴', 'subsidy', 80),
-  col('法定节假日加班', 'holidayOvertimeDays', 120),
-  col('法定节假日加班费', 'holidayOvertimePay', 130),
-  col('工作日加班补贴', 'weekdayOvertimePay', 120),
+  col('法定节假日加班', 'holidayOvertimeDays', 130),
+  col('法定节假日加班费', 'holidayOvertimePay', 140),
+  col('工作日加班补贴', 'weekdayOvertimePay', 130),
   col('病假天数', 'sickDays', 90),
   col('病假系数', 'sickRate', 90),
   col('病假工资', 'sickPay', 90),
-  col('事假/缺勤天数', 'personalAbsenceDays', 120),
+  col('事假/缺勤天数', 'personalAbsenceDays', 130),
   col('事假工资', 'personalLeavePay', 90),
   col('出差补贴', 'tripSubsidy', 90),
   col('其它加减', 'otherAdjust', 90),
   col('应付工资', 'payable', 90),
   col('社保扣除', 'socialDeduct', 90),
   col('公积金扣除', 'housingDeduct', 100),
-  col('个人所得税', 'tax', 100),
-  col('实发工资', 'net', 90),
+  col('个人所得税', 'tax', 110),
   col('银行卡号', 'bankAccount', 160),
   col('开户支行', 'bankName', 140),
   col('手机号码', 'mobile', 120),
   col('身份证号码', 'idCard', 170),
+  col('实发工资', 'net', 110, 'right'),
 ];
 
 async function reload() {
@@ -247,16 +253,22 @@ onMounted(async () => {
         <p v-if="unmatched.length" class="mt-2 mb-0">未匹配打卡姓名：{{ unmatched.join('、') }}</p>
         <p v-if="status === 'DRAFT'" class="mt-2 mb-0 text-gray-500">草稿可点单元格改补贴/加班/个税等，失焦保存并重算应付与实发。</p>
       </div>
-      <div style="overflow-x: auto; position: relative; z-index: 1">
-        <Table
-          size="small"
-          :data-source="lines"
-          :loading="loading"
-          row-key="id"
-          :pagination="false"
-          :columns="lineColumns"
-        />
-      </div>
+      <Table
+        class="payroll-line-table"
+        size="small"
+        :data-source="lines"
+        :loading="loading"
+        row-key="id"
+        :pagination="false"
+        :scroll="{ x: 3600 }"
+        :columns="lineColumns"
+      />
     </Card>
   </Page>
 </template>
+
+<style scoped>
+.payroll-line-table :deep(.ant-table-thead > tr > th) {
+  white-space: nowrap;
+}
+</style>
