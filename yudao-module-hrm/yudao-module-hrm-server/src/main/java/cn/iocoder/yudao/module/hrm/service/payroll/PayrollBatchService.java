@@ -24,7 +24,7 @@ public interface PayrollBatchService {
 
     List<PayrollLineDO> listMyPayslips(Long loginUserId);
 
-    void updateAdjust(Long lineId, BigDecimal tax, BigDecimal overtime);
+    void updateAdjust(Long lineId, PayrollLineDO patch);
 
     PunchUploadVO uploadPunch(int yearMonth, InputStream in) throws Exception;
 }

@@ -95,4 +95,31 @@ class PayrollBatchServiceTest {
         assertNull(captor.getValue().getBankAccount());
         assertEquals(88L, captor.getValue().getUserId());
     }
+
+    @Test
+    void updateAdjustRecalculatesPayableAndNet() {
+        PayrollLineDO line = new PayrollLineDO();
+        line.setId(3L);
+        line.setBatchId(1L);
+        line.setSnapshot(false);
+        line.setWage(new BigDecimal("8000"));
+        line.setFullAttendanceBonus(new BigDecimal("200"));
+        line.setSocialDeduct(new BigDecimal("840"));
+        line.setHousingDeduct(new BigDecimal("400"));
+        line.setTax(BigDecimal.ZERO);
+        when(payrollLineMapper.selectById(3L)).thenReturn(line);
+        PayrollBatchDO batch = new PayrollBatchDO();
+        batch.setStatus(PayrollBatchRules.DRAFT);
+        when(payrollBatchMapper.selectById(1L)).thenReturn(batch);
+
+        PayrollLineDO patch = new PayrollLineDO();
+        patch.setBonus(new BigDecimal("500"));
+        patch.setTax(new BigDecimal("100"));
+        service.updateAdjust(3L, patch);
+
+        ArgumentCaptor<PayrollLineDO> captor = ArgumentCaptor.forClass(PayrollLineDO.class);
+        verify(payrollLineMapper).updateById(captor.capture());
+        assertEquals(new BigDecimal("8700"), captor.getValue().getPayable());
+        assertEquals(new BigDecimal("7360"), captor.getValue().getNet());
+    }
 }

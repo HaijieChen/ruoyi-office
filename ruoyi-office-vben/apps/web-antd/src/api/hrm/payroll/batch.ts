@@ -97,3 +97,7 @@ export function uploadPayrollPunch(yearMonth: number, file: File) {
 export function listMyPayslips() {
   return requestClient.get<PayrollBatchApi.Line[]>('/hrm/payroll-payslip/list');
 }
+
+export function adjustPayrollLine(lineId: number, patch: Partial<PayrollBatchApi.Line>) {
+  return requestClient.put('/hrm/payroll-batch/adjust', patch, { params: { lineId } });
+}

@@ -15,12 +15,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import cn.iocoder.yudao.module.hrm.controller.admin.payroll.vo.PayrollExportExcelVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.payroll.vo.PunchTemplateExcelVO;
 
@@ -90,12 +90,11 @@ public class PayrollBatchController {
     }
 
     @PutMapping("/adjust")
-    @Operation(summary = "草稿调整个税/加班")
+    @Operation(summary = "草稿调整单人金额")
     @PreAuthorize("@ss.hasPermission('hrm:payroll-batch:update')")
     public CommonResult<Boolean> adjust(@RequestParam Long lineId,
-                                        @RequestParam(required = false) BigDecimal tax,
-                                        @RequestParam(required = false) BigDecimal overtime) {
-        payrollBatchService.updateAdjust(lineId, tax, overtime);
+                                        @RequestBody PayrollLineDO patch) {
+        payrollBatchService.updateAdjust(lineId, patch);
         return success(true);
     }
 

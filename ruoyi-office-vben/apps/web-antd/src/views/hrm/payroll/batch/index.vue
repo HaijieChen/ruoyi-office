@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue';
+import { h, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
@@ -7,6 +7,7 @@ import { downloadFileFromBlobPart } from '@vben/utils';
 import { Button, Card, InputNumber, Radio, RadioGroup, Space, Table, Upload, message } from 'ant-design-vue';
 
 import {
+  adjustPayrollLine,
   downloadPunchTemplate,
   exportPayrollBatch,
   generatePayrollBatch,
@@ -36,40 +37,89 @@ const minWageWhen = ref<'current' | 'next'>('current');
 const minWageRows = ref<MinWageApi.MinWageRow[]>([]);
 const minWageLoading = ref(false);
 
+const editableKeys = new Set([
+  'housingSubsidy',
+  'performance',
+  'bonus',
+  'subsidy',
+  'holidayOvertimeDays',
+  'holidayOvertimePay',
+  'weekdayOvertimePay',
+  'tripSubsidy',
+  'otherAdjust',
+  'socialDeduct',
+  'housingDeduct',
+  'tax',
+]);
+
+async function saveCell(record: PayrollBatchApi.Line, key: string, value: number | null) {
+  if (!record.id || status.value !== 'DRAFT') {
+    return;
+  }
+  (record as Record<string, unknown>)[key] = value;
+  await adjustPayrollLine(record.id, { [key]: value });
+  await reload();
+}
+
+function col(title: string, dataIndex: string, width = 110) {
+  return {
+    title,
+    dataIndex,
+    width,
+    customRender: ({ record }: { record: PayrollBatchApi.Line }) => {
+      const current = (record as Record<string, unknown>)[dataIndex];
+      if (!editableKeys.has(dataIndex) || status.value !== 'DRAFT') {
+        return current ?? '';
+      }
+      return h(InputNumber, {
+        size: 'small',
+        value: current as number,
+        style: { width: '100%' },
+        onChange: (v: number | string | null) => {
+          (record as Record<string, unknown>)[dataIndex] = v;
+        },
+        onBlur: () => {
+          void saveCell(record, dataIndex, (record as Record<string, unknown>)[dataIndex] as number);
+        },
+      });
+    },
+  };
+}
+
 const lineColumns = [
-  { title: '姓名', dataIndex: 'employeeName', width: 110 },
-  { title: '年月', dataIndex: 'yearMonth', width: 90 },
-  { title: '公司', dataIndex: 'companyName', width: 100 },
-  { title: '部门', dataIndex: 'deptName', width: 100 },
-  { title: '岗位', dataIndex: 'jobPost', width: 100 },
-  { title: '入职日期', dataIndex: 'entryDate', width: 110 },
-  { title: '工资', dataIndex: 'wage', width: 90 },
-  { title: '社保基数', dataIndex: 'socialBase', width: 90 },
-  { title: '公积金基数', dataIndex: 'housingBase', width: 100 },
-  { title: '全勤奖', dataIndex: 'fullAttendanceBonus', width: 80 },
-  { title: '住房补贴', dataIndex: 'housingSubsidy', width: 90 },
-  { title: '绩效', dataIndex: 'performance', width: 80 },
-  { title: '奖金', dataIndex: 'bonus', width: 80 },
-  { title: '补贴', dataIndex: 'subsidy', width: 80 },
-  { title: '法定节假日加班', dataIndex: 'holidayOvertimeDays', width: 120 },
-  { title: '法定节假日加班费', dataIndex: 'holidayOvertimePay', width: 130 },
-  { title: '工作日加班补贴', dataIndex: 'weekdayOvertimePay', width: 120 },
-  { title: '病假天数', dataIndex: 'sickDays', width: 90 },
-  { title: '病假系数', dataIndex: 'sickRate', width: 90 },
-  { title: '病假工资', dataIndex: 'sickPay', width: 90 },
-  { title: '事假/缺勤天数', dataIndex: 'personalAbsenceDays', width: 120 },
-  { title: '事假工资', dataIndex: 'personalLeavePay', width: 90 },
-  { title: '出差补贴', dataIndex: 'tripSubsidy', width: 90 },
-  { title: '其它加减', dataIndex: 'otherAdjust', width: 90 },
-  { title: '应付工资', dataIndex: 'payable', width: 90 },
-  { title: '社保扣除', dataIndex: 'socialDeduct', width: 90 },
-  { title: '公积金扣除', dataIndex: 'housingDeduct', width: 100 },
-  { title: '个人所得税', dataIndex: 'tax', width: 100 },
-  { title: '实发工资', dataIndex: 'net', width: 90 },
-  { title: '银行卡号', dataIndex: 'bankAccount', width: 160 },
-  { title: '开户支行', dataIndex: 'bankName', width: 140 },
-  { title: '手机号码', dataIndex: 'mobile', width: 120 },
-  { title: '身份证号码', dataIndex: 'idCard', width: 170 },
+  col('姓名', 'employeeName', 110),
+  col('年月', 'yearMonth', 90),
+  col('公司', 'companyName', 100),
+  col('部门', 'deptName', 100),
+  col('岗位', 'jobPost', 100),
+  col('入职日期', 'entryDate', 110),
+  col('工资', 'wage', 90),
+  col('社保基数', 'socialBase', 90),
+  col('公积金基数', 'housingBase', 100),
+  col('全勤奖', 'fullAttendanceBonus', 80),
+  col('住房补贴', 'housingSubsidy', 90),
+  col('绩效', 'performance', 80),
+  col('奖金', 'bonus', 80),
+  col('补贴', 'subsidy', 80),
+  col('法定节假日加班', 'holidayOvertimeDays', 120),
+  col('法定节假日加班费', 'holidayOvertimePay', 130),
+  col('工作日加班补贴', 'weekdayOvertimePay', 120),
+  col('病假天数', 'sickDays', 90),
+  col('病假系数', 'sickRate', 90),
+  col('病假工资', 'sickPay', 90),
+  col('事假/缺勤天数', 'personalAbsenceDays', 120),
+  col('事假工资', 'personalLeavePay', 90),
+  col('出差补贴', 'tripSubsidy', 90),
+  col('其它加减', 'otherAdjust', 90),
+  col('应付工资', 'payable', 90),
+  col('社保扣除', 'socialDeduct', 90),
+  col('公积金扣除', 'housingDeduct', 100),
+  col('个人所得税', 'tax', 100),
+  col('实发工资', 'net', 90),
+  col('银行卡号', 'bankAccount', 160),
+  col('开户支行', 'bankName', 140),
+  col('手机号码', 'mobile', 120),
+  col('身份证号码', 'idCard', 170),
 ];
 
 async function reload() {
@@ -152,7 +202,7 @@ onMounted(async () => {
 
 <template>
   <Page>
-    <Card size="small" title="最低工资" class="mb-3">
+    <Card size="small" title="最低工资" class="mb-4">
       <Space wrap>
         <span>金额</span>
         <InputNumber v-model:value="minWageAmount" :min="0" :precision="2" />
@@ -179,30 +229,34 @@ onMounted(async () => {
     </Card>
 
     <Card size="small" title="月度核算">
-      <Space wrap class="mb-3">
-        <span>年月</span>
-        <InputNumber v-model:value="yearMonth" :min="202001" />
-        <span>状态：{{ status }}</span>
-        <Button type="primary" @click="onGenerate">生成草稿</Button>
-        <Button @click="onDownloadTemplate">下载打卡模板</Button>
-        <Upload :show-upload-list="false" :before-upload="onUploadPunch" accept=".xls,.xlsx">
-          <Button>上传打卡并合并</Button>
-        </Upload>
-        <Button @click="onPublish">确认下发</Button>
-        <Button @click="onWithdraw">撤回</Button>
-        <Button @click="onExport">导出</Button>
-        <Button @click="reload">刷新</Button>
-      </Space>
-      <p v-if="unmatched.length" class="mb-2">未匹配打卡姓名：{{ unmatched.join('、') }}</p>
-      <Table
-        size="small"
-        :data-source="lines"
-        :loading="loading"
-        row-key="id"
-        :scroll="{ x: 3600 }"
-        :pagination="false"
-        :columns="lineColumns"
-      />
+      <div class="mb-4 bg-white" style="position: relative; z-index: 5">
+        <Space wrap>
+          <span>年月</span>
+          <InputNumber v-model:value="yearMonth" :min="202001" />
+          <span>状态：{{ status }}</span>
+          <Button type="primary" @click="onGenerate">生成草稿</Button>
+          <Button @click="onDownloadTemplate">下载打卡模板</Button>
+          <Upload :show-upload-list="false" :before-upload="onUploadPunch" accept=".xls,.xlsx">
+            <Button>上传打卡并合并</Button>
+          </Upload>
+          <Button @click="onPublish">确认下发</Button>
+          <Button @click="onWithdraw">撤回</Button>
+          <Button @click="onExport">导出</Button>
+          <Button @click="reload">刷新</Button>
+        </Space>
+        <p v-if="unmatched.length" class="mt-2 mb-0">未匹配打卡姓名：{{ unmatched.join('、') }}</p>
+        <p v-if="status === 'DRAFT'" class="mt-2 mb-0 text-gray-500">草稿可点单元格改补贴/加班/个税等，失焦保存并重算应付与实发。</p>
+      </div>
+      <div style="overflow-x: auto; position: relative; z-index: 1">
+        <Table
+          size="small"
+          :data-source="lines"
+          :loading="loading"
+          row-key="id"
+          :pagination="false"
+          :columns="lineColumns"
+        />
+      </div>
     </Card>
   </Page>
 </template>

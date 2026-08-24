@@ -181,7 +181,7 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     }
 
     @Override
-    public void updateAdjust(Long lineId, BigDecimal tax, BigDecimal overtime) {
+    public void updateAdjust(Long lineId, PayrollLineDO patch) {
         PayrollLineDO line = payrollLineMapper.selectById(lineId);
         if (line == null || Boolean.TRUE.equals(line.getSnapshot())) {
             throw new IllegalStateException("line not editable");
@@ -190,17 +190,62 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
         if (!PayrollBatchRules.canEdit(batch.getStatus())) {
             throw new IllegalStateException("published batch is locked");
         }
-        if (tax != null) {
-            line.setTax(tax);
+        if (patch.getTax() != null) {
+            line.setTax(patch.getTax());
         }
-        if (overtime != null) {
-            line.setOvertime(overtime);
+        if (patch.getPerformance() != null) {
+            line.setPerformance(patch.getPerformance());
         }
-        if (line.getPayable() != null && line.getTax() != null) {
-            BigDecimal extra = overtime == null ? BigDecimal.ZERO : overtime;
-            line.setNet(line.getPayable().add(extra).subtract(line.getTax()));
+        if (patch.getBonus() != null) {
+            line.setBonus(patch.getBonus());
         }
+        if (patch.getSubsidy() != null) {
+            line.setSubsidy(patch.getSubsidy());
+        }
+        if (patch.getHousingSubsidy() != null) {
+            line.setHousingSubsidy(patch.getHousingSubsidy());
+        }
+        if (patch.getHolidayOvertimeDays() != null) {
+            line.setHolidayOvertimeDays(patch.getHolidayOvertimeDays());
+        }
+        if (patch.getHolidayOvertimePay() != null) {
+            line.setHolidayOvertimePay(patch.getHolidayOvertimePay());
+        }
+        if (patch.getWeekdayOvertimePay() != null) {
+            line.setWeekdayOvertimePay(patch.getWeekdayOvertimePay());
+        }
+        if (patch.getTripSubsidy() != null) {
+            line.setTripSubsidy(patch.getTripSubsidy());
+        }
+        if (patch.getOtherAdjust() != null) {
+            line.setOtherAdjust(patch.getOtherAdjust());
+        }
+        if (patch.getSocialDeduct() != null) {
+            line.setSocialDeduct(patch.getSocialDeduct());
+        }
+        if (patch.getHousingDeduct() != null) {
+            line.setHousingDeduct(patch.getHousingDeduct());
+        }
+        BigDecimal overtime = nz(line.getHolidayOvertimePay()).add(nz(line.getWeekdayOvertimePay()));
+        line.setOvertime(overtime);
+        BigDecimal payable = nz(line.getWage())
+                .add(nz(line.getFullAttendanceBonus()))
+                .add(nz(line.getHousingSubsidy()))
+                .add(nz(line.getPerformance()))
+                .add(nz(line.getBonus()))
+                .add(nz(line.getSubsidy()))
+                .add(overtime)
+                .add(nz(line.getSickPay()))
+                .add(nz(line.getTripSubsidy()))
+                .add(nz(line.getOtherAdjust()))
+                .subtract(nz(line.getPersonalLeavePay()));
+        line.setPayable(payable);
+        line.setNet(payable.subtract(nz(line.getSocialDeduct())).subtract(nz(line.getHousingDeduct())).subtract(nz(line.getTax())));
         payrollLineMapper.updateById(line);
+    }
+
+    private static BigDecimal nz(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
     }
 
     private void notify(Long userId, int yearMonth) {
