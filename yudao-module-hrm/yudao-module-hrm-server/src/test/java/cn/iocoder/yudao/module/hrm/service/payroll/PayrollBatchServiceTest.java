@@ -40,6 +40,8 @@ class PayrollBatchServiceTest {
     private MinWageService minWageService;
     @Mock
     private NotifyMessageSendApi notifyMessageSendApi;
+    @Mock
+    private PayrollAttendanceQuery payrollAttendanceQuery;
 
     @Test
     void generateInsertsHrLineWithoutPublishing() {
@@ -58,6 +60,8 @@ class PayrollBatchServiceTest {
         emp.setIdCard("310");
         emp.setBankAccount("6222");
         when(employeeMapper.selectList(any())).thenReturn(List.of(emp));
+        when(payrollAttendanceQuery.covers(88L, 202608)).thenReturn(List.of());
+        when(payrollAttendanceQuery.yearToDateSickBefore(88L, 202608)).thenReturn(BigDecimal.ZERO);
 
         service.generate(202608);
 

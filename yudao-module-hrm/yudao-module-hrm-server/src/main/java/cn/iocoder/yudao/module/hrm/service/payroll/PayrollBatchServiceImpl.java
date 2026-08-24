@@ -15,6 +15,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -75,12 +76,14 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 wage = BigDecimal.ZERO;
             }
             int tenure = tenureYears(emp.getEntryDate(), yearMonth);
+            OaLeave oa = oaLeave(emp, yearMonth);
             PayrollCalculator.Result calc = calculator.calculate(new PayrollCalculator.Input(
                     wage, new BigDecimal("200"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                    wage, wage, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                    BigDecimal.ZERO, false, tenure, minWage));
+                    wage, wage, BigDecimal.ZERO, oa.sick(), oa.personal(), BigDecimal.ZERO,
+                    payrollAttendanceQuery.yearToDateSickBefore(emp.getUserId(), yearMonth),
+                    oa.allSick(), tenure, minWage));
             PayrollLineDO line = new PayrollLineDO();
-            fillTemplateLine(line, batch, emp, wage, calc, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+            fillTemplateLine(line, batch, emp, wage, calc, oa.sick(), oa.personal(), BigDecimal.ZERO);
             line.setSnapshot(false);
             payrollLineMapper.insert(line);
         }
@@ -323,6 +326,38 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
 
     private static BigDecimal nz(BigDecimal v) {
         return v == null ? BigDecimal.ZERO : v;
+    }
+
+    private record OaLeave(BigDecimal sick, BigDecimal personal, boolean allSick) {
+    }
+
+    private OaLeave oaLeave(EmployeeDO emp, int yearMonth) {
+        List<AttendanceMerger.ProcessCover> covers = payrollAttendanceQuery.covers(emp.getUserId(), yearMonth);
+        BigDecimal sick = BigDecimal.ZERO;
+        BigDecimal personal = BigDecimal.ZERO;
+        int sickWeekdays = 0;
+        for (AttendanceMerger.ProcessCover cover : covers) {
+            if (AttendanceMerger.SICK.equals(cover.type())) {
+                sick = sick.add(cover.days() == null ? BigDecimal.ONE : cover.days());
+                sickWeekdays++;
+            } else if (AttendanceMerger.PERSONAL.equals(cover.type())) {
+                personal = personal.add(cover.days() == null ? BigDecimal.ONE : cover.days());
+            }
+        }
+        int weekdays = weekdaysInMonth(yearMonth);
+        return new OaLeave(sick, personal, weekdays > 0 && sickWeekdays >= weekdays);
+    }
+
+    static int weekdaysInMonth(int yearMonth) {
+        LocalDate start = LocalDate.of(yearMonth / 100, yearMonth % 100, 1);
+        LocalDate end = start.plusMonths(1).minusDays(1);
+        int n = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (d.getDayOfWeek() != DayOfWeek.SATURDAY && d.getDayOfWeek() != DayOfWeek.SUNDAY) {
+                n++;
+            }
+        }
+        return n;
     }
 
     static LocalDate parsePunchDate(String raw) {
