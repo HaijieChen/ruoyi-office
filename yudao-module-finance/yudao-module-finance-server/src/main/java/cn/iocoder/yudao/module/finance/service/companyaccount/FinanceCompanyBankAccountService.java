@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.finance.service.companyaccount;
 
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountImportExcelVO;
+import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO;
@@ -28,6 +30,8 @@ public interface FinanceCompanyBankAccountService {
      * 出纳选择：指定主体公司下启用账户。
      */
     List<FinanceCompanyBankAccountDO> listEnabledByEntityCompany(Long entityCompanyDeptId);
+
+    FinanceCompanyBankAccountImportRespVO importExcel(List<FinanceCompanyBankAccountImportExcelVO> rows);
 
     /** 账号脱敏展示，如 ****1234 */
     static String maskAccountNo(String accountNo) {

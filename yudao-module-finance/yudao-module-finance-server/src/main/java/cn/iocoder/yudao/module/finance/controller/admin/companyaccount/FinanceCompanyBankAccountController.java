@@ -4,6 +4,9 @@ import cn.iocoder.yudao.framework.apilog.core.annotation.ApiAccessLog;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
+import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountImportExcelVO;
+import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountSaveReqVO;
@@ -14,12 +17,16 @@ import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBank
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -84,6 +91,34 @@ public class FinanceCompanyBankAccountController {
             list.add(toResp(row, false));
         }
         return success(new PageResult<>(list, page.getTotal()));
+    }
+
+    @GetMapping("/get-import-template")
+    @Operation(summary = "获得公司银行账户导入模板")
+    @PreAuthorize("@ss.hasPermission('finance:company-bank-account:import')")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        ExcelUtils.write(response, "账户信息导入模板.xls", "账户信息",
+                FinanceCompanyBankAccountImportExcelVO.class,
+                Arrays.asList(FinanceCompanyBankAccountImportExcelVO.builder()
+                        .entityCompanyName("示例主体公司")
+                        .accountName("基本户")
+                        .bankName("中国工商银行XX支行")
+                        .accountHolder("示例主体公司")
+                        .accountNo("6222000011112222")
+                        .accountType("BASIC")
+                        .currency("CNY")
+                        .status("启用")
+                        .remark("")
+                        .build()));
+    }
+
+    @PostMapping("/import")
+    @Operation(summary = "导入公司银行账户（账号已存在则行失败，不覆盖）")
+    @PreAuthorize("@ss.hasPermission('finance:company-bank-account:import')")
+    public CommonResult<FinanceCompanyBankAccountImportRespVO> importExcel(
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return success(bankAccountService.importExcel(
+                ExcelUtils.read(file, FinanceCompanyBankAccountImportExcelVO.class)));
     }
 
     @GetMapping("/simple-list")

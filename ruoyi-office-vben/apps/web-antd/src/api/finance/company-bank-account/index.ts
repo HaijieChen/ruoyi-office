@@ -77,6 +77,17 @@ export function updateCompanyBankAccountStatus(id: number, status: number) {
 }
 
 /** 出纳选账户：按主体公司过滤，账号脱敏 */
+export function importCompanyBankAccountTemplate() {
+  return requestClient.download('/finance/company-bank-account/get-import-template');
+}
+
+export function importCompanyBankAccount(file: File) {
+  return requestClient.upload<{
+    createdNos: string[];
+    failureRows: Record<number, string>;
+  }>('/finance/company-bank-account/import', { file });
+}
+
 export function getCompanyBankAccountSimpleList(entityCompanyDeptId: number) {
   return requestClient.get<FinanceCompanyBankAccountApi.Account[]>(
     '/finance/company-bank-account/simple-list',

@@ -13,6 +13,7 @@ import { message } from 'ant-design-vue';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import FormModal from './modules/form.vue';
+import ImportModal from './modules/import-modal.vue';
 
 defineOptions({ name: 'FinanceCompanyBankAccount' });
 
@@ -25,9 +26,18 @@ function handleRefresh() {
   gridApi.query();
 }
 
+const [AccountImportModal, importModalApi] = useVbenModal({
+  connectedComponent: ImportModal,
+  destroyOnClose: true,
+});
+
 function handleCreate() {
   formModalApi.setData({});
   formModalApi.open();
+}
+
+function handleImport() {
+  importModalApi.open();
 }
 
 function handleEdit(row: FinanceCompanyBankAccountApi.Account) {
@@ -71,7 +81,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <AccountFormModal @success="handleRefresh" />
-    <Grid table-title="公司银行账户（挂靠组织架构公司）">
+    <AccountImportModal @success="handleRefresh" />
+    <Grid table-title="账户信息管理">
       <template #toolbar-tools>
         <TableAction
           :actions="[
@@ -81,6 +92,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['finance:company-bank-account:create'],
               onClick: handleCreate,
+            },
+            {
+              label: '导入',
+              auth: ['finance:company-bank-account:import'],
+              onClick: handleImport,
             },
           ]"
         />

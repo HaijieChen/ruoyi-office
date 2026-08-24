@@ -1,12 +1,16 @@
 package cn.iocoder.yudao.module.finance.service.companyaccount;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountImportExcelVO;
+import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.companyaccount.vo.FinanceCompanyBankAccountSaveReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.companyaccount.FinanceCompanyBankAccountMapper;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -93,6 +97,42 @@ class FinanceCompanyBankAccountServiceImplTest {
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.requireEnabledForEntityCompany(3L, 21L));
         assertEquals(COMPANY_BANK_ACCOUNT_ENTITY_MISMATCH.getCode(), ex.getCode());
+    }
+
+    @Test
+    void importCreatesAndRejectsDuplicateAccountNo() {
+        when(entityCompanyResolver.loadEnabledCompanies()).thenReturn(List.of());
+        doAnswer(inv -> {
+            FinanceEntityCompanyResolver.ResolvedCompany[] out = inv.getArgument(1);
+            out[0] = new FinanceEntityCompanyResolver.ResolvedCompany(20L, "主体甲", "CNY");
+            return null;
+        }).when(entityCompanyResolver).matchByNameOrError(eq("主体甲"), any(), any());
+        when(mapper.selectByCompanyAndAccountNo(20L, "62220001"))
+                .thenReturn(null)
+                .thenReturn(FinanceCompanyBankAccountDO.builder().id(9L).build());
+
+        FinanceCompanyBankAccountImportExcelVO ok = FinanceCompanyBankAccountImportExcelVO.builder()
+                .entityCompanyName("主体甲")
+                .accountName("基本户")
+                .bankName("工行")
+                .accountHolder("主体甲")
+                .accountNo("62220001")
+                .currency("CNY")
+                .status("启用")
+                .build();
+        FinanceCompanyBankAccountImportExcelVO dup = FinanceCompanyBankAccountImportExcelVO.builder()
+                .entityCompanyName("主体甲")
+                .accountName("基本户2")
+                .bankName("工行")
+                .accountHolder("主体甲")
+                .accountNo("62220001")
+                .currency("CNY")
+                .build();
+
+        FinanceCompanyBankAccountImportRespVO resp = service.importExcel(List.of(ok, dup));
+        assertEquals(List.of("62220001"), resp.getCreatedNos());
+        assertEquals("本文件内账号重复", resp.getFailureRows().get(3));
+        verify(mapper, times(1)).insert(any(FinanceCompanyBankAccountDO.class));
     }
 
 }
