@@ -35,6 +35,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
     private MinWageService minWageService;
     @Resource
     private NotifyMessageSendApi notifyMessageSendApi;
+    @Resource
+    private PayrollAttendanceQuery payrollAttendanceQuery;
 
     private final PayrollCalculator calculator = new PayrollCalculator();
 
@@ -105,8 +107,8 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 .eq(PayrollLineDO::getBatchId, batch.getId())
                 .eq(PayrollLineDO::getSnapshot, false));
         for (PayrollLineDO line : lines) {
-            BigDecimal absence = applied.absenceByEmployeeId().get(line.getEmployeeId());
-            if (absence == null) {
+            List<PunchXlsParser.PunchRow> punchRows = applied.rowsByEmployeeId().get(line.getEmployeeId());
+            if (punchRows == null || punchRows.isEmpty()) {
                 continue;
             }
             EmployeeDO emp = byId.get(line.getEmployeeId());
@@ -118,11 +120,21 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
                 wage = BigDecimal.ZERO;
             }
             int tenure = tenureYears(emp.getEntryDate(), yearMonth);
+            List<AttendanceMerger.PunchDay> punchDays = punchRows.stream()
+                    .map(row -> new AttendanceMerger.PunchDay(parsePunchDate(row.date()), row.absence(), row.late(), false))
+                    .filter(day -> day.date() != null)
+                    .toList();
+            AttendanceMerger.MonthResult merged = new AttendanceMerger().merge(
+                    punchDays, payrollAttendanceQuery.covers(emp.getUserId(), yearMonth));
+            boolean allSick = !merged.days().isEmpty()
+                    && merged.days().stream().allMatch(d -> "SICK".equals(d.status()));
             PayrollCalculator.Result calc = calculator.calculate(new PayrollCalculator.Input(
                     wage, new BigDecimal("200"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                    wage, wage, line.getTax(), BigDecimal.ZERO, BigDecimal.ZERO, absence,
-                    BigDecimal.ZERO, false, tenure, minWage));
-            fillTemplateLine(line, batch, emp, wage, calc, BigDecimal.ZERO, absence, line.getTax());
+                    wage, wage, line.getTax(), merged.sickDays(), merged.personalLeaveDays(), merged.absenceDays(),
+                    payrollAttendanceQuery.yearToDateSickBefore(emp.getUserId(), yearMonth),
+                    allSick, tenure, minWage));
+            BigDecimal unpaid = merged.personalLeaveDays().add(merged.absenceDays());
+            fillTemplateLine(line, batch, emp, wage, calc, merged.sickDays(), unpaid, line.getTax());
             line.setPunchName(emp.getName());
             payrollLineMapper.updateById(line);
         }
@@ -246,6 +258,22 @@ public class PayrollBatchServiceImpl implements PayrollBatchService {
 
     private static BigDecimal nz(BigDecimal v) {
         return v == null ? BigDecimal.ZERO : v;
+    }
+
+    static LocalDate parsePunchDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String text = raw.trim().replace('/', '-');
+        try {
+            return LocalDate.parse(text.length() <= 10 ? text : text.substring(0, 10));
+        } catch (Exception ignored) {
+            String[] parts = text.split("-");
+            if (parts.length == 3) {
+                return LocalDate.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+            }
+            return null;
+        }
     }
 
     private void notify(Long userId, int yearMonth) {

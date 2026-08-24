@@ -11,7 +11,8 @@ public class PayrollPunchApply {
     public record EmployeeName(Long id, String name, String employeeNo) {
     }
 
-    public record Result(int matched, List<String> unmatched, Map<Long, BigDecimal> absenceByEmployeeId) {
+    public record Result(int matched, List<String> unmatched, Map<Long, BigDecimal> absenceByEmployeeId,
+                         Map<Long, List<PunchXlsParser.PunchRow>> rowsByEmployeeId) {
     }
 
     public static Result apply(List<EmployeeName> employees, PunchXlsParser.ParseResult punch) {
@@ -49,7 +50,7 @@ public class PayrollPunchApply {
                 absence.put(e.getKey(), BigDecimal.valueOf(abs));
             }
         }
-        return new Result(matched, unmatched, absence);
+        return new Result(matched, unmatched, absence, rowsByEmp);
     }
 
     static Long resolve(PunchXlsParser.PunchRow row, Map<String, Long> byNo, Map<String, Integer> noCounts,
