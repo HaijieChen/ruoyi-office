@@ -29,6 +29,9 @@ public interface OAuth2TokenService {
      */
     OAuth2AccessTokenDO createAccessToken(Long userId, Integer userType, String clientId, List<String> scopes);
 
+    /** 回写 access token 元数据（如 MFA epoch）到 DB/Redis。 */
+    void saveAccessToken(OAuth2AccessTokenDO accessTokenDO);
+
     /**
      * 刷新访问令牌
      *

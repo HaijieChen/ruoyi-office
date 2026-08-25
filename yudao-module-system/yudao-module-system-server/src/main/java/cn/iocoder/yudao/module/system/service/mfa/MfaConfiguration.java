@@ -4,6 +4,8 @@ import cn.iocoder.yudao.module.system.service.mfa.crypto.FailClosedMfaSecretCiph
 import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretCipher;
 import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretCipherImpl;
 import cn.iocoder.yudao.module.system.service.mfa.crypto.MfaSecretProperties;
+import cn.iocoder.yudao.module.system.service.mail.MailSendService;
+import cn.iocoder.yudao.module.system.service.mfa.delivery.MailMfaChallengeDelivery;
 import cn.iocoder.yudao.module.system.service.mfa.delivery.MfaChallengeDelivery;
 import cn.iocoder.yudao.module.system.service.mfa.delivery.StubMfaChallengeDelivery;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -20,8 +22,8 @@ public class MfaConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(MfaChallengeDelivery.class)
-    public MfaChallengeDelivery mfaChallengeDelivery() {
-        return new StubMfaChallengeDelivery();
+    public MfaChallengeDelivery mfaChallengeDelivery(MailSendService mailSendService) {
+        return new MailMfaChallengeDelivery(mailSendService, new StubMfaChallengeDelivery());
     }
 
     @Bean

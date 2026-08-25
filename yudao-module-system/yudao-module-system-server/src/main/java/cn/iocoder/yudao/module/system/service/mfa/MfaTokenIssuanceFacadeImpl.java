@@ -174,6 +174,7 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
                     aEpoch = view.getAssuranceEpoch();
                 }
                 stampTokenMetadata(token, again, aEpoch);
+                oauth2TokenService.saveAccessToken(token);
                 if (again.getMode() != null && again.getMode() != MfaMode.OFF) {
                     long tg = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_GLOBAL_EPOCH));
                     long tt = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_TENANT_EPOCH));
@@ -487,6 +488,7 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
             OAuth2AccessTokenDO token = oauth2TokenService.createAccessToken(
                     userId, UserTypeEnum.ADMIN.getValue(), clientId, scopes);
             stampTokenMetadata(token, policy, assuranceEpoch);
+            oauth2TokenService.saveAccessToken(token);
             return MfaIssuanceResult.builder()
                     .outcome(MfaIssuanceOutcome.ALLOWED)
                     .loginStatus(MfaLoginStatus.AUTHENTICATED)

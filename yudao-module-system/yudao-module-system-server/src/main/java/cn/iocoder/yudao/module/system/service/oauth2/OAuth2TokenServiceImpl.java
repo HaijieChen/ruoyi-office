@@ -81,6 +81,17 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         return createOAuth2AccessToken(refreshTokenDO, clientDO);
     }
 
+    @Override
+    public void saveAccessToken(OAuth2AccessTokenDO accessTokenDO) {
+        if (accessTokenDO == null) {
+            return;
+        }
+        if (accessTokenDO.getId() != null) {
+            oauth2AccessTokenMapper.updateById(accessTokenDO);
+        }
+        oauth2AccessTokenRedisDAO.set(accessTokenDO);
+    }
+
     private static boolean isAdminUserSubject(Long userId, Integer userType) {
         return userId != null && userId != 0L && UserTypeEnum.ADMIN.getValue().equals(userType);
     }

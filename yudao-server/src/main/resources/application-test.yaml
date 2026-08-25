@@ -167,6 +167,11 @@ yudao:
     invoice-ocr:
       base-url: http://10.20.32.1:8099
       timeout-ms: 60000
+  mfa:
+    secret:
+      active-key-id: ${MFA_SECRET_KEY_ID:devk1}
+      keys:
+        devk1: ${MFA_SECRET_KEY:PMjcsVF4jqefo16rf0jU/+nLWcfCQTSye1sKAT4HkZE=}
 
 justauth:
   enabled: true

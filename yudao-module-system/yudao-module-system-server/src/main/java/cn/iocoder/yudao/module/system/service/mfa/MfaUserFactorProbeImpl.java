@@ -1,6 +1,12 @@
 package cn.iocoder.yudao.module.system.service.mfa;
 
+import cn.iocoder.yudao.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
+import cn.iocoder.yudao.module.system.dal.mysql.oauth2.OAuth2AccessTokenMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * 切片 3：基于因子权威探测用户 MFA 就绪状态。
@@ -9,14 +15,21 @@ import org.springframework.stereotype.Service;
 public class MfaUserFactorProbeImpl implements MfaUserFactorProbe {
 
     private final MfaFactorService factorService;
+    private final OAuth2AccessTokenMapper accessTokenMapper;
 
     public MfaUserFactorProbeImpl(MfaFactorService factorService) {
+        this(factorService, null);
+    }
+
+    @Autowired
+    public MfaUserFactorProbeImpl(MfaFactorService factorService,
+                                  OAuth2AccessTokenMapper accessTokenMapper) {
         this.factorService = factorService;
+        this.accessTokenMapper = accessTokenMapper;
     }
 
     @Override
     public boolean isUserMfaEnabled(Long tenantId, Long userId) {
-        // OPTIONAL 用户开关完整实现前：有 ACTIVE 因子即视为启用
         return hasEligibleActiveFactor(tenantId, userId);
     }
 
@@ -32,7 +45,26 @@ public class MfaUserFactorProbeImpl implements MfaUserFactorProbe {
 
     @Override
     public Long getSessionPolicyVersion(String refreshToken) {
-        return null; // refresh family 落盘后由 Token 元数据/会话表提供
+        if (refreshToken == null || refreshToken.isBlank() || accessTokenMapper == null) {
+            return null;
+        }
+        List<OAuth2AccessTokenDO> tokens = accessTokenMapper.selectListByRefreshToken(refreshToken);
+        if (tokens == null || tokens.isEmpty()) {
+            return null;
+        }
+        Map<String, String> info = tokens.get(0).getUserInfo();
+        if (info == null) {
+            return null;
+        }
+        String raw = info.get(MfaSessionGuardImpl.UI_GLOBAL_EPOCH);
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(raw);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     @Override

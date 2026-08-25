@@ -135,11 +135,20 @@ public class MailSendServiceImpl implements MailSendService {
     }
 
     private MailAccount buildMailAccount(MailAccountDO account, String nickname) {
-        String from = StrUtil.isNotEmpty(nickname) ? nickname + " <" + account.getMail() + ">" : account.getMail();
-        return new MailAccount().setFrom(from).setAuth(true)
+        // 企业邮 SSL/465：from 用纯邮箱，避免 OA <addr> 被拒；超时避免 MailUtil 一直挂起。
+        String from = account.getMail();
+        MailAccount mailAccount = new MailAccount().setFrom(from).setAuth(true)
                 .setUser(account.getUsername()).setPass(account.getPassword().toCharArray())
                 .setHost(account.getHost()).setPort(account.getPort())
-                .setSslEnable(account.getSslEnable()).setStarttlsEnable(account.getStarttlsEnable());
+                .setSslEnable(Boolean.TRUE.equals(account.getSslEnable()))
+                .setStarttlsEnable(Boolean.TRUE.equals(account.getStarttlsEnable()))
+                .setTimeout(15_000)
+                .setConnectionTimeout(15_000);
+        if (Boolean.TRUE.equals(account.getSslEnable())) {
+            mailAccount.setCustomProperty("mail.smtp.ssl.protocols", "TLSv1.2");
+            mailAccount.setCustomProperty("mail.smtp.ssl.trust", account.getHost());
+        }
+        return mailAccount;
     }
 
     @VisibleForTesting

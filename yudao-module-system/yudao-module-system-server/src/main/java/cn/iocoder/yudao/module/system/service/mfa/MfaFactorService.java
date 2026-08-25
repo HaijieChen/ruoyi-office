@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.system.service.mfa;
 
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorView;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingEmail;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp;
 
 import java.util.List;
@@ -51,7 +52,16 @@ public interface MfaFactorService {
      */
     boolean activatePendingTotp(Long tenantId, Long userId, String factorId, String code);
 
+    MfaPendingEmail startPendingEmail(Long tenantId, Long userId, String email);
+
+    boolean activatePendingEmail(Long tenantId, Long userId, String factorId, String code);
+
+    boolean hasActiveFactorOfType(Long tenantId, Long userId, String factorType);
+
     String peekFactorStatus(Long tenantId, Long userId, String factorId);
+
+    /** ACTIVE 因子解绑（仅本人调用方校验）。 */
+    boolean revokeActiveFactor(Long tenantId, Long userId, String factorId);
 
     void clear();
 }

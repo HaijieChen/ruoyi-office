@@ -14,12 +14,57 @@ export namespace AuthApi {
     socialState?: string;
   }
 
-  /** 登录接口返回值 */
+  export interface MfaFactorRef {
+    id?: string;
+    type?: string;
+    label?: string;
+    maskedTarget?: string;
+  }
+
+  export interface MfaFlowPayload {
+    flowToken?: string;
+    tokenClass?: string;
+    expiresIn?: number;
+    allowedActions?: string[];
+    factors?: MfaFactorRef[];
+  }
+
+  /** 登录接口返回值（含 MFA 判别联合） */
   export interface LoginResult {
-    accessToken: string;
-    refreshToken: string;
-    userId: number;
-    expiresTime: number;
+    accessToken?: string;
+    refreshToken?: string;
+    userId?: number;
+    expiresTime?: number;
+    loginStatus?: string;
+    flow?: MfaFlowPayload;
+  }
+
+  export interface MfaVerifyParams {
+    flowToken: string;
+    factorId: string;
+    code: string;
+  }
+
+  export interface MfaSendCodeParams {
+    flowToken: string;
+    factorId: string;
+  }
+
+  export interface MfaEnrollStartParams {
+    flowToken: string;
+  }
+
+  export interface MfaEnrollStartResult {
+    factorId?: string;
+    otpauthUri?: string;
+    secretManual?: string;
+    flowToken?: string;
+  }
+
+  export interface MfaEnrollConfirmParams {
+    flowToken: string;
+    factorId: string;
+    code: string;
   }
 
   /** 租户信息返回值 */
@@ -157,5 +202,49 @@ export async function socialLogin(data: AuthApi.SocialLoginParams) {
   return requestClient.post<AuthApi.LoginResult>(
     '/system/auth/social-login',
     data,
+  );
+}
+
+export async function mfaVerifyApi(data: AuthApi.MfaVerifyParams) {
+  return requestClient.post<AuthApi.LoginResult>('/system/auth/mfa/verify', data, {
+    headers: {
+      isEncrypt: false,
+    },
+  });
+}
+
+export async function mfaSendCodeApi(data: AuthApi.MfaSendCodeParams) {
+  return requestClient.post<boolean>('/system/auth/mfa/code/send', data, {
+    headers: {
+      isEncrypt: false,
+    },
+  });
+}
+
+export async function mfaEnrollmentTotpStartApi(
+  data: AuthApi.MfaEnrollStartParams,
+) {
+  return requestClient.post<AuthApi.MfaEnrollStartResult>(
+    '/system/auth/mfa/enrollment/totp/start',
+    data,
+    {
+      headers: {
+        isEncrypt: false,
+      },
+    },
+  );
+}
+
+export async function mfaEnrollmentTotpConfirmApi(
+  data: AuthApi.MfaEnrollConfirmParams,
+) {
+  return requestClient.post<AuthApi.LoginResult>(
+    '/system/auth/mfa/enrollment/totp/confirm',
+    data,
+    {
+      headers: {
+        isEncrypt: false,
+      },
+    },
   );
 }

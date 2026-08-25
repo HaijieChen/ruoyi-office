@@ -5,6 +5,7 @@ import cn.iocoder.yudao.module.system.service.mfa.delivery.StubMfaChallengeDeliv
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaAuthFlowRecord;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorBinding;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaFactorView;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingEmail;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp;
 import cn.iocoder.yudao.module.system.service.mfa.store.InMemoryMfaFactorStore;
 import cn.iocoder.yudao.module.system.service.mfa.store.MfaFactorStore;
@@ -14,12 +15,12 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -38,6 +39,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
     private static final int OTP_TTL_SECONDS = 300;
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_REVOKED = "REVOKED";
 
     private final MfaAuthFlowService authFlowService;
     private final MfaFactorStore factorStore;
@@ -121,7 +123,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
                 .type(type)
                 .status(STATUS_ACTIVE)
                 .secretOrDestination(secretOrDestination)
-                .label("Authenticator")
+                .label("身份验证器")
                 .masked(null)
                 .lastUsedStep(-1L)
                 .build());
@@ -162,18 +164,19 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         Objects.requireNonNull(userId, "userId");
         byte[] secretBytes = new byte[20];
         RANDOM.nextBytes(secretBytes);
-        String secret = Base64.getUrlEncoder().withoutPadding().encodeToString(secretBytes);
+        String secret = cn.hutool.core.codec.Base32.encode(secretBytes).replace("=", "").toUpperCase(Locale.ROOT);
         String factorId = "totp-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String label = accountName == null ? ("user-" + userId) : accountName;
-        String otpauth = "otpauth://totp/OA:" + label
+        String path = URLEncoder.encode("OA:" + label, StandardCharsets.UTF_8).replace("+", "%20");
+        String otpauth = "otpauth://totp/" + path
                 + "?secret=" + secret
-                + "&issuer=OA&algorithm=SHA1&digits=6&period=30";
+                + "&issuer=OA&digits=6&period=30";
         factorStore.save(tenantId, userId, MfaFactorBinding.builder()
                 .factorId(factorId)
                 .type("TOTP")
                 .status(STATUS_PENDING)
                 .secretOrDestination(secret)
-                .label("Authenticator")
+                .label("身份验证器")
                 .masked(null)
                 .lastUsedStep(-1L)
                 .build());
@@ -212,6 +215,71 @@ public class MfaFactorServiceImpl implements MfaFactorService {
             return false;
         }
         return tryActivatePendingFactor(tenantId, userId, factorId, step);
+    }
+
+    @Override
+    public boolean hasActiveFactorOfType(Long tenantId, Long userId, String factorType) {
+        String type = normalizeType(factorType);
+        for (MfaFactorView view : listActiveFactors(tenantId, userId)) {
+            if (type.equalsIgnoreCase(view.getType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public MfaPendingEmail startPendingEmail(Long tenantId, Long userId, String email) {
+        MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FACTOR));
+        Objects.requireNonNull(tenantId, "tenantId");
+        Objects.requireNonNull(userId, "userId");
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("email blank");
+        }
+        String dest = email.trim();
+        String factorId = "email-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String masked = maskEmail(dest);
+        factorStore.save(tenantId, userId, MfaFactorBinding.builder()
+                .factorId(factorId)
+                .type("EMAIL")
+                .status(STATUS_PENDING)
+                .secretOrDestination(dest)
+                .label("邮箱")
+                .masked(masked)
+                .lastUsedStep(-1L)
+                .build());
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        deliveryCodes.put(enrollKey(tenantId, userId, factorId),
+                new DeliveryCode(code, Instant.now().plusSeconds(OTP_TTL_SECONDS), "EMAIL"));
+        challengeDelivery.deliver("EMAIL", dest, code);
+        return MfaPendingEmail.builder().factorId(factorId).maskedEmail(masked).build();
+    }
+
+    @Override
+    public boolean activatePendingEmail(Long tenantId, Long userId, String factorId, String code) {
+        MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FACTOR));
+        if (code == null || code.isBlank() || factorId == null) {
+            return false;
+        }
+        String key = enrollKey(tenantId, userId, factorId);
+        DeliveryCode dc = deliveryCodes.get(key);
+        if (dc == null || Instant.now().isAfter(dc.expiresAt)) {
+            if (dc != null) {
+                deliveryCodes.remove(key);
+            }
+            return false;
+        }
+        if (!constantTimeEquals(dc.code, code.trim())) {
+            return false;
+        }
+        deliveryCodes.remove(key);
+        return tryActivatePendingFactor(tenantId, userId, factorId, null);
+    }
+
+    @Override
+    public boolean revokeActiveFactor(Long tenantId, Long userId, String factorId) {
+        MfaLockOrder.requireValidOrder(List.of(MfaLockOrder.Resource.FACTOR));
+        return factorStore.casStatus(tenantId, userId, factorId, STATUS_ACTIVE, STATUS_REVOKED, null);
     }
 
     @Override
@@ -285,6 +353,21 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         return flowHash + ":" + factorId;
     }
 
+    private static String enrollKey(Long tenantId, Long userId, String factorId) {
+        return "enroll:" + tenantId + ":" + userId + ":" + factorId;
+    }
+
+    static String maskEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return "***";
+        }
+        String local = email.substring(0, at);
+        String domain = email.substring(at);
+        String keep = local.substring(0, Math.min(2, local.length()));
+        return keep + "***" + domain;
+    }
+
     private static Long matchTotpStep(MfaFactorBinding binding, String code, Instant now) {
         long step = now.getEpochSecond() / 30L;
         for (long s = step - 1; s <= step + 1; s++) {
@@ -298,7 +381,7 @@ public class MfaFactorServiceImpl implements MfaFactorService {
     private static String hotp(String secret, long counter) {
         try {
             Mac mac = Mac.getInstance("HmacSHA1");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA1"));
+            mac.init(new SecretKeySpec(decodeTotpKey(secret), "HmacSHA1"));
             byte[] hash = mac.doFinal(ByteBuffer.allocate(8).putLong(counter).array());
             int offset = hash[hash.length - 1] & 0x0f;
             int binary = ((hash[offset] & 0x7f) << 24)
@@ -309,6 +392,17 @@ public class MfaFactorServiceImpl implements MfaFactorService {
         } catch (Exception e) {
             throw new IllegalStateException("TOTP failed", e);
         }
+    }
+
+    private static byte[] decodeTotpKey(String secret) {
+        if (secret == null) {
+            return new byte[0];
+        }
+        String compact = secret.trim().replace(" ", "").replace("=", "").toUpperCase(Locale.ROOT);
+        if (compact.length() >= 16 && compact.matches("[A-Z2-7]+")) {
+            return cn.hutool.core.codec.Base32.decode(compact);
+        }
+        return secret.getBytes(StandardCharsets.UTF_8);
     }
 
     private static boolean constantTimeEquals(String a, String b) {
