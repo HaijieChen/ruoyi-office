@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { createAttachmentFromOnboardingClaim } from '../../../../components/attachment-list/onboarding-claim';
 import {
+  calcAgeYears,
+  calcTenureMonths,
+  parseBirthdayFromIdCard,
+} from '../info/derived-fields';
+import {
   normalizeContractList,
   validateContractList,
   validateEducationRoles,
@@ -70,5 +75,27 @@ describe('employee roster field rules', () => {
     expect(att.fileUrl).toBe('');
     expect(att.filePath).toBe('');
     expect(att.fileExtension).toBe('pdf');
+  });
+});
+
+describe('employee archive derived age and tenure', () => {
+  const today = new Date(2026, 7, 25); // 2026-08-25
+
+  it('parses birthday from an 18-digit id card', () => {
+    expect(parseBirthdayFromIdCard('11010119900307123X')).toBe('1990-03-07');
+    expect(parseBirthdayFromIdCard('bad')).toBeUndefined();
+  });
+
+  it('computes full years of age and does not increment before birthday', () => {
+    expect(calcAgeYears('1990-08-25', today)).toBe(36);
+    expect(calcAgeYears('1990-08-26', today)).toBe(35);
+    expect(calcAgeYears(undefined, today)).toBeUndefined();
+  });
+
+  it('computes tenure in complete months like backend Period.between', () => {
+    expect(calcTenureMonths('2020-08-25', today)).toBe(72);
+    expect(calcTenureMonths('2020-08-26', today)).toBe(71);
+    expect(calcTenureMonths('2026-08-31', today)).toBe(0);
+    expect(calcTenureMonths(undefined, today)).toBeUndefined();
   });
 });

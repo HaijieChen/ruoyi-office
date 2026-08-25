@@ -5,6 +5,13 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
+import {
+  calcAgeYears,
+  calcTenureMonths,
+  formatDerivedNumber,
+  parseBirthdayFromIdCard,
+} from './derived-fields';
+
 /**
  * 基本信息表单配置
  */
@@ -107,9 +114,23 @@ export function useBasicFormSchema(_isEdit?: boolean): VbenFormSchema[] {
       label: '年龄',
       component: 'Input',
       componentProps: {
-        placeholder: '自动计算',
+        placeholder: '根据出生日期/身份证自动计算',
         readonly: true,
         disabled: true,
+      },
+      dependencies: {
+        triggerFields: ['birthday', 'idCard'],
+        trigger: async (values, formApi) => {
+          const fromId = parseBirthdayFromIdCard(values.idCard as string);
+          if (fromId && values.birthday !== fromId) {
+            await formApi.setFieldValue?.('birthday', fromId);
+          }
+          const birthday = (fromId || values.birthday) as string | undefined;
+          const next = formatDerivedNumber(calcAgeYears(birthday));
+          if (values.age !== next) {
+            await formApi.setFieldValue?.('age', next);
+          }
+        },
       },
     },
     {
@@ -390,9 +411,20 @@ export function useWorkFormSchema(
       label: '司龄（月）',
       component: 'Input',
       componentProps: {
-        placeholder: '自动计算',
+        placeholder: '根据入职日期自动计算',
         readonly: true,
         disabled: true,
+      },
+      dependencies: {
+        triggerFields: ['entryDate'],
+        trigger: async (values, formApi) => {
+          const next = formatDerivedNumber(
+            calcTenureMonths(values.entryDate as string),
+          );
+          if (values.companyTenureMonths !== next) {
+            await formApi.setFieldValue?.('companyTenureMonths', next);
+          }
+        },
       },
     },
     {
