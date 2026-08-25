@@ -3,22 +3,18 @@ import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { Button, Descriptions, Spin } from 'ant-design-vue';
+import { Descriptions, Spin } from 'ant-design-vue';
 
 import { FilePreviewList } from '#/components/upload';
 import { getPaymentApplication } from '#/api/finance/payment-application';
 import type { FinancePaymentApplicationApi } from '#/api/finance/payment-application';
 import { displayDate } from '#/utils/display-time';
-import { printFormElement } from '#/utils/print-form';
+import PrintVoucher from './print-voucher.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationDetail' });
 
 const detail = ref<FinancePaymentApplicationApi.Application | null>(null);
 const loading = ref(false);
-
-function onPrint() {
-  printFormElement(document.getElementById('paymentDetailPrint'), '付款申请');
-}
 
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
@@ -42,9 +38,9 @@ const [Modal, modalApi] = useVbenModal({
   <Modal title="付款申请详情" class="w-[720px]" :show-confirm-button="false">
     <Spin :spinning="loading">
       <div v-if="detail" class="mb-3">
-        <Button type="primary" @click="onPrint">打印</Button>
+        <PrintVoucher :detail="detail" />
       </div>
-      <Descriptions id="paymentDetailPrint" v-if="detail" bordered :column="1" size="small">
+      <Descriptions v-if="detail" bordered :column="1" size="small">
         <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
         <Descriptions.Item label="标题">{{ detail.processTitle }}</Descriptions.Item>
         <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>

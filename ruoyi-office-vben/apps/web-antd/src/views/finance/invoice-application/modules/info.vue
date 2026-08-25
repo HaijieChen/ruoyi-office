@@ -9,7 +9,6 @@ import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 import {
-  Button,
   Descriptions,
   DescriptionsItem,
   Divider,
@@ -21,7 +20,7 @@ import {
 
 import { getInvoiceApplication } from '#/api/finance/invoice-application';
 import { displayDateTime } from '#/utils/display-time';
-import { printFormElement } from '#/utils/print-form';
+import PrintVoucher from './print-voucher.vue';
 import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
 defineOptions({ name: 'FinanceInvoiceApplicationListInfo' });
@@ -131,10 +130,6 @@ function displayTime(val?: null | number | string) {
   return displayDateTime(val);
 }
 
-function onPrint() {
-  printFormElement(document.getElementById('invoiceListPrintForm'), '开票申请');
-}
-
 const [Modal, modalApi] = useVbenModal({
   showConfirmButton: false,
   cancelText: '关闭',
@@ -166,7 +161,7 @@ const [Modal, modalApi] = useVbenModal({
     <Spin :spinning="loading">
       <template v-if="detail">
         <div class="mb-3 flex flex-wrap items-center gap-2">
-          <Button type="primary" size="small" @click="onPrint">打印</Button>
+          <PrintVoucher :detail="detail" />
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>
             {{ approvalLabel[detail.approvalStatus] || detail.approvalStatus }}
@@ -177,7 +172,6 @@ const [Modal, modalApi] = useVbenModal({
           </Tag>
         </div>
 
-        <div id="invoiceListPrintForm">
         <Descriptions bordered :column="2" size="small" class="mb-4">
           <DescriptionsItem label="申请单号">
             {{ detail.applicationNo || '-' }}
@@ -234,7 +228,6 @@ const [Modal, modalApi] = useVbenModal({
           bordered
           class="mb-2"
         />
-        </div>
 
         <Divider orientation="left" class="!mt-6">审批全貌</Divider>
         <ApprovalOverviewPanel

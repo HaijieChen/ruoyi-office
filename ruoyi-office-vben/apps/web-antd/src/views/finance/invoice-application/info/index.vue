@@ -10,11 +10,11 @@ import type { FinanceInvoiceApplicationApi } from '#/api/finance/invoice-applica
 import { onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { Button, Descriptions, DescriptionsItem, Spin, Table, Tag, message } from 'ant-design-vue';
+import { Descriptions, DescriptionsItem, Spin, Table, Tag, message } from 'ant-design-vue';
 
 import { getInvoiceApplication } from '#/api/finance/invoice-application';
 import { displayDateTime } from '#/utils/display-time';
-import { printFormElement } from '#/utils/print-form';
+import PrintVoucher from '../modules/print-voucher.vue';
 
 defineOptions({ name: 'FinanceInvoiceApplicationInfo' });
 
@@ -43,10 +43,6 @@ function resolveId(): number | undefined {
     return Number.isFinite(n) ? n : undefined;
   }
   return undefined;
-}
-
-function onPrint() {
-  printFormElement(document.getElementById('invoicePrintForm'), '开票申请');
 }
 
 function displayTime(val?: null | number | string) {
@@ -190,9 +186,7 @@ watch(
       <template v-if="detail">
         <div class="mb-4 flex items-center gap-2">
           <span class="text-base font-medium">开票申请</span>
-          <Button type="primary" size="small" class="print:hidden" @click="onPrint">
-            打印
-          </Button>
+          <PrintVoucher :detail="detail" />
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>
             {{ approvalLabel[detail.approvalStatus] || detail.approvalStatus }}
@@ -203,7 +197,6 @@ watch(
           </Tag>
         </div>
 
-        <div id="invoicePrintForm">
         <Descriptions bordered :column="2" size="small" class="mb-4">
           <DescriptionsItem label="申请单号">
             {{ detail.applicationNo || '-' }}
@@ -259,7 +252,6 @@ watch(
           row-key="id"
           bordered
         />
-        </div>
       </template>
       <div v-else-if="!loading" class="text-gray-500">
         未找到开票申请（id={{ resolveId() ?? '空' }}）。请确认流程

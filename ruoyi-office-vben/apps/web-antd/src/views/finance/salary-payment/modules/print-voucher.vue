@@ -4,7 +4,7 @@ import { computed } from 'vue';
 import PrintSlip from '#/components/print/print-slip.vue';
 import { displayDate } from '#/utils/display-time';
 
-defineOptions({ name: 'PaymentPrintVoucher' });
+defineOptions({ name: 'SalaryPrintVoucher' });
 
 const props = defineProps<{ detail: any }>();
 
@@ -23,19 +23,16 @@ const fields = computed(() => [
   },
   { label: '事由', value: props.detail?.paymentReason, span: 2 as const },
   { label: '时效', value: props.detail?.paymentTiming },
-  { label: '产品名称', value: props.detail?.costProject },
+  { label: '期间', value: props.detail?.periodLabel },
   { label: '支付日', value: displayDate(props.detail?.actualPayDate) },
-  {
-    label: '资料',
-    value: props.detail?.materialsStatus === 'WAIT_INVOICE' ? '待补票' : '齐全',
-  },
+  { label: '已登记支付', value: props.detail?.paidLineSum ?? 0 },
 ]);
 </script>
 
 <template>
   <PrintSlip
-    slip-id="paymentPrintVoucher"
-    title="付款申请单"
+    slip-id="salaryPrintVoucher"
+    title="薪资付款申请单"
     :fields="fields"
   />
 </template>

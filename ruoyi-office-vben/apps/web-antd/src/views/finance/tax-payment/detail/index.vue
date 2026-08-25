@@ -40,13 +40,9 @@ import type { DefaultOptionType } from 'ant-design-vue/es/select';
 import { getDictOptions } from '@vben/hooks';
 import { FilePreviewList, FileUpload } from '#/components/upload';
 import { displayDate } from '#/utils/display-time';
-import { printFormElement } from '#/utils/print-form';
+import PrintVoucher from '../modules/print-voucher.vue';
 
 defineOptions({ name: 'FinanceTaxPaymentBpmDetail' });
-
-function onPrintForm() {
-  printFormElement(document.getElementById('taxPrintForm'), '税金付款申请');
-}
 
 function dictOptions(dictType: string): DefaultOptionType[] {
   return getDictOptions(dictType).map((d) => ({
@@ -335,9 +331,7 @@ watch(
       <template v-if="detail">
         <div class="mb-4 flex flex-wrap items-center gap-2">
           <span class="text-base font-medium">税金付款申请</span>
-          <Button type="primary" size="small" class="print:hidden" @click="onPrintForm">
-            打印
-          </Button>
+          <PrintVoucher :detail="detail" />
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
           <Tag>{{ detail.status }}</Tag>
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
@@ -470,7 +464,7 @@ watch(
           </div>
         </Card>
 
-        <Descriptions id="taxPrintForm" bordered :column="2" size="small" class="mb-4">
+        <Descriptions bordered :column="2" size="small" class="mb-4">
           <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
           <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
           <Descriptions.Item label="主体公司">
