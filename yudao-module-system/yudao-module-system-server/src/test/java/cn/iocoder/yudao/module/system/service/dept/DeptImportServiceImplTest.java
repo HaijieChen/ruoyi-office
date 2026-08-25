@@ -138,7 +138,7 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
         existing.setFunctionalCurrency("CNY");
         deptMapper.insert(existing);
         List<DeptImportExcelVO> rows = List.of(
-                row("文枢科技", "", "公司", "0", "启用", "USD", null) // 币种不同
+                row("文枢科技", "", "公司", "9", "启用", "USD", null) // 显示顺序不同
         );
         byte[] bytes = writeExcel(rows);
         try (MockedStatic<?> login = mockLogin()) {
@@ -181,7 +181,7 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    void invalidCurrencyAndLeader() throws Exception {
+    void invalidLeaderStillRejectedWithoutCurrency() throws Exception {
         List<DeptImportExcelVO> rows = List.of(
                 row("文枢科技", "", "公司", "0", "启用", "EUR", "no_such_user")
         );
@@ -189,7 +189,7 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
         try (MockedStatic<?> login = mockLogin()) {
             DeptImportRespVO preview = deptImportService.validateImport(xlsxFile(bytes));
             assertFalse(preview.getCanCommit());
-            assertTrue(preview.getErrors().stream().anyMatch(e -> "CURRENCY_INVALID".equals(e.getCode())));
+            assertTrue(preview.getErrors().stream().noneMatch(e -> "CURRENCY_INVALID".equals(e.getCode())));
             assertTrue(preview.getErrors().stream().anyMatch(e -> "LEADER_NOT_FOUND".equals(e.getCode())));
         }
     }

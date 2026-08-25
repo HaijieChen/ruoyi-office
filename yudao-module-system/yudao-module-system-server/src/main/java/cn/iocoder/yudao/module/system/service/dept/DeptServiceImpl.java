@@ -204,25 +204,11 @@ public class DeptServiceImpl implements DeptService {
     }
 
     /**
-     * 公司节点：记账本位币必填且仅 CNY/USD/HKD；部门节点清空本位币。
+     * 记账本位币已改由财务公司银行账户维护，组织节点一律清空。
      */
     @VisibleForTesting
     void normalizeAndValidateFunctionalCurrency(DeptSaveReqVO reqVO) {
-        boolean company = OrgTypeEnum.COMPANY.getValue().equals(String.valueOf(reqVO.getOrgType()));
-        String raw = reqVO.getFunctionalCurrency();
-        if (!company) {
-            // 部门不得挂本位币，避免脏数据
-            reqVO.setFunctionalCurrency(null);
-            return;
-        }
-        if (StrUtil.isBlank(raw)) {
-            throw exception(DEPT_FUNCTIONAL_CURRENCY_REQUIRED);
-        }
-        String currency = raw.trim().toUpperCase(Locale.ROOT);
-        if (!FUNCTIONAL_CURRENCIES.contains(currency)) {
-            throw exception(DEPT_FUNCTIONAL_CURRENCY_INVALID);
-        }
-        reqVO.setFunctionalCurrency(currency);
+        reqVO.setFunctionalCurrency(null);
     }
 
     @Override

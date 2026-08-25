@@ -22,6 +22,7 @@ import {
 } from '#/api/finance/payment-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { FileUpload } from '#/components/upload';
+import { defaultCurrencyFromCompanyAccounts } from '#/views/finance/shared/account-currency';
 
 defineOptions({ name: 'FinancePaymentApplicationFormBody' });
 
@@ -65,9 +66,7 @@ const mode = ref<'create' | 'resubmit'>('create');
 const supplierOptions = ref<
   { bankAccount?: string; bankName?: string; label: string; value: number }[]
 >([]);
-const companyOptions = ref<
-  { functionalCurrency?: string; label: string; value: number }[]
->([]);
+const companyOptions = ref<{ label: string; value: number }[]>([]);
 const purchaseOptions = ref<{ label: string; value: string }[]>([]);
 const leaseOptions = ref<{ label: string; value: number }[]>([]);
 const relatedContractOptions = ref<
@@ -131,7 +130,6 @@ async function loadCompanies() {
       .map((c) => ({
         label: c.name,
         value: c.id as number,
-        functionalCurrency: c.functionalCurrency || 'CNY',
       }));
     if (!companyOptions.value.length) {
       message.warning('未获取到启用中的主体公司，请联系管理员检查组织架构');
@@ -152,12 +150,14 @@ function onEntityCompanyChange(value: SelectValue) {
   if (!Number.isFinite(id)) {
     return;
   }
-  const opt = companyOptions.value.find((o) => o.value === id);
-  // 切换主体：若用户未手改币种，默认带出公司本位币（可再改）
-  if (opt && !currencyTouched.value) {
-    const fc = (opt.functionalCurrency || 'CNY').toUpperCase();
-    formData.value.currency = ['CNY', 'USD', 'HKD'].includes(fc) ? fc : 'CNY';
+  if (currencyTouched.value) {
+    return;
   }
+  void defaultCurrencyFromCompanyAccounts(id).then((currency) => {
+    if (!currencyTouched.value) {
+      formData.value.currency = currency;
+    }
+  });
 }
 
 function onCurrencyChange() {
@@ -352,7 +352,6 @@ async function reset(opts?: { id?: number; mode?: string }) {
           label:
             detail.entityCompanyName || `公司 #${detail.entityCompanyDeptId}`,
           value: detail.entityCompanyDeptId,
-          functionalCurrency: detail.currency || 'CNY',
         },
         ...companyOptions.value,
       ];

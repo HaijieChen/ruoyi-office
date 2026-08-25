@@ -299,25 +299,8 @@ public class DeptImportServiceImpl implements DeptImportService {
                 rowErrors.add(error(rowNumber, null, "status", "STATUS_INVALID", "状态仅支持 启用/停用"));
             }
 
-            String currency = trimToNull(raw.getFunctionalCurrency());
-            if (currency != null) {
-                currency = currency.toUpperCase(Locale.ROOT);
-            }
-            if (OrgTypeEnum.COMPANY.getValue().equals(orgType)) {
-                if (StrUtil.isBlank(currency)) {
-                    rowErrors.add(error(rowNumber, null, "functionalCurrency", "CURRENCY_REQUIRED",
-                            "公司节点必须填写记账本位币"));
-                } else if (!DeptImportSupport.CURRENCIES.contains(currency)) {
-                    rowErrors.add(error(rowNumber, null, "functionalCurrency", "CURRENCY_INVALID",
-                            "记账本位币仅支持 CNY/USD/HKD"));
-                }
-            } else if (OrgTypeEnum.DEPARTMENT.getValue().equals(orgType)) {
-                if (StrUtil.isNotBlank(currency)) {
-                    rowErrors.add(error(rowNumber, null, "functionalCurrency", "CURRENCY_INVALID",
-                            "部门节点不得填写记账本位币"));
-                }
-                currency = null;
-            }
+            // 本位币改由财务账户维护，导入列忽略
+            String currency = null;
 
             String phone = trimToNull(raw.getPhone());
             if (phone != null && phone.length() > 11) {

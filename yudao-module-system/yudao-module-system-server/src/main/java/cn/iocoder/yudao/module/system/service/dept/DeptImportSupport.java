@@ -138,11 +138,6 @@ public final class DeptImportSupport {
         if (!Objects.equals(row.status(), existing.getStatus())) {
             return false;
         }
-        String existingCurrency = StrUtil.blankToDefault(existing.getFunctionalCurrency(), null);
-        String rowCurrency = StrUtil.blankToDefault(row.functionalCurrency(), null);
-        if (!Objects.equals(rowCurrency, existingCurrency)) {
-            return false;
-        }
         if (!Objects.equals(row.leaderUserId(), existing.getLeaderUserId())) {
             return false;
         }

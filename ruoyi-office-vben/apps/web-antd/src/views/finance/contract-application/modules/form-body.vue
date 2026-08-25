@@ -27,6 +27,7 @@ import {
 } from '#/api/finance/contract-application';
 import { getCustomerCompanySimpleList } from '#/api/finance/customer-company';
 import { getSimpleCompanyList } from '#/api/system/dept';
+import { defaultCurrencyFromCompanyAccounts } from '#/views/finance/shared/account-currency';
 
 defineOptions({ name: 'FinanceContractApplicationFormBody' });
 
@@ -212,7 +213,6 @@ async function loadCompanies() {
       .map((c) => ({
         value: c.id as number,
         label: c.name as string,
-        functionalCurrency: (c as any).functionalCurrency || 'CNY',
       }));
   } finally {
     loadingCompany.value = false;
@@ -375,10 +375,14 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         :options="companyOptions"
         placeholder="请选择签约主体公司"
         @change="(v: any) => {
-          const opt = companyOptions.find((o) => o.value === v) as any;
-          if (opt?.functionalCurrency && !formData.amountNa) {
-            formData.currency = opt.functionalCurrency;
+          if (formData.amountNa) {
+            return;
           }
+          void defaultCurrencyFromCompanyAccounts(Number(v)).then((currency) => {
+            if (!formData.amountNa) {
+              formData.currency = currency;
+            }
+          });
         }"
       />
     </Form.Item>

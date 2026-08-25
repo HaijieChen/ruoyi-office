@@ -45,7 +45,7 @@ public class FinanceEntityCompanyResolver {
                 || !isCompany(dept)) {
             throw exception(ENTITY_COMPANY_INVALID);
         }
-        return new ResolvedCompany(dept.getId(), dept.getName(), dept.getFunctionalCurrency());
+        return new ResolvedCompany(dept.getId(), dept.getName(), null);
     }
 
     /**
@@ -86,7 +86,7 @@ public class FinanceEntityCompanyResolver {
             return "主体公司名称重复，请改用唯一名称";
         }
         DeptRespDTO hit = hits.get(0);
-        out[0] = new ResolvedCompany(hit.getId(), hit.getName(), hit.getFunctionalCurrency());
+        out[0] = new ResolvedCompany(hit.getId(), hit.getName(), null);
         return null;
     }
 

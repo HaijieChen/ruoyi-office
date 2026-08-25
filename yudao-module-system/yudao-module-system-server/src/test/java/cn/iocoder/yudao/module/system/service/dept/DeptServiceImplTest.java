@@ -59,41 +59,16 @@ public class DeptServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    public void testCreateCompanyRequiresFunctionalCurrency() {
+    public void testCreateCompanyIgnoresFunctionalCurrency() {
         DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
             o.setId(null);
             o.setParentId(DeptDO.PARENT_ID_ROOT);
             o.setStatus(CommonStatusEnum.ENABLE.getStatus());
             o.setOrgType("1");
-            o.setFunctionalCurrency(null);
-        });
-        assertServiceException(() -> deptService.createDept(reqVO), DEPT_FUNCTIONAL_CURRENCY_REQUIRED);
-    }
-
-    @Test
-    public void testCreateCompanyWithValidCurrency() {
-        DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
-            o.setId(null);
-            o.setParentId(DeptDO.PARENT_ID_ROOT);
-            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
-            o.setOrgType("1");
-            o.setFunctionalCurrency("usd");
+            o.setFunctionalCurrency("USD");
         });
         Long deptId = deptService.createDept(reqVO);
-        DeptDO deptDO = deptMapper.selectById(deptId);
-        assertEquals("USD", deptDO.getFunctionalCurrency());
-    }
-
-    @Test
-    public void testCreateCompanyRejectsInvalidCurrency() {
-        DeptSaveReqVO reqVO = randomPojo(DeptSaveReqVO.class, o -> {
-            o.setId(null);
-            o.setParentId(DeptDO.PARENT_ID_ROOT);
-            o.setStatus(CommonStatusEnum.ENABLE.getStatus());
-            o.setOrgType("1");
-            o.setFunctionalCurrency("EUR");
-        });
-        assertServiceException(() -> deptService.createDept(reqVO), DEPT_FUNCTIONAL_CURRENCY_INVALID);
+        assertNull(deptMapper.selectById(deptId).getFunctionalCurrency());
     }
 
     @Test
@@ -409,7 +384,7 @@ public class DeptServiceImplTest extends BaseDbUnitTest {
         });
         Long id = deptService.createDept(reqVO);
         assertNotNull(id);
-        assertEquals("USD", deptMapper.selectById(id).getFunctionalCurrency());
+        assertNull(deptMapper.selectById(id).getFunctionalCurrency());
     }
 
 }
