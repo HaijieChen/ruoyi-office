@@ -50,7 +50,6 @@ public class FinanceExpenseReimbursementController {
 
     @PostMapping("/create-no-invoice")
     @Operation(summary = "创建并发起无票费用报销")
-    @PreAuthorize("@ss.hasPermission('finance:expense-no-invoice:create')")
     public CommonResult<Long> createNoInvoice(@Valid @RequestBody FinanceExpenseReimbursementCreateReqVO reqVO) {
         return success(expenseReimbursementService.createNoInvoice(reqVO, getLoginUserId()));
     }

@@ -78,6 +78,14 @@ class BpmProcessStartEligibilityServiceTest {
     }
 
     @Test
+    void noInvoiceExpense_followsProcessDesignNotFinanceMenu() {
+        BpmProcessStartEligibility e = service.evaluate("oa_expense_no_invoice");
+
+        assertTrue(e.isCanStart());
+        assertNull(e.getRequiredStartPermission());
+    }
+
+    @Test
     void tripAndOuting_notHiddenAndNotEmbed() {
         for (String key : new String[]{"oa_business_trip", "oa_outing"}) {
             assertFalse(service.shouldHideFromStartList(key), key);
