@@ -2,8 +2,9 @@
 import { h, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
+import { IconifyIcon } from '@vben/icons';
 
-import { Table } from 'ant-design-vue';
+import { Button, Table } from 'ant-design-vue';
 
 import { listMyPayslips, type PayrollBatchApi } from '#/api/hrm/payroll/batch';
 
@@ -11,6 +12,31 @@ defineOptions({ name: 'HrmPayrollPayslip' });
 
 const lines = ref<PayrollBatchApi.Line[]>([]);
 const loading = ref(false);
+const revealed = ref<Set<number>>(new Set());
+
+function isOpen(record: PayrollBatchApi.Line) {
+  return record.id != null && revealed.value.has(record.id);
+}
+
+function toggle(record: PayrollBatchApi.Line) {
+  if (record.id == null) {
+    return;
+  }
+  const next = new Set(revealed.value);
+  if (next.has(record.id)) {
+    next.delete(record.id);
+  } else {
+    next.add(record.id);
+  }
+  revealed.value = next;
+}
+
+function masked(record: PayrollBatchApi.Line, value: unknown) {
+  if (isOpen(record)) {
+    return value ?? '';
+  }
+  return '****';
+}
 
 function col(title: string, dataIndex: string, width: number, fixed?: 'left' | 'right') {
   return {
@@ -18,10 +44,35 @@ function col(title: string, dataIndex: string, width: number, fixed?: 'left' | '
     dataIndex,
     width,
     fixed,
+    customRender: ({ record, text }: { record: PayrollBatchApi.Line; text: unknown }) =>
+      dataIndex === 'employeeName' || dataIndex === 'yearMonth' ? (text ?? '') : masked(record, text),
   };
 }
 
 const columns = [
+  {
+    title: '',
+    dataIndex: '_eye',
+    width: 56,
+    fixed: 'left' as const,
+    customRender: ({ record }: { record: PayrollBatchApi.Line }) =>
+      h(
+        Button,
+        {
+          type: 'text',
+          size: 'small',
+          title: isOpen(record) ? '隐藏明细' : '显示明细',
+          onClick: () => toggle(record),
+        },
+        {
+          default: () =>
+            h(IconifyIcon, {
+              icon: isOpen(record) ? 'lucide:eye' : 'lucide:eye-off',
+              class: 'size-4',
+            }),
+        },
+      ),
+  },
   col('姓名', 'employeeName', 120, 'left'),
   col('年月', 'yearMonth', 90),
   col('公司', 'companyName', 80),
@@ -65,12 +116,13 @@ onMounted(async () => {
 
 <template>
   <Page title="我的工资条">
+    <p class="mb-3 text-sm text-gray-500">默认隐藏明细，点击左侧眼睛查看该月数据。</p>
     <Table
       class="payroll-line-table"
       :data-source="lines"
       :loading="loading"
       row-key="id"
-      :scroll="{ x: 3200 }"
+      :scroll="{ x: 3260 }"
       :columns="columns"
     />
   </Page>
