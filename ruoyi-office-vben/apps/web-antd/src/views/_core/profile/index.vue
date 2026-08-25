@@ -13,6 +13,7 @@ import { getUserProfile } from '#/api/system/user/profile';
 
 import BaseInfo from './modules/base-info.vue';
 import ProfileUser from './modules/profile-user.vue';
+import MfaSetting from './modules/mfa-setting.vue';
 import ResetPwd from './modules/reset-pwd.vue';
 import UserSocial from './modules/user-social.vue';
 
@@ -55,6 +56,9 @@ onMounted(loadProfile);
           </Tabs.TabPane>
           <Tabs.TabPane key="resetPwd" tab="密码设置">
             <ResetPwd />
+          </Tabs.TabPane>
+          <Tabs.TabPane key="mfa" tab="MFA 设置">
+            <MfaSetting />
           </Tabs.TabPane>
           <Tabs.TabPane key="userSocial" tab="社交绑定" force-render>
             <UserSocial @update:active-name="activeName = $event" />

@@ -15,13 +15,17 @@ import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.dal.mysql.oauth2.OAuth2AccessTokenMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.oauth2.OAuth2RefreshTokenMapper;
 import cn.iocoder.yudao.module.system.dal.redis.oauth2.OAuth2AccessTokenRedisDAO;
+import cn.iocoder.yudao.module.system.service.mfa.model.IssuanceDecision;
+import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import jakarta.annotation.Resource;
 import org.assertj.core.util.Lists;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -57,6 +61,23 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
     @MockitoBean
     private AdminUserService adminUserService;
 
+    @AfterEach
+    public void clearMfaGuard() {
+        MfaIssuanceGuard.clear();
+    }
+
+    private void bindAdminDecision(Long userId) {
+        MfaIssuanceGuard.bind(IssuanceDecision.builder()
+                .subjectId(userId)
+                .mfaSatisfied(true)
+                .enrollmentComplete(true)
+                .recoveryRequired(false)
+                .policyVersion(0L)
+                .factorVersion(0L)
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build());
+    }
+
     @Test
     public void testCreateAccessToken() {
         TenantContextHolder.setTenantId(0L);
@@ -72,6 +93,9 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
         // mock 数据（用户）
         AdminUserDO user = randomPojo(AdminUserDO.class);
         when(adminUserService.getUser(userId)).thenReturn(user);
+
+        // ADMIN 用户态签发需 IssuanceDecision（Facade 门闩）
+        bindAdminDecision(userId);
 
         // 调用
         OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.createAccessToken(userId, userType, clientId, scopes);

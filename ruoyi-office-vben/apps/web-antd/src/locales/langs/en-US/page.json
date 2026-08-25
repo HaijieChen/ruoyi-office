@@ -5,6 +5,8 @@
     "codeLogin": "Code Login",
     "qrcodeLogin": "Qr Code Login",
     "forgetPassword": "Forget Password",
+    "mfaChallenge": "Two-factor verification",
+    "mfaEnroll": "Set up authenticator",
     "profile": "Profile"
   },
   "dashboard": {

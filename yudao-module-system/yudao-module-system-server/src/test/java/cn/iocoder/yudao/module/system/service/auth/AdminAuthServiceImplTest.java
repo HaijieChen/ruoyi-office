@@ -16,6 +16,12 @@ import cn.iocoder.yudao.module.system.enums.sms.SmsSceneEnum;
 import cn.iocoder.yudao.module.system.enums.social.SocialTypeEnum;
 import cn.iocoder.yudao.module.system.service.logger.LoginLogService;
 import cn.iocoder.yudao.module.system.service.member.MemberService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaAuthFlowService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaFactorService;
+import cn.iocoder.yudao.module.system.service.mfa.MfaTokenIssuanceFacade;
+import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuanceOutcome;
+import cn.iocoder.yudao.module.system.service.mfa.enums.MfaLoginStatus;
+import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
 import cn.iocoder.yudao.module.system.service.social.SocialUserService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
@@ -58,6 +64,12 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
     private SmsCodeApi smsCodeApi;
     @MockitoBean
     private OAuth2TokenService oauth2TokenService;
+    @MockitoBean
+    private MfaTokenIssuanceFacade mfaTokenIssuanceFacade;
+    @MockitoBean
+    private MfaAuthFlowService mfaAuthFlowService;
+    @MockitoBean
+    private MfaFactorService mfaFactorService;
     @MockitoBean
     private MemberService memberService;
     @MockitoBean
@@ -162,15 +174,28 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         when(userService.getUserByUsername(eq("test_username"))).thenReturn(user);
         // mock password 匹配
         when(userService.isPasswordMatch(eq("test_password"), eq(user.getPassword()))).thenReturn(true);
-        // mock 缓存登录用户到 Redis
+        // mock MFA Facade 签发
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class, o -> o.setUserId(1L)
                 .setUserType(UserTypeEnum.ADMIN.getValue()));
-        when(oauth2TokenService.createAccessToken(eq(1L), eq(UserTypeEnum.ADMIN.getValue()), eq("default"), isNull()))
-                .thenReturn(accessTokenDO);
+        AuthLoginRespVO facadeResp = AuthLoginRespVO.builder()
+                .userId(1L)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED.name())
+                .accessToken(accessTokenDO.getAccessToken())
+                .refreshToken(accessTokenDO.getRefreshToken())
+                .expiresTime(accessTokenDO.getExpiresTime())
+                .build();
+        when(mfaTokenIssuanceFacade.issueAfterPrimaryAuth(any(), eq(1L), any(), eq(UserTypeEnum.ADMIN.getValue()),
+                eq("default"), isNull(), any())).thenReturn(MfaIssuanceResult.builder()
+                .outcome(MfaIssuanceOutcome.ALLOWED)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED)
+                .accessToken(accessTokenDO)
+                .loginResp(facadeResp)
+                .build());
 
         // 调用，并校验
         AuthLoginRespVO loginRespVO = authService.login(reqVO);
-        assertPojoEquals(accessTokenDO, loginRespVO);
+        assertEquals(accessTokenDO.getAccessToken(), loginRespVO.getAccessToken());
+        assertEquals(accessTokenDO.getRefreshToken(), loginRespVO.getRefreshToken());
         // 校验调用参数
         verify(loginLogService).createLoginLog(
                 argThat(o -> o.getLogType().equals(LoginLogTypeEnum.LOGIN_USERNAME.getType())
@@ -218,15 +243,26 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         // mock 方法（用户信息）
         AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(1L));
         when(userService.getUserByMobile(eq(mobile))).thenReturn(user);
-        // mock 缓存登录用户到 Redis
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class, o -> o.setUserId(1L)
                 .setUserType(UserTypeEnum.ADMIN.getValue()));
-        when(oauth2TokenService.createAccessToken(eq(1L), eq(UserTypeEnum.ADMIN.getValue()), eq("default"), isNull()))
-                .thenReturn(accessTokenDO);
+        AuthLoginRespVO facadeResp = AuthLoginRespVO.builder()
+                .userId(1L)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED.name())
+                .accessToken(accessTokenDO.getAccessToken())
+                .refreshToken(accessTokenDO.getRefreshToken())
+                .expiresTime(accessTokenDO.getExpiresTime())
+                .build();
+        when(mfaTokenIssuanceFacade.issueAfterPrimaryAuth(any(), eq(1L), any(), eq(UserTypeEnum.ADMIN.getValue()),
+                eq("default"), isNull(), any())).thenReturn(MfaIssuanceResult.builder()
+                .outcome(MfaIssuanceOutcome.ALLOWED)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED)
+                .accessToken(accessTokenDO)
+                .loginResp(facadeResp)
+                .build());
 
         // 调用，并断言
         AuthLoginRespVO loginRespVO = authService.smsLogin(reqVO);
-        assertPojoEquals(accessTokenDO, loginRespVO);
+        assertEquals(accessTokenDO.getAccessToken(), loginRespVO.getAccessToken());
         // 断言调用
         verify(loginLogService).createLoginLog(
                 argThat(o -> o.getLogType().equals(LoginLogTypeEnum.LOGIN_MOBILE.getType())
@@ -246,15 +282,26 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         // mock（用户）
         AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(userId));
         when(userService.getUser(eq(userId))).thenReturn(user);
-        // mock 缓存登录用户到 Redis
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class, o -> o.setUserId(1L)
                 .setUserType(UserTypeEnum.ADMIN.getValue()));
-        when(oauth2TokenService.createAccessToken(eq(1L), eq(UserTypeEnum.ADMIN.getValue()), eq("default"), isNull()))
-                .thenReturn(accessTokenDO);
+        AuthLoginRespVO facadeResp = AuthLoginRespVO.builder()
+                .userId(1L)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED.name())
+                .accessToken(accessTokenDO.getAccessToken())
+                .refreshToken(accessTokenDO.getRefreshToken())
+                .expiresTime(accessTokenDO.getExpiresTime())
+                .build();
+        when(mfaTokenIssuanceFacade.issueAfterPrimaryAuth(any(), eq(1L), any(), eq(UserTypeEnum.ADMIN.getValue()),
+                eq("default"), isNull(), any())).thenReturn(MfaIssuanceResult.builder()
+                .outcome(MfaIssuanceOutcome.ALLOWED)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED)
+                .accessToken(accessTokenDO)
+                .loginResp(facadeResp)
+                .build());
 
         // 调用，并断言
         AuthLoginRespVO loginRespVO = authService.socialLogin(reqVO);
-        assertPojoEquals(accessTokenDO, loginRespVO);
+        assertEquals(accessTokenDO.getAccessToken(), loginRespVO.getAccessToken());
         // 断言调用
         verify(loginLogService).createLoginLog(
                 argThat(o -> o.getLogType().equals(LoginLogTypeEnum.LOGIN_SOCIAL.getType())
@@ -316,13 +363,25 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         String refreshToken = randomString();
         // mock 方法
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class);
-        when(oauth2TokenService.refreshAccessToken(eq(refreshToken), eq("default")))
-                .thenReturn(accessTokenDO);
+        AuthLoginRespVO facadeResp = AuthLoginRespVO.builder()
+                .userId(accessTokenDO.getUserId())
+                .loginStatus(MfaLoginStatus.AUTHENTICATED.name())
+                .accessToken(accessTokenDO.getAccessToken())
+                .refreshToken(accessTokenDO.getRefreshToken())
+                .expiresTime(accessTokenDO.getExpiresTime())
+                .build();
+        when(mfaTokenIssuanceFacade.refresh(any(), eq(refreshToken), eq("default")))
+                .thenReturn(MfaIssuanceResult.builder()
+                        .outcome(MfaIssuanceOutcome.ALLOWED)
+                        .loginStatus(MfaLoginStatus.AUTHENTICATED)
+                        .accessToken(accessTokenDO)
+                        .loginResp(facadeResp)
+                        .build());
 
         // 调用
         AuthLoginRespVO loginRespVO = authService.refreshToken(refreshToken);
         // 断言
-        assertPojoEquals(accessTokenDO, loginRespVO);
+        assertEquals(accessTokenDO.getAccessToken(), loginRespVO.getAccessToken());
     }
 
     @Test

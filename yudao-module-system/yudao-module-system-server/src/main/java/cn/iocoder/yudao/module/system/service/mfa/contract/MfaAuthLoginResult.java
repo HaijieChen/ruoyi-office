@@ -1,0 +1,169 @@
+package cn.iocoder.yudao.module.system.service.mfa.contract;
+
+import cn.iocoder.yudao.module.system.service.mfa.enums.MfaFlowTokenClass;
+import cn.iocoder.yudao.module.system.service.mfa.enums.MfaLoginStatus;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * ADR-MFA-v3 §7 canonical 判别式登录结果。
+ * <p>
+ * 仅允许工厂方法构造；禁止公开 builder 构造非法联合。
+ * 禁止旧别名字段 challengeToken / preAuthToken / enrollmentToken / recoveryToken。
+ * <p>
+ * TTL 上限：PRE_AUTH ≤ 300s；ENROLLMENT/RECOVERY ≤ 600s。
+ * Factor type 封闭：TOTP / SMS / EMAIL / BACKUP_CODE。
+ */
+@Getter
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public final class MfaAuthLoginResult {
+
+    public static final int PRE_AUTH_MAX_TTL_SECONDS = 300;
+    public static final int ENROLLMENT_MAX_TTL_SECONDS = 600;
+    public static final int RECOVERY_MAX_TTL_SECONDS = 600;
+
+    private static final Set<String> FACTOR_TYPES = Set.of("TOTP", "SMS", "EMAIL", "BACKUP_CODE");
+
+    private final MfaLoginStatus loginStatus;
+    private final String accessToken;
+    private final String refreshToken;
+    private final Integer expiresIn;
+    private final FlowPayload flow;
+
+    @Getter
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
+    public static final class FlowPayload {
+        private final String flowToken;
+        private final MfaFlowTokenClass tokenClass;
+        private final int expiresIn;
+        private final List<String> allowedActions;
+        private final List<FactorRef> factors;
+
+        /**
+         * @param expiresIn 必须 &gt; 0 且不超过 tokenClass 上限
+         */
+        public static FlowPayload of(String flowToken, MfaFlowTokenClass tokenClass, int expiresIn,
+                                     List<String> allowedActions, List<FactorRef> factors) {
+            if (flowToken == null || flowToken.isBlank()) {
+                throw new IllegalArgumentException("flowToken required");
+            }
+            if (tokenClass == null) {
+                throw new IllegalArgumentException("tokenClass required");
+            }
+            if (expiresIn <= 0) {
+                throw new IllegalArgumentException("expiresIn must be positive");
+            }
+            int max = maxTtlSeconds(tokenClass);
+            if (expiresIn > max) {
+                throw new IllegalArgumentException(
+                        "expiresIn " + expiresIn + " exceeds max " + max + " for " + tokenClass);
+            }
+            if (factors != null) {
+                for (FactorRef f : factors) {
+                    if (f == null) {
+                        throw new IllegalArgumentException("factor entry null");
+                    }
+                }
+            }
+            return new FlowPayload(
+                    flowToken,
+                    tokenClass,
+                    expiresIn,
+                    allowedActions == null ? Collections.emptyList() : List.copyOf(allowedActions),
+                    factors == null ? Collections.emptyList() : List.copyOf(factors));
+        }
+
+        public static FlowPayload of(String flowToken, MfaFlowTokenClass tokenClass, int expiresIn) {
+            return of(flowToken, tokenClass, expiresIn, null, null);
+        }
+
+        public static int maxTtlSeconds(MfaFlowTokenClass tokenClass) {
+            return switch (tokenClass) {
+                case PRE_AUTH -> PRE_AUTH_MAX_TTL_SECONDS;
+                case ENROLLMENT -> ENROLLMENT_MAX_TTL_SECONDS;
+                case RECOVERY -> RECOVERY_MAX_TTL_SECONDS;
+            };
+        }
+    }
+
+    @Getter
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
+    public static final class FactorRef {
+        private final String id;
+        private final String type;
+        private final String label;
+        private final String maskedTarget;
+
+        public static FactorRef of(String id, String type, String label, String maskedTarget) {
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException("factor id required");
+            }
+            if (type == null || type.isBlank()) {
+                throw new IllegalArgumentException("factor type required");
+            }
+            String normalized = type.trim().toUpperCase(Locale.ROOT);
+            if (!FACTOR_TYPES.contains(normalized)) {
+                throw new IllegalArgumentException("unknown factor type: " + type);
+            }
+            return new FactorRef(id, normalized, label, maskedTarget);
+        }
+    }
+
+    /**
+     * AUTHENTICATED：必须有 access+refresh，且无 flow。
+     */
+    public static MfaAuthLoginResult authenticated(String accessToken, String refreshToken, int expiresIn) {
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("accessToken required for AUTHENTICATED");
+        }
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new IllegalArgumentException("refreshToken required for AUTHENTICATED");
+        }
+        if (expiresIn <= 0) {
+            throw new IllegalArgumentException("expiresIn must be positive for AUTHENTICATED");
+        }
+        return new MfaAuthLoginResult(MfaLoginStatus.AUTHENTICATED, accessToken, refreshToken, expiresIn, null);
+    }
+
+    /**
+     * MFA 中间态：status 与 tokenClass 必须精确映射，零 access/refresh。
+     * <ul>
+     *   <li>MFA_REQUIRED → PRE_AUTH</li>
+     *   <li>MFA_ENROLLMENT_REQUIRED → ENROLLMENT</li>
+     *   <li>MFA_RECOVERY_REQUIRED → RECOVERY</li>
+     * </ul>
+     * {@link MfaLoginStatus#MFA_POLICY_UNAVAILABLE} 不得走本工厂。
+     */
+    public static MfaAuthLoginResult mfaFlow(MfaLoginStatus status, FlowPayload flow) {
+        Objects.requireNonNull(status, "status");
+        Objects.requireNonNull(flow, "flow");
+        MfaFlowTokenClass expected = expectedTokenClass(status);
+        if (flow.getTokenClass() != expected) {
+            throw new IllegalArgumentException(
+                    "tokenClass " + flow.getTokenClass() + " incompatible with status " + status
+                            + "; expected " + expected);
+        }
+        return new MfaAuthLoginResult(status, null, null, null, flow);
+    }
+
+    private static MfaFlowTokenClass expectedTokenClass(MfaLoginStatus status) {
+        return switch (status) {
+            case MFA_REQUIRED -> MfaFlowTokenClass.PRE_AUTH;
+            case MFA_ENROLLMENT_REQUIRED -> MfaFlowTokenClass.ENROLLMENT;
+            case MFA_RECOVERY_REQUIRED -> MfaFlowTokenClass.RECOVERY;
+            case AUTHENTICATED, MFA_POLICY_UNAVAILABLE ->
+                    throw new IllegalArgumentException("status " + status + " cannot carry flow payload");
+        };
+    }
+
+    public boolean hasAccessOrRefreshToken() {
+        return accessToken != null || refreshToken != null;
+    }
+}

@@ -22,6 +22,11 @@ import {
 } from '#/api';
 import { FIXED_LOGIN_TENANT_ID } from '#/constants/tenant';
 import { $t } from '#/locales';
+import {
+  clearMfaFlow,
+  resolveLoginNext,
+  saveMfaFlow,
+} from '#/utils/mfa-flow';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -64,41 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
           loginResult = await loginApi(params);
         }
       }
-      const { accessToken, refreshToken } = loginResult;
-
-      // 如果成功获取到 accessToken
-      if (accessToken) {
-        accessStore.setAccessToken(accessToken);
-        accessStore.setRefreshToken(refreshToken);
-
-        // 获取用户信息并存储到 userStore、accessStore 中
-        // TODO @芋艿：清理掉 accessCodes 相关的逻辑
-        // const [fetchUserInfoResult, accessCodes] = await Promise.all([
-        //   fetchUserInfo(),
-        //   // getAccessCodesApi(),
-        // ]);
-        const fetchUserInfoResult = await fetchUserInfo();
-
-        userInfo = fetchUserInfoResult.user;
-
-        if (accessStore.loginExpired) {
-          accessStore.setLoginExpired(false);
-        } else {
-          onSuccess
-            ? await onSuccess?.()
-            : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
-              );
-        }
-
-        if (userInfo?.nickname) {
-          notification.success({
-            description: `${$t('authentication.loginSuccessDesc')}:${userInfo?.nickname}`,
-            duration: 3,
-            message: $t('authentication.loginSuccess'),
-          });
-        }
-      }
+      userInfo = await finishMfaLogin(loginResult, onSuccess);
     } finally {
       loginLoading.value = false;
     }
@@ -106,6 +77,66 @@ export const useAuthStore = defineStore('auth', () => {
     return {
       userInfo,
     };
+  }
+
+  async function completeAuthenticatedLogin(
+    loginResult: AuthApi.LoginResult,
+    onSuccess?: () => Promise<void> | void,
+  ) {
+    const { accessToken, refreshToken } = loginResult;
+    if (!accessToken) {
+      return null;
+    }
+    clearMfaFlow();
+    accessStore.setAccessToken(accessToken);
+    accessStore.setRefreshToken(refreshToken);
+
+    const fetchUserInfoResult = await fetchUserInfo();
+    const userInfo = fetchUserInfoResult.user;
+
+    if (accessStore.loginExpired) {
+      accessStore.setLoginExpired(false);
+    } else {
+      onSuccess
+        ? await onSuccess?.()
+        : await router.push(
+            userInfo.homePath || preferences.app.defaultHomePath,
+          );
+    }
+
+    if (userInfo?.nickname) {
+      notification.success({
+        description: `${$t('authentication.loginSuccessDesc')}:${userInfo?.nickname}`,
+        duration: 3,
+        message: $t('authentication.loginSuccess'),
+      });
+    }
+    return userInfo;
+  }
+
+  async function finishMfaLogin(
+    loginResult: AuthApi.LoginResult,
+    onSuccess?: () => Promise<void> | void,
+  ) {
+    const next = resolveLoginNext(loginResult);
+    if (next === 'home') {
+      return completeAuthenticatedLogin(loginResult, onSuccess);
+    }
+    if (next === 'challenge' && loginResult.flow) {
+      saveMfaFlow(loginResult.flow);
+      await router.push({ name: 'MfaChallenge' });
+      return null;
+    }
+    if (next === 'enroll' && loginResult.flow) {
+      saveMfaFlow(loginResult.flow);
+      await router.push({ name: 'MfaEnroll' });
+      return null;
+    }
+    notification.warning({
+      duration: 4,
+      message: '当前登录需要额外验证，但未返回可用流程',
+    });
+    return null;
   }
 
   async function logout(redirect: boolean = true) {
@@ -118,6 +149,7 @@ export const useAuthStore = defineStore('auth', () => {
       // 不做任何处理
     }
     resetAllStores();
+    clearMfaFlow();
     accessStore.setLoginExpired(false);
     // OA 固定登录租户，退出后仍保持 tenant-id=1，避免回登录页请求丢租户
     accessStore.setTenantId(FIXED_LOGIN_TENANT_ID);
@@ -153,7 +185,9 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     $reset,
     authLogin,
+    completeAuthenticatedLogin,
     fetchUserInfo,
+    finishMfaLogin,
     loginLoading,
     logout,
   };

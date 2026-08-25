@@ -51,3 +51,8 @@ mybatis-plus:
 yudao:
   info:
     base-package: cn.iocoder.yudao.module
+  mfa:
+    secret:
+      active-key-id: test-k1
+      keys:
+        test-k1: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

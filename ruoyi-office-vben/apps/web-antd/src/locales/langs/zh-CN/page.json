@@ -5,6 +5,8 @@
     "codeLogin": "验证码登录",
     "qrcodeLogin": "二维码登录",
     "forgetPassword": "忘记密码",
+    "mfaChallenge": "二次验证",
+    "mfaEnroll": "绑定验证器",
     "profile": "个人中心"
   },
   "dashboard": {

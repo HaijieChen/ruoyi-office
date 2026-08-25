@@ -17,6 +17,21 @@ public interface ErrorCodeConstants {
     ErrorCode AUTH_MOBILE_NOT_EXISTS = new ErrorCode(1_002_000_007, "手机号不存在");
     ErrorCode AUTH_REGISTER_CAPTCHA_CODE_ERROR = new ErrorCode(1_002_000_008, "验证码不正确，原因：{}");
 
+    // ========== MFA 模块 1-002-030-000 ==========
+    ErrorCode MFA_POLICY_UNAVAILABLE = new ErrorCode(1_002_030_000, "MFA 策略不可用，请稍后重试");
+    ErrorCode MFA_TOKEN_ISSUANCE_REJECTED = new ErrorCode(1_002_030_001, "Token 签发被拒绝");
+    ErrorCode MFA_REQUIRED = new ErrorCode(1_002_030_002, "需要完成多因素认证");
+    ErrorCode MFA_ENROLLMENT_REQUIRED = new ErrorCode(1_002_030_003, "需要完成 MFA 绑定");
+    ErrorCode MFA_ADMIN_DIRECT_ISSUE_FORBIDDEN = new ErrorCode(1_002_030_004, "禁止绕过 MFA 门禁直接签发管理员 Token");
+    ErrorCode MFA_ISSUANCE_DECISION_INVALID = new ErrorCode(1_002_030_005, "签发决策无效或已消费");
+    ErrorCode MFA_TOKEN_CLASS_FORBIDDEN = new ErrorCode(1_002_030_006, "当前凭证不可访问业务接口");
+    ErrorCode MFA_FLOW_INVALID = new ErrorCode(1_002_030_007, "MFA 流程令牌无效、已过期或已消费");
+    ErrorCode MFA_FACTOR_VERIFY_FAILED = new ErrorCode(1_002_030_008, "MFA 因子校验失败");
+    ErrorCode MFA_SESSION_REJECTED = new ErrorCode(1_002_030_009, "会话未通过 MFA 门禁校验");
+    ErrorCode MFA_FACTOR_NOT_FOUND = new ErrorCode(1_002_030_010, "MFA 设备不存在或已解绑");
+    ErrorCode MFA_EMAIL_NOT_EXISTS = new ErrorCode(1_002_030_011, "账号未绑定邮箱，无法使用邮箱 MFA");
+    ErrorCode MFA_EMAIL_ALREADY_BOUND = new ErrorCode(1_002_030_012, "已绑定邮箱 MFA，请先解绑再绑定");
+
     // ========== 菜单模块 1-002-001-000 ==========
     ErrorCode MENU_NAME_DUPLICATE = new ErrorCode(1_002_001_000, "已经存在该名字的菜单");
     ErrorCode MENU_PARENT_NOT_EXISTS = new ErrorCode(1_002_001_001, "父菜单不存在");

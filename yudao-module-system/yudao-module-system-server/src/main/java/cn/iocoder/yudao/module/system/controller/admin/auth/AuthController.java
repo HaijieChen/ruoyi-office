@@ -184,4 +184,37 @@ public class AuthController {
         return success(authService.socialLogin(reqVO));
     }
 
+    // ========== MFA 切片 3（ADR-MFA-v3 §7.4）==========
+
+    @PostMapping("/mfa/code/send")
+    @PermitAll
+    @Operation(summary = "MFA 发送挑战码（SMS/EMAIL，绑定 PRE_AUTH flow）")
+    public CommonResult<Boolean> mfaCodeSend(@RequestBody @Valid AuthMfaCodeSendReqVO reqVO) {
+        authService.mfaSendCode(reqVO);
+        return success(true);
+    }
+
+    @PostMapping("/mfa/verify")
+    @PermitAll
+    @Operation(summary = "MFA 校验因子并签发会话（PRE_AUTH → AUTHENTICATED）")
+    public CommonResult<AuthLoginRespVO> mfaVerify(@RequestBody @Valid AuthMfaVerifyReqVO reqVO) {
+        return success(authService.mfaVerify(reqVO));
+    }
+
+    @PostMapping("/mfa/enrollment/totp/start")
+    @PermitAll
+    @Operation(summary = "MFA TOTP 绑定开始（ENROLLMENT flow；secret 仅返回一次）")
+    public CommonResult<AuthMfaEnrollmentTotpStartRespVO> mfaEnrollmentTotpStart(
+            @RequestBody @Valid AuthMfaEnrollmentTotpStartReqVO reqVO) {
+        return success(authService.mfaEnrollmentTotpStart(reqVO));
+    }
+
+    @PostMapping("/mfa/enrollment/totp/confirm")
+    @PermitAll
+    @Operation(summary = "MFA TOTP 绑定确认并签发会话")
+    public CommonResult<AuthLoginRespVO> mfaEnrollmentTotpConfirm(
+            @RequestBody @Valid AuthMfaEnrollmentTotpConfirmReqVO reqVO) {
+        return success(authService.mfaEnrollmentTotpConfirm(reqVO));
+    }
+
 }
