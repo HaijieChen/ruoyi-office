@@ -29,6 +29,15 @@ public class FinanceInvoiceApplicationImportExcelVO {
     @ExcelProperty("币种")
     private String currency;
 
+    @ExcelProperty("开票主体公司")
+    private String invoiceCompany;
+
+    @ExcelProperty("产品类型")
+    private String productType;
+
+    @ExcelProperty("开票时间")
+    private String issueTime;
+
     @ExcelProperty("商务单号")
     private String businessOrderNo;
 

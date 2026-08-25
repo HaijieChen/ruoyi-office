@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.finance.service.invoice;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationImportExcelVO;
@@ -13,6 +14,9 @@ import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicati
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationMapper;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
+import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.springframework.stereotype.Service;
@@ -20,7 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,19 +38,27 @@ import java.util.Set;
 @Validated
 public class FinanceInvoiceApplicationImportServiceImpl implements FinanceInvoiceApplicationImportService {
 
+    private static final String DICT_PRODUCT_TYPE = "finance_product_type";
+
     private final FinanceInvoiceApplicationMapper applicationMapper;
     private final FinanceInvoiceApplicationLineMapper lineMapper;
     private final FinanceBusinessOrderMapper businessOrderMapper;
     private final AdminUserApi adminUserApi;
+    private final FinanceEntityCompanyResolver entityCompanyResolver;
+    private final DictDataApi dictDataApi;
 
     public FinanceInvoiceApplicationImportServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
                                                       FinanceInvoiceApplicationLineMapper lineMapper,
                                                       FinanceBusinessOrderMapper businessOrderMapper,
-                                                      AdminUserApi adminUserApi) {
+                                                      AdminUserApi adminUserApi,
+                                                      FinanceEntityCompanyResolver entityCompanyResolver,
+                                                      DictDataApi dictDataApi) {
         this.applicationMapper = applicationMapper;
         this.lineMapper = lineMapper;
         this.businessOrderMapper = businessOrderMapper;
         this.adminUserApi = adminUserApi;
+        this.entityCompanyResolver = entityCompanyResolver;
+        this.dictDataApi = dictDataApi;
     }
 
     @Override
@@ -57,6 +73,7 @@ public class FinanceInvoiceApplicationImportServiceImpl implements FinanceInvoic
                 .failureRows(new LinkedHashMap<>())
                 .build();
         Set<String> seen = new HashSet<>();
+        List<DeptRespDTO> companies = entityCompanyResolver.loadEnabledCompanies();
         for (int i = 0; i < rows.size(); i++) {
             int rowNumber = i + 2;
             FinanceInvoiceApplicationImportExcelVO row = rows.get(i);
@@ -95,6 +112,7 @@ public class FinanceInvoiceApplicationImportServiceImpl implements FinanceInvoic
                 continue;
             }
             Long boId = null;
+            String productFromBo = null;
             if (StrUtil.isNotBlank(row.getBusinessOrderNo())) {
                 FinanceBusinessOrderDO bo = businessOrderMapper.selectByOrderNo(row.getBusinessOrderNo().trim());
                 if (bo == null) {
@@ -102,6 +120,42 @@ public class FinanceInvoiceApplicationImportServiceImpl implements FinanceInvoic
                     continue;
                 }
                 boId = bo.getId();
+                productFromBo = StrUtil.trim(bo.getProductTypeSnapshot());
+            }
+            FinanceEntityCompanyResolver.ResolvedCompany company = null;
+            if (StrUtil.isNotBlank(row.getInvoiceCompany())) {
+                FinanceEntityCompanyResolver.ResolvedCompany[] companyOut =
+                        new FinanceEntityCompanyResolver.ResolvedCompany[1];
+                String companyErr = entityCompanyResolver.matchByNameOrError(
+                        row.getInvoiceCompany(), companyOut, companies);
+                if (companyErr != null) {
+                    resp.getFailureRows().put(rowNumber, companyErr);
+                    continue;
+                }
+                company = companyOut[0];
+            }
+            String productType = StrUtil.trim(row.getProductType());
+            if (StrUtil.isBlank(productType)) {
+                productType = productFromBo;
+            }
+            if (StrUtil.isNotBlank(productType)) {
+                try {
+                    dictDataApi.validateDictDataList(DICT_PRODUCT_TYPE, Collections.singletonList(productType))
+                            .checkError();
+                } catch (Exception ex) {
+                    resp.getFailureRows().put(rowNumber, "产品类型不在启用字典中");
+                    continue;
+                }
+            }
+            LocalDateTime issuedAt = null;
+            if (StrUtil.isNotBlank(row.getIssueTime())) {
+                try {
+                    Date parsed = DateUtil.parse(row.getIssueTime().trim());
+                    issuedAt = LocalDateTime.ofInstant(parsed.toInstant(), ZoneId.systemDefault());
+                } catch (Exception ex) {
+                    resp.getFailureRows().put(rowNumber, "开票时间格式无效");
+                    continue;
+                }
             }
             String currency = StrUtil.blankToDefault(StrUtil.trim(row.getCurrency()), "CNY");
             FinanceInvoiceApplicationDO app = FinanceInvoiceApplicationDO.builder()
@@ -114,17 +168,29 @@ public class FinanceInvoiceApplicationImportServiceImpl implements FinanceInvoic
                     .pendingClaimedAmount(BigDecimal.ZERO)
                     .buyerName(row.getBuyerName().trim())
                     .currency(currency)
+                    .invoiceCompany(company != null ? company.name() : StrUtil.trim(row.getInvoiceCompany()))
+                    .invoiceCompanyDeptId(company != null ? company.deptId() : null)
+                    .taxContent(productType)
                     .voided(Boolean.FALSE)
                     .redFlushed(Boolean.FALSE)
                     .remark(StrUtil.blankToDefault(row.getInvoiceNo(), null))
                     .build();
             applicationMapper.insert(app);
-            if (boId != null) {
+            boolean needLine = boId != null
+                    || StrUtil.isNotBlank(row.getInvoiceNo())
+                    || issuedAt != null
+                    || StrUtil.isNotBlank(productType)
+                    || company != null;
+            if (needLine) {
                 lineMapper.insert(FinanceInvoiceApplicationLineDO.builder()
                         .applicationId(app.getId())
                         .businessOrderId(boId)
                         .amount(row.getTotalAmount())
+                        .productTypeSnapshot(productType)
+                        .invoiceCompany(company != null ? company.name() : null)
                         .invoiceNo(StrUtil.trim(row.getInvoiceNo()))
+                        .issuedAt(issuedAt)
+                        .issueStatus(FinanceInvoiceIssueStatusEnum.FULL.getStatus())
                         .sort(1)
                         .build());
             }

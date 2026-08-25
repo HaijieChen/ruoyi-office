@@ -65,6 +65,9 @@ public class FinanceInvoiceApplicationController {
                         .buyerName("示例客户")
                         .totalAmount(new BigDecimal("1000.00"))
                         .currency("CNY")
+                        .invoiceCompany("示例主体公司")
+                        .productType("广告")
+                        .issueTime("2026-01-15")
                         .businessOrderNo("BO-001")
                         .invoiceNo("12345678")
                         .build()));

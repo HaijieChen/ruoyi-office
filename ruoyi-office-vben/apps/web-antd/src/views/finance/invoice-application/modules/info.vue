@@ -124,6 +124,13 @@ const lineColumns = [
     key: 'invoiceNo',
     width: 140,
   },
+  {
+    title: '开票时间',
+    dataIndex: 'issuedAt',
+    key: 'issuedAt',
+    width: 160,
+    customRender: ({ text }: { text?: unknown }) => displayTime(text as any),
+  },
 ];
 
 function displayTime(val?: null | number | string) {

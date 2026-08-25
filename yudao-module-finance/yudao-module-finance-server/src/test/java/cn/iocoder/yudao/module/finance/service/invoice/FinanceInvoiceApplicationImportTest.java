@@ -4,11 +4,14 @@ import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationImportRespVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationMapper;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
+import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +24,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class FinanceInvoiceApplicationImportTest {
@@ -30,6 +35,8 @@ class FinanceInvoiceApplicationImportTest {
     private FinanceInvoiceApplicationLineMapper lineMapper;
     private FinanceBusinessOrderMapper businessOrderMapper;
     private AdminUserApi adminUserApi;
+    private FinanceEntityCompanyResolver entityCompanyResolver;
+    private DictDataApi dictDataApi;
     private FinanceInvoiceApplicationImportServiceImpl service;
 
     @BeforeEach
@@ -38,8 +45,12 @@ class FinanceInvoiceApplicationImportTest {
         lineMapper = mock(FinanceInvoiceApplicationLineMapper.class);
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
         adminUserApi = mock(AdminUserApi.class);
+        entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
+        dictDataApi = mock(DictDataApi.class);
         service = new FinanceInvoiceApplicationImportServiceImpl(
-                applicationMapper, lineMapper, businessOrderMapper, adminUserApi);
+                applicationMapper, lineMapper, businessOrderMapper, adminUserApi,
+                entityCompanyResolver, dictDataApi);
+        when(entityCompanyResolver.loadEnabledCompanies()).thenReturn(List.of());
         AdminUserRespDTO user = new AdminUserRespDTO();
         user.setId(88L);
         user.setStatus(0);
@@ -80,6 +91,38 @@ class FinanceInvoiceApplicationImportTest {
         FinanceInvoiceApplicationImportRespVO resp = service.importHistorical(List.of(validRow(), validRow()));
         assertEquals(1, resp.getCreatedNos().size());
         assertEquals("本文件内开票申请单号重复", resp.getFailureRows().get(3));
+    }
+
+    @Test
+    void importPersistsCompanyProductAndIssueTime() {
+        when(entityCompanyResolver.matchByNameOrError(any(), any(), any())).thenAnswer(inv -> {
+            FinanceEntityCompanyResolver.ResolvedCompany[] out = inv.getArgument(1);
+            out[0] = new FinanceEntityCompanyResolver.ResolvedCompany(10L, "示例主体公司");
+            return null;
+        });
+        when(dictDataApi.validateDictDataList(eq("finance_product_type"), anyCollection()))
+                .thenReturn(CommonResult.success(true));
+        FinanceInvoiceApplicationImportExcelVO row = validRow();
+        row.setInvoiceCompany("示例主体公司");
+        row.setProductType("广告");
+        row.setIssueTime("2026-01-15");
+        row.setInvoiceNo("12345678");
+        FinanceInvoiceApplicationImportRespVO resp = service.importHistorical(List.of(row));
+        assertEquals(List.of("INV-H-1"), resp.getCreatedNos());
+        ArgumentCaptor<FinanceInvoiceApplicationDO> appCap =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
+        verify(applicationMapper).insert(appCap.capture());
+        assertEquals("示例主体公司", appCap.getValue().getInvoiceCompany());
+        assertEquals(10L, appCap.getValue().getInvoiceCompanyDeptId());
+        assertEquals("广告", appCap.getValue().getTaxContent());
+        ArgumentCaptor<FinanceInvoiceApplicationLineDO> lineCap =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationLineDO.class);
+        verify(lineMapper).insert(lineCap.capture());
+        assertEquals("广告", lineCap.getValue().getProductTypeSnapshot());
+        assertEquals("12345678", lineCap.getValue().getInvoiceNo());
+        assertEquals(2026, lineCap.getValue().getIssuedAt().getYear());
+        assertEquals(1, lineCap.getValue().getIssuedAt().getMonthValue());
+        assertEquals(15, lineCap.getValue().getIssuedAt().getDayOfMonth());
     }
 
     private static FinanceInvoiceApplicationImportExcelVO validRow() {
