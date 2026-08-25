@@ -149,6 +149,17 @@ WHERE r.`deleted` = b'0' AND r.`code` = 'business_staff' AND r.`tenant_id` = 1
         )
         -- 商务单新建要拉可选合同
      OR m.`permission` = 'finance:contract-application:query'
+        -- 用印申请
+     OR m.`component` IN ('oa/seal/sealapply/list/index', 'oa/seal/sealapply/info/index')
+     OR m.`path` IN ('/finance/seal-apply', '/oa/seal/seal-apply-info')
+     OR m.`permission` IN (
+            'oa:seal-apply-bill:query',
+            'oa:seal-apply-bill:create',
+            'oa:seal-apply-bill:update',
+            'oa:seal-apply-bill:submit',
+            'oa:seal-apply-bill:withdraw',
+            'oa:seal:query'
+        )
         -- 认领：本人侧（不含复核/确认/驳回/撤销）
      OR m.`permission` IN (
             'finance:receipt-claim:query',
