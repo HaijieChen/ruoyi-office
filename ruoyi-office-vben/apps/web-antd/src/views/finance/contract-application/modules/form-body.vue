@@ -26,6 +26,7 @@ import {
   resubmitContractApplication,
 } from '#/api/finance/contract-application';
 import { getCustomerCompanySimpleList } from '#/api/finance/customer-company';
+import { FileUpload } from '#/components/upload';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { defaultCurrencyFromCompanyAccounts } from '#/views/finance/shared/account-currency';
 
@@ -141,7 +142,7 @@ const rules = computed<Record<string, Rule[]>>(() => ({
   copyCount: [{ required: true, message: '请输入文件份数', trigger: 'change' }],
   sealTypes: [{ required: true, message: '请输入印章类型', trigger: 'blur' }],
   draftFileUrl: [
-    { required: true, message: '请填写用印文件电子版 URL', trigger: 'blur' },
+    { required: true, message: '请上传电子版文件或填写 URL', trigger: 'change' },
   ],
   contractAmount: [
     {
@@ -178,6 +179,11 @@ const rules = computed<Record<string, Rule[]>>(() => ({
     },
   ],
 }));
+
+function onDraftFile(val: string | string[]) {
+  const url = Array.isArray(val) ? String(val[0] || '') : String(val || '');
+  formData.value.draftFileUrl = url || undefined;
+}
 
 function clearForm() {
   formData.value = {
@@ -455,10 +461,18 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         class="w-full"
       />
     </Form.Item>
-    <Form.Item label="电子版文件URL" name="draftFileUrl">
+    <Form.Item label="电子版文件" name="draftFileUrl">
+      <FileUpload
+        :value="formData.draftFileUrl ? [formData.draftFileUrl] : []"
+        :max-number="1"
+        :max-size="20"
+        help-text="上传用印文件电子版"
+        @update:value="onDraftFile"
+      />
       <Input
+        class="mt-2"
         v-model:value="formData.draftFileUrl"
-        placeholder="用印文件电子版附件地址"
+        placeholder="也可直接填写文件 URL"
       />
     </Form.Item>
     <Form.Item label="备注" name="remark">
