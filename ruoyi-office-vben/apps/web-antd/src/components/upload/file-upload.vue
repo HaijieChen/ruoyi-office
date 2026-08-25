@@ -145,11 +145,7 @@ async function handlePreview(file: UploadFile) {
   const nameOrUrl = file.name || file.url || '';
   const kind = guessPreviewKind(nameOrUrl);
   if (!kind) {
-    if (file.url) {
-      window.open(file.url, '_blank');
-    } else {
-      message.info('该文件类型不支持在线预览，请下载后查看');
-    }
+    message.info('该文件类型不支持在线预览');
     return;
   }
   try {
@@ -175,11 +171,7 @@ async function handlePreview(file: UploadFile) {
     previewTitle.value = file.name || '预览';
     previewOpen.value = true;
   } catch {
-    if (file.url && /^https?:\/\//i.test(file.url)) {
-      window.open(file.url, '_blank');
-      return;
-    }
-    message.error('预览失败');
+    message.error('无法在本页预览该文件');
   }
 }
 

@@ -42,6 +42,12 @@ import { getDictOptions } from '@vben/hooks';
 import { FilePreviewList, FileUpload } from '#/components/upload';
 import { previewAuthUrl } from '#/utils/file-preview';
 import { displayDate } from '#/utils/display-time';
+import {
+  financeProductLabel,
+  financeReasonLabel,
+  financeStatusLabel,
+  financeTimingLabel,
+} from '#/views/finance/shared/display-labels';
 import PrintVoucher from '../modules/print-voucher.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationBpmDetail' });
@@ -354,7 +360,7 @@ watch(
         <div class="mb-4 flex flex-wrap items-center gap-2">
           <span class="text-base font-medium">付款申请</span>
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
-          <Tag>{{ detail.status }}</Tag>
+          <Tag>{{ financeStatusLabel(detail.status) }}</Tag>
           <Tag v-if="detail.materialsStatus === 'WAIT_INVOICE'" color="red">待补票</Tag>
           <Button
             v-if="detail.materialsStatus === 'WAIT_INVOICE' && isCashierNode"
@@ -496,7 +502,7 @@ watch(
 
         <Descriptions bordered :column="2" size="small" class="mb-4">
           <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
-          <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
+          <Descriptions.Item label="状态">{{ financeStatusLabel(detail.status) }}</Descriptions.Item>
           <Descriptions.Item label="主体公司">
             {{ detail.entityCompanyName || '历史未记录' }}
           </Descriptions.Item>
@@ -508,10 +514,10 @@ watch(
             v-if="!detail.applicationKind || detail.applicationKind === 'ORDINARY'"
             label="产品名称"
           >
-            {{ detail.costProject || '-' }}
+            {{ financeProductLabel(detail.costProject) }}
           </Descriptions.Item>
-          <Descriptions.Item label="事由">{{ detail.paymentReason }}</Descriptions.Item>
-          <Descriptions.Item label="时效">{{ detail.paymentTiming }}</Descriptions.Item>
+          <Descriptions.Item label="事由">{{ financeReasonLabel(detail.paymentReason) }}</Descriptions.Item>
+          <Descriptions.Item label="时效">{{ financeTimingLabel(detail.paymentTiming) }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ detail.periodLabel || '-' }}</Descriptions.Item>
           <Descriptions.Item label="账户" :span="2">
             {{ detail.payeeBankName || '-' }} / {{ detail.payeeBankAccount || '-' }}

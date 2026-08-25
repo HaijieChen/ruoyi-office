@@ -40,6 +40,11 @@ import type { DefaultOptionType } from 'ant-design-vue/es/select';
 import { getDictOptions } from '@vben/hooks';
 import { FilePreviewList, FileUpload } from '#/components/upload';
 import { displayDate } from '#/utils/display-time';
+import {
+  financeReasonLabel,
+  financeStatusLabel,
+  financeTimingLabel,
+} from '#/views/finance/shared/display-labels';
 import PrintVoucher from '../modules/print-voucher.vue';
 
 defineOptions({ name: 'FinanceTaxPaymentBpmDetail' });
@@ -333,7 +338,7 @@ watch(
           <span class="text-base font-medium">税金付款申请</span>
           <PrintVoucher :detail="detail" />
           <Tag color="blue">{{ detail.applicationNo || '-' }}</Tag>
-          <Tag>{{ detail.status }}</Tag>
+          <Tag>{{ financeStatusLabel(detail.status) }}</Tag>
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
             {{ props.nodeKeyName || resolvedNodeKey }}
           </Tag>
@@ -466,7 +471,7 @@ watch(
 
         <Descriptions bordered :column="2" size="small" class="mb-4">
           <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
-          <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
+          <Descriptions.Item label="状态">{{ financeStatusLabel(detail.status) }}</Descriptions.Item>
           <Descriptions.Item label="主体公司">
             {{ detail.entityCompanyName || '历史未记录' }}
           </Descriptions.Item>
@@ -474,8 +479,8 @@ watch(
           <Descriptions.Item label="金额">
             {{ detail.applyAmount }} {{ detail.currency }}
           </Descriptions.Item>
-          <Descriptions.Item label="事由">{{ detail.paymentReason }}</Descriptions.Item>
-          <Descriptions.Item label="时效">{{ detail.paymentTiming }}</Descriptions.Item>
+          <Descriptions.Item label="事由">{{ financeReasonLabel(detail.paymentReason) }}</Descriptions.Item>
+          <Descriptions.Item label="时效">{{ financeTimingLabel(detail.paymentTiming) }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ detail.periodLabel || '-' }}</Descriptions.Item>
           <Descriptions.Item label="账户" :span="2">
             {{ detail.payeeBankName || '-' }} / {{ detail.payeeBankAccount || '-' }}

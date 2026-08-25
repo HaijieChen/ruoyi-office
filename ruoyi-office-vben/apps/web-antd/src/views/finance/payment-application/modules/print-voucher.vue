@@ -3,6 +3,11 @@ import { computed } from 'vue';
 
 import PrintSlip from '#/components/print/print-slip.vue';
 import { displayDate } from '#/utils/display-time';
+import {
+  financeProductLabel,
+  financeReasonLabel,
+  financeTimingLabel,
+} from '#/views/finance/shared/display-labels';
 
 defineOptions({ name: 'PaymentPrintVoucher' });
 
@@ -21,9 +26,9 @@ const fields = computed(() => [
     value: `${props.detail?.payeeBankName || '-'} / ${props.detail?.payeeBankAccount || '-'}`,
     span: 2 as const,
   },
-  { label: '事由', value: props.detail?.paymentReason, span: 2 as const },
-  { label: '时效', value: props.detail?.paymentTiming },
-  { label: '产品名称', value: props.detail?.costProject },
+  { label: '事由', value: financeReasonLabel(props.detail?.paymentReason), span: 2 as const },
+  { label: '时效', value: financeTimingLabel(props.detail?.paymentTiming) },
+  { label: '产品名称', value: financeProductLabel(props.detail?.costProject) },
   { label: '支付日', value: displayDate(props.detail?.actualPayDate) },
   {
     label: '资料',

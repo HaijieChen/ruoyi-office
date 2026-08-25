@@ -56,15 +56,7 @@ export async function fetchPreviewBlob(url: string): Promise<Blob> {
 }
 
 export async function previewAuthUrl(url: string) {
-  try {
-    const blob = await fetchPreviewBlob(url);
-    const obj = URL.createObjectURL(blob);
-    window.open(obj, '_blank');
-  } catch (error) {
-    if (/^https?:\/\//i.test(url)) {
-      window.open(url, '_blank');
-      return;
-    }
-    throw error;
-  }
+  const blob = await fetchPreviewBlob(url);
+  const obj = URL.createObjectURL(blob);
+  window.open(obj, '_blank');
 }

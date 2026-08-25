@@ -64,7 +64,13 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'payeeName', title: '收款方', minWidth: 140 },
     { field: 'applyAmount', title: '金额', minWidth: 100 },
     { field: 'currency', title: '币种', width: 80 },
-    { field: 'paymentReason', title: '事由', minWidth: 100 },
+    {
+      field: 'paymentReason',
+      title: '事由',
+      minWidth: 100,
+      formatter: ({ cellValue }) =>
+        getDictLabel('finance_payment_reason', cellValue) || cellValue || '-',
+    },
     {
       field: 'costProject',
       title: '产品名称',

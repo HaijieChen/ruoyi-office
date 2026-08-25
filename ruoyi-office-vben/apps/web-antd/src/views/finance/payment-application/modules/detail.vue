@@ -9,6 +9,12 @@ import { FilePreviewList } from '#/components/upload';
 import { getPaymentApplication } from '#/api/finance/payment-application';
 import type { FinancePaymentApplicationApi } from '#/api/finance/payment-application';
 import { displayDate } from '#/utils/display-time';
+import {
+  financeProductLabel,
+  financeReasonLabel,
+  financeStatusLabel,
+  financeTimingLabel,
+} from '#/views/finance/shared/display-labels';
 import PrintVoucher from './print-voucher.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationDetail' });
@@ -43,7 +49,7 @@ const [Modal, modalApi] = useVbenModal({
       <Descriptions v-if="detail" bordered :column="1" size="small">
         <Descriptions.Item label="单号">{{ detail.applicationNo }}</Descriptions.Item>
         <Descriptions.Item label="标题">{{ detail.processTitle }}</Descriptions.Item>
-        <Descriptions.Item label="状态">{{ detail.status }}</Descriptions.Item>
+        <Descriptions.Item label="状态">{{ financeStatusLabel(detail.status) }}</Descriptions.Item>
         <Descriptions.Item label="节点">{{ detail.currentNodeName }}</Descriptions.Item>
         <Descriptions.Item label="主体公司">
           {{ detail.entityCompanyName || '历史未记录' }}
@@ -53,9 +59,9 @@ const [Modal, modalApi] = useVbenModal({
           {{ detail.payeeBankName }} / {{ detail.payeeBankAccount }}
         </Descriptions.Item>
         <Descriptions.Item label="金额">{{ detail.applyAmount }} {{ detail.currency }}</Descriptions.Item>
-        <Descriptions.Item label="时效">{{ detail.paymentTiming }}</Descriptions.Item>
-        <Descriptions.Item label="产品名称">{{ detail.costProject || '-' }}</Descriptions.Item>
-        <Descriptions.Item label="事由">{{ detail.paymentReason }}</Descriptions.Item>
+        <Descriptions.Item label="时效">{{ financeTimingLabel(detail.paymentTiming) }}</Descriptions.Item>
+        <Descriptions.Item label="产品名称">{{ financeProductLabel(detail.costProject) }}</Descriptions.Item>
+        <Descriptions.Item label="事由">{{ financeReasonLabel(detail.paymentReason) }}</Descriptions.Item>
         <Descriptions.Item label="采购前置">{{ detail.purchaseSnapshot || detail.purchaseProcessInstanceId || '-' }}</Descriptions.Item>
         <Descriptions.Item label="租赁合同">{{ detail.leaseContractApplicationId || '-' }}</Descriptions.Item>
         <Descriptions.Item label="累计已支付">{{ detail.cumulativePaid }}</Descriptions.Item>
