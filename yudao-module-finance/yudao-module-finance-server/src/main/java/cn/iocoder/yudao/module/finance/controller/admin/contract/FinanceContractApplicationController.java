@@ -141,7 +141,7 @@ public class FinanceContractApplicationController {
 
     @GetMapping("/list-selectable-for-bo")
     @Operation(summary = "商务单可选合同（已通过且本人申请）")
-    @PreAuthorize("@ss.hasPermission('finance:contract-application:query')")
+    @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:query', 'finance:business-order:create', 'finance:business-order:query')")
     public CommonResult<java.util.List<FinanceContractApplicationRespVO>> listSelectableForBo() {
         return success(BeanUtils.toBean(
                 contractApplicationService.listSelectableForBo(getLoginUserId()),

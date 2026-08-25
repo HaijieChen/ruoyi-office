@@ -147,6 +147,8 @@ WHERE r.`deleted` = b'0' AND r.`code` = 'business_staff' AND r.`tenant_id` = 1
             'finance:business-order:delete',
             'finance:business-order:import'
         )
+        -- 商务单新建要拉可选合同
+     OR m.`permission` = 'finance:contract-application:query'
         -- 认领：本人侧（不含复核/确认/驳回/撤销）
      OR m.`permission` IN (
             'finance:receipt-claim:query',
