@@ -1,11 +1,11 @@
--- 财务/商务角色补用印申请单权限（幂等）
+-- 财务/商务/普通角色：用印申请列表、隐藏详情、查询/创建/更新/提交/撤回
 SET NAMES utf8mb4;
 
 INSERT INTO `system_role_menu` (`role_id`, `menu_id`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `tenant_id`)
 SELECT r.id, m.id, 'admin', NOW(), 'admin', NOW(), b'0', 1
 FROM system_role r
 CROSS JOIN system_menu m
-WHERE r.deleted=b'0' AND r.tenant_id=1 AND r.code IN ('finance_admin', 'business_staff')
+WHERE r.deleted=b'0' AND r.tenant_id=1 AND r.code IN ('finance_admin', 'business_staff', 'common')
   AND m.deleted=b'0'
   AND (
         m.permission IN (
