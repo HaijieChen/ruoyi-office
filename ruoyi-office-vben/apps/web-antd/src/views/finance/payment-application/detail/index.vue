@@ -39,7 +39,7 @@ import { getCompanyBankAccountSimpleList } from '#/api/finance/company-bank-acco
 import type { DefaultOptionType } from 'ant-design-vue/es/select';
 
 import { getDictOptions } from '@vben/hooks';
-import { FileUpload } from '#/components/upload';
+import { FilePreviewList, FileUpload } from '#/components/upload';
 import { previewAuthUrl } from '#/utils/file-preview';
 import { displayDate } from '#/utils/display-time';
 import PrintVoucher from '../modules/print-voucher.vue';
@@ -521,15 +521,7 @@ watch(
           </Descriptions.Item>
           <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
           <Descriptions.Item label="依据" :span="2">
-            <a
-              v-for="(u, i) in String(detail.evidenceFileUrls || '')
-                .split(/[,;]/)
-                .map((s) => s.trim())
-                .filter(Boolean)"
-              :key="i"
-              class="mr-2 cursor-pointer text-blue-600"
-              @click.prevent="previewEvidence(u)"
-            >预览{{ i + 1 }}</a>
+            <FilePreviewList :value="detail.evidenceFileUrls" />
           </Descriptions.Item>
         </Descriptions>
 

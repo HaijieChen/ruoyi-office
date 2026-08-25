@@ -5,6 +5,7 @@ import { useVbenModal } from '@vben/common-ui';
 
 import { Button, Descriptions, Spin } from 'ant-design-vue';
 
+import { FilePreviewList } from '#/components/upload';
 import { getPaymentApplication } from '#/api/finance/payment-application';
 import type { FinancePaymentApplicationApi } from '#/api/finance/payment-application';
 import { displayDate } from '#/utils/display-time';
@@ -64,7 +65,9 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="累计已支付">{{ detail.cumulativePaid }}</Descriptions.Item>
         <Descriptions.Item label="本次后累计">{{ detail.cumulativeAfter }}</Descriptions.Item>
         <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
-        <Descriptions.Item label="支付凭证">{{ detail.payVoucherUrl || '-' }}</Descriptions.Item>
+        <Descriptions.Item label="支付凭证">
+          <FilePreviewList :value="detail.payVoucherUrl" />
+        </Descriptions.Item>
       </Descriptions>
     </Spin>
   </Modal>

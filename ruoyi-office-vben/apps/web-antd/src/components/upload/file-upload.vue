@@ -12,7 +12,9 @@ import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
 import { checkFileType, isFunction, isObject, isString } from '@vben/utils';
 
-import { Button, message, Upload } from 'ant-design-vue';
+import { Button, Modal, message, Upload } from 'ant-design-vue';
+
+import { fetchPreviewBlob, guessPreviewKind } from '#/utils/file-preview';
 
 import { UploadResultStatus } from './typing';
 import { useUpload, useUploadType } from './use-upload';
@@ -67,6 +69,20 @@ const isActMsg = ref<boolean>(true); // 文件类型错误提示
 const isFirstRender = ref<boolean>(true); // 是否第一次渲染
 const uploadNumber = ref<number>(0); // 上传文件计数器
 const uploadList = ref<any[]>([]); // 临时上传列表
+const previewOpen = ref(false);
+const previewTitle = ref('预览');
+const previewSrc = ref('');
+const previewKind = ref<'image' | 'pdf'>('image');
+let previewObjectUrl = '';
+
+function closePreview() {
+  previewOpen.value = false;
+  previewSrc.value = '';
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = '';
+  }
+}
 
 watch(
   currentValue,
@@ -124,8 +140,47 @@ async function handleRemove(file: UploadFile) {
 }
 
 /** 处理文件预览 */
-function handlePreview(file: UploadFile) {
+async function handlePreview(file: UploadFile) {
   emit('preview', file);
+  const nameOrUrl = file.name || file.url || '';
+  const kind = guessPreviewKind(nameOrUrl);
+  if (!kind) {
+    if (file.url) {
+      window.open(file.url, '_blank');
+    } else {
+      message.info('该文件类型不支持在线预览，请下载后查看');
+    }
+    return;
+  }
+  try {
+    if (file.originFileObj) {
+      const local = URL.createObjectURL(file.originFileObj);
+      previewObjectUrl = local;
+      previewSrc.value = local;
+      previewKind.value = kind;
+      previewTitle.value = file.name || '预览';
+      previewOpen.value = true;
+      return;
+    }
+    const url = file.url || '';
+    if (!url) {
+      message.warning('没有可预览的地址');
+      return;
+    }
+    const blob = await fetchPreviewBlob(url);
+    const obj = URL.createObjectURL(blob);
+    previewObjectUrl = obj;
+    previewSrc.value = obj;
+    previewKind.value = kind;
+    previewTitle.value = file.name || '预览';
+    previewOpen.value = true;
+  } catch {
+    if (file.url && /^https?:\/\//i.test(file.url)) {
+      window.open(file.url, '_blank');
+      return;
+    }
+    message.error('预览失败');
+  }
 }
 
 /** 处理文件数量超限 */
@@ -325,6 +380,27 @@ function getValue() {
         格式文件
       </div>
     </Upload>
+    <Modal
+      :open="previewOpen"
+      :title="previewTitle"
+      :footer="null"
+      width="720px"
+      destroy-on-close
+      @cancel="closePreview"
+    >
+      <img
+        v-if="previewKind === 'image'"
+        :src="previewSrc"
+        :alt="previewTitle"
+        class="max-h-[70vh] w-full object-contain"
+      />
+      <iframe
+        v-else
+        :src="previewSrc"
+        class="h-[70vh] w-full border-0"
+        title="pdf-preview"
+      />
+    </Modal>
   </div>
 </template>
 

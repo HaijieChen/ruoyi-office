@@ -83,8 +83,8 @@ public class FileTypeUtils {
         String mineType = getMineType(content, filename);
         response.setContentType(mineType);
         // 设置内容显示、下载文件名：https://www.cnblogs.com/wq-9/articles/12165056.html
-        if (isImage(mineType)) {
-            // 参见 https://gitee.com/yqzy1688/ruoyi-office.git/issues/692 讨论
+        if (isImage(mineType) || StrUtil.equalsIgnoreCase(mineType, "application/pdf")) {
+            // 图片/PDF 预览用 inline，避免浏览器直接下载
             response.setHeader("Content-Disposition", "inline;filename=" + HttpUtils.encodeUtf8(filename));
         } else {
             response.setHeader("Content-Disposition", "attachment;filename=" + HttpUtils.encodeUtf8(filename));

@@ -10,6 +10,7 @@ import { formatDateTime } from '@vben/utils';
 
 import { Button, Descriptions, Divider, Space, Spin, message } from 'ant-design-vue';
 
+import { FilePreviewList } from '#/components/upload';
 import { getContractApplication } from '#/api/finance/contract-application';
 import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
@@ -141,10 +142,10 @@ const [Modal, modalApi] = useVbenModal({
           {{ detail.startDate || '-' }} ~ {{ detail.endDate || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="电子版" :span="2">
-          {{ detail.draftFileUrl || '-' }}
+          <FilePreviewList :value="detail.draftFileUrl" />
         </Descriptions.Item>
         <Descriptions.Item label="用印扫描件" :span="2">
-          {{ detail.sealFileUrl || '-' }}
+          <FilePreviewList :value="detail.sealFileUrl" />
         </Descriptions.Item>
         <Descriptions.Item label="归档时间">
           {{ displayTime(detail.archivedAt) }}

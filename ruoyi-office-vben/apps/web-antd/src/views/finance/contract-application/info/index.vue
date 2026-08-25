@@ -33,7 +33,7 @@ import {
   recordContractMail,
   recordContractSeal,
 } from '#/api/finance/contract-application';
-import { FileUpload } from '#/components/upload';
+import { FilePreviewList, FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'FinanceContractApplicationBpmInfo' });
 
@@ -369,7 +369,7 @@ watch(
           />
           <Descriptions bordered size="small" :column="1" class="mb-3">
             <DescriptionsItem label="用印扫描件">
-              {{ detail.sealFileUrl || '（尚未登记，归档将失败）' }}
+              <FilePreviewList :value="detail.sealFileUrl" />
             </DescriptionsItem>
           </Descriptions>
           <Space>
@@ -479,10 +479,10 @@ watch(
             {{ detail.startDate || '-' }} ~ {{ detail.endDate || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="电子版" :span="2">
-            {{ detail.draftFileUrl || '-' }}
+            <FilePreviewList :value="detail.draftFileUrl" />
           </DescriptionsItem>
           <DescriptionsItem label="用印扫描件" :span="2">
-            {{ detail.sealFileUrl || '-' }}
+            <FilePreviewList :value="detail.sealFileUrl" />
           </DescriptionsItem>
           <DescriptionsItem label="归档时间">
             {{ displayTime(detail.archivedAt) }}

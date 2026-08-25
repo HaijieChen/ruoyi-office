@@ -38,7 +38,7 @@ import { getCompanyBankAccountSimpleList } from '#/api/finance/company-bank-acco
 import type { DefaultOptionType } from 'ant-design-vue/es/select';
 
 import { getDictOptions } from '@vben/hooks';
-import { FileUpload } from '#/components/upload';
+import { FilePreviewList, FileUpload } from '#/components/upload';
 import { displayDate } from '#/utils/display-time';
 import { printFormElement } from '#/utils/print-form';
 
@@ -491,7 +491,7 @@ watch(
           </Descriptions.Item>
           <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
           <Descriptions.Item label="依据" :span="2">
-            {{ detail.evidenceFileUrls }}
+            <FilePreviewList :value="detail.evidenceFileUrls" />
           </Descriptions.Item>
         </Descriptions>
 
