@@ -84,7 +84,7 @@ public class FinanceContractApplicationController {
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建合同签约申请并启动审批（无草稿）")
-    @PreAuthorize("@ss.hasPermission('finance:contract-application:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Long> createAndStart(@Valid @RequestBody FinanceContractApplicationCreateAndStartReqVO reqVO) {
         return success(contractApplicationService.createAndStart(reqVO, getLoginUserId()));
     }

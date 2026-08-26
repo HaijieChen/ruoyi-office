@@ -43,7 +43,7 @@ public class FinanceInvoiceRedflushController {
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建红冲申请并启动审批（不占商务单）")
-    @PreAuthorize("@ss.hasPermission('finance:invoice-application:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Long> createAndStart(@Valid @RequestBody FinanceInvoiceRedflushCreateAndStartReqVO reqVO) {
         return success(redflushService.createAndStart(reqVO, getLoginUserId()));
     }

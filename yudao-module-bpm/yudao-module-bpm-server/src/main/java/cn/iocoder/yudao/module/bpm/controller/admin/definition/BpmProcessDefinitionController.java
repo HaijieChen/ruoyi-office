@@ -13,6 +13,7 @@ import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmFormDO;
 import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmCategoryService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmFormService;
+import cn.iocoder.yudao.module.bpm.service.definition.BpmModelService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessStartEligibility;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessStartEligibilityService;
@@ -23,6 +24,7 @@ import jakarta.annotation.Resource;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.common.engine.impl.db.SuspensionState;
 import org.flowable.engine.repository.Deployment;
+import org.flowable.engine.repository.Model;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -32,11 +34,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertList;
+import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertMap;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
@@ -56,6 +61,8 @@ public class BpmProcessDefinitionController {
     private BpmProcessStartEligibilityService processStartEligibilityService;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
+    @Resource
+    private BpmModelService modelService;
 
     @GetMapping("/page")
     @Operation(summary = "获得流程定义分页")
@@ -106,14 +113,34 @@ public class BpmProcessDefinitionController {
             if (catalogAdmin) {
                 return false;
             }
-            return !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId)
-                    || processStartEligibilityService.shouldHideFromStartList(processDefinition.getKey());
+            // 目录可见性只跟流程设计（可见开关 + 发起人/发起部门），不再叠加业务菜单权限
+            return !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId);
         });
 
-        // 2. 拼接 VO 返回（列表仅含可发起项；仍填充 canStart 元数据供前端防御性消费）
+        Map<String, Model> modelByKey = convertMap(modelService.getModelList(null), Model::getKey);
+        Set<String> categoryCodes = new HashSet<>();
+        for (ProcessDefinition definition : list) {
+            Model model = modelByKey.get(definition.getKey());
+            String code = model != null && StrUtil.isNotBlank(model.getCategory())
+                    ? model.getCategory() : definition.getCategory();
+            if (StrUtil.isNotBlank(code)) {
+                categoryCodes.add(code);
+            }
+        }
+        Map<String, BpmCategoryDO> categoryMap = categoryService.getCategoryMap(categoryCodes);
         List<BpmProcessDefinitionRespVO> voList = BpmProcessDefinitionConvert.INSTANCE.buildProcessDefinitionList(
-                list, null, processDefinitionMap, null, null);
-        fillStartEligibility(voList);
+                list, null, processDefinitionMap, null, categoryMap);
+        for (BpmProcessDefinitionRespVO vo : voList) {
+            Model model = modelByKey.get(vo.getKey());
+            String code = model != null && StrUtil.isNotBlank(model.getCategory())
+                    ? model.getCategory() : vo.getCategory();
+            vo.setCategory(code);
+            BpmCategoryDO category = categoryMap.get(code);
+            if (category != null) {
+                vo.setCategoryName(category.getName());
+            }
+            vo.setCanStart(true);
+        }
         return success(voList);
     }
 

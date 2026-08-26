@@ -38,7 +38,7 @@ public class FinanceTaxPaymentController {
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建税金付款申请并启动审批")
-    @PreAuthorize("@ss.hasPermission('finance:tax-payment:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Long> createAndStart(@Valid @RequestBody FinanceTaxPaymentCreateAndStartReqVO reqVO) {
         return success(paymentApplicationService.createAndStartTax(reqVO, getLoginUserId()));
     }

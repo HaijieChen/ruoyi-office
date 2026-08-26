@@ -39,7 +39,7 @@ public class FinanceSalaryPaymentController {
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建薪资付款申请并启动审批")
-    @PreAuthorize("@ss.hasPermission('finance:salary-payment:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Long> createAndStart(@Valid @RequestBody FinanceSalaryPaymentCreateAndStartReqVO reqVO) {
         return success(paymentApplicationService.createAndStartSalary(reqVO, getLoginUserId()));
     }

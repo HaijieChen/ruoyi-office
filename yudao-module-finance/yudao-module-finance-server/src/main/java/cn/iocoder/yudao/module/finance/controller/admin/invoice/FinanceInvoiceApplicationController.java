@@ -84,7 +84,7 @@ public class FinanceInvoiceApplicationController {
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建开票申请并启动审批（无草稿）")
-    @PreAuthorize("@ss.hasPermission('finance:invoice-application:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Long> createAndStart(@Valid @RequestBody FinanceInvoiceApplicationCreateAndStartReqVO reqVO) {
         return success(invoiceApplicationService.createAndStart(reqVO, getLoginUserId()));
     }

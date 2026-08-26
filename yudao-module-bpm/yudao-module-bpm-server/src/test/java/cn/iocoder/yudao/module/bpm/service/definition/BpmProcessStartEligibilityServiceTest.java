@@ -30,41 +30,19 @@ class BpmProcessStartEligibilityServiceTest {
     }
 
     @Test
-    void payment_missingPermission_cannotStart_withFriendlyReason() {
-        when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
-                .thenReturn(false);
-
-        BpmProcessStartEligibility e = service.evaluate("finance_payment_apply");
-
-        assertFalse(e.isCanStart());
-        assertEquals("finance:payment-application:create", e.getRequiredStartPermission());
-        assertEquals("无付款发起权限，请联系管理员分配付款发起角色", e.getCannotStartReason());
-    }
-
-    @Test
-    void payment_hasPermission_canStart() {
-        when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
-                .thenReturn(true);
-
+    void payment_ignoresMenuPermission_canStart() {
         BpmProcessStartEligibility e = service.evaluate("finance_payment_apply");
 
         assertTrue(e.isCanStart());
         assertNull(e.getCannotStartReason());
-        assertEquals("finance:payment-application:create", e.getRequiredStartPermission());
     }
 
     @Test
-    void contract_and_invoice_requireCreatePermission() {
-        when(securityFrameworkService.hasPermission(eq("finance:contract-application:create")))
-                .thenReturn(false);
-        when(securityFrameworkService.hasPermission(eq("finance:invoice-application:create")))
-                .thenReturn(true);
-
+    void contract_and_invoice_ignoreMenuPermission() {
         BpmProcessStartEligibility contract = service.evaluate("finance_contract_sign");
         BpmProcessStartEligibility invoice = service.evaluate("finance_invoice_apply");
 
-        assertFalse(contract.isCanStart());
-        assertEquals("finance:contract-application:create", contract.getRequiredStartPermission());
+        assertTrue(contract.isCanStart());
         assertTrue(invoice.isCanStart());
     }
 
@@ -106,25 +84,17 @@ class BpmProcessStartEligibilityServiceTest {
     }
 
     @Test
-    void listShouldHideWhenCannotStart() {
-        when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
-                .thenReturn(false);
-
-        assertTrue(service.shouldHideFromStartList("finance_payment_apply"));
+    void listShouldNotHideByMenuPermission() {
+        assertFalse(service.shouldHideFromStartList("finance_payment_apply"));
         assertFalse(service.shouldHideFromStartList("oa_leave"));
     }
 
     @Test
-    void salaryTax_withoutPermission_hiddenAndGenericStartDenied() {
-        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
-                .thenReturn(false);
-        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
-                .thenReturn(false);
-
-        assertFalse(service.evaluate("finance_salary_payment_apply").isCanStart());
-        assertFalse(service.evaluate("finance_tax_payment_apply").isCanStart());
-        assertTrue(service.shouldHideFromStartList("finance_salary_payment_apply"));
-        assertTrue(service.shouldHideFromStartList("finance_tax_payment_apply"));
+    void salaryTax_withoutPermission_catalogVisible_genericStartDenied() {
+        assertTrue(service.evaluate("finance_salary_payment_apply").isCanStart());
+        assertTrue(service.evaluate("finance_tax_payment_apply").isCanStart());
+        assertFalse(service.shouldHideFromStartList("finance_salary_payment_apply"));
+        assertFalse(service.shouldHideFromStartList("finance_tax_payment_apply"));
 
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.validateStartOrThrow("finance_salary_payment_apply"));
@@ -135,11 +105,6 @@ class BpmProcessStartEligibilityServiceTest {
 
     @Test
     void salaryTax_withPermission_catalogVisible_butGenericStartStillDenied() {
-        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
-                .thenReturn(true);
-        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
-                .thenReturn(true);
-
         // 统一目录：可见（canStart=true）
         assertTrue(service.evaluate("finance_salary_payment_apply").isCanStart());
         assertTrue(service.evaluate("finance_tax_payment_apply").isCanStart());
@@ -158,11 +123,6 @@ class BpmProcessStartEligibilityServiceTest {
 
     @Test
     void salaryTax_trustedChannel_allowsWithPermission() {
-        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
-                .thenReturn(true);
-        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
-                .thenReturn(true);
-
         assertTrue(service.evaluate("finance_salary_payment_apply", true).isCanStart());
         assertTrue(service.evaluate("finance_tax_payment_apply", true).isCanStart());
         assertDoesNotThrow(() -> service.validateStartOrThrow("finance_salary_payment_apply", true));
@@ -184,32 +144,13 @@ class BpmProcessStartEligibilityServiceTest {
     }
 
     @Test
-    void salaryTax_trustedChannel_deniesWithoutPermission() {
-        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
-                .thenReturn(false);
-
-        BpmProcessStartEligibility e = service.evaluate("finance_salary_payment_apply", true);
-        assertFalse(e.isCanStart());
-        ServiceException ex = assertThrows(ServiceException.class,
-                () -> service.validateStartOrThrow("finance_salary_payment_apply", true));
-        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
+    void salaryTax_trustedChannel_allowsWithoutMenuPermission() {
+        assertTrue(service.evaluate("finance_salary_payment_apply", true).isCanStart());
+        assertDoesNotThrow(() -> service.validateStartOrThrow("finance_salary_payment_apply", true));
     }
 
     @Test
-    void validateStartOrThrow_deniesWithoutPermission() {
-        when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
-                .thenReturn(false);
-
-        ServiceException ex = assertThrows(ServiceException.class,
-                () -> service.validateStartOrThrow("finance_payment_apply"));
-        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
-        assertTrue(ex.getMessage().contains("付款"));
-    }
-
-    @Test
-    void validateStartOrThrow_allowsWithPermission() {
-        when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
-                .thenReturn(true);
+    void validateStartOrThrow_paymentIgnoresMenuPermission() {
         assertDoesNotThrow(() -> service.validateStartOrThrow("finance_payment_apply"));
     }
 
@@ -234,9 +175,7 @@ class BpmProcessStartEligibilityServiceTest {
 
     @Test
     void catalogAdmin_doesNotHideEvenWithoutPermission() {
-        when(securityFrameworkService.hasPermission(eq("finance:payment-application:create")))
-                .thenReturn(false);
-        assertTrue(service.shouldHideFromStartList("finance_payment_apply"));
+        assertFalse(service.shouldHideFromStartList("finance_payment_apply"));
         assertFalse(service.shouldHideFromStartList("finance_payment_apply", true));
     }
 

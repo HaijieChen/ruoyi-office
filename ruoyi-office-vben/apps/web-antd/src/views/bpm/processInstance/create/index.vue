@@ -135,16 +135,19 @@ const processDefinitionGroup = computed(() => {
     return {};
   }
   // 按照 categoryList 的顺序重新组织数据
-  const grouped = groupBy(filteredProcessDefinitionList.value, 'category');
+  const grouped = groupBy(
+    filteredProcessDefinitionList.value,
+    (item) => item.categoryName || item.category,
+  );
   const orderedGroup: Record<
     string,
     BpmProcessDefinitionApi.ProcessDefinition[]
   > = {};
   categoryList.value.forEach((category: BpmCategoryApi.Category) => {
-    if (grouped[category.code]) {
-      orderedGroup[category.code] = grouped[
-        category.code
-      ] as BpmProcessDefinitionApi.ProcessDefinition[];
+    const bucket =
+      grouped[category.name] || grouped[category.code];
+    if (bucket) {
+      orderedGroup[category.code] = bucket as BpmProcessDefinitionApi.ProcessDefinition[];
     }
   });
   return orderedGroup;
