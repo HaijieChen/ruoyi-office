@@ -370,6 +370,12 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
     if (configForm.value?.candidateStrategy === CandidateStrategy.START_USER) {
       showText = `发起人自己`;
     }
+    if (
+      configForm.value?.candidateStrategy ===
+      CandidateStrategy.START_USER_COMPANY_FINANCE
+    ) {
+      showText = `发起人公司财务`;
+    }
     // 发起人的部门负责人
     if (
       configForm.value?.candidateStrategy ===

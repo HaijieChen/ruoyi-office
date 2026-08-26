@@ -21,6 +21,10 @@ export enum BpmCandidateStrategyEnum {
    */
   FORM_DEPT_LEADER = 51,
   /**
+   * 发起人公司财务
+   */
+  START_USER_COMPANY_FINANCE = 52,
+  /**
    * 表单内用户字段
    */
   FORM_USER = 50,

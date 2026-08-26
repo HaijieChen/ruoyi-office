@@ -328,4 +328,8 @@ public interface ErrorCodeConstants {
     ErrorCode INVOICE_REDFUSH_STATUS_INVALID = new ErrorCode(1_040_010_005,
             "当前审批状态不允许执行该操作");
 
+    // ========== 公司财务审批人 1-040-011-000 ==========
+    ErrorCode COMPANY_APPROVER_USER_REQUIRED = new ErrorCode(1_040_011_000, "请至少选择一名财务审批人");
+    ErrorCode COMPANY_APPROVER_USER_INVALID = new ErrorCode(1_040_011_001, "财务审批人不存在或已停用");
+
 }

@@ -297,6 +297,7 @@ export enum CandidateStrategy {
    * 表单内部门负责人
    */
   FORM_DEPT_LEADER = 51,
+  START_USER_COMPANY_FINANCE = 52,
   /**
    * 表单内用户字段
    */
@@ -678,6 +679,10 @@ export const CANDIDATE_STRATEGY: DictDataType[] = [
   {
     label: '表单内部门负责人',
     value: CandidateStrategy.FORM_DEPT_LEADER as any,
+  },
+  {
+    label: '发起人公司财务',
+    value: CandidateStrategy.START_USER_COMPANY_FINANCE as any,
   },
   { label: '流程表达式', value: CandidateStrategy.EXPRESSION as any },
 ];
