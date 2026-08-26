@@ -67,10 +67,7 @@ public class BpmOATripServiceImpl implements BpmOATripService {
     @Transactional(rollbackFor = Exception.class)
     public Long createTrip(Long userId, BpmOATripCreateReqVO createReqVO) {
         java.util.List<Long> companionIds = resolveCompanionIds(createReqVO);
-        if (StrUtil.isBlank(createReqVO.getDestination()) || StrUtil.isBlank(createReqVO.getReason())
-                || companionIds.isEmpty()) {
-            throw exception(OA_TRIP_FIELD_REQUIRED);
-        }
+        applyBizFieldRules(createReqVO, companionIds);
         if (companionIds.contains(userId)) {
             throw exception(OA_TRIP_COMPANION_INVALID);
         }
@@ -92,6 +89,8 @@ public class BpmOATripServiceImpl implements BpmOATripService {
                 .setAttendanceSyncStatus(OaAttendanceSyncStatusEnum.NOT_SYNCED.getStatus());
         trip.setCompanionUserIds(companionIds);
         trip.setCompanionUserId(companionIds.get(0));
+        trip.setType(null);
+        trip.setDestination(createReqVO.getDestination().trim());
         tripMapper.insert(trip);
 
         Map<String, Object> processInstanceVariables = new HashMap<>();
@@ -102,9 +101,6 @@ public class BpmOATripServiceImpl implements BpmOATripService {
         }
         if (createReqVO.getStartDeptId() != null) {
             processInstanceVariables.put("startDeptId", createReqVO.getStartDeptId());
-        }
-        if (createReqVO.getType() != null) {
-            processInstanceVariables.put("type", createReqVO.getType());
         }
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)
@@ -145,6 +141,43 @@ public class BpmOATripServiceImpl implements BpmOATripService {
     public PageResult<BpmOATripDO> getTripPage(Long userId, BpmOATripPageReqVO pageReqVO) {
         Long filterUserId = securityFrameworkService.hasPermission(QUERY_PERMISSION) ? null : userId;
         return tripMapper.selectPage(filterUserId, pageReqVO);
+    }
+
+    static final int BIZ_TALK = 1;
+    static final int BIZ_EVENT = 2;
+    static final int BIZ_OTHER = 3;
+
+    static void applyBizFieldRules(BpmOATripCreateReqVO vo, java.util.List<Long> companionIds) {
+        Integer bizType = vo.getBizType();
+        java.util.List<String> attachments = vo.getAttachmentUrls();
+        boolean hasAttach = attachments != null && attachments.stream().anyMatch(StrUtil::isNotBlank);
+        if (bizType == null || StrUtil.isBlank(vo.getDestination()) || StrUtil.isBlank(vo.getOriginCity())
+                || StrUtil.isBlank(vo.getReason()) || StrUtil.isBlank(vo.getTransport())
+                || companionIds == null || companionIds.isEmpty() || !hasAttach) {
+            throw exception(OA_TRIP_FIELD_REQUIRED);
+        }
+        if (Objects.equals(bizType, BIZ_TALK) || Objects.equals(bizType, BIZ_EVENT)) {
+            if (StrUtil.isBlank(vo.getPartyName()) || StrUtil.isBlank(vo.getAddress())
+                    || StrUtil.isBlank(vo.getContactInfo()) || StrUtil.isBlank(vo.getHotelBooking())) {
+                throw exception(OA_TRIP_FIELD_REQUIRED);
+            }
+        }
+        if (Objects.equals(bizType, BIZ_EVENT)
+                && (StrUtil.isBlank(vo.getNeedOutput()) || StrUtil.isBlank(vo.getHasCarriageFee()))) {
+            throw exception(OA_TRIP_FIELD_REQUIRED);
+        }
+        if (Objects.equals(bizType, BIZ_OTHER)) {
+            vo.setPartyName(null);
+            vo.setAddress(null);
+            vo.setContactInfo(null);
+            vo.setNeedOutput(null);
+            vo.setHasCarriageFee(null);
+        } else if (Objects.equals(bizType, BIZ_TALK)) {
+            vo.setNeedOutput(null);
+            vo.setHasCarriageFee(null);
+        } else if (!Objects.equals(bizType, BIZ_EVENT)) {
+            throw exception(OA_TRIP_FIELD_REQUIRED);
+        }
     }
 
     static java.util.List<Long> resolveCompanionIds(BpmOATripCreateReqVO vo) {

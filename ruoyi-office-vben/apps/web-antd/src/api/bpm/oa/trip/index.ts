@@ -10,7 +10,18 @@ export namespace BpmOATripApi {
     deptName?: string;
     status?: number;
     type?: number;
+    bizType?: number;
     destination?: string;
+    originCity?: string;
+    transport?: string;
+    hotelBooking?: string;
+    partyName?: string;
+    address?: string;
+    contactInfo?: string;
+    needOutput?: string;
+    hasCarriageFee?: string;
+    remark?: string;
+    attachmentUrls?: string[];
     reason?: string;
     companionUserId?: number;
     companionNickname?: string;
@@ -25,12 +36,24 @@ export namespace BpmOATripApi {
   }
 
   export interface TripCreate {
+    bizType: number;
+    originCity: string;
     destination: string;
     reason: string;
+    transport: string;
+    hotelBooking?: string;
+    partyName?: string;
+    address?: string;
+    contactInfo?: string;
+    needOutput?: string;
+    hasCarriageFee?: string;
+    remark?: string;
+    attachmentUrls: string[];
     companionUserId?: number;
     companionUserIds: number[];
     startTime: number;
     endTime: number;
+    startCompanyDeptId?: number;
   }
 }
 

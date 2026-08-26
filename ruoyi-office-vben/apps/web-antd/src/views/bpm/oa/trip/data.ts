@@ -6,7 +6,7 @@ import { h } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
-import { formatDate } from '@vben/utils';
+import { formatDateTime } from '@vben/utils';
 
 import { z } from '#/adapter/form';
 import { DictTag } from '#/components/dict-tag';
@@ -143,12 +143,12 @@ export function useFormSchema(): VbenFormSchema[] {
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
-      fieldName: 'type',
+      fieldName: 'bizType',
       label: '出差类型',
       component: 'Select',
       componentProps: {
         placeholder: '请选择出差类型',
-        options: getDictOptions(DICT_TYPE.BPM_OA_TRIP_TYPE, 'number'),
+        options: getDictOptions(DICT_TYPE.BPM_OA_TRIP_BIZ_TYPE, 'number'),
         allowClear: true,
       },
     },
@@ -205,26 +205,35 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       },
     },
     {
+      field: 'bizType',
+      title: '出差类型',
+      minWidth: 120,
+      cellRender: {
+        name: 'CellDict',
+        props: { type: DICT_TYPE.BPM_OA_TRIP_BIZ_TYPE },
+      },
+    },
+    {
+      field: 'reason',
+      title: '出差事由',
+      minWidth: 160,
+    },
+    {
       field: 'destination',
-      title: '出差城市',
+      title: '目的地城市',
       minWidth: 140,
     },
     {
-      field: 'companionNickname',
-      title: '同行人员',
-      minWidth: 100,
-    },
-    {
       field: 'startTime',
-      title: '开始日期',
+      title: '开始时间',
       minWidth: 180,
-      formatter: 'formatDate',
+      formatter: 'formatDateTime',
     },
     {
       field: 'endTime',
-      title: '结束日期',
+      title: '结束时间',
       minWidth: 180,
-      formatter: 'formatDate',
+      formatter: 'formatDateTime',
     },
     {
       field: 'hours',
@@ -249,35 +258,79 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
 /** 详情 */
 export function useDetailFormSchema(): DescriptionItemSchema[] {
   return [
+    { label: '申请人', field: 'userNickname' },
+    { label: '部门', field: 'deptName' },
     {
-      label: '申请人',
-      field: 'userNickname',
+      label: '出差类型',
+      field: 'bizType',
+      render: (val) =>
+        val == null || val === ''
+          ? ''
+          : h(DictTag, { type: DICT_TYPE.BPM_OA_TRIP_BIZ_TYPE, value: val }),
+    },
+    { label: '出差事由', field: 'reason' },
+    { label: '出发城市', field: 'originCity' },
+    { label: '目的地城市', field: 'destination' },
+    {
+      label: '交通工具',
+      field: 'transport',
+      render: (val) =>
+        val == null || val === ''
+          ? ''
+          : h(DictTag, { type: DICT_TYPE.BPM_OA_TRIP_TRANSPORT, value: val }),
+    },
+    { label: '公司/邀请方', field: 'partyName' },
+    { label: '地址', field: 'address' },
+    { label: '对接人', field: 'contactInfo' },
+    {
+      label: '机酒预定情况',
+      field: 'hotelBooking',
+      render: (val) =>
+        val == null || val === ''
+          ? ''
+          : h(DictTag, { type: DICT_TYPE.BPM_OA_TRIP_HOTEL_BOOKING, value: val }),
     },
     {
-      label: '部门',
-      field: 'deptName',
+      label: '是否需要内容产出',
+      field: 'needOutput',
+      render: (val) =>
+        val == null || val === ''
+          ? ''
+          : h(DictTag, { type: DICT_TYPE.INFRA_BOOLEAN_STRING, value: val }),
     },
     {
-      label: '出差城市',
-      field: 'destination',
+      label: '是否有车马费',
+      field: 'hasCarriageFee',
+      render: (val) =>
+        val == null || val === ''
+          ? ''
+          : h(DictTag, { type: DICT_TYPE.INFRA_BOOLEAN_STRING, value: val }),
     },
+    { label: '备注', field: 'remark' },
+    { label: '同行人员', field: 'companionNickname' },
     {
-      label: '出差原因',
-      field: 'reason',
-    },
-    {
-      label: '同行人员',
-      field: 'companionNickname',
-    },
-    {
-      label: '开始日期',
+      label: '开始时间',
       field: 'startTime',
-      render: (val) => formatDate(val) as string,
+      render: (val) => formatDateTime(val) as string,
     },
     {
-      label: '结束日期',
+      label: '结束时间',
       field: 'endTime',
-      render: (val) => formatDate(val) as string,
+      render: (val) => formatDateTime(val) as string,
+    },
+    {
+      label: '出差时长(小时)',
+      field: 'hours',
+      render: (val) =>
+        val === undefined || val === null || val === '' ? '' : `${Number(val).toFixed(1)} 小时`,
+    },
+    {
+      label: '附件',
+      field: 'attachmentUrls',
+      render: (val) => {
+        if (!Array.isArray(val) || val.length === 0) return '';
+        return val.join('\n');
+      },
     },
   ];
 }

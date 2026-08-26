@@ -47,7 +47,10 @@ const BPM_DICT = {
   BPM_MODEL_FORM_TYPE: 'bpm_model_form_type', // BPM 模型表单类型
   BPM_MODEL_TYPE: 'bpm_model_type', // BPM 模型类型
   BPM_OA_LEAVE_TYPE: 'bpm_oa_leave_type', // BPM OA 请假类型
-  BPM_OA_TRIP_TYPE: 'bpm_oa_trip_type', // BPM OA 出差类型
+  BPM_OA_TRIP_TYPE: 'bpm_oa_trip_type', // BPM OA 出差类型（历史市内/省内）
+  BPM_OA_TRIP_BIZ_TYPE: 'bpm_oa_trip_biz_type', // 业务洽谈/商务活动/其他类型
+  BPM_OA_TRIP_TRANSPORT: 'bpm_oa_trip_transport', // 飞机/火车/汽车/自驾
+  BPM_OA_TRIP_HOTEL_BOOKING: 'bpm_oa_trip_hotel_booking', // 机酒预定情况
   OA_TRAVEL_CITY: 'oa_travel_city', // OA 出差/外出城市
   BPM_PROCESS_INSTANCE_STATUS: 'bpm_process_instance_status', // BPM 流程实例状态
   BPM_PROCESS_LISTENER_TYPE: 'bpm_process_listener_type', // BPM 流程监听器类型
