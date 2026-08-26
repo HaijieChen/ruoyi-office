@@ -5,8 +5,10 @@ import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeContractVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEducationVO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmploymentVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSaveReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.OnboardingAttachmentSaveReqVO;
@@ -16,6 +18,7 @@ import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEducationDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.OnboardingFileClaimDO;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeContractMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeEducationMapper;
+import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeEmploymentMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeFamilyMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeWorkExperienceMapper;
@@ -24,6 +27,7 @@ import cn.iocoder.yudao.module.infra.api.config.ConfigApi;
 import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
 import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
+import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,6 +64,8 @@ class EmployeeServiceImplTest {
     private EmployeeFamilyMapper employeeFamilyMapper;
     @Mock
     private EmployeeContractMapper employeeContractMapper;
+    @Mock
+    private EmployeeEmploymentMapper employeeEmploymentMapper;
     @Mock
     private AttachmentService attachmentService;
     @Mock
@@ -634,6 +640,52 @@ class EmployeeServiceImplTest {
         assertNotNull(FileAccessApi.class.getMethod("getFileContent", Long.class));
         assertNotNull(FileAccessApi.class.getMethod("getUniqueFileByPath", String.class));
         assertFalse(FileAccessApi.class.isAnnotationPresent(org.springframework.web.bind.annotation.RestController.class));
+    }
+
+    @Test
+    void saveEmploymentsWritesSigningDeptOntoArchive() {
+        EmployeeDO archive = new EmployeeDO();
+        archive.setId(1L);
+        EmployeeEmploymentVO signed = new EmployeeEmploymentVO();
+        signed.setCompanyDeptId(10L);
+        signed.setDeptId(11L);
+        signed.setCompanyName("A");
+        signed.setSigned(true);
+        EmployeeEmploymentVO extra = new EmployeeEmploymentVO();
+        extra.setCompanyDeptId(20L);
+        extra.setDeptId(21L);
+        extra.setSigned(false);
+        mockDeptUnderCompany(11L, 10L);
+        mockDeptUnderCompany(21L, 20L);
+
+        employeeService.saveEmployments(1L, List.of(signed, extra), archive);
+
+        assertEquals(10L, archive.getCompanyId());
+        assertEquals(11L, archive.getDeptId());
+        verify(employeeEmploymentMapper, times(2)).insert(any(cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEmploymentDO.class));
+        verify(employeeArchiveMapper).updateById(archive);
+    }
+
+    @Test
+    void saveEmploymentsRejectsMissingDept() {
+        EmployeeDO archive = new EmployeeDO();
+        EmployeeEmploymentVO signed = new EmployeeEmploymentVO();
+        signed.setCompanyDeptId(10L);
+        signed.setSigned(true);
+        assertThrows(ServiceException.class,
+                () -> employeeService.saveEmployments(1L, List.of(signed), archive));
+    }
+
+    private void mockDeptUnderCompany(Long deptId, Long companyId) {
+        DeptRespDTO dept = new DeptRespDTO();
+        dept.setId(deptId);
+        dept.setParentId(companyId);
+        dept.setOrgType("2");
+        DeptRespDTO company = new DeptRespDTO();
+        company.setId(companyId);
+        company.setOrgType("1");
+        when(deptApi.getDept(deptId)).thenReturn(CommonResult.success(dept));
+        when(deptApi.getDept(companyId)).thenReturn(CommonResult.success(company));
     }
 
 }

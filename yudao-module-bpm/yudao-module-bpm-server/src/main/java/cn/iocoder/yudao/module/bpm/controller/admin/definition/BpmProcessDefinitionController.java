@@ -153,6 +153,29 @@ public class BpmProcessDefinitionController {
         return success(respVO);
     }
 
+    @GetMapping("/allowed-employments")
+    @Operation(summary = "当前登录人可发起该流程的任职")
+    @Parameter(name = "id", description = "流程定义编号", required = true)
+    public CommonResult<List<Map<String, Object>>> getAllowedEmployments(
+            @RequestParam("id") String id) {
+        BpmProcessDefinitionInfoDO info = processDefinitionService.getProcessDefinitionInfo(id);
+        if (info == null) {
+            return success(Collections.emptyList());
+        }
+        List<cn.iocoder.yudao.module.bpm.api.task.BpmStartEmploymentProvider.Employment> list =
+                processDefinitionService.listAllowedStartEmployments(info, getLoginUserId());
+        List<Map<String, Object>> body = convertList(list, item -> {
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("deptId", item.deptId());
+            row.put("companyDeptId", item.companyDeptId());
+            row.put("signed", item.signed());
+            row.put("companyName", item.companyName());
+            row.put("deptName", item.deptName());
+            return row;
+        });
+        return success(body);
+    }
+
     private void fillStartEligibility(List<BpmProcessDefinitionRespVO> list) {
         if (CollUtil.isEmpty(list)) {
             return;

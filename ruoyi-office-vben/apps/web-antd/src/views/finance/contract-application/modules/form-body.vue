@@ -323,7 +323,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
 
 interface SubmitContext {
   startUserSelectAssignees?: Record<string, number[]>;
-  startCompanyDeptId?: number;
+  startCompanyDeptId?: number; startDeptId?: number;
 }
 
 async function submit(ctx?: SubmitContext): Promise<void> {
@@ -334,6 +334,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       ...buildPayload(),
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
       startCompanyDeptId: ctx?.startCompanyDeptId,
+      startDeptId: ctx?.startDeptId,
     };
     await (isResubmit.value && formData.value.id
       ? resubmitContractApplication(formData.value.id, payload)

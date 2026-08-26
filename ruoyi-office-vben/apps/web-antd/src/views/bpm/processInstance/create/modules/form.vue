@@ -30,8 +30,10 @@ import {
   Tabs,
 } from 'ant-design-vue';
 
-import { getProcessDefinition } from '#/api/bpm/definition';
-import { getMyEmployments } from '#/api/hrm/employee';
+import {
+  getAllowedEmployments,
+  getProcessDefinition,
+} from '#/api/bpm/definition';
 import {
   createProcessInstance,
   getApprovalDetail as getApprovalDetailApi,
@@ -84,7 +86,17 @@ const detailForm = ref<ProcessFormData>({
 const fApi = ref<any>();
 
 const startCompanyDeptId = ref<number | undefined>();
+const startDeptId = ref<number | undefined>();
 const employmentOptions = ref<{ label: string; value: number }[]>([]);
+const allowedEmployments = ref<
+  {
+    deptId?: number;
+    companyDeptId?: number;
+    signed?: boolean;
+    companyName?: string;
+    deptName?: string;
+  }[]
+>([]);
 
 const startUserSelectTasks = ref<UserTask[]>([]);
 const startUserSelectAssignees = ref<Record<string, string[]>>({});
@@ -173,6 +185,7 @@ async function submitForm() {
       await embedBodyRef.value.submit({
         startUserSelectAssignees: buildStartUserSelectAssigneesForDomain(),
         startCompanyDeptId: startCompanyDeptId.value,
+        startDeptId: startDeptId.value,
       });
       await closeCurrentTab();
       await router.push({ name: 'BpmProcessInstanceMy' });
@@ -199,6 +212,7 @@ async function submitForm() {
       variables: {
         ...(detailForm.value.value || {}),
         startCompanyDeptId: startCompanyDeptId.value,
+        startDeptId: startDeptId.value,
       },
       startUserSelectAssignees: startUserSelectAssignees.value,
     });
@@ -280,26 +294,40 @@ async function retryEmbedInit() {
 }
 
 /** 设置表单信息、获取流程图数据 */
-async function loadEmployments() {
+function applyEmploymentSelection(companyDeptId?: number) {
+  const hit = allowedEmployments.value.find(
+    (e) => e.companyDeptId === companyDeptId,
+  );
+  startCompanyDeptId.value = hit?.companyDeptId;
+  startDeptId.value = hit?.deptId;
+}
+
+async function loadEmployments(processDefinitionId?: string) {
   try {
-    const list = (await getMyEmployments()) || [];
-    employmentOptions.value = list
-      .filter((e) => e.companyDeptId != null)
-      .map((e) => ({
-        value: e.companyDeptId,
-        label: `${e.companyName || e.companyDeptId}${e.signed ? '（签约）' : ''}`,
-      }));
-    const signed = list.find((e) => e.signed);
-    startCompanyDeptId.value =
-      signed?.companyDeptId ?? list[0]?.companyDeptId ?? undefined;
+    const list = processDefinitionId
+      ? (await getAllowedEmployments(processDefinitionId)) || []
+      : [];
+    allowedEmployments.value = list.filter(
+      (e) => e.companyDeptId != null && e.deptId != null,
+    );
+    employmentOptions.value = allowedEmployments.value.map((e) => ({
+      value: e.companyDeptId!,
+      label: `${e.companyName || e.companyDeptId} / ${e.deptName || e.deptId}${e.signed ? '（签约）' : ''}`,
+    }));
+    const signed = allowedEmployments.value.find((e) => e.signed);
+    applyEmploymentSelection(
+      signed?.companyDeptId ?? allowedEmployments.value[0]?.companyDeptId,
+    );
   } catch {
+    allowedEmployments.value = [];
     employmentOptions.value = [];
     startCompanyDeptId.value = undefined;
+    startDeptId.value = undefined;
   }
 }
 
 async function initProcessInfo(row: any, formVariables?: any) {
-  await loadEmployments();
+  await loadEmployments(row?.id);
   embedInitGen += 1;
   const gen = embedInitGen;
   predictGen += 1;
@@ -372,6 +400,7 @@ async function initProcessInfo(row: any, formVariables?: any) {
       processVariablesStr: JSON.stringify({
         ...(formVariables || {}),
         startCompanyDeptId: startCompanyDeptId.value,
+        startDeptId: startDeptId.value,
       }),
     });
     await loadDiagram(row.id);
@@ -500,6 +529,7 @@ watch(
         processVariablesStr: JSON.stringify({
           ...(newValue || {}),
           startCompanyDeptId: startCompanyDeptId.value,
+          startDeptId: startDeptId.value,
         }),
       });
     }
@@ -508,6 +538,21 @@ watch(
     deep: true,
   },
 );
+
+watch(startCompanyDeptId, () => {
+  applyEmploymentSelection(startCompanyDeptId.value);
+  if (!props.selectProcessDefinition?.id) {
+    return;
+  }
+  getApprovalDetail({
+    id: props.selectProcessDefinition.id,
+    processVariablesStr: JSON.stringify({
+      ...(detailForm.value.value || {}),
+      startCompanyDeptId: startCompanyDeptId.value,
+      startDeptId: startDeptId.value,
+    }),
+  });
+});
 
 async function getApprovalDetail(row: {
   id: string;
@@ -641,12 +686,13 @@ defineExpose({ initProcessInfo });
             class="flex-1 overflow-auto"
           >
             <div v-if="employmentOptions.length" class="mb-4 max-w-md">
-              <div class="mb-1 text-sm">任职公司</div>
+              <div class="mb-1 text-sm">任职</div>
               <Select
                 v-model:value="startCompanyDeptId"
                 class="w-full"
                 :options="employmentOptions"
-                placeholder="默认签约公司，可改选其它任职公司"
+                placeholder="默认签约任职，可改选其它任职"
+                @change="(v: any) => applyEmploymentSelection(v)"
               />
             </div>
             <form-create

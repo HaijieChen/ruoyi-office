@@ -40,4 +40,7 @@ public class FinanceTaxPaymentCreateAndStartReqVO {
     @Schema(description = "发起时选择的任职公司")
     private Long startCompanyDeptId;
 
+    @Schema(description = "发起时选择的任职部门")
+    private Long startDeptId;
+
 }

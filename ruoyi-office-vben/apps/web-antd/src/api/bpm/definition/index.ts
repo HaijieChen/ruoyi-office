@@ -62,6 +62,21 @@ export async function getProcessDefinitionList(params: any) {
   );
 }
 
+export interface AllowedEmployment {
+  deptId?: number;
+  companyDeptId?: number;
+  signed?: boolean;
+  companyName?: string;
+  deptName?: string;
+}
+
+export function getAllowedEmployments(id: string) {
+  return requestClient.get<AllowedEmployment[]>(
+    '/bpm/process-definition/allowed-employments',
+    { params: { id } },
+  );
+}
+
 /** 查询流程定义列表（简单列表） */
 export async function getSimpleProcessDefinitionList(category?: string) {
   return requestClient.get<

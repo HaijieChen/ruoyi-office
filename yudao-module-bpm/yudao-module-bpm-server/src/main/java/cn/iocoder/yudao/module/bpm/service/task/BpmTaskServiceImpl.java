@@ -671,6 +671,17 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         }
         if (CollUtil.isNotEmpty(reqVO.getVariables())) { // 合并前端传递的流程变量，以前端为准
             processVariables.putAll(reqVO.getVariables());
+            processVariables.remove("startDeptId");
+            processVariables.remove("startCompanyDeptId");
+            Map<String, Object> started = instance.getProcessVariables();
+            if (started != null) {
+                if (started.get("startDeptId") != null) {
+                    processVariables.put("startDeptId", started.get("startDeptId"));
+                }
+                if (started.get("startCompanyDeptId") != null) {
+                    processVariables.put("startCompanyDeptId", started.get("startCompanyDeptId"));
+                }
+            }
         }
 
         // 4. 校验并处理 APPROVE_USER_SELECT 当前审批人，选择下一节点审批人的逻辑

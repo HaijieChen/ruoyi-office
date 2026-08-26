@@ -38,6 +38,9 @@ public class BpmOALeaveCreateReqVO {
     @Schema(description = "发起时选择的任职公司")
     private Long startCompanyDeptId;
 
+    @Schema(description = "发起时选择的任职部门")
+    private Long startDeptId;
+
     @AssertTrue(message = "结束时间，需要在开始时间之后")
     public boolean isEndTimeValid() {
         return !getEndTime().isBefore(getStartTime());

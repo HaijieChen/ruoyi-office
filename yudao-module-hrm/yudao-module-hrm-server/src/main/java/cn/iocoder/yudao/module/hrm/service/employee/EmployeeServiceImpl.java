@@ -199,6 +199,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (updateReqVO.getEmploymentList() != null) {
             employeeEmploymentMapper.deleteByEmployeeId(updateReqVO.getId());
             saveEmployments(updateReqVO.getId(), updateReqVO.getEmploymentList(), updateObj);
+            updateReqVO.setDeptId(updateObj.getDeptId());
+            updateReqVO.setCompanyId(updateObj.getCompanyId());
+            updateReqVO.setCompanyName(updateObj.getCompanyName());
         }
         if (updateReqVO.getOnboardingAttachments() != null) {
             saveOnboardingAttachments(updateReqVO.getId(), updateReqVO.getOnboardingAttachments());
@@ -232,6 +235,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         employeeEducationMapper.deleteByEmployeeId(id);
         employeeFamilyMapper.deleteByEmployeeId(id);
         employeeContractMapper.deleteByEmployeeId(id);
+        employeeEmploymentMapper.deleteByEmployeeId(id);
         attachmentService.deleteAttachmentByBusiness(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, id);
     }
 
@@ -262,6 +266,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             employeeEducationMapper.deleteByEmployeeId(id);
             employeeFamilyMapper.deleteByEmployeeId(id);
             employeeContractMapper.deleteByEmployeeId(id);
+            employeeEmploymentMapper.deleteByEmployeeId(id);
         }
         attachmentService.deleteAttachmentByBusinessIds(ONBOARDING_ATTACHMENT_BUSINESS_TYPE, ids);
     }
@@ -492,6 +497,10 @@ public class EmployeeServiceImpl implements EmployeeService {
             req.setEmployeeStatus(existing.getEmployeeStatus());
         }
         self.updateEmployeeArchive(req);
+        if (req.getCompanyId() != null && req.getDeptId() != null) {
+            self.applySigningEmployment(existing.getId(), req.getCompanyId(), req.getDeptId(),
+                    req.getCompanyName(), req.getDeptName());
+        }
     }
 
     private EmployeeServiceImpl getSelf() {
@@ -716,6 +725,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (CollUtil.isEmpty(list) && archive != null && archive.getCompanyId() != null) {
             EmployeeEmploymentVO fallback = new EmployeeEmploymentVO();
             fallback.setCompanyDeptId(archive.getCompanyId());
+            fallback.setDeptId(archive.getDeptId());
             fallback.setSigned(true);
             list = List.of(fallback);
         }
@@ -731,17 +741,29 @@ public class EmployeeServiceImpl implements EmployeeService {
             if (item.getCompanyDeptId() == null || !seen.add(item.getCompanyDeptId())) {
                 throw exception(EMPLOYEE_EMPLOYMENT_COMPANY_DUPLICATE);
             }
+            if (item.getDeptId() == null) {
+                throw exception(EMPLOYEE_EMPLOYMENT_DEPT_REQUIRED);
+            }
+            Long companyOfDept = findCompanyIdByDeptId(item.getDeptId());
+            if (!item.getCompanyDeptId().equals(companyOfDept)) {
+                throw exception(EMPLOYEE_EMPLOYMENT_DEPT_NOT_UNDER_COMPANY);
+            }
         }
         for (EmployeeEmploymentVO item : list) {
             employeeEmploymentMapper.insert(EmployeeEmploymentDO.builder()
                     .employeeId(employeeId)
                     .companyDeptId(item.getCompanyDeptId())
+                    .deptId(item.getDeptId())
                     .signed(Boolean.TRUE.equals(item.getSigned()))
                     .build());
             if (Boolean.TRUE.equals(item.getSigned()) && archive != null) {
                 archive.setCompanyId(item.getCompanyDeptId());
+                archive.setDeptId(item.getDeptId());
                 if (StrUtil.isNotBlank(item.getCompanyName())) {
                     archive.setCompanyName(item.getCompanyName());
+                }
+                if (StrUtil.isNotBlank(item.getDeptName())) {
+                    archive.setDeptName(item.getDeptName());
                 }
                 employeeArchiveMapper.updateById(archive);
             }
@@ -754,12 +776,15 @@ public class EmployeeServiceImpl implements EmployeeService {
             EmployeeEmploymentVO vo = new EmployeeEmploymentVO();
             vo.setCompanyDeptId(archive.getCompanyId());
             vo.setCompanyName(archive.getCompanyName());
+            vo.setDeptId(archive.getDeptId());
+            vo.setDeptName(archive.getDeptName());
             vo.setSigned(true);
             return List.of(vo);
         }
         return rows.stream().map(row -> {
             EmployeeEmploymentVO vo = new EmployeeEmploymentVO();
             vo.setCompanyDeptId(row.getCompanyDeptId());
+            vo.setDeptId(row.getDeptId());
             vo.setSigned(Boolean.TRUE.equals(row.getSigned()));
             if (row.getCompanyDeptId() != null) {
                 CommonResult<DeptRespDTO> company = deptApi.getDept(row.getCompanyDeptId());
@@ -767,8 +792,77 @@ public class EmployeeServiceImpl implements EmployeeService {
                     vo.setCompanyName(company.getData().getName());
                 }
             }
+            if (row.getDeptId() != null) {
+                CommonResult<DeptRespDTO> dept = deptApi.getDept(row.getDeptId());
+                if (dept != null && dept.isSuccess() && dept.getData() != null) {
+                    vo.setDeptName(dept.getData().getName());
+                }
+            }
             return vo;
         }).toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void applySigningEmployment(Long employeeId, Long companyDeptId, Long deptId,
+                                       String companyName, String deptName) {
+        if (employeeId == null || companyDeptId == null || deptId == null) {
+            return;
+        }
+        Long companyOfDept = findCompanyIdByDeptId(deptId);
+        if (!companyDeptId.equals(companyOfDept)) {
+            throw exception(EMPLOYEE_EMPLOYMENT_DEPT_NOT_UNDER_COMPANY);
+        }
+        EmployeeDO archive = employeeArchiveMapper.selectById(employeeId);
+        if (archive == null) {
+            return;
+        }
+        List<EmployeeEmploymentDO> rows = employeeEmploymentMapper.selectListByEmployeeId(employeeId);
+        EmployeeEmploymentDO target = rows.stream()
+                .filter(row -> companyDeptId.equals(row.getCompanyDeptId()))
+                .findFirst()
+                .orElse(null);
+        for (EmployeeEmploymentDO row : rows) {
+            boolean signed = companyDeptId.equals(row.getCompanyDeptId());
+            if (Boolean.TRUE.equals(row.getSigned()) == signed
+                    && (!signed || deptId.equals(row.getDeptId()))) {
+                continue;
+            }
+            row.setSigned(signed);
+            if (signed) {
+                row.setDeptId(deptId);
+            }
+            employeeEmploymentMapper.updateById(row);
+        }
+        if (target == null) {
+            employeeEmploymentMapper.insert(EmployeeEmploymentDO.builder()
+                    .employeeId(employeeId)
+                    .companyDeptId(companyDeptId)
+                    .deptId(deptId)
+                    .signed(true)
+                    .build());
+        }
+        archive.setCompanyId(companyDeptId);
+        archive.setDeptId(deptId);
+        if (StrUtil.isNotBlank(companyName)) {
+            archive.setCompanyName(companyName);
+        }
+        if (StrUtil.isNotBlank(deptName)) {
+            archive.setDeptName(deptName);
+        }
+        employeeArchiveMapper.updateById(archive);
+        if (Boolean.TRUE.equals(archive.getUserGenerated()) && archive.getUserId() != null) {
+            EmployeeSaveReqVO sync = new EmployeeSaveReqVO();
+            sync.setEmployeeNo(archive.getEmployeeNo());
+            sync.setName(archive.getName());
+            sync.setMobile(archive.getMobile());
+            sync.setEmail(archive.getEmail());
+            sync.setSex(archive.getSex());
+            sync.setAvatar(archive.getAvatar());
+            sync.setDeptId(deptId);
+            sync.setRemark(archive.getRemark());
+            syncEmployeeToUser(sync, archive.getUserId());
+        }
     }
 
     @Override

@@ -76,6 +76,9 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Schema(description = "发起时选择的任职公司")
     private Long startCompanyDeptId;
 
+    @Schema(description = "发起时选择的任职部门")
+    private Long startDeptId;
+
     @Schema(description = "开票明细", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "开票明细不能为空")
     @Valid

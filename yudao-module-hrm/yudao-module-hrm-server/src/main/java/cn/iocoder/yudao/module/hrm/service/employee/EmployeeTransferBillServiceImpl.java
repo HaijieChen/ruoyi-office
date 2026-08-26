@@ -249,6 +249,7 @@ public class EmployeeTransferBillServiceImpl implements EmployeeTransferBillServ
      * @param transferBillId 调动申请单ID
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateEmployeeFromTransferBill(Long transferBillId) {
         // 获取调动申请单信息
         EmployeeTransferBillRespVO transferBillRespVO = getEmployeeTransferBillInfo(transferBillId);
@@ -291,6 +292,14 @@ public class EmployeeTransferBillServiceImpl implements EmployeeTransferBillServ
         }
         
         employeeMapper.updateById(updateEmployee);
+        if (transferBillRespVO.getNewCompanyId() != null && transferBillRespVO.getNewDeptId() != null) {
+            employeeService.applySigningEmployment(
+                    employee.getId(),
+                    transferBillRespVO.getNewCompanyId(),
+                    transferBillRespVO.getNewDeptId(),
+                    transferBillRespVO.getNewCompanyName(),
+                    transferBillRespVO.getNewDeptName());
+        }
         log.info("[updateEmployeeFromTransferBill] 从调动申请单更新员工档案成功，transferBillId: {}, employeeId: {}, newDeptId: {}, newCompanyId: {}", 
                 transferBillId, employee.getId(), transferBillRespVO.getNewDeptId(), transferBillRespVO.getNewCompanyId());
     }

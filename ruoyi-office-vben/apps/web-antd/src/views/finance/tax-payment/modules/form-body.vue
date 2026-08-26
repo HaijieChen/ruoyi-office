@@ -49,7 +49,7 @@ async function reset(opts) {
   }
   emit('predictChange', getPredictVariables());
 }
-async function submit(ctx?: { startCompanyDeptId?: number }) {
+async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number }) {
   if (!form.value.periodLabel) { message.error('请填写税款所属期'); throw new Error('period'); }
   if (!form.value.evidenceFileUrls || !form.value.evidenceFileUrls.length) { message.error('税金依据附件必传'); throw new Error('file'); }
   if (!form.value.lines.every(function (l) { return l.entityCompanyDeptId; })) { message.error('请为每行选择主体公司'); throw new Error('company'); }
@@ -63,6 +63,7 @@ async function submit(ctx?: { startCompanyDeptId?: number }) {
       return { entityCompanyDeptId: l.entityCompanyDeptId, vatAmount: Number(l.vatAmount || 0), surchargeAmount: Number(l.surchargeAmount || 0), stampTaxAmount: Number(l.stampTaxAmount || 0), citAmount: Number(l.citAmount || 0) };
     }),
     startCompanyDeptId: ctx?.startCompanyDeptId,
+      startDeptId: ctx?.startDeptId,
   };
   submitting.value = true;
   try {

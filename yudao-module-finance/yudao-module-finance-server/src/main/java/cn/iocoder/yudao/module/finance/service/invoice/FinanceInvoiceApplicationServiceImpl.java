@@ -207,6 +207,9 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         if (reqVO.getStartCompanyDeptId() != null) {
             variables.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
         }
+        if (reqVO.getStartDeptId() != null) {
+            variables.put("startDeptId", reqVO.getStartDeptId());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(applicantUserId,
                 new BpmProcessInstanceCreateReqDTO()
                         .setProcessDefinitionKey(PROCESS_KEY)

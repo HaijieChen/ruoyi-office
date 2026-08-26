@@ -1023,6 +1023,7 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         if (!processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId)) {
             throw exception(PROCESS_INSTANCE_START_USER_CAN_START);
         }
+        processDefinitionService.assertStartEmploymentAllowed(processDefinitionInfo, userId, variables);
         // 1.2.1 嵌入式业务表单：业务 create 权限
         // 薪税：通用 createProcessInstance 恒 deny；可信业务通道（领域 API）可过；统一目录仅露出不直启
         processStartEligibilityService.validateStartOrThrow(definition.getKey(), trustedBusinessStart);

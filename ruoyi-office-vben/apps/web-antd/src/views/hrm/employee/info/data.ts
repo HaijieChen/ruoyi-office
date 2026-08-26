@@ -277,10 +277,7 @@ export function useAvatarFormSchema(): VbenFormSchema[] {
 /**
  * 工作信息表单配置
  */
-export function useWorkFormSchema(
-  deptSelectModalRef?: any,
-  readonly?: any,
-): VbenFormSchema[] {
+export function useWorkFormSchema(): VbenFormSchema[] {
   return [
     {
       fieldName: 'bankName',
@@ -338,24 +335,13 @@ export function useWorkFormSchema(
     {
       fieldName: 'deptName',
       label: '所属部门',
-      component: 'HelpInput',
+      help: '由下方签约任职同步，不可单独修改',
+      component: 'Input',
       componentProps: {
-        placeholder: '请选择所属部门',
-        bind: {
-          readonly,
-          onClick: () => {
-            if (!readonly?.value && deptSelectModalRef?.value) {
-              deptSelectModalRef.value.modalApi.open();
-            }
-          },
-        },
-        onClick: () => {
-          if (!readonly?.value && deptSelectModalRef?.value) {
-            deptSelectModalRef.value.modalApi.open();
-          }
-        },
+        placeholder: '请在任职公司中标注签约并选择部门',
+        readonly: true,
+        disabled: true,
       },
-      // 导入写库后编辑保存亦须有有效部门展示名（与 deptId 同步）
       rules: 'required',
     },
     {
@@ -379,9 +365,10 @@ export function useWorkFormSchema(
     {
       fieldName: 'companyName',
       label: '签约公司',
+      help: '由下方签约任职同步，不可单独修改',
       component: 'Input',
       componentProps: {
-        placeholder: '所属公司',
+        placeholder: '请在任职公司中标注签约',
         readonly: true,
         disabled: true,
       },

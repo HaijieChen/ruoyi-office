@@ -32,6 +32,8 @@ public interface ErrorCodeConstants {
             "入职资料存储失败，请检查文件配置主存储器");
     ErrorCode EMPLOYEE_EMPLOYMENT_SIGNED_REQUIRED = new ErrorCode(1_050_001_016, "必须且只能标注一家签约公司");
     ErrorCode EMPLOYEE_EMPLOYMENT_COMPANY_DUPLICATE = new ErrorCode(1_050_001_017, "任职公司不能重复");
+    ErrorCode EMPLOYEE_EMPLOYMENT_DEPT_REQUIRED = new ErrorCode(1_050_001_018, "任职部门不能为空");
+    ErrorCode EMPLOYEE_EMPLOYMENT_DEPT_NOT_UNDER_COMPANY = new ErrorCode(1_050_001_019, "任职部门必须属于所选公司");
 
     // ========== 员工入职申请单 1-050-002-000 ==========
     ErrorCode EMPLOYEE_ENTRY_BILL_NOT_EXISTS = new ErrorCode(1_050_002_001, "员工入职申请单不存在");

@@ -190,6 +190,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (reqVO.getStartCompanyDeptId() != null) {
             vars.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
         }
+        if (reqVO.getStartDeptId() != null) {
+            vars.put("startDeptId", reqVO.getStartDeptId());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                         new BpmProcessInstanceCreateReqDTO()
                                 .setProcessDefinitionKey(processKey)

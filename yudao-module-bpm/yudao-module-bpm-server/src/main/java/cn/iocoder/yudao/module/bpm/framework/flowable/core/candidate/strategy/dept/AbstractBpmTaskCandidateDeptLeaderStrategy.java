@@ -9,9 +9,12 @@ import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 
+import cn.iocoder.yudao.framework.common.util.number.NumberUtils;
+
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -84,6 +87,17 @@ public abstract class AbstractBpmTaskCandidateDeptLeaderStrategy implements BpmT
      * @param startUserId 发起人 Id
      */
     protected DeptRespDTO getStartUserDept(Long startUserId) {
+        return getStartUserDept(startUserId, Map.of());
+    }
+
+    protected DeptRespDTO getStartUserDept(Long startUserId, Map<String, Object> processVariables) {
+        if (processVariables != null) {
+            Object raw = processVariables.get("startDeptId");
+            Long startDeptId = NumberUtils.parseLong(raw == null ? null : String.valueOf(raw));
+            if (startDeptId != null && startDeptId > 0) {
+                return deptApi.getDept(startDeptId).getCheckedData();
+            }
+        }
         AdminUserRespDTO startUser = adminUserApi.getUser(startUserId).getCheckedData();
         if (startUser.getDeptId() == null) { // 找不到部门
             return null;

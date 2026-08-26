@@ -15,6 +15,12 @@ public class EmployeeEmploymentVO {
     @Schema(description = "任职公司名称")
     private String companyName;
 
+    @Schema(description = "任职部门编号")
+    private Long deptId;
+
+    @Schema(description = "任职部门名称")
+    private String deptName;
+
     @Schema(description = "是否签约公司")
     private Boolean signed;
 }

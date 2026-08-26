@@ -160,7 +160,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         applicationMapper.insert(application);
 
         String processInstanceId = startProcess(applicantUserId, application,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(application.getId());
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -227,7 +227,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
 
         FinancePaymentApplicationDO reloaded = getApplication(id);
-        String processInstanceId = startProcess(userId, reloaded, reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId());
+        String processInstanceId = startProcess(userId, reloaded, reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(id);
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -274,7 +274,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         applicationMapper.insert(application);
         insertSalaryLines(application.getId(), preparedLines.salaryLines());
         String processInstanceId = startProcess(applicantUserId, application,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(application.getId());
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -323,7 +323,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         applicationMapper.insert(application);
         insertTaxLines(application.getId(), preparedLines.taxLines());
         String processInstanceId = startProcess(applicantUserId, application,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(application.getId());
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -393,7 +393,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
         FinancePaymentApplicationDO reloaded = getApplication(id);
         String processInstanceId = startProcess(userId, reloaded,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(id);
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -461,7 +461,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
         FinancePaymentApplicationDO reloaded = getApplication(id);
         String processInstanceId = startProcess(userId, reloaded,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(id);
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -1060,12 +1060,18 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private String startProcess(Long userId, FinancePaymentApplicationDO application,
                                 Map<String, List<Long>> startUserSelectAssignees,
                                 String processDefinitionKey) {
-        return startProcess(userId, application, startUserSelectAssignees, processDefinitionKey, null);
+        return startProcess(userId, application, startUserSelectAssignees, processDefinitionKey, null, null);
     }
 
     private String startProcess(Long userId, FinancePaymentApplicationDO application,
                                 Map<String, List<Long>> startUserSelectAssignees,
                                 String processDefinitionKey, Long startCompanyDeptId) {
+        return startProcess(userId, application, startUserSelectAssignees, processDefinitionKey, startCompanyDeptId, null);
+    }
+
+    private String startProcess(Long userId, FinancePaymentApplicationDO application,
+                                Map<String, List<Long>> startUserSelectAssignees,
+                                String processDefinitionKey, Long startCompanyDeptId, Long startDeptId) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("paymentApplicationId", application.getId());
         variables.put("applicationNo", application.getApplicationNo());
@@ -1079,6 +1085,9 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         // EXP-73 BPM-1：待办公司列展示业务主体，而非仅任职公司
         if (startCompanyDeptId != null) {
             variables.put("startCompanyDeptId", startCompanyDeptId);
+        }
+        if (startDeptId != null) {
+            variables.put("startDeptId", startDeptId);
         }
         if (application.getEntityCompanyDeptId() != null) {
             variables.put(BpmProcessVariableConstants.COMPANY_ID, application.getEntityCompanyDeptId());

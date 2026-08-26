@@ -79,6 +79,9 @@ public class BpmOAOutingServiceImpl implements BpmOAOutingService {
         if (createReqVO.getStartCompanyDeptId() != null) {
             processInstanceVariables.put("startCompanyDeptId", createReqVO.getStartCompanyDeptId());
         }
+        if (createReqVO.getStartDeptId() != null) {
+            processInstanceVariables.put("startDeptId", createReqVO.getStartDeptId());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)
                         .setVariables(processInstanceVariables).setBusinessKey(String.valueOf(outing.getId())))

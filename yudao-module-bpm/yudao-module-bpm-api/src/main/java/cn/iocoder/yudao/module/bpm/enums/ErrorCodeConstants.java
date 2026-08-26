@@ -49,6 +49,7 @@ public interface ErrorCodeConstants {
     ErrorCode PROCESS_INSTANCE_START_USER_SELECT_ASSIGNEES_NOT_CONFIG = new ErrorCode(1_009_004_003, "任务({})的候选人未配置");
     ErrorCode PROCESS_INSTANCE_START_USER_SELECT_ASSIGNEES_NOT_EXISTS = new ErrorCode(1_009_004_004, "任务({})的候选人({})不存在");
     ErrorCode PROCESS_INSTANCE_START_USER_CAN_START = new ErrorCode(1_009_004_005, "发起流程失败，你没有权限发起该流程");
+    ErrorCode PROCESS_INSTANCE_START_EMPLOYMENT_INVALID = new ErrorCode(1_009_004_018, "发起流程失败，所选任职不在可发起范围内");
     /** 嵌入式流程业务发起权限不足或配置缺失；msg 参数为友好文案 */
     ErrorCode PROCESS_INSTANCE_START_PERMISSION_DENIED = new ErrorCode(1_009_004_011, "{}");
     /** EXP-87 G1：create-by-business 调用方非可验证 Finance 服务身份 */

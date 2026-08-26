@@ -12,9 +12,12 @@ import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmProcessDefinitio
 import cn.iocoder.yudao.module.bpm.dal.mysql.definition.BpmProcessDefinitionInfoMapper;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmnModelConstants;
 import cn.iocoder.yudao.module.bpm.framework.flowable.core.util.FlowableUtils;
+import cn.iocoder.yudao.framework.common.util.number.NumberUtils;
+import cn.iocoder.yudao.module.bpm.api.task.BpmStartEmploymentProvider;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.ObjectProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.common.engine.impl.db.SuspensionState;
@@ -54,6 +57,8 @@ public class BpmProcessDefinitionServiceImpl implements BpmProcessDefinitionServ
 
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private ObjectProvider<BpmStartEmploymentProvider> startEmploymentProvider;
 
     @Override
     public ProcessDefinition getProcessDefinition(String id) {
@@ -101,6 +106,10 @@ public class BpmProcessDefinitionServiceImpl implements BpmProcessDefinitionServ
 
         // 校验用户是否在允许发起的部门列表中
         if (CollUtil.isNotEmpty(processDefinition.getStartDeptIds())) {
+            List<BpmStartEmploymentProvider.Employment> employments = listEmployments(userId);
+            if (!employments.isEmpty()) {
+                return employments.stream().anyMatch(item -> matchesStartDept(processDefinition, item));
+            }
             AdminUserRespDTO user = adminUserApi.getUser(userId).getCheckedData();
             return user != null
                     && user.getDeptId() != null
@@ -109,6 +118,76 @@ public class BpmProcessDefinitionServiceImpl implements BpmProcessDefinitionServ
 
         // 都为空，则所有人都可以发起
         return true;
+    }
+
+    @Override
+    public List<BpmStartEmploymentProvider.Employment> listAllowedStartEmployments(
+            BpmProcessDefinitionInfoDO processDefinition, Long userId) {
+        List<BpmStartEmploymentProvider.Employment> employments = listEmployments(userId);
+        if (employments.isEmpty()) {
+            return List.of();
+        }
+        if (CollUtil.isNotEmpty(processDefinition.getStartUserIds())) {
+            if (!processDefinition.getStartUserIds().contains(userId)) {
+                return List.of();
+            }
+            return employments.stream().filter(item -> item.deptId() != null).toList();
+        }
+        if (CollUtil.isNotEmpty(processDefinition.getStartDeptIds())) {
+            return employments.stream().filter(item -> matchesStartDept(processDefinition, item)).toList();
+        }
+        return employments.stream().filter(item -> item.deptId() != null).toList();
+    }
+
+    @Override
+    public void assertStartEmploymentAllowed(BpmProcessDefinitionInfoDO processDefinition, Long userId,
+                                             Map<String, Object> variables) {
+        Long startDeptId = readVar(variables, "startDeptId");
+        Long startCompanyDeptId = readVar(variables, "startCompanyDeptId");
+        if (startDeptId == null && startCompanyDeptId == null) {
+            return;
+        }
+        List<BpmStartEmploymentProvider.Employment> allowed = listAllowedStartEmployments(processDefinition, userId);
+        if (allowed.isEmpty()) {
+            throw exception(PROCESS_INSTANCE_START_EMPLOYMENT_INVALID);
+        }
+        if (startDeptId == null) {
+            return;
+        }
+        boolean match = allowed.stream().anyMatch(item ->
+                Objects.equals(item.deptId(), startDeptId)
+                        && (startCompanyDeptId == null
+                        || Objects.equals(item.companyDeptId(), startCompanyDeptId)));
+        if (!match) {
+            throw exception(PROCESS_INSTANCE_START_EMPLOYMENT_INVALID);
+        }
+    }
+
+    private List<BpmStartEmploymentProvider.Employment> listEmployments(Long userId) {
+        BpmStartEmploymentProvider provider = startEmploymentProvider.getIfAvailable();
+        if (provider == null || userId == null) {
+            return List.of();
+        }
+        List<BpmStartEmploymentProvider.Employment> list = provider.listByUserId(userId);
+        return list == null ? List.of() : list;
+    }
+
+    private boolean matchesStartDept(BpmProcessDefinitionInfoDO processDefinition,
+                                     BpmStartEmploymentProvider.Employment item) {
+        if (item.deptId() == null) {
+            return false;
+        }
+        return processDefinition.getStartDeptIds().contains(item.deptId())
+                || (item.companyDeptId() != null
+                && processDefinition.getStartDeptIds().contains(item.companyDeptId()));
+    }
+
+    private Long readVar(Map<String, Object> variables, String key) {
+        if (variables == null) {
+            return null;
+        }
+        Object raw = variables.get(key);
+        return NumberUtils.parseLong(raw == null ? null : String.valueOf(raw));
     }
 
     @Override

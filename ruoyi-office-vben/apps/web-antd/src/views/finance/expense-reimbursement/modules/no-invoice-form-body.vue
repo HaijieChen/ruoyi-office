@@ -187,7 +187,7 @@ const rules: Record<string, Rule[]> = {
   payeeAccountNo: [{ required: true, message: '请填写收款账号', trigger: 'blur' }],
 };
 
-async function submit(ctx?: { startCompanyDeptId?: number }): Promise<void> {
+async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number }): Promise<void> {
   await formRef.value?.validate();
   const lines = formData.value.lines
     .filter((l) => l.category && l.feeDate && Number(l.amount) > 0)
@@ -234,6 +234,7 @@ async function submit(ctx?: { startCompanyDeptId?: number }): Promise<void> {
       payeeAccountNo: String(formData.value.payeeAccountNo),
       lines,
       startCompanyDeptId: ctx?.startCompanyDeptId,
+      startDeptId: ctx?.startDeptId,
     } as any);
     message.success('提交成功');
     emit('success');

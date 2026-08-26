@@ -527,7 +527,16 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
         // 工作信息
         employeeSaveReqVO.setEntryDate(entryBillRespVO.getEntryDate());
         employeeSaveReqVO.setDeptId(entryBillRespVO.getEmpDeptId());
+        employeeSaveReqVO.setCompanyId(entryBillRespVO.getEmpCompanyId());
         employeeSaveReqVO.setCompanyName(entryBillRespVO.getEmpCompanyName());
+        if (entryBillRespVO.getEmpCompanyId() != null && entryBillRespVO.getEmpDeptId() != null) {
+            EmployeeEmploymentVO signed = new EmployeeEmploymentVO();
+            signed.setCompanyDeptId(entryBillRespVO.getEmpCompanyId());
+            signed.setCompanyName(entryBillRespVO.getEmpCompanyName());
+            signed.setDeptId(entryBillRespVO.getEmpDeptId());
+            signed.setSigned(true);
+            employeeSaveReqVO.setEmploymentList(java.util.List.of(signed));
+        }
         employeeSaveReqVO.setJobPost(entryBillRespVO.getJobPost());
         employeeSaveReqVO.setJobPosition(entryBillRespVO.getJobPosition());
         employeeSaveReqVO.setJobTitle(entryBillRespVO.getJobTitle());

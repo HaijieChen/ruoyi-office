@@ -25,4 +25,5 @@ public class FinanceExpenseReimbursementCreateReqVO {
     private List<FinanceExpenseReimbursementLineReqVO> lines;
 
     private Long startCompanyDeptId;
+    private Long startDeptId;
 }

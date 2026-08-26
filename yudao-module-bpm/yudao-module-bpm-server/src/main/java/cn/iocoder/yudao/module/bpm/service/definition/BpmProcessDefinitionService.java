@@ -153,6 +153,18 @@ public interface BpmProcessDefinitionService {
     boolean canUserStartProcessDefinition(BpmProcessDefinitionInfoDO processDefinition, Long userId);
 
     /**
+     * 当前用户可用来发起该流程的任职（登录用户范围由调用方保证）。
+     */
+    java.util.List<cn.iocoder.yudao.module.bpm.api.task.BpmStartEmploymentProvider.Employment>
+            listAllowedStartEmployments(BpmProcessDefinitionInfoDO processDefinition, Long userId);
+
+    /**
+     * 校验发起变量中的任职属于可发起集合。无任职档案时跳过。
+     */
+    void assertStartEmploymentAllowed(BpmProcessDefinitionInfoDO processDefinition, Long userId,
+                                      java.util.Map<String, Object> variables);
+
+    /**
      * 获得 ids 对应的 Deployment Map
      *
      * @param ids 部署编号的数组

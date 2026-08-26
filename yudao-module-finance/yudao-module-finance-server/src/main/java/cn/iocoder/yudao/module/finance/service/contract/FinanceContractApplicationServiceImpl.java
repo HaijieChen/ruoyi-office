@@ -657,6 +657,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         if (reqVO.getStartCompanyDeptId() != null) {
             variables.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
         }
+        if (reqVO.getStartDeptId() != null) {
+            variables.put("startDeptId", reqVO.getStartDeptId());
+        }
         return processInstanceApi.createProcessInstance(userId,
                         new BpmProcessInstanceCreateReqDTO()
                                 .setProcessDefinitionKey(PROCESS_KEY)

@@ -31,6 +31,12 @@ public interface EmployeeService {
     java.util.List<cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmploymentVO> listMyEmployments(Long userId);
 
     /**
+     * 将指定公司+部门设为签约任职：同公司改部门，跨公司降级旧签约并提升或新增目标行。
+     */
+    void applySigningEmployment(Long employeeId, Long companyDeptId, Long deptId,
+                                String companyName, String deptName);
+
+    /**
      * 更新员工档案
      *
      * @param updateReqVO 更新信息

@@ -100,6 +100,9 @@ public class BpmOATripServiceImpl implements BpmOATripService {
         if (createReqVO.getStartCompanyDeptId() != null) {
             processInstanceVariables.put("startCompanyDeptId", createReqVO.getStartCompanyDeptId());
         }
+        if (createReqVO.getStartDeptId() != null) {
+            processInstanceVariables.put("startDeptId", createReqVO.getStartDeptId());
+        }
         if (createReqVO.getType() != null) {
             processInstanceVariables.put("type", createReqVO.getType());
         }

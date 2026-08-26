@@ -70,6 +70,8 @@ export namespace EmployeeArchiveApi {
   export interface EmployeeEmployment {
     companyDeptId: number;
     companyName?: string;
+    deptId?: number;
+    deptName?: string;
     signed?: boolean;
   }
 

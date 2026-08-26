@@ -58,7 +58,7 @@ function getPredictVariables() {
 
 async function submit(ctx?: {
   startUserSelectAssignees?: Record<string, number[]>;
-  startCompanyDeptId?: number;
+  startCompanyDeptId?: number; startDeptId?: number;
 }) {
   if (!predecessorId.value) {
     message.warning('请选择前置开票申请');
@@ -77,6 +77,7 @@ async function submit(ctx?: {
       totalAmount: snapshot.value?.totalAmount,
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
       startCompanyDeptId: ctx?.startCompanyDeptId,
+      startDeptId: ctx?.startDeptId,
     });
     message.success('已提交红冲申请');
     emit('success');

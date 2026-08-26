@@ -30,8 +30,6 @@ import {
 import { getSimpleDeptList } from '#/api/system/dept';
 import { AttachmentList } from '#/components/attachment-list';
 import { CardContainer } from '#/components/basic-form';
-import { DeptSelectModal } from '#/views/system/dept/components';
-
 import {
   useAvatarFormSchema,
   useBasicFormSchema,
@@ -54,13 +52,11 @@ const formData = ref<Partial<EmployeeArchiveApi.EmployeeArchive>>({});
 const readonly = ref(false);
 const loading = ref(false);
 
-// 部门选择弹窗引用
-const deptSelectModalRef = ref<InstanceType<typeof DeptSelectModal>>();
-
 // 工作经历列表
 const workExperienceList = ref<EmployeeArchiveApi.EmployeeWorkExperience[]>([]);
 const employmentList = ref<EmployeeArchiveApi.EmployeeEmployment[]>([]);
 const companyOptions = ref<{ label: string; value: number }[]>([]);
+const allDepts = ref<SystemDeptApi.Dept[]>([]);
 // 教育经历列表
 const educationList = ref<EmployeeArchiveApi.EmployeeEducation[]>([]);
 // 家属信息列表
@@ -609,7 +605,7 @@ const [WorkForm, workFormApi] = useVbenForm({
   },
   wrapperClass: 'grid grid-cols-2 gap-4',
   layout: 'horizontal',
-  schema: useWorkFormSchema(deptSelectModalRef, readonly),
+  schema: useWorkFormSchema(),
   showDefaultActions: false,
 });
 
@@ -648,6 +644,8 @@ async function loadData(newId?: string) {
         {
           companyDeptId: data.companyId,
           companyName: data.companyName,
+          deptId: data.deptId,
+          deptName: data.deptName,
           signed: true,
         },
       ];
@@ -806,10 +804,17 @@ async function handleSave() {
       loading.value = false;
       return;
     }
+    if (employmentList.value.some((r) => r.companyDeptId == null || r.deptId == null)) {
+      message.error('每条任职都要选择公司和部门');
+      loading.value = false;
+      return;
+    }
     values.employmentList = employmentList.value;
     const signed = signedRows[0]!;
     values.companyId = signed.companyDeptId;
     values.companyName = signed.companyName;
+    values.deptId = signed.deptId;
+    values.deptName = signed.deptName;
     values.workExperienceList = workExperienceList.value;
     values.educationList = educationList.value;
     values.familyList = familyList.value;
@@ -936,16 +941,21 @@ function handleDeleteFamily(index: number) {
   familyList.value.splice(index, 1);
 }
 
-/** 处理部门选择 */
-function handleDeptSelect(
-  dept: SystemDeptApi.Dept & { companyId?: number; companyName?: string },
-) {
-  // 设置部门ID、部门名称、公司ID和公司名称
-  workFormApi.setFieldValue('deptId', dept.id);
-  workFormApi.setFieldValue('deptName', dept.name);
-  workFormApi.setFieldValue('companyId', dept.companyId);
-  workFormApi.setFieldValue('companyName', dept.companyName || '');
+function syncWorkInfoFromSigned() {
+  const signed = employmentList.value.find((r) => r.signed);
+  workFormApi.setFieldValue('deptId', signed?.deptId);
+  workFormApi.setFieldValue('deptName', signed?.deptName || '');
+  workFormApi.setFieldValue('companyId', signed?.companyDeptId);
+  workFormApi.setFieldValue('companyName', signed?.companyName || '');
 }
+
+watch(
+  employmentList,
+  () => {
+    syncWorkInfoFromSigned();
+  },
+  { deep: true },
+);
 
 // 监听 readonly 状态变化，更新表单的 disabled 状态
 watch(
@@ -974,12 +984,14 @@ watch(
     avatarFormApi.updateSchema(updatedAvatarSchema);
 
     // 更新工作信息表单
-    const workSchema = useWorkFormSchema(deptSelectModalRef, readonly);
+    const workSchema = useWorkFormSchema();
+    const workLocked = (field?: string) =>
+      field === 'deptName' || field === 'companyName';
     const updatedWorkSchema = workSchema.map((item) => ({
       ...item,
       componentProps: {
         ...item.componentProps,
-        disabled: isReadonly,
+        disabled: isReadonly || workLocked(item.fieldName),
       },
     }));
     workFormApi.updateSchema(updatedWorkSchema);
@@ -987,9 +999,30 @@ watch(
   { immediate: true },
 );
 
+function deptOptionsFor(companyId?: number) {
+  if (companyId == null) {
+    return [];
+  }
+  const byId = new Map(allDepts.value.map((d) => [d.id, d]));
+  const underCompany = (deptId?: number) => {
+    let cur = deptId;
+    for (let i = 0; i < 16 && cur; i++) {
+      if (cur === companyId) {
+        return true;
+      }
+      cur = byId.get(cur)?.parentId;
+    }
+    return false;
+  };
+  return allDepts.value
+    .filter((d) => d.id != null && underCompany(d.id))
+    .map((d) => ({ label: d.name, value: d.id! }));
+}
+
 function handleAddEmployment() {
   employmentList.value.push({
     companyDeptId: undefined as unknown as number,
+    deptId: undefined,
     signed: employmentList.value.length === 0,
   });
 }
@@ -1010,6 +1043,7 @@ onMounted(async () => {
   readonly.value = route.query.readonly === 'true';
   try {
     const list = (await getSimpleDeptList()) || [];
+    allDepts.value = list;
     companyOptions.value = list
       .filter((d: any) => String(d.orgType) === '1')
       .map((d: any) => ({ label: d.name, value: d.id }));
@@ -1053,8 +1087,6 @@ onMounted(async () => {
     <div class="mb-4 rounded-lg bg-white p-4 shadow-sm">
       <CardContainer title="工作信息">
         <WorkForm />
-        <!-- 部门选择弹窗 -->
-        <DeptSelectModal ref="deptSelectModalRef" @select="handleDeptSelect" />
       </CardContainer>
     </div>
 
@@ -1067,7 +1099,8 @@ onMounted(async () => {
         </template>
         <Table
           :columns="[
-            { title: '公司', key: 'company', width: 280 },
+            { title: '公司', key: 'company', width: 220 },
+            { title: '部门', key: 'dept', width: 220 },
             { title: '签约公司', key: 'signed', width: 120 },
             { title: '操作', key: 'action', width: 80 },
           ]"
@@ -1088,6 +1121,27 @@ onMounted(async () => {
                   (v: any) => {
                     const hit = companyOptions.find((o) => o.value === v);
                     record.companyName = hit?.label;
+                    record.deptId = undefined;
+                    record.deptName = undefined;
+                  }
+                "
+              />
+            </template>
+            <template v-else-if="column.key === 'dept'">
+              <Select
+                v-model:value="record.deptId"
+                class="w-full"
+                :disabled="readonly || record.companyDeptId == null"
+                :options="deptOptionsFor(record.companyDeptId)"
+                :placeholder="
+                  record.companyDeptId == null ? '先选择公司' : '选择任职部门'
+                "
+                @change="
+                  (v: any) => {
+                    const hit = deptOptionsFor(record.companyDeptId).find(
+                      (o) => o.value === v,
+                    );
+                    record.deptName = hit?.label;
                   }
                 "
               />

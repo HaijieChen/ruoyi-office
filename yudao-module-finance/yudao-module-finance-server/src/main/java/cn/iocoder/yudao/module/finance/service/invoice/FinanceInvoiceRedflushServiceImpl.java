@@ -188,6 +188,9 @@ public class FinanceInvoiceRedflushServiceImpl implements FinanceInvoiceRedflush
         if (reqVO.getStartCompanyDeptId() != null) {
             variables.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
         }
+        if (reqVO.getStartDeptId() != null) {
+            variables.put("startDeptId", reqVO.getStartDeptId());
+        }
         BpmProcessInstanceCreateReqDTO createReqDTO = new BpmProcessInstanceCreateReqDTO();
         createReqDTO.setProcessDefinitionKey(PROCESS_KEY);
         createReqDTO.setBusinessKey(String.valueOf(row.getId()));

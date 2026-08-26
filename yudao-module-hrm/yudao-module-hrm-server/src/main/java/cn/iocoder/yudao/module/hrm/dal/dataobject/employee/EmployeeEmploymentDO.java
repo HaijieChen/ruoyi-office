@@ -24,6 +24,8 @@ public class EmployeeEmploymentDO extends BaseDO {
     private Long employeeId;
     /** 任职公司 = system_dept.id（orgType=公司） */
     private Long companyDeptId;
+    /** 任职部门 = system_dept.id */
+    private Long deptId;
     /** 是否签约公司 */
     private Boolean signed;
 }
