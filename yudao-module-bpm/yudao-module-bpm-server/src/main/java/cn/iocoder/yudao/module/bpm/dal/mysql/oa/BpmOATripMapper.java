@@ -17,7 +17,7 @@ public interface BpmOATripMapper extends BaseMapperX<BpmOATripDO> {
         return selectPage(reqVO, new LambdaQueryWrapperX<BpmOATripDO>()
                 .eqIfPresent(BpmOATripDO::getUserId, userId)
                 .eqIfPresent(BpmOATripDO::getStatus, reqVO.getStatus())
-                .eqIfPresent(BpmOATripDO::getType, reqVO.getType())
+                .eqIfPresent(BpmOATripDO::getBizType, reqVO.getBizType())
                 .betweenIfPresent(BpmOATripDO::getCreateTime, reqVO.getCreateTime())
                 .orderByDesc(BpmOATripDO::getId));
     }

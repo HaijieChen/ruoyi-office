@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_DURATION_INVALID;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_ACCESS_DENIED;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_TRIP_FIELD_REQUIRED;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -101,7 +102,11 @@ class BpmOATripServiceTest {
         BpmOATripDO inserted = insertCaptor.getValue();
         assertEquals(1L, inserted.getUserId());
         assertEquals("北京", inserted.getDestination());
+        assertEquals("广州", inserted.getOriginCity());
+        assertEquals(Integer.valueOf(1), inserted.getBizType());
+        assertNull(inserted.getType());
         assertEquals("客户拜访", inserted.getReason());
+        assertEquals(java.util.List.of("http://file/a.pdf"), inserted.getAttachmentUrls());
         assertEquals(2L, inserted.getCompanionUserId());
         assertEquals(java.util.List.of(2L), inserted.getCompanionUserIds());
         assertEquals(0, new BigDecimal("1.5").compareTo(inserted.getHours()));
@@ -154,6 +159,72 @@ class BpmOATripServiceTest {
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
         verify(processInstanceApi).createProcessInstance(eq(1L), dtoCaptor.capture());
         assertNull(dtoCaptor.getValue().getStartUserSelectAssignees());
+    }
+
+    @Test
+    void createTrip_talkMissingHotel_rejected() {
+        BpmOATripCreateReqVO req = validCreateReq();
+        req.setHotelBooking(null);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createTrip(1L, req));
+        assertEquals(OA_TRIP_FIELD_REQUIRED.getCode(), ex.getCode());
+        verify(tripMapper, never()).insert(any(BpmOATripDO.class));
+    }
+
+    @Test
+    void createTrip_otherWithoutHotel_succeeds() {
+        doAnswer(invocation -> {
+            BpmOATripDO trip = invocation.getArgument(0);
+            trip.setId(8L);
+            return 1;
+        }).when(tripMapper).insert(any(BpmOATripDO.class));
+        when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("pi-8"));
+
+        BpmOATripCreateReqVO req = validCreateReq();
+        req.setBizType(3);
+        req.setHotelBooking(null);
+        req.setPartyName("should-clear");
+        service.createTrip(1L, req);
+
+        ArgumentCaptor<BpmOATripDO> insertCaptor = ArgumentCaptor.forClass(BpmOATripDO.class);
+        verify(tripMapper).insert(insertCaptor.capture());
+        assertNull(insertCaptor.getValue().getHotelBooking());
+        assertNull(insertCaptor.getValue().getPartyName());
+    }
+
+    @Test
+    void createTrip_originGuangzhouDestShanghai_persistsDest() {
+        doAnswer(invocation -> {
+            BpmOATripDO trip = invocation.getArgument(0);
+            trip.setId(9L);
+            return 1;
+        }).when(tripMapper).insert(any(BpmOATripDO.class));
+        when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("pi-9"));
+
+        BpmOATripCreateReqVO req = validCreateReq();
+        req.setOriginCity("广州");
+        req.setDestination("上海");
+        service.createTrip(1L, req);
+
+        ArgumentCaptor<BpmOATripDO> insertCaptor = ArgumentCaptor.forClass(BpmOATripDO.class);
+        verify(tripMapper).insert(insertCaptor.capture());
+        assertEquals("上海", insertCaptor.getValue().getDestination());
+        assertEquals("广州", insertCaptor.getValue().getOriginCity());
+
+        ArgumentCaptor<BpmProcessInstanceCreateReqDTO> dtoCaptor =
+                ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
+        verify(processInstanceApi).createProcessInstance(eq(1L), dtoCaptor.capture());
+        assertEquals("上海", dtoCaptor.getValue().getVariables().get("destination"));
+        assertNull(dtoCaptor.getValue().getVariables().get("type"));
+    }
+
+    @Test
+    void createTrip_missingAttachments_rejected() {
+        BpmOATripCreateReqVO req = validCreateReq();
+        req.setAttachmentUrls(java.util.List.of());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createTrip(1L, req));
+        assertEquals(OA_TRIP_FIELD_REQUIRED.getCode(), ex.getCode());
     }
 
     @Test
@@ -242,8 +313,16 @@ class BpmOATripServiceTest {
 
     private static BpmOATripCreateReqVO validCreateReq() {
         BpmOATripCreateReqVO req = new BpmOATripCreateReqVO();
+        req.setBizType(1);
+        req.setOriginCity("广州");
         req.setDestination("北京");
         req.setReason("客户拜访");
+        req.setTransport("1");
+        req.setHotelBooking("1");
+        req.setPartyName("某公司");
+        req.setAddress("某路1号");
+        req.setContactInfo("张三 经理 13800000000");
+        req.setAttachmentUrls(java.util.List.of("http://file/a.pdf"));
         req.setCompanionUserId(2L);
         req.setStartTime(START);
         req.setEndTime(START.plusMinutes(90));

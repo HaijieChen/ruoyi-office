@@ -22,9 +22,21 @@ public class BpmOATripRespVO {
     @Schema(description = "申请人部门", example = "研发部")
     private String deptName;
 
-    @Schema(description = "出差类型：1市内 2省内 3省外 4国外", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
+    @Schema(description = "历史市内/省内类型")
     private Integer type;
+    @Schema(description = "业务类型：1洽谈 2活动 3其他")
+    private Integer bizType;
     private String destination;
+    private String originCity;
+    private String transport;
+    private String hotelBooking;
+    private String partyName;
+    private String address;
+    private String contactInfo;
+    private String needOutput;
+    private String hasCarriageFee;
+    private String remark;
+    private java.util.List<String> attachmentUrls;
     private String reason;
     private Long companionUserId;
     private String companionNickname;

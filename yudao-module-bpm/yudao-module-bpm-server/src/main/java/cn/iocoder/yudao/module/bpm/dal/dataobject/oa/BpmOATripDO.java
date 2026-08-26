@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,6 +15,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * OA 出差申请 DO
@@ -33,10 +35,25 @@ public class BpmOATripDO extends BaseDO {
      */
     private Long userId;
     /**
-     * 出差类型：1市内 2省内 3省外 4国外
+     * 出差类型：1市内 2省内 3省外 4国外（历史，新单不填）
      */
     private Integer type;
+    /** 目的地城市（费用报销住宿城市） */
     private String destination;
+    /** 出发城市 */
+    private String originCity;
+    /** 业务类型：1洽谈 2活动 3其他 */
+    private Integer bizType;
+    private String transport;
+    private String hotelBooking;
+    private String partyName;
+    private String address;
+    private String contactInfo;
+    private String needOutput;
+    private String hasCarriageFee;
+    private String remark;
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<String> attachmentUrls;
     private String reason;
     private Long companionUserId;
     /** 同行人员用户编号，逗号分隔 */

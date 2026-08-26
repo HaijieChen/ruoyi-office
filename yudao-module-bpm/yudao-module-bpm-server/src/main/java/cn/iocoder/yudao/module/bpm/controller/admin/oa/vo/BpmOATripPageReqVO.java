@@ -16,8 +16,11 @@ public class BpmOATripPageReqVO extends PageParam {
     @Schema(description = "状态", example = "1")
     private Integer status;
 
-    @Schema(description = "出差类型：1市内 2省内 3省外 4国外", example = "1")
+    @Schema(description = "历史市内/省内类型，列表不再用")
     private Integer type;
+
+    @Schema(description = "业务类型：1洽谈 2活动 3其他", example = "1")
+    private Integer bizType;
 
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     @Schema(description = "申请时间")

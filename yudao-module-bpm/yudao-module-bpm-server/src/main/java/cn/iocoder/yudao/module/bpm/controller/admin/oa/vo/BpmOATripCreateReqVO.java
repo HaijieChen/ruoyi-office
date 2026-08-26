@@ -17,16 +17,51 @@ import static cn.iocoder.yudao.framework.common.util.date.DateUtils.FORMAT_YEAR_
 @Data
 public class BpmOATripCreateReqVO {
 
-    @Schema(description = "出差类型（历史，新单可不填）", example = "1")
+    @Schema(description = "历史市内/省内类型，新单不填")
     private Integer type;
 
-    @Schema(description = "出差地点", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "出差地点不能为空")
+    @Schema(description = "业务类型：1洽谈 2活动 3其他", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "出差类型不能为空")
+    private Integer bizType;
+
+    @Schema(description = "目的地城市", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "目的地城市不能为空")
     private String destination;
 
-    @Schema(description = "出差原因", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "出差原因不能为空")
+    @Schema(description = "出发城市", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "出发城市不能为空")
+    private String originCity;
+
+    @Schema(description = "出差事由", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "出差事由不能为空")
     private String reason;
+
+    @Schema(description = "交通工具")
+    private String transport;
+
+    @Schema(description = "机酒预定情况")
+    private String hotelBooking;
+
+    @Schema(description = "公司全称或活动邀请方")
+    private String partyName;
+
+    @Schema(description = "具体地址")
+    private String address;
+
+    @Schema(description = "对接人姓名职务联系方式")
+    private String contactInfo;
+
+    @Schema(description = "是否需要内容产出")
+    private String needOutput;
+
+    @Schema(description = "是否有车马费")
+    private String hasCarriageFee;
+
+    @Schema(description = "备注")
+    private String remark;
+
+    @Schema(description = "附件 URL")
+    private List<String> attachmentUrls;
 
     @Schema(description = "同行人员用户编号（兼容旧单选）")
     private Long companionUserId;
@@ -44,7 +79,7 @@ public class BpmOATripCreateReqVO {
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime endTime;
 
-    @Schema(description = "发起人自选审批人 Map（服务端忽略）", example = "{taskKey1: [1, 2]}")
+    @Schema(description = "发起人自选审批人 Map（服务端忽略）")
     private Map<String, List<Long>> startUserSelectAssignees;
 
     @Schema(description = "发起时选择的任职公司")
