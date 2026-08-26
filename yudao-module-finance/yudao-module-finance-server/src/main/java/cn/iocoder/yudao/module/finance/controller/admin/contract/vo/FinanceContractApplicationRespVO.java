@@ -18,6 +18,7 @@ public class FinanceContractApplicationRespVO {
     private String currentNodeKey;
     private String currentNodeName;
     private Long applicantUserId;
+    private Long businessStaffUserId;
     private Long applicantDeptId;
     private Long counterpartyCompanyId;
     private String counterpartyName;

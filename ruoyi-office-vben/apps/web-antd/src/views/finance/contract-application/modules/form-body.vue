@@ -29,6 +29,7 @@ import { getCustomerCompanySimpleList } from '#/api/finance/customer-company';
 import { FileUpload } from '#/components/upload';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { defaultCurrencyFromCompanyAccounts } from '#/views/finance/shared/account-currency';
+import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
 
 defineOptions({ name: 'FinanceContractApplicationFormBody' });
 
@@ -83,6 +84,7 @@ interface FormData {
   endDate?: string;
   draftFileUrl?: string;
   remark?: string;
+  businessStaffUserId?: number;
 }
 
 interface Option {
@@ -101,6 +103,7 @@ const companyOptions = ref<Option[]>([]);
 const loadingCustomer = ref(false);
 const loadingCompany = ref(false);
 const submitting = ref(false);
+const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
 
 const isResubmit = computed(() => formData.value.mode === 'resubmit');
 const needPreProcess = computed(
@@ -210,6 +213,7 @@ function clearForm() {
     needMail: false,
     copyCount: 1,
     mode: 'create',
+    businessStaffUserId: undefined,
   };
   formRef.value?.resetFields?.();
 }
@@ -269,6 +273,7 @@ function buildPayload(): FinanceContractApplicationApi.CreateAndStartRequest {
     endDate: formData.value.endDate,
     draftFileUrl: formData.value.draftFileUrl!,
     remark: formData.value.remark,
+    businessStaffUserId: formData.value.businessStaffUserId,
   };
 }
 
@@ -289,6 +294,7 @@ function getPredictVariables(): Record<string, unknown> {
 }
 
 async function reset(opts?: { id?: number; mode?: string }) {
+  const defaultStaff = await loadBusinessStaff();
   await Promise.all([loadCustomers(), loadCompanies()]);
   if (opts?.mode === 'resubmit' && opts.id) {
     const detail = await getContractApplication(opts.id);
@@ -314,9 +320,11 @@ async function reset(opts?: { id?: number; mode?: string }) {
       endDate: detail.endDate?.slice?.(0, 10) || detail.endDate,
       draftFileUrl: detail.draftFileUrl,
       remark: detail.remark,
+      businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
     };
   } else {
     clearForm();
+    formData.value.businessStaffUserId = defaultStaff;
   }
   emit('predictChange', getPredictVariables());
 }
@@ -357,6 +365,16 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     :label-col="{ span: 7 }"
     :wrapper-col="{ span: 15 }"
   >
+    <Form.Item label="业务人员" name="businessStaffUserId">
+      <Select
+        v-model:value="formData.businessStaffUserId"
+        class="w-full"
+        show-search
+        option-filter-prop="label"
+        :options="staffOptions"
+        placeholder="默认提单人，可改选任职公司员工"
+      />
+    </Form.Item>
     <Form.Item label="对方客商" name="counterpartyCompanyId">
       <Select
         v-model:value="formData.counterpartyCompanyId"

@@ -39,6 +39,7 @@ import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
 import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
+import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
@@ -53,6 +54,7 @@ import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.ObjectProvider;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -106,6 +108,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private final FinancePaymentPayLineMapper payLineMapper;
     private final FinancePaymentSalaryLineMapper salaryLineMapper;
     private final FinancePaymentTaxLineMapper taxLineMapper;
+    @Resource
+    private FinanceBusinessStaffSupport businessStaffSupport;
 
     public FinancePaymentApplicationServiceImpl(FinancePaymentApplicationMapper applicationMapper,
                                                 FinancePaymentApplicationNoRedisDAO applicationNoRedisDAO,
@@ -1053,6 +1057,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .specialNote(trimToNull(reqVO.getSpecialNote()))
                 .processTitle(title)
                 .applicantUserId(applicantUserId)
+                .businessStaffUserId(businessStaffSupport.resolve(applicantUserId, reqVO.getBusinessStaffUserId()))
                 .applicantDeptId(deptId)
                 .build();
     }
@@ -1613,6 +1618,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         String specialNote;
         String processTitle;
         Long applicantUserId;
+        Long businessStaffUserId;
         Long applicantDeptId;
 
         FinancePaymentApplicationDO.FinancePaymentApplicationDOBuilder toDoBuilder() {
@@ -1640,6 +1646,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .specialNote(specialNote)
                     .processTitle(processTitle)
                     .applicantUserId(applicantUserId)
+                    .businessStaffUserId(businessStaffUserId)
                     .applicantDeptId(applicantDeptId);
         }
     }

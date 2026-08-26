@@ -1018,6 +1018,58 @@ public class EmployeeServiceImpl implements EmployeeService {
         return buildEmploymentList(archive);
     }
 
+    @Override
+    public List<cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO> listColleaguesByUserId(Long userId) {
+        List<cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO> result = new ArrayList<>();
+        if (userId == null) {
+            return result;
+        }
+        Set<Long> seenUsers = new HashSet<>();
+        EmployeeDO self = employeeArchiveMapper.selectByUserId(userId);
+        addColleague(result, seenUsers, userId, self != null ? self.getId() : null,
+                self != null ? self.getName() : null);
+        List<EmployeeEmploymentVO> mine = listMyEmployments(userId);
+        Set<Long> companyIds = mine.stream()
+                .map(EmployeeEmploymentVO::getCompanyDeptId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (companyIds.isEmpty()) {
+            return result;
+        }
+        List<EmployeeEmploymentDO> rows = employeeEmploymentMapper.selectListByCompanyDeptIds(companyIds);
+        Set<Long> employeeIds = rows.stream()
+                .map(EmployeeEmploymentDO::getEmployeeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (employeeIds.isEmpty()) {
+            return result;
+        }
+        List<EmployeeDO> employees = employeeArchiveMapper.selectBatchIds(employeeIds);
+        if (CollUtil.isEmpty(employees)) {
+            return result;
+        }
+        for (EmployeeDO employee : employees) {
+            if (employee.getUserId() == null) {
+                continue;
+            }
+            addColleague(result, seenUsers, employee.getUserId(), employee.getId(), employee.getName());
+        }
+        return result;
+    }
+
+    private static void addColleague(List<cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO> result,
+                                     Set<Long> seenUsers, Long userId, Long employeeId, String name) {
+        if (userId == null || !seenUsers.add(userId)) {
+            return;
+        }
+        cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO vo =
+                new cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO();
+        vo.setUserId(userId);
+        vo.setEmployeeId(employeeId);
+        vo.setName(StrUtil.blankToDefault(name, String.valueOf(userId)));
+        result.add(vo);
+    }
+
     void saveContracts(Long employeeId, List<EmployeeContractVO> contracts) {
         if (CollUtil.isEmpty(contracts)) {
             return;

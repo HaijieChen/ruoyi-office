@@ -49,6 +49,7 @@ export namespace FinanceInvoiceApplicationApi {
     /** 服务端可认领金额 */
     claimableAmount?: number;
     applicantUserId: number;
+    businessStaffUserId?: number;
     buyerName?: string;
     buyerTaxNo?: string;
     buyerAddressPhone?: string;
@@ -94,6 +95,7 @@ export namespace FinanceInvoiceApplicationApi {
     taxAmount?: number;
     evidenceFileUrl?: string;
     remark?: string;
+    businessStaffUserId?: number;
     lines: Array<{
       businessOrderId: number;
       amount: number;

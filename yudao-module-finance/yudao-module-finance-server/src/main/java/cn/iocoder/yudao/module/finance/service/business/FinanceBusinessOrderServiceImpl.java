@@ -13,9 +13,11 @@ import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMa
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -51,6 +53,8 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
     private final FinanceContractApplicationMapper contractApplicationMapper;
     private final FinanceEntityCompanyResolver entityCompanyResolver;
     private final FinanceRelatedProcessAccess relatedProcessAccess;
+    @Resource
+    private FinanceBusinessStaffSupport businessStaffSupport;
 
     public FinanceBusinessOrderServiceImpl(FinanceBusinessOrderMapper businessOrderMapper,
                                            FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO,
@@ -88,6 +92,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         businessOrder.setOrderNo(businessOrderNoRedisDAO.generate(importDate));
         businessOrder.setImportDate(importDate);
         businessOrder.setImporterId(importerId);
+        businessOrder.setBusinessStaffUserId(businessStaffSupport.resolve(importerId, createReqVO.getBusinessStaffUserId()));
         businessOrder.setConfirmedClaimedAmount(ZERO);
         businessOrderMapper.insert(businessOrder);
         return businessOrder.getId();
@@ -158,6 +163,8 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         updateObj.setOrderNo(currentOrder.getOrderNo());
         updateObj.setImportDate(currentOrder.getImportDate());
         updateObj.setImporterId(currentOrder.getImporterId());
+        updateObj.setBusinessStaffUserId(businessStaffSupport.resolve(
+                currentOrder.getImporterId(), updateReqVO.getBusinessStaffUserId()));
         updateObj.setConfirmedClaimedAmount(confirmedClaimedAmount);
         updateObj.setSourceRowHash(currentOrder.getSourceRowHash());
         updateObj.setContractProcessId(currentOrder.getContractProcessId());

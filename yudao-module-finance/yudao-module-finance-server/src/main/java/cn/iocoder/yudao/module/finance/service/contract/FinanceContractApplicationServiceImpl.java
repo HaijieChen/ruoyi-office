@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCo
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
@@ -22,6 +23,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.ObjectProvider;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -72,6 +74,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private final ObjectProvider<TaskService> taskServiceProvider;
     private final DictDataApi dictDataApi;
     private final ObjectProvider<FinanceApprovedSalesBusinessOrderService> autoBusinessOrderProvider;
+    @Resource
+    private FinanceBusinessStaffSupport businessStaffSupport;
+
     private static final org.slf4j.Logger log =
             org.slf4j.LoggerFactory.getLogger(FinanceContractApplicationServiceImpl.class);
 
@@ -610,6 +615,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         String currency = resolveCurrency(reqVO);
         return FinanceContractApplicationDO.builder()
                 .applicantUserId(applicantUserId)
+                .businessStaffUserId(businessStaffSupport.resolve(applicantUserId, reqVO.getBusinessStaffUserId()))
                 .applicantDeptId(reqVO.getApplicantDeptId())
                 .counterpartyCompanyId(counterparty.getId())
                 .counterpartyName(counterparty.getName())

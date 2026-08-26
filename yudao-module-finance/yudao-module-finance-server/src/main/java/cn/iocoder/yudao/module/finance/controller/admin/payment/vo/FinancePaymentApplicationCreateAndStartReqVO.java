@@ -71,6 +71,9 @@ public class FinancePaymentApplicationCreateAndStartReqVO {
     @Schema(description = "特殊说明")
     private String specialNote;
 
+    @Schema(description = "业务人员用户编号，默认提单人")
+    private Long businessStaffUserId;
+
     @Schema(description = "申请人部门")
     private Long applicantDeptId;
 

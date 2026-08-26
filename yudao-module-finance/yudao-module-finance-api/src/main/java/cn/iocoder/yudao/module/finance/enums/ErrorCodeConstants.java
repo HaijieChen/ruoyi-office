@@ -332,4 +332,6 @@ public interface ErrorCodeConstants {
     ErrorCode COMPANY_APPROVER_USER_REQUIRED = new ErrorCode(1_040_011_000, "请至少选择一名财务审批人");
     ErrorCode COMPANY_APPROVER_USER_INVALID = new ErrorCode(1_040_011_001, "财务审批人不存在或已停用");
 
+    ErrorCode BUSINESS_STAFF_INVALID = new ErrorCode(1_040_000_040, "业务人员须为提单人任职公司下的员工");
+
 }

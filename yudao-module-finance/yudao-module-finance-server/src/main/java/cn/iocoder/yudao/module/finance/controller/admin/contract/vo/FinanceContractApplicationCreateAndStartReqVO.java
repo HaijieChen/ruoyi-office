@@ -85,6 +85,9 @@ public class FinanceContractApplicationCreateAndStartReqVO {
     @Schema(description = "备注")
     private String remark;
 
+    @Schema(description = "业务人员用户编号，默认提单人")
+    private Long businessStaffUserId;
+
     @Schema(description = "申请人部门编号")
     private Long applicantDeptId;
 

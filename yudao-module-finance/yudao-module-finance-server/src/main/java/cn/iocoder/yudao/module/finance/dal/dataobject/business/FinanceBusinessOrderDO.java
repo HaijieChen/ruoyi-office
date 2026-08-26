@@ -28,6 +28,7 @@ public class FinanceBusinessOrderDO extends BaseDO {
     private String entityCompanyName;
     private LocalDate importDate;
     private Long importerId;
+    private Long businessStaffUserId;
     private String contractProcessId;
     /**
      * 正式关联合同签约申请 id（CS-T1/T5）；legacy 文本见 {@link #contractProcessId}

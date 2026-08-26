@@ -70,6 +70,9 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Schema(description = "备注/特殊情况说明")
     private String remark;
 
+    @Schema(description = "业务人员用户编号，默认提单人")
+    private Long businessStaffUserId;
+
     @Schema(description = "发起人自选审批人")
     private Map<String, List<Long>> startUserSelectAssignees;
 

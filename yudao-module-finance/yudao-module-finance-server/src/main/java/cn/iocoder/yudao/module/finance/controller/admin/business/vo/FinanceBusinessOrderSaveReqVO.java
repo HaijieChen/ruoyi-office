@@ -63,6 +63,9 @@ public class FinanceBusinessOrderSaveReqVO {
     @NotBlank(message = "币种不能为空")
     private String currency;
 
+    @Schema(description = "业务人员用户编号，默认提单人")
+    private Long businessStaffUserId;
+
     @Schema(description = "备注")
     private String remark;
 

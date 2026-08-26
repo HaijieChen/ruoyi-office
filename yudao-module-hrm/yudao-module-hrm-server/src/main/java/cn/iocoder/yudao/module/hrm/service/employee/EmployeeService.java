@@ -30,6 +30,8 @@ public interface EmployeeService {
 
     java.util.List<cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmploymentVO> listMyEmployments(Long userId);
 
+    java.util.List<cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO> listColleaguesByUserId(Long userId);
+
     /**
      * 将指定公司+部门设为签约任职：同公司改部门，跨公司降级旧签约并提升或新增目标行。
      */

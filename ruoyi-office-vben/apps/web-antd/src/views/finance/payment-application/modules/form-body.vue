@@ -23,6 +23,7 @@ import {
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { FileUpload } from '#/components/upload';
 import { defaultCurrencyFromCompanyAccounts } from '#/views/finance/shared/account-currency';
+import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
 
 defineOptions({ name: 'FinancePaymentApplicationFormBody' });
 
@@ -55,6 +56,7 @@ interface FormData {
   costProject?: string;
   evidenceFileUrls?: string[];
   specialNote?: string;
+  businessStaffUserId?: number;
 }
 
 const formRef = ref();
@@ -74,6 +76,7 @@ const relatedContractOptions = ref<
 >([]);
 const cumulativePaid = ref(0);
 const submitting = ref(false);
+const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
 /** 用户是否手动改过币种（切换主体时不再覆盖） */
 const currencyTouched = ref(false);
 
@@ -314,6 +317,7 @@ function onCompanyDropdownVisible(open: boolean) {
 /** 初始化（壳内 mount 或 Modal open） */
 async function reset(opts?: { id?: number; mode?: string }) {
   // 公司与收款方分开拉：收款方失败不能把主体公司也带空
+  const defaultStaff = await loadBusinessStaff();
   await Promise.all([loadSuppliers(), loadCompanies()]);
   mode.value = opts?.mode === 'resubmit' ? 'resubmit' : 'create';
   currencyTouched.value = false;
@@ -337,6 +341,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
       costProject: detail.costProject,
       evidenceFileUrls: parseEvidenceUrls(detail.evidenceFileUrls),
       specialNote: detail.specialNote,
+      businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
     };
     // 历史驳回重提：主体为空时须补选；币种若已有则视为已确认
     if (detail.entityCompanyDeptId) {
@@ -365,6 +370,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
       currency: 'CNY',
       paymentTiming: 'IMMEDIATE',
       evidenceFileUrls: [],
+      businessStaffUserId: defaultStaff,
     };
     cumulativePaid.value = 0;
   }
@@ -426,6 +432,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
       startCompanyDeptId: ctx?.startCompanyDeptId,
       startDeptId: ctx?.startDeptId,
+      businessStaffUserId: formData.value.businessStaffUserId,
     };
     if (mode.value === 'resubmit' && formData.value.id) {
       await resubmitPaymentApplication(formData.value.id, payload);
@@ -461,6 +468,16 @@ defineExpose({
       :label-col="{ span: 6 }"
       :wrapper-col="{ span: 16 }"
     >
+      <Form.Item label="业务人员" name="businessStaffUserId">
+        <Select
+          v-model:value="formData.businessStaffUserId"
+          class="w-full"
+          show-search
+          option-filter-prop="label"
+          :options="staffOptions"
+          placeholder="默认提单人，可改选任职公司员工"
+        />
+      </Form.Item>
       <Form.Item label="主体公司" name="entityCompanyDeptId" required>
         <Select
           v-model:value="formData.entityCompanyDeptId"

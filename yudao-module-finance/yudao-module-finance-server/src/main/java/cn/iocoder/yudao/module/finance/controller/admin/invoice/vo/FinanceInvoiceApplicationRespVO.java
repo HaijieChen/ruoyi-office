@@ -32,6 +32,7 @@ public class FinanceInvoiceApplicationRespVO {
     private BigDecimal pendingClaimedAmount;
     @Schema(description = "申请人用户编号")
     private Long applicantUserId;
+    private Long businessStaffUserId;
     @Schema(description = "期望开票日")
     private LocalDate expectedInvoiceDate;
     @Schema(description = "开票公司名称快照")

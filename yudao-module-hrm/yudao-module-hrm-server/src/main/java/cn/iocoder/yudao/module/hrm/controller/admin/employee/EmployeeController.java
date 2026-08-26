@@ -78,6 +78,13 @@ public class EmployeeController {
                 cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId()));
     }
 
+    @GetMapping("/colleagues")
+    @Operation(summary = "当前登录人任职公司下的同事（含本人）")
+    public CommonResult<List<cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO>> getColleagues() {
+        return success(employeeArchiveService.listColleaguesByUserId(
+                cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId()));
+    }
+
     @GetMapping("/get")
     @Operation(summary = "获得员工档案")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")

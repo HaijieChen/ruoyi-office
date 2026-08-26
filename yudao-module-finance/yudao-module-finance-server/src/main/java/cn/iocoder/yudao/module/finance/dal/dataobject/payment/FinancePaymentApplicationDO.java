@@ -35,6 +35,7 @@ public class FinancePaymentApplicationDO extends TenantBaseDO {
     private String currentNodeName;
     private String processTitle;
     private Long applicantUserId;
+    private Long businessStaffUserId;
     private Long applicantDeptId;
     /** 主体公司组织部门 ID（业务主体，非仅任职部门；薪资/税金主单可空，明细行承载） */
     private Long entityCompanyDeptId;

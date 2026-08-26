@@ -23,11 +23,13 @@ import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicati
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
+import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -76,6 +78,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     private final FinanceCustomerCompanyService customerCompanyService;
     private final FinanceEntityCompanyResolver entityCompanyResolver;
     private final DictDataApi dictDataApi;
+    @Resource
+    private FinanceBusinessStaffSupport businessStaffSupport;
 
     public FinanceInvoiceApplicationServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
                                                 FinanceInvoiceApplicationLineMapper lineMapper,
@@ -157,6 +161,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .confirmedClaimedAmount(ZERO)
                 .pendingClaimedAmount(ZERO)
                 .applicantUserId(applicantUserId)
+                .businessStaffUserId(businessStaffSupport.resolve(applicantUserId, reqVO.getBusinessStaffUserId()))
                 .expectedInvoiceDate(reqVO.getExpectedInvoiceDate())
                 .invoiceCompany(invoiceCo.name())
                 .invoiceCompanyDeptId(invoiceCo.deptId())

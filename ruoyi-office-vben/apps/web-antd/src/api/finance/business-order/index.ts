@@ -60,6 +60,7 @@ export namespace FinanceBusinessOrderApi {
     invoiceOpenableAmount?: number;
     /** 备注（可选） */
     remark?: string;
+    businessStaffUserId?: number;
     /** 创建时间，只读 */
     createTime: string;
   }
@@ -93,6 +94,7 @@ export namespace FinanceBusinessOrderApi {
     discountRate?: number;
     currency: string;
     remark?: string;
+    businessStaffUserId?: number;
     /**
      * @deprecated EXP-70 兼容期：旧客户端可传，服务端忽略并从合同派生
      */

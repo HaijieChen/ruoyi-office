@@ -31,6 +31,7 @@ import {
   resubmitInvoiceApplication,
 } from '#/api/finance/invoice-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
+import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
 
 defineOptions({ name: 'FinanceInvoiceApplicationFormBody' });
 
@@ -67,6 +68,7 @@ interface FormData {
   /** 特别开票要求（单据级，不进客户档案） */
   specialInvoiceRequirement?: string;
   remark?: string;
+  businessStaffUserId?: number;
   lines: LineItem[];
 }
 
@@ -104,6 +106,7 @@ const customerCompanyOptions = ref<CustomerCompanyOption[]>([]);
 const loadingBo = ref(false);
 const loadingCompany = ref(false);
 const loadingCustomerCompany = ref(false);
+const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
 /** resubmit 时原客户公司已停用：保留上次快照只读展示，须重选启用档 */
 const priorBuyerSnapshotHint = ref<string | undefined>();
 /** orderNo 远程搜索防抖 */
@@ -561,6 +564,7 @@ function getPredictVariables(): Record<string, unknown> {
 }
 
 async function reset(opts?: { id?: number; mode?: string }) {
+  const defaultStaff = await loadBusinessStaff();
   await Promise.all([
     loadBusinessOrderOptions(),
     loadCompanyOptions(),
@@ -583,6 +587,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
       productType: detail.taxContent,
       specialInvoiceRequirement: detail.specialInvoiceRequirement,
       remark: detail.remark as any,
+      businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
       lines: (detail.lines || []).map((l) => ({
         businessOrderId: l.businessOrderId,
         amount: Number(l.amount),
@@ -645,7 +650,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
     }
   } else {
     priorBuyerSnapshotHint.value = undefined;
-    formData.value = { mode: 'create', lines: [{}] };
+    formData.value = { mode: 'create', lines: [{}], businessStaffUserId: defaultStaff };
   }
   emit('predictChange', getPredictVariables());
 }
@@ -701,6 +706,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
       startCompanyDeptId: ctx?.startCompanyDeptId,
       startDeptId: ctx?.startDeptId,
+      businessStaffUserId: formData.value.businessStaffUserId,
     };
     if (isResubmit.value && formData.value.id) {
       await resubmitInvoiceApplication(formData.value.id, {
@@ -740,6 +746,16 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
       :label-col="{ span: 5 }"
       :wrapper-col="{ span: 18 }"
     >
+      <Form.Item label="业务人员" name="businessStaffUserId">
+        <Select
+          v-model:value="formData.businessStaffUserId"
+          class="w-full"
+          show-search
+          option-filter-prop="label"
+          :options="staffOptions"
+          placeholder="默认提单人，可改选任职公司员工"
+        />
+      </Form.Item>
       <Form.Item label="客户公司" name="customerCompanyId" required>
         <Select
           v-model:value="formData.customerCompanyId"

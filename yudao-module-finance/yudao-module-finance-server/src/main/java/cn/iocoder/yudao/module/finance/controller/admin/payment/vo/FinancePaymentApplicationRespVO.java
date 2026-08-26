@@ -21,6 +21,7 @@ public class FinancePaymentApplicationRespVO {
     private String currentNodeName;
     private String processTitle;
     private Long applicantUserId;
+    private Long businessStaffUserId;
     private Long applicantDeptId;
     private Long entityCompanyDeptId;
     private String entityCompanyName;

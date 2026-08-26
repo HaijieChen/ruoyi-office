@@ -25,6 +25,7 @@ import {
 import { listSelectableContractsForBo } from '#/api/finance/contract-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { $t } from '#/locales';
+import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
 
 import {
   resolveEditOpenProductType,
@@ -68,8 +69,10 @@ interface FormData {
   orderNo?: string;
   importDate?: string;
   importer?: string;
+  businessStaffUserId?: number;
 }
 
+const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
 const formRef = ref();
 const formData = ref<FormData>({});
 const companyOptions = ref<CompanyOption[]>([]);
@@ -264,6 +267,7 @@ const [Modal, modalApi] = useVbenModal({
       currency: (formData.value.currency || 'CNY').toUpperCase(),
       discountRate: formData.value.discountRate,
       remark: formData.value.remark,
+      businessStaffUserId: formData.value.businessStaffUserId,
     };
     try {
       await (saveData.id ? updateBusinessOrder(saveData) : createBusinessOrder(saveData));
@@ -282,9 +286,11 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     payerDirty.value = false;
+    const defaultStaff = await loadBusinessStaff();
     await Promise.all([loadCompanyOptions(), loadContractOptions()]);
     const data = modalApi.getData<{ id?: number }>();
     if (!data?.id) {
+      formData.value.businessStaffUserId = defaultStaff;
       // 新建：不预填；用户选合同时 @change 回填
       return;
     }
@@ -390,6 +396,16 @@ function onContractChange(id: unknown) {
         </Form.Item>
       </template>
 
+      <Form.Item label="业务人员" name="businessStaffUserId">
+        <Select
+          v-model:value="formData.businessStaffUserId"
+          class="w-full"
+          show-search
+          option-filter-prop="label"
+          :options="staffOptions"
+          placeholder="默认提单人，可改选任职公司员工"
+        />
+      </Form.Item>
       <Form.Item label="主体公司" name="entityCompanyDeptId">
         <Select
           v-model:value="formData.entityCompanyDeptId"

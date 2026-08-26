@@ -45,6 +45,7 @@ public class FinanceInvoiceApplicationDO extends BaseDO {
     private BigDecimal confirmedClaimedAmount;
     private BigDecimal pendingClaimedAmount;
     private Long applicantUserId;
+    private Long businessStaffUserId;
     private LocalDate expectedInvoiceDate;
     private String invoiceCompany;
     /**

@@ -34,6 +34,7 @@ public class FinanceContractApplicationDO extends TenantBaseDO {
     private String currentNodeKey;
     private String currentNodeName;
     private Long applicantUserId;
+    private Long businessStaffUserId;
     private Long applicantDeptId;
     private Long counterpartyCompanyId;
     private String counterpartyName;

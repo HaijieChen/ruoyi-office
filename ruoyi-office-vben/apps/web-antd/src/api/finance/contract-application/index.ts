@@ -17,6 +17,7 @@ export namespace FinanceContractApplicationApi {
     currentNodeKey?: string;
     currentNodeName?: string;
     applicantUserId?: number;
+    businessStaffUserId?: number;
     applicantDeptId?: number;
     counterpartyCompanyId?: number;
     counterpartyName?: string;
@@ -71,6 +72,7 @@ export namespace FinanceContractApplicationApi {
     draftFileUrl: string;
     remark?: string;
     applicantDeptId?: number;
+    businessStaffUserId?: number;
     /** 发起人自选节点审批人 activityId -> userIds */
     startUserSelectAssignees?: Record<string, number[]>;
     startCompanyDeptId?: number;

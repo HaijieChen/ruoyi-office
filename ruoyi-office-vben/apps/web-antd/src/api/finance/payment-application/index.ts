@@ -19,6 +19,7 @@ export namespace FinancePaymentApplicationApi {
     currentNodeName?: string;
     processTitle?: string;
     applicantUserId?: number;
+    businessStaffUserId?: number;
     applicantDeptId?: number;
     applyDate?: string;
     paymentTiming: string;
@@ -72,6 +73,7 @@ export namespace FinancePaymentApplicationApi {
     evidenceFileUrls: string[];
     specialNote?: string;
     applicantDeptId?: number;
+    businessStaffUserId?: number;
     /** 发起人自选节点审批人 activityId -> userIds */
     startUserSelectAssignees?: Record<string, number[]>;
   }

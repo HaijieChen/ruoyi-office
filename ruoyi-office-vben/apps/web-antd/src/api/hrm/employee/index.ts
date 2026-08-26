@@ -193,6 +193,18 @@ export function getMyEmployments() {
   );
 }
 
+export interface EmployeeColleague {
+  userId?: number;
+  employeeId?: number;
+  name?: string;
+}
+
+export function listEmployeeColleagues() {
+  return requestClient.get<EmployeeColleague[]>(
+    '/hrm/employee-archive/colleagues',
+  );
+}
+
 /** 查询员工档案详情 */
 export function getEmployeeArchive(id: number) {
   return requestClient.get<EmployeeArchiveApi.EmployeeArchive>(
