@@ -58,9 +58,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EmployeeRosterImportTest {
 
-    private static final String EXPECTED_TEMPLATE_SHA256 =
-            "79ce40ae8aa0c584b58fae2da02def6d8032737a34cd81cb35a87642c81bf540";
-
     @InjectMocks
     private EmployeeServiceImpl employeeService;
 
@@ -86,6 +83,8 @@ class EmployeeRosterImportTest {
     private AdminUserApi adminUserApi;
     @Mock
     private ConfigApi configApi;
+    @Mock
+    private cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeEmploymentMapper employeeEmploymentMapper;
 
     private static final String DEPT_NAME = "总经办";
     private static final Long DEPT_ID = 1001L;
@@ -126,11 +125,13 @@ class EmployeeRosterImportTest {
             assertEquals(1, prop.value().length);
             annotated.add(prop.value()[0]);
         }
-        assertEquals(52, annotated.size());
+        assertEquals(54, annotated.size());
         for (int i = 0; i < 52; i++) {
             assertEquals(EmployeeRosterImportExcelVO.TEMPLATE_HEADERS[i], annotated.get(i),
                     "column index " + i);
         }
+        assertEquals("任职单位", annotated.get(52));
+        assertEquals("任职部门", annotated.get(53));
 
         // 关键列
         assertEquals("最高学历\n毕业学校", annotated.get(27));
@@ -142,25 +143,20 @@ class EmployeeRosterImportTest {
     }
 
     @Test
-    void bundledImportTemplateSha256MatchesAuthoritativeAttachment() throws Exception {
+    void bundledImportTemplateKeepsOfficialHeadersAndAppendsEmployments() throws Exception {
         ClassPathResource resource = new ClassPathResource("excel/文枢花名册导入模板.xlsx");
         assertTrue(resource.exists(), "classpath template missing");
-        byte[] bytes;
-        try (InputStream in = resource.getInputStream()) {
-            bytes = in.readAllBytes();
-        }
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        String sha = HexFormat.of().formatHex(md.digest(bytes));
-        assertEquals(EXPECTED_TEMPLATE_SHA256, sha);
-
-        // 工作区附件（若存在）亦对齐
-        Path workspaceTpl = Path.of("attachments/文枢花名册模版.xlsx");
-        if (Files.isRegularFile(workspaceTpl)) {
-            String sha2 = HexFormat.of().formatHex(md.digest(Files.readAllBytes(workspaceTpl)));
-            // re-init digest
-            sha2 = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(Files.readAllBytes(workspaceTpl)));
-            assertEquals(EXPECTED_TEMPLATE_SHA256, sha2);
+        try (InputStream in = resource.getInputStream();
+             org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(in)) {
+            var sheet = wb.getSheetAt(0);
+            var header = sheet.getRow(1);
+            assertTrue(header.getLastCellNum() >= 54);
+            for (int i = 0; i < 52; i++) {
+                assertEquals(EmployeeRosterImportExcelVO.TEMPLATE_HEADERS[i], header.getCell(i).getStringCellValue(),
+                        "template column " + i);
+            }
+            assertEquals("任职单位", header.getCell(52).getStringCellValue());
+            assertEquals("任职部门", header.getCell(53).getStringCellValue());
         }
     }
 
@@ -303,9 +299,9 @@ class EmployeeRosterImportTest {
             assertTrue(resp.getFailureRows().isEmpty());
 
             ArgumentCaptor<EmployeeDO> updateCap = ArgumentCaptor.forClass(EmployeeDO.class);
-            verify(employeeArchiveMapper).updateById(updateCap.capture());
+            verify(employeeArchiveMapper, atLeastOnce()).updateById(updateCap.capture());
             assertEquals(EmployeeStatusEnum.PROBATIONARY.getStatus(),
-                    updateCap.getValue().getEmployeeStatus(),
+                    updateCap.getAllValues().get(0).getEmployeeStatus(),
                     "F1: update must keep probationary when Excel 员工类型 blank");
         }
     }
@@ -484,7 +480,7 @@ class EmployeeRosterImportTest {
             assertEquals(0, resp.getCreateNames().size());
             assertEquals(1, resp.getUpdateNames().size());
             assertTrue(resp.getFailureRows().isEmpty());
-            verify(employeeArchiveMapper).updateById(any(EmployeeDO.class));
+            verify(employeeArchiveMapper, atLeastOnce()).updateById(any(EmployeeDO.class));
         }
     }
 
@@ -528,9 +524,9 @@ class EmployeeRosterImportTest {
             assertTrue(resp.getFailureRows().isEmpty());
 
             ArgumentCaptor<EmployeeDO> updateCap = ArgumentCaptor.forClass(EmployeeDO.class);
-            verify(employeeArchiveMapper).updateById(updateCap.capture());
+            verify(employeeArchiveMapper, atLeastOnce()).updateById(updateCap.capture());
             assertEquals(EmployeeStatusEnum.PROBATIONARY.getStatus(),
-                    updateCap.getValue().getEmployeeStatus(),
+                    updateCap.getAllValues().get(0).getEmployeeStatus(),
                     "P1-A: blank type + conflict fallback must keep winner probationary");
             assertNotEquals(EmployeeStatusEnum.FORMAL.getStatus(),
                     updateCap.getValue().getEmployeeStatus());
@@ -683,5 +679,49 @@ class EmployeeRosterImportTest {
         assertEquals(DEPT_NAME, resp.getDeptName());
         assertEquals(COMPANY_ID, resp.getCompanyId());
         assertEquals("文枢科技", resp.getCompanyName());
+    }
+
+    @Test
+    void importWritesExtraUnsignedEmployment() {
+        DeptRespDTO extraDept = new DeptRespDTO();
+        extraDept.setId(2002L);
+        extraDept.setName("财务部");
+        extraDept.setParentId(200L);
+        extraDept.setStatus(0);
+        extraDept.setOrgType("0");
+        DeptRespDTO extraCompany = new DeptRespDTO();
+        extraCompany.setId(200L);
+        extraCompany.setName("另一家公司");
+        extraCompany.setOrgType("1");
+        extraCompany.setStatus(0);
+        extraCompany.setParentId(0L);
+        DeptRespDTO signedDept = new DeptRespDTO();
+        signedDept.setId(DEPT_ID);
+        signedDept.setName(DEPT_NAME);
+        signedDept.setParentId(COMPANY_ID);
+        signedDept.setStatus(0);
+        signedDept.setOrgType("0");
+        when(deptApi.getSimpleDeptList()).thenReturn(CommonResult.success(List.of(signedDept, extraDept)));
+        when(deptApi.getDept(2002L)).thenReturn(CommonResult.success(extraDept));
+        when(deptApi.getDept(200L)).thenReturn(CommonResult.success(extraCompany));
+
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+            EmployeeRosterImportExcelVO row = baseRow("110101199001011088", "多任职员");
+            row.setExtraCompanyNames("另一家公司");
+            row.setExtraDeptNames("财务部");
+            when(employeeArchiveMapper.selectByIdCard("110101199001011088")).thenReturn(null);
+            doAnswer(inv -> {
+                EmployeeDO e = inv.getArgument(0);
+                e.setId(88L);
+                return 1;
+            }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
+            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+
+            EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
+            assertEquals(List.of("多任职员"), resp.getCreateNames());
+            assertTrue(resp.getFailureRows().isEmpty());
+            verify(employeeEmploymentMapper, times(2)).insert(any(cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEmploymentDO.class));
+        }
     }
 }

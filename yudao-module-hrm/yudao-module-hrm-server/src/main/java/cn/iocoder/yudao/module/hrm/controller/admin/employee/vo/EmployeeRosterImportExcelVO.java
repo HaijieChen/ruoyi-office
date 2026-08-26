@@ -233,4 +233,11 @@ public class EmployeeRosterImportExcelVO {
     @ExcelProperty(value = "入职资料（系统里可以标注一个上传附件的地方，我们可以扫描上传入职资料）", index = 51)
     private String onboardingAttachmentStatus;
 
+    /** 官方 52 列之后：多家任职用英文/中文逗号分隔，与任职部门按序成对 */
+    @ExcelProperty(value = "任职单位", index = 52)
+    private String extraCompanyNames;
+
+    @ExcelProperty(value = "任职部门", index = 53)
+    private String extraDeptNames;
+
 }

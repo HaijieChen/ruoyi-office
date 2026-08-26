@@ -93,8 +93,8 @@ async function handleDownloadTemplate() {
       <Alert
         type="info"
         show-icon
-        message="请先下载官方导入模板，按第 2 行表头填写后上传"
-        description="以身份证号 upsert（有则更新、无则新建）。序号/年龄/司龄不写库；入职资料列不携带附件本体。勿改动表头文案（含换行列）。"
+        message="请先下载导入模板，按第 2 行表头填写后上传"
+        description="以身份证号 upsert。单位名称+部门为签约任职；可选列「任职单位」「任职部门」用逗号分隔多家（按顺序成对）。旧 52 列文件仍可导入。"
       />
 
       <Upload

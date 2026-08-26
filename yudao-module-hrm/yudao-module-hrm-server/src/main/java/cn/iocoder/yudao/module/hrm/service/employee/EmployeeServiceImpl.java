@@ -391,6 +391,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 idCardForMask = idCard;
                 // 部门：模板有「部门」列 → 必须解析为当前租户启用部门的 deptId
                 bindDeptForImport(req, deptsByName);
+                List<EmployeeEmploymentVO> extras = bindExtraEmploymentsForImport(row, deptsByName, req.getCompanyId());
                 // P1-A：解析后的员工类型快照不可变（空白保持 null）
                 final Integer parsedEmployeeStatus = req.getEmployeeStatus();
                 if (!seenIdCards.add(idCard)) {
@@ -406,6 +407,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                     req.setEmployeeStatus(EmployeeRosterImportSupport.defaultEmployeeStatusForCreate(
                             parsedEmployeeStatus));
                     try {
+                        if (CollUtil.isNotEmpty(extras)) {
+                            req.setEmploymentList(buildImportEmploymentList(req, extras));
+                        }
                         self.createEmployeeArchive(req);
                         resp.getCreateNames().add(req.getName());
                     } catch (org.springframework.dao.DataIntegrityViolationException dup) {
@@ -416,14 +420,14 @@ public class EmployeeServiceImpl implements EmployeeService {
                         }
                         // P1-A：恢复原始解析值，使 applyImportUpdate 在空白时保留获胜行状态
                         req.setEmployeeStatus(parsedEmployeeStatus);
-                        applyImportUpdate(self, req, existing);
+                        applyImportUpdate(self, req, existing, extras);
                         resp.getUpdateNames().add(req.getName());
                         log.info("[importEmployeeRosterList][row={} idCard={} concurrent create conflict, switched to update id={}]",
                                 excelRowNumber, EmployeeRosterImportSupport.maskIdCard(idCard), existing.getId());
                     }
                 } else {
                     // 直接 update：req 仍为原始 parsedEmployeeStatus（空白=null → 保留旧值）
-                    applyImportUpdate(self, req, existing);
+                    applyImportUpdate(self, req, existing, extras);
                     resp.getUpdateNames().add(req.getName());
                 }
             } catch (Exception ex) {
@@ -490,7 +494,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     /** 导入 update：空白员工类型回填旧值，避免误改为正式（P1-A） */
-    private void applyImportUpdate(EmployeeServiceImpl self, EmployeeSaveReqVO req, EmployeeDO existing) {
+    private void applyImportUpdate(EmployeeServiceImpl self, EmployeeSaveReqVO req, EmployeeDO existing,
+                                  List<EmployeeEmploymentVO> extras) {
         req.setId(existing.getId());
         req.setEmployeeNo(existing.getEmployeeNo());
         if (req.getEmployeeStatus() == null) {
@@ -500,6 +505,142 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (req.getCompanyId() != null && req.getDeptId() != null) {
             self.applySigningEmployment(existing.getId(), req.getCompanyId(), req.getDeptId(),
                     req.getCompanyName(), req.getDeptName());
+        }
+        upsertExtraEmployments(existing.getId(), extras);
+    }
+
+    private List<EmployeeEmploymentVO> buildImportEmploymentList(EmployeeSaveReqVO req,
+                                                                List<EmployeeEmploymentVO> extras) {
+        List<EmployeeEmploymentVO> list = new ArrayList<>();
+        EmployeeEmploymentVO signed = new EmployeeEmploymentVO();
+        signed.setCompanyDeptId(req.getCompanyId());
+        signed.setCompanyName(req.getCompanyName());
+        signed.setDeptId(req.getDeptId());
+        signed.setDeptName(req.getDeptName());
+        signed.setSigned(true);
+        list.add(signed);
+        if (CollUtil.isNotEmpty(extras)) {
+            list.addAll(extras);
+        }
+        return list;
+    }
+
+    List<EmployeeEmploymentVO> bindExtraEmploymentsForImport(EmployeeRosterImportExcelVO row,
+                                                            Map<String, List<DeptRespDTO>> deptsByName,
+                                                            Long signedCompanyId) {
+        List<String> companies = splitImportNames(row.getExtraCompanyNames());
+        List<String> depts = splitImportNames(row.getExtraDeptNames());
+        if (companies.isEmpty() && depts.isEmpty()) {
+            return List.of();
+        }
+        if (companies.size() != depts.size()) {
+            throw new IllegalArgumentException("任职单位与任职部门数量须一致（用逗号分隔，按顺序成对）");
+        }
+        List<EmployeeEmploymentVO> extras = new ArrayList<>();
+        for (int i = 0; i < companies.size(); i++) {
+            addExtraEmployment(extras, companies.get(i), depts.get(i),
+                    deptsByName, signedCompanyId, "任职");
+        }
+        Set<Long> seen = new HashSet<>();
+        if (signedCompanyId != null) {
+            seen.add(signedCompanyId);
+        }
+        for (EmployeeEmploymentVO extra : extras) {
+            if (!seen.add(extra.getCompanyDeptId())) {
+                throw new IllegalArgumentException("其他任职公司不能与签约公司或其它任职重复");
+            }
+        }
+        return extras;
+    }
+
+    private List<String> splitImportNames(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return List.of();
+        }
+        List<String> parts = new ArrayList<>();
+        for (String part : raw.split("[,，]")) {
+            String trimmed = StrUtil.trim(part);
+            if (StrUtil.isNotBlank(trimmed)) {
+                parts.add(trimmed);
+            }
+        }
+        return parts;
+    }
+
+    private void addExtraEmployment(List<EmployeeEmploymentVO> extras, String companyName, String deptName,
+                                    Map<String, List<DeptRespDTO>> deptsByName, Long signedCompanyId, String label) {
+        String company = StrUtil.trim(companyName);
+        String dept = StrUtil.trim(deptName);
+        if (StrUtil.isBlank(company) && StrUtil.isBlank(dept)) {
+            return;
+        }
+        if (StrUtil.isBlank(company) || StrUtil.isBlank(dept)) {
+            throw new IllegalArgumentException(label + "单位与部门须成对填写");
+        }
+        List<DeptRespDTO> matches = deptsByName != null ? deptsByName.get(dept) : null;
+        if (CollUtil.isEmpty(matches)) {
+            throw new IllegalArgumentException(label + "部门不存在或未启用：" + dept);
+        }
+        DeptRespDTO picked = null;
+        for (DeptRespDTO candidate : matches) {
+            Long companyId = findCompanyIdByDeptId(candidate.getId());
+            if (companyId == null) {
+                continue;
+            }
+            CommonResult<DeptRespDTO> companyNode = deptApi.getDept(companyId);
+            String nodeName = companyNode != null && companyNode.isSuccess() && companyNode.getData() != null
+                    ? companyNode.getData().getName() : null;
+            if (company.equals(nodeName)) {
+                if (picked != null) {
+                    throw new IllegalArgumentException(label + "部门名称在该单位下无法唯一绑定：" + dept);
+                }
+                picked = candidate;
+                extras.add(toUnsignedEmployment(companyId, nodeName, candidate));
+            }
+        }
+        if (picked == null) {
+            throw new IllegalArgumentException(label + "部门不属于单位：" + company + " / " + dept);
+        }
+        if (signedCompanyId != null && signedCompanyId.equals(findCompanyIdByDeptId(picked.getId()))) {
+            throw new IllegalArgumentException(label + "不能与签约单位相同");
+        }
+    }
+
+    private EmployeeEmploymentVO toUnsignedEmployment(Long companyId, String companyName, DeptRespDTO dept) {
+        EmployeeEmploymentVO vo = new EmployeeEmploymentVO();
+        vo.setCompanyDeptId(companyId);
+        vo.setCompanyName(companyName);
+        vo.setDeptId(dept.getId());
+        vo.setDeptName(dept.getName());
+        vo.setSigned(false);
+        return vo;
+    }
+
+    void upsertExtraEmployments(Long employeeId, List<EmployeeEmploymentVO> extras) {
+        if (employeeId == null || CollUtil.isEmpty(extras)) {
+            return;
+        }
+        List<EmployeeEmploymentDO> rows = employeeEmploymentMapper.selectListByEmployeeId(employeeId);
+        for (EmployeeEmploymentVO extra : extras) {
+            Long companyOfDept = findCompanyIdByDeptId(extra.getDeptId());
+            if (!extra.getCompanyDeptId().equals(companyOfDept)) {
+                throw exception(EMPLOYEE_EMPLOYMENT_DEPT_NOT_UNDER_COMPANY);
+            }
+            EmployeeEmploymentDO existing = rows.stream()
+                    .filter(row -> extra.getCompanyDeptId().equals(row.getCompanyDeptId()))
+                    .findFirst()
+                    .orElse(null);
+            if (existing == null) {
+                employeeEmploymentMapper.insert(EmployeeEmploymentDO.builder()
+                        .employeeId(employeeId)
+                        .companyDeptId(extra.getCompanyDeptId())
+                        .deptId(extra.getDeptId())
+                        .signed(false)
+                        .build());
+            } else if (!Boolean.TRUE.equals(existing.getSigned())) {
+                existing.setDeptId(extra.getDeptId());
+                employeeEmploymentMapper.updateById(existing);
+            }
         }
     }
 
