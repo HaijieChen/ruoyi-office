@@ -101,6 +101,9 @@ public class EmployeeServiceImpl implements EmployeeService {
     private EmployeeContractMapper employeeContractMapper;
 
     @Resource
+    private EmployeeEmploymentMapper employeeEmploymentMapper;
+
+    @Resource
     private AttachmentService attachmentService;
 
     @Resource
@@ -141,6 +144,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         saveEducations(archive.getId(), createReqVO.getEducationList());
         saveFamilies(archive.getId(), createReqVO.getFamilyList());
         saveContracts(archive.getId(), createReqVO.getContractList());
+        saveEmployments(archive.getId(), createReqVO.getEmploymentList(), archive);
 
         if (createReqVO.getOnboardingAttachments() != null) {
             saveOnboardingAttachments(archive.getId(), createReqVO.getOnboardingAttachments());
@@ -191,6 +195,10 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (updateReqVO.getContractList() != null) {
             employeeContractMapper.deleteByEmployeeId(updateReqVO.getId());
             saveContracts(updateReqVO.getId(), updateReqVO.getContractList());
+        }
+        if (updateReqVO.getEmploymentList() != null) {
+            employeeEmploymentMapper.deleteByEmployeeId(updateReqVO.getId());
+            saveEmployments(updateReqVO.getId(), updateReqVO.getEmploymentList(), updateObj);
         }
         if (updateReqVO.getOnboardingAttachments() != null) {
             saveOnboardingAttachments(updateReqVO.getId(), updateReqVO.getOnboardingAttachments());
@@ -321,6 +329,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         List<EmployeeContractDO> contracts = employeeContractMapper.selectListByEmployeeId(id);
         respVO.setContractList(BeanUtils.toBean(contracts, EmployeeContractVO.class));
         fillCurrentContract(respVO, contracts);
+        respVO.setEmploymentList(buildEmploymentList(archive));
 
         // 入职资料（内部列表；不暴露公开 URL；下载走鉴权接口）
         List<AttachmentDO> attachments = attachmentService.getAttachmentListByBusinessInternal(
@@ -700,6 +709,78 @@ public class EmployeeServiceImpl implements EmployeeService {
             item.setEmployeeId(employeeId);
             employeeFamilyMapper.insert(item);
         });
+    }
+
+    void saveEmployments(Long employeeId, List<EmployeeEmploymentVO> employmentList, EmployeeDO archive) {
+        List<EmployeeEmploymentVO> list = employmentList;
+        if (CollUtil.isEmpty(list) && archive != null && archive.getCompanyId() != null) {
+            EmployeeEmploymentVO fallback = new EmployeeEmploymentVO();
+            fallback.setCompanyDeptId(archive.getCompanyId());
+            fallback.setSigned(true);
+            list = List.of(fallback);
+        }
+        if (CollUtil.isEmpty(list)) {
+            return;
+        }
+        long signedCount = list.stream().filter(item -> Boolean.TRUE.equals(item.getSigned())).count();
+        if (signedCount != 1) {
+            throw exception(EMPLOYEE_EMPLOYMENT_SIGNED_REQUIRED);
+        }
+        Set<Long> seen = new HashSet<>();
+        for (EmployeeEmploymentVO item : list) {
+            if (item.getCompanyDeptId() == null || !seen.add(item.getCompanyDeptId())) {
+                throw exception(EMPLOYEE_EMPLOYMENT_COMPANY_DUPLICATE);
+            }
+        }
+        for (EmployeeEmploymentVO item : list) {
+            employeeEmploymentMapper.insert(EmployeeEmploymentDO.builder()
+                    .employeeId(employeeId)
+                    .companyDeptId(item.getCompanyDeptId())
+                    .signed(Boolean.TRUE.equals(item.getSigned()))
+                    .build());
+            if (Boolean.TRUE.equals(item.getSigned()) && archive != null) {
+                archive.setCompanyId(item.getCompanyDeptId());
+                if (StrUtil.isNotBlank(item.getCompanyName())) {
+                    archive.setCompanyName(item.getCompanyName());
+                }
+                employeeArchiveMapper.updateById(archive);
+            }
+        }
+    }
+
+    List<EmployeeEmploymentVO> buildEmploymentList(EmployeeDO archive) {
+        List<EmployeeEmploymentDO> rows = employeeEmploymentMapper.selectListByEmployeeId(archive.getId());
+        if (CollUtil.isEmpty(rows) && archive.getCompanyId() != null) {
+            EmployeeEmploymentVO vo = new EmployeeEmploymentVO();
+            vo.setCompanyDeptId(archive.getCompanyId());
+            vo.setCompanyName(archive.getCompanyName());
+            vo.setSigned(true);
+            return List.of(vo);
+        }
+        return rows.stream().map(row -> {
+            EmployeeEmploymentVO vo = new EmployeeEmploymentVO();
+            vo.setCompanyDeptId(row.getCompanyDeptId());
+            vo.setSigned(Boolean.TRUE.equals(row.getSigned()));
+            if (row.getCompanyDeptId() != null) {
+                CommonResult<DeptRespDTO> company = deptApi.getDept(row.getCompanyDeptId());
+                if (company != null && company.isSuccess() && company.getData() != null) {
+                    vo.setCompanyName(company.getData().getName());
+                }
+            }
+            return vo;
+        }).toList();
+    }
+
+    @Override
+    public List<EmployeeEmploymentVO> listMyEmployments(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        EmployeeDO archive = employeeArchiveMapper.selectByUserId(userId);
+        if (archive == null) {
+            return List.of();
+        }
+        return buildEmploymentList(archive);
     }
 
     void saveContracts(Long employeeId, List<EmployeeContractVO> contracts) {

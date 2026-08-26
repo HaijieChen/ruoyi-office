@@ -46,14 +46,14 @@ const rules = {
 function onAttach(v) {
   formData.value.attachmentUrls = Array.isArray(v) ? v : (v ? [v] : []);
 }
-async function submit() {
+async function submit(ctx?: { startCompanyDeptId?: number }) {
   await formRef.value.validate();
   syncHours();
   if (!range.value || !range.value[0] || !range.value[1] || formData.value.hours == null) {
     message.warning('结束时间必须晚于开始时间，且时长须大于 0');
     throw new Error('invalid range');
   }
-  const payload = { reason: formData.value.reason, location: formData.value.location, startTime: range.value[0].valueOf(), endTime: range.value[1].valueOf() };
+  const payload: any = { reason: formData.value.reason, location: formData.value.location, startTime: range.value[0].valueOf(), endTime: range.value[1].valueOf(), startCompanyDeptId: ctx?.startCompanyDeptId };
   if (formData.value.needOutput) payload.needOutput = formData.value.needOutput;
   if (formData.value.attachmentUrls && formData.value.attachmentUrls.length) payload.attachmentUrls = formData.value.attachmentUrls;
   submitting.value = true;

@@ -23,4 +23,6 @@ public class FinanceExpenseReimbursementCreateReqVO {
     @NotEmpty
     @Valid
     private List<FinanceExpenseReimbursementLineReqVO> lines;
+
+    private Long startCompanyDeptId;
 }

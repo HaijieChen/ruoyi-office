@@ -282,6 +282,9 @@ public class EmployeeSaveReqVO {
     /**
      * 工作经历列表
      */
+    @Schema(description = "任职公司列表")
+    private List<EmployeeEmploymentVO> employmentList;
+
     @Schema(description = "工作经历列表")
     private List<EmployeeWorkExperienceVO> workExperienceList;
 

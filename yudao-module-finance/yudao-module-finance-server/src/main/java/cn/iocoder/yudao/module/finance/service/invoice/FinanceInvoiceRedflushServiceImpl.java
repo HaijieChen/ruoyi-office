@@ -185,6 +185,9 @@ public class FinanceInvoiceRedflushServiceImpl implements FinanceInvoiceRedflush
                               FinanceInvoiceRedflushCreateAndStartReqVO reqVO) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("totalAmount", row.getTotalAmount());
+        if (reqVO.getStartCompanyDeptId() != null) {
+            variables.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
+        }
         BpmProcessInstanceCreateReqDTO createReqDTO = new BpmProcessInstanceCreateReqDTO();
         createReqDTO.setProcessDefinitionKey(PROCESS_KEY);
         createReqDTO.setBusinessKey(String.valueOf(row.getId()));

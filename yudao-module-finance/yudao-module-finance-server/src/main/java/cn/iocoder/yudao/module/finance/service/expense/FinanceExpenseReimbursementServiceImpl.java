@@ -187,6 +187,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         Map<String, Object> vars = new HashMap<>();
         vars.put("applyAmount", apply);
         vars.put("periodLabel", header.getPeriodLabel());
+        if (reqVO.getStartCompanyDeptId() != null) {
+            vars.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                         new BpmProcessInstanceCreateReqDTO()
                                 .setProcessDefinitionKey(processKey)

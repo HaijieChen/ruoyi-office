@@ -25,4 +25,6 @@ public class FinanceInvoiceRedflushCreateAndStartReqVO {
     private BigDecimal totalAmount;
 
     private Map<String, List<Long>> startUserSelectAssignees;
+
+    private Long startCompanyDeptId;
 }

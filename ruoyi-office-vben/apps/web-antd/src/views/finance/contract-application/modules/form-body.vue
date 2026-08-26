@@ -129,7 +129,7 @@ const rules = computed<Record<string, Rule[]>>(() => ({
     },
   ],
   fileName: [
-    { required: true, message: '请输入用印文件名称', trigger: 'blur' },
+    { required: true, message: '请先上传电子版文件', trigger: 'change' },
   ],
   fileType: [{ required: true, message: '请选择文件类型', trigger: 'change' }],
   productType: [
@@ -180,9 +180,28 @@ const rules = computed<Record<string, Rule[]>>(() => ({
   ],
 }));
 
+function fileNameFromUrl(url?: string) {
+  if (!url) return undefined;
+  const raw = String(url).split('?')[0] || '';
+  const name = decodeURIComponent(
+    raw.slice(Math.max(0, raw.lastIndexOf('/') + 1)),
+  );
+  return name || undefined;
+}
+
 function onDraftFile(val: string | string[]) {
   const url = Array.isArray(val) ? String(val[0] || '') : String(val || '');
   formData.value.draftFileUrl = url || undefined;
+  formData.value.fileName = fileNameFromUrl(url);
+}
+
+function onDraftUploaded(payload: { name?: string; url?: string }) {
+  if (payload?.url) {
+    formData.value.draftFileUrl = payload.url;
+  }
+  if (payload?.name) {
+    formData.value.fileName = payload.name;
+  }
 }
 
 function clearForm() {
@@ -304,6 +323,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
 
 interface SubmitContext {
   startUserSelectAssignees?: Record<string, number[]>;
+  startCompanyDeptId?: number;
 }
 
 async function submit(ctx?: SubmitContext): Promise<void> {
@@ -313,6 +333,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
     const payload: FinanceContractApplicationApi.CreateAndStartRequest = {
       ...buildPayload(),
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
+      startCompanyDeptId: ctx?.startCompanyDeptId,
     };
     await (isResubmit.value && formData.value.id
       ? resubmitContractApplication(formData.value.id, payload)
@@ -392,12 +413,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         }"
       />
     </Form.Item>
-    <Form.Item label="用印文件名称" name="fileName">
-      <Input
-        v-model:value="formData.fileName"
-        placeholder="完整准确的文件名称"
-      />
-    </Form.Item>
     <Form.Item label="文件类型" name="fileType">
       <Select
         v-model:value="formData.fileType"
@@ -468,12 +483,17 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         :max-size="20"
         help-text="上传用印文件电子版"
         @update:value="onDraftFile"
+        @uploaded="onDraftUploaded"
       />
       <Input
         class="mt-2"
         v-model:value="formData.draftFileUrl"
         placeholder="也可直接填写文件 URL"
+        @change="onDraftFile(formData.draftFileUrl || '')"
       />
+      <div v-if="formData.fileName" class="mt-1 text-sm text-gray-500">
+        文件名称：{{ formData.fileName }}
+      </div>
     </Form.Item>
     <Form.Item label="备注" name="remark">
       <Textarea v-model:value="formData.remark" :rows="2" />

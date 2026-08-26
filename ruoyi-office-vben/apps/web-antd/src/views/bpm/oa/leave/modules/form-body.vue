@@ -47,7 +47,7 @@ const rules: Record<string, Rule[]> = {
   range: [{ required: true, message: '请选择开始和结束时间', trigger: 'change' }],
 };
 
-async function submit(): Promise<void> {
+async function submit(ctx?: { startCompanyDeptId?: number }): Promise<void> {
   await formRef.value?.validate();
   const range = formData.value.range;
   if (!range?.[0] || !range?.[1] || range[1].isBefore(range[0])) {
@@ -61,6 +61,7 @@ async function submit(): Promise<void> {
       reason: String(formData.value.reason).trim(),
       startTime: range[0].valueOf(),
       endTime: range[1].valueOf(),
+      startCompanyDeptId: ctx?.startCompanyDeptId,
     } as any);
     message.success('提交成功');
     emit('success');

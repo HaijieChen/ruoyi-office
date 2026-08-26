@@ -58,12 +58,19 @@ export namespace EmployeeArchiveApi {
     userId?: number; // 关联用户ID
     userGenerated?: boolean; // 是否已生成用户
     createTime?: Date | string; // 创建时间
+    employmentList?: EmployeeEmployment[];
     workExperienceList?: EmployeeWorkExperience[]; // 工作经历列表
     educationList?: EmployeeEducation[]; // 教育经历列表
     familyList?: EmployeeFamily[]; // 家属信息列表
     contractList?: EmployeeContract[]; // 合同明细
     /** 入职资料：新附件只传 claimToken；已有附件传 id */
     onboardingAttachments?: OnboardingAttachment[];
+  }
+
+  export interface EmployeeEmployment {
+    companyDeptId: number;
+    companyName?: string;
+    signed?: boolean;
   }
 
   export interface EmployeeContract {
@@ -175,6 +182,12 @@ export function getEmployeeArchiveSelectPage(
   return requestClient.get<PageResult<EmployeeArchiveApi.EmployeeArchive>>(
     '/hrm/employee-archive/select-page',
     { params },
+  );
+}
+
+export function getMyEmployments() {
+  return requestClient.get<EmployeeArchiveApi.EmployeeEmployment[]>(
+    '/hrm/employee-archive/my-employments',
   );
 }
 

@@ -43,4 +43,7 @@ public class BpmOAOutingCreateReqVO {
     @Schema(description = "发起人自选审批人 Map（创建时忽略）", example = "{taskKey1: [1, 2]}")
     private Map<String, List<Long>> startUserSelectAssignees;
 
+    @Schema(description = "发起时选择的任职公司")
+    private Long startCompanyDeptId;
+
 }

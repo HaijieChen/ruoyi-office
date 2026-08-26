@@ -26,10 +26,12 @@ import {
   Row,
   Space,
   Spin,
+  Select,
   Tabs,
 } from 'ant-design-vue';
 
 import { getProcessDefinition } from '#/api/bpm/definition';
+import { getMyEmployments } from '#/api/hrm/employee';
 import {
   createProcessInstance,
   getApprovalDetail as getApprovalDetailApi,
@@ -80,6 +82,9 @@ const detailForm = ref<ProcessFormData>({
   value: {},
 });
 const fApi = ref<any>();
+
+const startCompanyDeptId = ref<number | undefined>();
+const employmentOptions = ref<{ label: string; value: number }[]>([]);
 
 const startUserSelectTasks = ref<UserTask[]>([]);
 const startUserSelectAssignees = ref<Record<string, string[]>>({});
@@ -167,6 +172,7 @@ async function submitForm() {
     try {
       await embedBodyRef.value.submit({
         startUserSelectAssignees: buildStartUserSelectAssigneesForDomain(),
+        startCompanyDeptId: startCompanyDeptId.value,
       });
       await closeCurrentTab();
       await router.push({ name: 'BpmProcessInstanceMy' });
@@ -190,7 +196,10 @@ async function submitForm() {
   try {
     await createProcessInstance({
       processDefinitionId: props.selectProcessDefinition.id,
-      variables: detailForm.value.value,
+      variables: {
+        ...(detailForm.value.value || {}),
+        startCompanyDeptId: startCompanyDeptId.value,
+      },
       startUserSelectAssignees: startUserSelectAssignees.value,
     });
     message.success('发起流程成功');
@@ -271,7 +280,26 @@ async function retryEmbedInit() {
 }
 
 /** 设置表单信息、获取流程图数据 */
+async function loadEmployments() {
+  try {
+    const list = (await getMyEmployments()) || [];
+    employmentOptions.value = list
+      .filter((e) => e.companyDeptId != null)
+      .map((e) => ({
+        value: e.companyDeptId,
+        label: `${e.companyName || e.companyDeptId}${e.signed ? '（签约）' : ''}`,
+      }));
+    const signed = list.find((e) => e.signed);
+    startCompanyDeptId.value =
+      signed?.companyDeptId ?? list[0]?.companyDeptId ?? undefined;
+  } catch {
+    employmentOptions.value = [];
+    startCompanyDeptId.value = undefined;
+  }
+}
+
 async function initProcessInfo(row: any, formVariables?: any) {
+  await loadEmployments();
   embedInitGen += 1;
   const gen = embedInitGen;
   predictGen += 1;
@@ -341,7 +369,10 @@ async function initProcessInfo(row: any, formVariables?: any) {
     await nextTick();
     await getApprovalDetail({
       id: row.id,
-      processVariablesStr: JSON.stringify(formVariables || {}),
+      processVariablesStr: JSON.stringify({
+        ...(formVariables || {}),
+        startCompanyDeptId: startCompanyDeptId.value,
+      }),
     });
     await loadDiagram(row.id);
     return;
@@ -466,7 +497,10 @@ watch(
       startUserSelectAssignees.value = {};
       getApprovalDetail({
         id: props.selectProcessDefinition.id,
-        processVariablesStr: JSON.stringify(newValue),
+        processVariablesStr: JSON.stringify({
+          ...(newValue || {}),
+          startCompanyDeptId: startCompanyDeptId.value,
+        }),
       });
     }
   },
@@ -606,6 +640,15 @@ defineExpose({ initProcessInfo });
             :xl="18"
             class="flex-1 overflow-auto"
           >
+            <div v-if="employmentOptions.length" class="mb-4 max-w-md">
+              <div class="mb-1 text-sm">任职公司</div>
+              <Select
+                v-model:value="startCompanyDeptId"
+                class="w-full"
+                :options="employmentOptions"
+                placeholder="默认签约公司，可改选其它任职公司"
+              />
+            </div>
             <form-create
               v-if="isNormalShell"
               :rule="detailForm.rule"

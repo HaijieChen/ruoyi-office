@@ -652,6 +652,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
 
 interface SubmitContext {
   startUserSelectAssignees?: Record<string, number[]>;
+  startCompanyDeptId?: number;
 }
 
 async function submit(ctx?: SubmitContext): Promise<void> {
@@ -698,6 +699,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
         invoiceType: formData.value.invoiceType,
       })),
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
+      startCompanyDeptId: ctx?.startCompanyDeptId,
     };
     if (isResubmit.value && formData.value.id) {
       await resubmitInvoiceApplication(formData.value.id, {

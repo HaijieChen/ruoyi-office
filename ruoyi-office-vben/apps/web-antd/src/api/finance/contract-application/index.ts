@@ -73,6 +73,7 @@ export namespace FinanceContractApplicationApi {
     applicantDeptId?: number;
     /** 发起人自选节点审批人 activityId -> userIds */
     startUserSelectAssignees?: Record<string, number[]>;
+    startCompanyDeptId?: number;
   }
 
   export type ResubmitRequest = CreateAndStartRequest;

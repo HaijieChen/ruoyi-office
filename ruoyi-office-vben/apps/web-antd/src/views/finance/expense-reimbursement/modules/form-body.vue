@@ -370,7 +370,7 @@ const rules: Record<string, Rule[]> = {
   payeeAccountNo: [{ required: true, message: '请填写收款账号', trigger: 'blur' }],
 };
 
-async function submit(): Promise<void> {
+async function submit(ctx?: { startCompanyDeptId?: number }): Promise<void> {
   await formRef.value?.validate();
   const kind = expectedKind();
   if (formData.value.proxyTicket && formData.value.lines.some((l) => l.category && !l.invoiceType)) {
@@ -426,7 +426,8 @@ async function submit(): Promise<void> {
       payeeAccountName: String(formData.value.payeeAccountName),
       payeeAccountNo: String(formData.value.payeeAccountNo),
       lines,
-    });
+      startCompanyDeptId: ctx?.startCompanyDeptId,
+    } as any);
     message.success('提交成功');
     emit('success');
   } finally {

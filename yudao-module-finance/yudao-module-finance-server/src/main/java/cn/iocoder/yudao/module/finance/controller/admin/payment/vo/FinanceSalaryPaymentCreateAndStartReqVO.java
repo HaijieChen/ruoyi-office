@@ -37,4 +37,7 @@ public class FinanceSalaryPaymentCreateAndStartReqVO {
     @Schema(description = "发起人自选节点审批人")
     private Map<String, List<Long>> startUserSelectAssignees;
 
+    @Schema(description = "发起时选择的任职公司")
+    private Long startCompanyDeptId;
+
 }

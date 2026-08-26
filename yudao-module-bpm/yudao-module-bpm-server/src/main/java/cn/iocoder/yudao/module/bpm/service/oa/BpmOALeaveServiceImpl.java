@@ -55,6 +55,9 @@ public class BpmOALeaveServiceImpl implements BpmOALeaveService {
         // 发起 BPM 流程
         Map<String, Object> processInstanceVariables = new HashMap<>();
         processInstanceVariables.put("day", day);
+        if (createReqVO.getStartCompanyDeptId() != null) {
+            processInstanceVariables.put("startCompanyDeptId", createReqVO.getStartCompanyDeptId());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)
                         .setVariables(processInstanceVariables).setBusinessKey(String.valueOf(leave.getId()))

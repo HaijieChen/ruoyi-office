@@ -28,6 +28,8 @@ public interface EmployeeService {
      */
     Long createEmployeeArchive(@Valid EmployeeSaveReqVO createReqVO);
 
+    java.util.List<cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmploymentVO> listMyEmployments(Long userId);
+
     /**
      * 更新员工档案
      *

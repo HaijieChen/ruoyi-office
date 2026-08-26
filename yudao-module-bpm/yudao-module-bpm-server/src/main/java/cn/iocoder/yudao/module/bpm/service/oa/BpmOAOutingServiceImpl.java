@@ -76,6 +76,9 @@ public class BpmOAOutingServiceImpl implements BpmOAOutingService {
         Map<String, Object> processInstanceVariables = new HashMap<>();
         processInstanceVariables.put("hours", hours);
         processInstanceVariables.put("need_output", createReqVO.getNeedOutput());
+        if (createReqVO.getStartCompanyDeptId() != null) {
+            processInstanceVariables.put("startCompanyDeptId", createReqVO.getStartCompanyDeptId());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(userId,
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(PROCESS_KEY)
                         .setVariables(processInstanceVariables).setBusinessKey(String.valueOf(outing.getId())))

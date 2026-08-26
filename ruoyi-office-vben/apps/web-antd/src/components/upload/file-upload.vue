@@ -43,6 +43,7 @@ const emit = defineEmits([
   'delete',
   'returnText',
   'preview',
+  'uploaded',
 ]);
 const { accept, helpText, maxNumber, maxSize } = toRefs(props);
 const isInnerOperate = ref<boolean>(false);
@@ -285,6 +286,7 @@ function handleUploadSuccess(res: any, file: File) {
     emit('update:value', value);
     emit('update:modelValue', value);
     emit('change', value);
+    emit('uploaded', { url: fileUrl, name: file.name });
   }
 }
 

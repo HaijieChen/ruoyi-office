@@ -49,7 +49,7 @@ async function reset(opts) {
   }
   emit('predictChange', getPredictVariables());
 }
-async function submit() {
+async function submit(ctx?: { startCompanyDeptId?: number }) {
   if (!form.value.periodLabel) { message.error('请填写薪资期间'); throw new Error('period'); }
   if (!form.value.lines.every(function (l) { return l.entityCompanyDeptId; })) { message.error('请为每行选择主体公司'); throw new Error('company'); }
   const payload = {
@@ -61,6 +61,7 @@ async function submit() {
     lines: form.value.lines.map(function (l) {
       return { entityCompanyDeptId: l.entityCompanyDeptId, netSalaryAmount: Number(l.netSalaryAmount || 0), personalTaxAmount: Number(l.personalTaxAmount || 0), socialInsuranceAmount: Number(l.socialInsuranceAmount || 0) };
     }),
+    startCompanyDeptId: ctx?.startCompanyDeptId,
   };
   submitting.value = true;
   try {

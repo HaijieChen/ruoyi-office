@@ -77,4 +77,7 @@ public class FinancePaymentApplicationCreateAndStartReqVO {
     @Schema(description = "自选审批人")
     private Map<String, List<Long>> startUserSelectAssignees;
 
+    @Schema(description = "发起时选择的任职公司")
+    private Long startCompanyDeptId;
+
 }

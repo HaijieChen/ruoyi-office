@@ -378,7 +378,7 @@ export function useWorkFormSchema(
     },
     {
       fieldName: 'companyName',
-      label: '所属公司',
+      label: '签约公司',
       component: 'Input',
       componentProps: {
         placeholder: '所属公司',

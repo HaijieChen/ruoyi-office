@@ -71,6 +71,13 @@ public class EmployeeController {
         return success(true);
     }
 
+    @GetMapping("/my-employments")
+    @Operation(summary = "当前登录人任职公司")
+    public CommonResult<List<EmployeeEmploymentVO>> getMyEmployments() {
+        return success(employeeArchiveService.listMyEmployments(
+                cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId()));
+    }
+
     @GetMapping("/get")
     @Operation(summary = "获得员工档案")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")

@@ -97,6 +97,9 @@ public class BpmOATripServiceImpl implements BpmOATripService {
         Map<String, Object> processInstanceVariables = new HashMap<>();
         processInstanceVariables.put("hours", hours);
         processInstanceVariables.put("destination", createReqVO.getDestination().trim());
+        if (createReqVO.getStartCompanyDeptId() != null) {
+            processInstanceVariables.put("startCompanyDeptId", createReqVO.getStartCompanyDeptId());
+        }
         if (createReqVO.getType() != null) {
             processInstanceVariables.put("type", createReqVO.getType());
         }

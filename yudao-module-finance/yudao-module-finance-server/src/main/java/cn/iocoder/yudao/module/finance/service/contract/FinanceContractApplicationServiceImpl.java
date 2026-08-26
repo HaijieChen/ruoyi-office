@@ -654,6 +654,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private String startProcess(Long userId, Long appId, FinanceContractApplicationDO application,
                                 FinanceContractApplicationCreateAndStartReqVO reqVO) {
         Map<String, Object> variables = buildProcessVariables(application);
+        if (reqVO.getStartCompanyDeptId() != null) {
+            variables.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
+        }
         return processInstanceApi.createProcessInstance(userId,
                         new BpmProcessInstanceCreateReqDTO()
                                 .setProcessDefinitionKey(PROCESS_KEY)

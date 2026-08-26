@@ -56,7 +56,10 @@ function getPredictVariables() {
   return { totalAmount: snapshot.value?.totalAmount };
 }
 
-async function submit(ctx?: { startUserSelectAssignees?: Record<string, number[]> }) {
+async function submit(ctx?: {
+  startUserSelectAssignees?: Record<string, number[]>;
+  startCompanyDeptId?: number;
+}) {
   if (!predecessorId.value) {
     message.warning('请选择前置开票申请');
     throw new Error('请选择前置开票申请');
@@ -73,6 +76,7 @@ async function submit(ctx?: { startUserSelectAssignees?: Record<string, number[]
       specialNote: specialNote.value || undefined,
       totalAmount: snapshot.value?.totalAmount,
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
+      startCompanyDeptId: ctx?.startCompanyDeptId,
     });
     message.success('已提交红冲申请');
     emit('success');

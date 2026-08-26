@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -59,26 +60,47 @@ public class BpmTaskCandidateStartUserCompanyFinanceStrategy implements BpmTaskC
     public Set<Long> calculateUsersByTask(DelegateExecution execution, String param) {
         ProcessInstance processInstance = processInstanceService.getProcessInstance(execution.getProcessInstanceId());
         Long startUserId = NumberUtils.parseLong(processInstance.getStartUserId());
-        return resolveApprovers(startUserId);
+        return resolveApprovers(startUserId, execution.getVariables());
     }
 
     @Override
     public Set<Long> calculateUsersByActivity(BpmnModel bpmnModel, String activityId, String param,
                                               Long startUserId, String processDefinitionId,
                                               Map<String, Object> processVariables) {
-        return resolveApprovers(startUserId);
+        return resolveApprovers(startUserId, processVariables);
     }
 
     Set<Long> resolveApprovers(Long startUserId) {
+        return resolveApprovers(startUserId, Map.of());
+    }
+
+    Set<Long> resolveApprovers(Long startUserId, Map<String, Object> processVariables) {
         BpmCompanyFinanceApproverProvider provider = approverProvider.getIfAvailable();
         if (provider == null) {
             return new HashSet<>();
         }
-        Long companyDeptId = resolveStartUserCompanyDeptId(startUserId);
+        Long companyDeptId = firstCompanyDeptId(processVariables);
+        if (companyDeptId == null) {
+            companyDeptId = resolveStartUserCompanyDeptId(startUserId);
+        }
         if (companyDeptId == null) {
             return new HashSet<>();
         }
         return provider.listUserIdsByCompanyDeptId(companyDeptId);
+    }
+
+    Long firstCompanyDeptId(Map<String, Object> processVariables) {
+        if (processVariables == null) {
+            return null;
+        }
+        for (String key : List.of("startCompanyDeptId", "entityCompanyDeptId", "companyId")) {
+            Object raw = processVariables.get(key);
+            Long id = NumberUtils.parseLong(raw == null ? null : String.valueOf(raw));
+            if (id != null && id > 0) {
+                return id;
+            }
+        }
+        return null;
     }
 
     Long resolveStartUserCompanyDeptId(Long startUserId) {

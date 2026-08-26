@@ -27,6 +27,7 @@ import {
   getEmployeeArchive,
   updateEmployeeArchive,
 } from '#/api/hrm/employee';
+import { getSimpleDeptList } from '#/api/system/dept';
 import { AttachmentList } from '#/components/attachment-list';
 import { CardContainer } from '#/components/basic-form';
 import { DeptSelectModal } from '#/views/system/dept/components';
@@ -58,6 +59,8 @@ const deptSelectModalRef = ref<InstanceType<typeof DeptSelectModal>>();
 
 // 工作经历列表
 const workExperienceList = ref<EmployeeArchiveApi.EmployeeWorkExperience[]>([]);
+const employmentList = ref<EmployeeArchiveApi.EmployeeEmployment[]>([]);
+const companyOptions = ref<{ label: string; value: number }[]>([]);
 // 教育经历列表
 const educationList = ref<EmployeeArchiveApi.EmployeeEducation[]>([]);
 // 家属信息列表
@@ -633,6 +636,22 @@ async function loadData(newId?: string) {
     await basicFormApi.setValues(data);
     await avatarFormApi.setValues(data);
     await workFormApi.setValues(data);
+    employmentList.value = (data.employmentList || []).map((item) => ({
+      ...item,
+      signed: !!item.signed,
+    }));
+    if (
+      !employmentList.value.length &&
+      data.companyId != null
+    ) {
+      employmentList.value = [
+        {
+          companyDeptId: data.companyId,
+          companyName: data.companyName,
+          signed: true,
+        },
+      ];
+    }
 
     // 加载工作经历
     if (data.workExperienceList) {
@@ -781,6 +800,16 @@ async function handleSave() {
     }
 
     // 表格中的日期字段已在 onChange 中设置为 undefined，直接使用即可
+    const signedRows = employmentList.value.filter((r) => r.signed);
+    if (!employmentList.value.length || signedRows.length !== 1) {
+      message.error('请至少维护一家任职公司，并只标注一家签约公司');
+      loading.value = false;
+      return;
+    }
+    values.employmentList = employmentList.value;
+    const signed = signedRows[0]!;
+    values.companyId = signed.companyDeptId;
+    values.companyName = signed.companyName;
     values.workExperienceList = workExperienceList.value;
     values.educationList = educationList.value;
     values.familyList = familyList.value;
@@ -958,9 +987,35 @@ watch(
   { immediate: true },
 );
 
+function handleAddEmployment() {
+  employmentList.value.push({
+    companyDeptId: undefined as unknown as number,
+    signed: employmentList.value.length === 0,
+  });
+}
+
+function handleDeleteEmployment(index: number) {
+  employmentList.value.splice(index, 1);
+}
+
+function markSigned(index: number) {
+  employmentList.value = employmentList.value.map((row, i) => ({
+    ...row,
+    signed: i === index,
+  }));
+}
+
 onMounted(async () => {
   // 判断是否只读
   readonly.value = route.query.readonly === 'true';
+  try {
+    const list = (await getSimpleDeptList()) || [];
+    companyOptions.value = list
+      .filter((d: any) => String(d.orgType) === '1')
+      .map((d: any) => ({ label: d.name, value: d.id }));
+  } catch {
+    companyOptions.value = [];
+  }
 
   // 加载数据
   await loadData();
@@ -1000,6 +1055,64 @@ onMounted(async () => {
         <WorkForm />
         <!-- 部门选择弹窗 -->
         <DeptSelectModal ref="deptSelectModalRef" @select="handleDeptSelect" />
+      </CardContainer>
+    </div>
+
+    <div class="mb-4 rounded-lg bg-white p-4 shadow-sm">
+      <CardContainer title="任职公司">
+        <template #extra>
+          <Button v-if="!readonly" type="primary" @click="handleAddEmployment">
+            添加任职
+          </Button>
+        </template>
+        <Table
+          :columns="[
+            { title: '公司', key: 'company', width: 280 },
+            { title: '签约公司', key: 'signed', width: 120 },
+            { title: '操作', key: 'action', width: 80 },
+          ]"
+          :data-source="employmentList"
+          :pagination="false"
+          row-key="companyDeptId"
+          size="small"
+        >
+          <template #bodyCell="{ column, record, index }">
+            <template v-if="column.key === 'company'">
+              <Select
+                v-model:value="record.companyDeptId"
+                class="w-full"
+                :disabled="readonly"
+                :options="companyOptions"
+                placeholder="选择任职公司"
+                @change="
+                  (v: any) => {
+                    const hit = companyOptions.find((o) => o.value === v);
+                    record.companyName = hit?.label;
+                  }
+                "
+              />
+            </template>
+            <template v-else-if="column.key === 'signed'">
+              <Checkbox
+                :checked="!!record.signed"
+                :disabled="readonly"
+                @change="() => markSigned(index)"
+              >
+                签约
+              </Checkbox>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Button
+                v-if="!readonly"
+                type="link"
+                danger
+                @click="handleDeleteEmployment(index)"
+              >
+                删除
+              </Button>
+            </template>
+          </template>
+        </Table>
       </CardContainer>
     </div>
 

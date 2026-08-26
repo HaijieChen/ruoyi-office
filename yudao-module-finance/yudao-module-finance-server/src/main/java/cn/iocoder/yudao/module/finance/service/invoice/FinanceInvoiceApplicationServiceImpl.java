@@ -204,6 +204,9 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
 
         // 5. 启动 BPM；失败则整单回滚（含占用）
         Map<String, Object> variables = buildProcessVariables(application);
+        if (reqVO.getStartCompanyDeptId() != null) {
+            variables.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
+        }
         String processInstanceId = processInstanceApi.createProcessInstance(applicantUserId,
                 new BpmProcessInstanceCreateReqDTO()
                         .setProcessDefinitionKey(PROCESS_KEY)
