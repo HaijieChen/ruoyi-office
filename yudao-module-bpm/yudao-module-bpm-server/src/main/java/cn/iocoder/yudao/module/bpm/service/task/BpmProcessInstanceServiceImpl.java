@@ -435,21 +435,33 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
                                                       BpmProcessDefinitionInfoDO processDefinitionInfo,
                                                       HistoricProcessInstance historicProcessInstance, Integer processInstanceStatus,
                                                       List<HistoricActivityInstance> activities, List<HistoricTaskInstance> tasks) {
-        // 遍历 tasks 列表，只处理已结束的 UserTask
-        // 为什么不通过 activities 呢？因为，加签场景下，它只存在于 tasks，没有 activities，导致如果遍历 activities 的话，它无法成为一个节点
-        List<HistoricTaskInstance> endTasks = filterList(tasks, task -> task.getEndTime() != null);
-        List<ActivityNode> approvalNodes = convertList(endTasks, task -> {
-            FlowElement flowNode = BpmnModelUtils.getFlowElementById(bpmnModel, task.getTaskDefinitionKey());
-            ActivityNode activityNode = new ActivityNode().setId(task.getTaskDefinitionKey()).setName(task.getName())
-                    .setNodeType(START_USER_NODE_ID.equals(task.getTaskDefinitionKey())
+        // 遍历 tasks 列表，只处理已结束的 UserTask；按节点合并，避免会签/或签每人一条时间轴
+        // 进行中的同节点留给 getRunApproveNodeList，这里不再拆一条“已通过”
+        Set<String> runningTaskDefKeys = convertSet(
+                filterList(tasks, task -> task.getEndTime() == null),
+                HistoricTaskInstance::getTaskDefinitionKey);
+        List<HistoricTaskInstance> endTasks = filterList(tasks, task -> task.getEndTime() != null
+                && !runningTaskDefKeys.contains(task.getTaskDefinitionKey()));
+        Map<String, List<HistoricTaskInstance>> endTaskMap = convertMultiMap(endTasks,
+                HistoricTaskInstance::getTaskDefinitionKey);
+        List<ActivityNode> approvalNodes = convertList(endTaskMap.entrySet(), entry -> {
+            List<HistoricTaskInstance> group = entry.getValue();
+            HistoricTaskInstance first = CollUtil.getFirst(group);
+            FlowElement flowNode = BpmnModelUtils.getFlowElementById(bpmnModel, first.getTaskDefinitionKey());
+            List<ActivityNodeTask> nodeTasks = convertList(group,
+                    BpmProcessInstanceConvert.INSTANCE::buildApprovalTaskInfo);
+            HistoricTaskInstance last = group.stream()
+                    .max(Comparator.comparing(HistoricTaskInstance::getEndTime))
+                    .orElse(first);
+            ActivityNode activityNode = new ActivityNode().setId(first.getTaskDefinitionKey()).setName(first.getName())
+                    .setNodeType(START_USER_NODE_ID.equals(first.getTaskDefinitionKey())
                             ? BpmSimpleModelNodeTypeEnum.START_USER_NODE.getType()
                             : ObjUtil.defaultIfNull(parseNodeType(flowNode), // 目的：解决“办理节点”的识别
                             BpmSimpleModelNodeTypeEnum.APPROVE_NODE.getType()))
-                    .setStatus(getEndActivityNodeStatus(task))
+                    .setStatus(getGroupedEndActivityNodeStatus(group))
                     .setCandidateStrategy(BpmnModelUtils.parseCandidateStrategy(flowNode))
-                    .setStartTime(DateUtils.of(task.getCreateTime())).setEndTime(DateUtils.of(task.getEndTime()))
-                    .setTasks(singletonList(BpmProcessInstanceConvert.INSTANCE.buildApprovalTaskInfo(task)));
-            // 如果是取消状态，则跳过
+                    .setStartTime(DateUtils.of(first.getCreateTime())).setEndTime(DateUtils.of(last.getEndTime()))
+                    .setTasks(nodeTasks);
             if (BpmTaskStatusEnum.isCancelStatus(activityNode.getStatus())) {
                 return null;
             }
@@ -523,6 +535,20 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         return BpmTaskStatusEnum.SKIP.getStatus();
     }
 
+    /** 同节点多人办结：有拒绝则拒绝，否则取最后一笔状态 */
+    private Integer getGroupedEndActivityNodeStatus(List<HistoricTaskInstance> group) {
+        Integer reject = BpmTaskStatusEnum.REJECT.getStatus();
+        for (HistoricTaskInstance task : group) {
+            if (Objects.equals(getEndActivityNodeStatus(task), reject)) {
+                return reject;
+            }
+        }
+        HistoricTaskInstance last = group.stream()
+                .max(Comparator.comparing(HistoricTaskInstance::getEndTime))
+                .orElse(CollUtil.getFirst(group));
+        return getEndActivityNodeStatus(last);
+    }
+
     /**
      * 获得【进行中】的活动节点们
      */
@@ -554,12 +580,22 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
                     .setCandidateStrategy(BpmnModelUtils.parseCandidateStrategy(flowNode))
                     .setStartTime(DateUtils.of(CollUtil.getFirst(taskActivities).getStartTime()))
                     .setTasks(new ArrayList<>());
+            // 会签/或签已办结的人挂在同一节点下，避免时间轴再拆一条同名“已通过”
+            Set<String> shownTaskIds = new HashSet<>();
+            for (HistoricTaskInstance ended : tasks) {
+                if (ended.getEndTime() == null
+                        || !activityId.equals(ended.getTaskDefinitionKey())) {
+                    continue;
+                }
+                activityNode.getTasks().add(BpmProcessInstanceConvert.INSTANCE.buildApprovalTaskInfo(ended));
+                shownTaskIds.add(ended.getId());
+            }
             // 处理每个任务的 tasks 属性
             for (HistoricActivityInstance activity : taskActivities) {
                 HistoricTaskInstance task = taskMap.get(activity.getTaskId());
                 // 特殊情况：子流程节点 ChildProcess 仅存在于 activity 中，并且没有自身的 task，需要跳过执行
                 // TODO @芋艿：后续看看怎么优化！
-                if (task == null) {
+                if (task == null || shownTaskIds.contains(task.getId())) {
                     continue;
                 }
                 activityNode.getTasks().add(BpmProcessInstanceConvert.INSTANCE.buildApprovalTaskInfo(task));
