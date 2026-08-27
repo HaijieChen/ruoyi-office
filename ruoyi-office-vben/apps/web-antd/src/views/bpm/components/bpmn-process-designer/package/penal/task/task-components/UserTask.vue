@@ -25,7 +25,6 @@ import {
   Button,
   Form,
   FormItem,
-  Input,
   Select,
   SelectOption,
   Textarea,
@@ -125,6 +124,10 @@ function filterDeptTree(nodes: any[], keyword: string): any[] {
 const displayDeptTree = computed(() =>
   filterDeptTree(withDeptFullName(deptTreeOptions.value || []), deptKeyword.value),
 );
+
+function onDeptSearch(value: string) {
+  deptKeyword.value = value;
+}
 // 表单内用户字段选项, 必须是必填和用户选择器
 const userFieldOnFormOptions = computed(() => {
   return formFieldOptions.filter((item) => item.type === 'UserSelect');
@@ -449,21 +452,19 @@ onBeforeUnmount(() => {
       label="指定部门"
       name="candidateParam"
     >
-      <Input
-        v-model:value="deptKeyword"
-        allow-clear
-        class="mb-1"
-        placeholder="搜索部门"
-      />
       <TreeSelect
         ref="treeRef"
         v-model:value="userTaskForm.candidateParam"
         :tree-data="displayDeptTree"
         :field-names="defaultProps"
-        placeholder="请选择部门"
+        placeholder="请选择部门，可输入搜索"
         multiple
         tree-checkable
+        show-search
+        :search-value="deptKeyword"
+        :filter-tree-node="() => true"
         tree-default-expand-all
+        @search="onDeptSearch"
         @change="updateElementTask"
       />
     </FormItem>
