@@ -21,6 +21,8 @@ import cn.iocoder.yudao.module.system.service.mfa.enums.MfaMode;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
+import cn.iocoder.yudao.module.system.service.permission.PermissionService;
+import cn.iocoder.yudao.module.system.service.permission.RoleService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -109,6 +111,8 @@ public class MfaSlice3LoginHttpPathTest extends BaseMockitoUnitTest {
         MfaIssuanceGuard.clear();
         flowService.clear();
         factorService.clear();
+        ReflectionTestUtils.setField(facade, "permissionService", null);
+        ReflectionTestUtils.setField(facade, "roleService", null);
     }
 
     @Test
@@ -302,6 +306,23 @@ public class MfaSlice3LoginHttpPathTest extends BaseMockitoUnitTest {
         assertNotNull(result.getAccessToken().getUserInfo().get(MfaSessionGuardImpl.UI_TOKEN_CLASS));
         assertNotNull(result.getAccessToken().getUserInfo().get(MfaSessionGuardImpl.UI_GLOBAL_EPOCH));
         sessionGuard.assertAccessAllowed(result.getAccessToken());
+    }
+
+    @Test
+    void superAdmin_offPolicy_stillRequiresEnrollment() {
+        policyControl.confirmGlobalPolicy(MfaMode.OFF, Set.of());
+        PermissionService permissionService = mock(PermissionService.class);
+        RoleService roleService = mock(RoleService.class);
+        when(permissionService.getUserRoleIdListByUserIdFromCache(1L)).thenReturn(Set.of(1L));
+        when(roleService.hasAnySuperAdmin(Set.of(1L))).thenReturn(true);
+        ReflectionTestUtils.setField(facade, "permissionService", permissionService);
+        ReflectionTestUtils.setField(facade, "roleService", roleService);
+
+        MfaIssuanceResult challenge = facade.issueAfterPrimaryAuth(
+                MfaIssuancePath.LOGIN_PASSWORD, 1L, 1L, UserTypeEnum.ADMIN.getValue(),
+                OAuth2ClientConstants.CLIENT_ID_DEFAULT, null, List.of("pwd"));
+        assertEquals(MfaIssuanceOutcome.CHALLENGE, challenge.getOutcome());
+        assertEquals(MfaLoginStatus.MFA_ENROLLMENT_REQUIRED, challenge.getLoginStatus());
     }
 
     @Test

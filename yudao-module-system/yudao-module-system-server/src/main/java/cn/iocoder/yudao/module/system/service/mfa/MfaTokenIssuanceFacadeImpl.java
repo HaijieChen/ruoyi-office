@@ -22,6 +22,8 @@ import cn.iocoder.yudao.module.system.service.mfa.store.MfaEnrollSagaStore;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaIssuanceGuard;
 import cn.iocoder.yudao.module.system.service.mfa.support.MfaLockOrder;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
+import cn.iocoder.yudao.module.system.service.permission.PermissionService;
+import cn.iocoder.yudao.module.system.service.permission.RoleService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -67,6 +70,10 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
     private MfaEnrollmentCommitter enrollmentCommitter;
     @Resource
     private MfaEnrollSagaStore enrollSagaStore;
+    @Resource
+    private PermissionService permissionService;
+    @Resource
+    private RoleService roleService;
 
     @Override
     public MfaIssuanceResult issueAfterPrimaryAuth(MfaIssuancePath path, Long userId, Long tenantId,
@@ -175,7 +182,8 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
                 }
                 stampTokenMetadata(token, again, aEpoch);
                 oauth2TokenService.saveAccessToken(token);
-                if (again.getMode() != null && again.getMode() != MfaMode.OFF) {
+                if (isForcedMfaUser(token.getUserId())
+                        || (again.getMode() != null && again.getMode() != MfaMode.OFF)) {
                     long tg = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_GLOBAL_EPOCH));
                     long tt = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_TENANT_EPOCH));
                     long ta = Long.parseLong(token.getUserInfo().get(MfaSessionGuardImpl.UI_ASSURANCE_EPOCH));
@@ -430,6 +438,13 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
     }
 
     private DecisionNeed evaluateNeed(MfaPolicySnapshot policy, Long tenantId, Long userId) {
+        if (isForcedMfaUser(userId)) {
+            if (!userFactorProbe.hasEligibleActiveFactor(tenantId, userId)
+                    || !userFactorProbe.isEnrollmentComplete(tenantId, userId)) {
+                return DecisionNeed.ENROLLMENT;
+            }
+            return DecisionNeed.MFA;
+        }
         MfaMode mode = policy.getMode();
         if (mode == null || mode == MfaMode.OFF) {
             return DecisionNeed.NONE;
@@ -622,6 +637,15 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
     private static boolean isAdminUser(Long userId, Integer userType) {
         return userId != null && userId != 0L
                 && UserTypeEnum.ADMIN.getValue().equals(userType);
+    }
+
+    /** 超级管理员始终强制 MFA，不受全局 OFF/OPTIONAL 开关影响。 */
+    private boolean isForcedMfaUser(Long userId) {
+        if (userId == null || permissionService == null || roleService == null) {
+            return false;
+        }
+        Set<Long> roleIds = permissionService.getUserRoleIdListByUserIdFromCache(userId);
+        return roleService.hasAnySuperAdmin(roleIds);
     }
 
 }
