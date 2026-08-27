@@ -148,7 +148,7 @@ public class FinanceHandlingFeePaymentServiceImpl implements FinanceHandlingFeeP
                 .entityCompanyDeptId(company.deptId())
                 .entityCompanyName(company.name())
                 .companyBankAccountId(account.getId())
-                .accountName(account.getAccountName())
+                .accountName(account.getAccountHolder())
                 .bankName(account.getBankName())
                 .accountNo(account.getAccountNo())
                 .accountNoMasked(FinanceCompanyBankAccountService.maskAccountNo(account.getAccountNo()))

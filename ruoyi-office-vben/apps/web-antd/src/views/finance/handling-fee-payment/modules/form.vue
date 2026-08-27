@@ -134,7 +134,7 @@ watch(
 watch(
   () => formData.value.companyBankAccountId,
   (id) => {
-    if (hydrating.value || !id || formData.value.currency) {
+    if (hydrating.value || !id) {
       return;
     }
     const account = accountList.value.find((a) => a.id === id);
@@ -248,7 +248,7 @@ const [Modal, modalApi] = useVbenModal({
       </Form.Item>
       <Form.Item label="户名">
         <Input
-          :value="selectedAccount?.accountHolder || selectedAccount?.accountName"
+          :value="selectedAccount?.accountHolder"
           disabled
         />
       </Form.Item>

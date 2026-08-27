@@ -48,7 +48,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     { field: 'currency', title: '币种', width: 80 },
     { field: 'entityCompanyName', title: '主体公司', minWidth: 140 },
-    { field: 'accountName', title: '账户名称', minWidth: 120 },
+    { field: 'accountName', title: '户名', minWidth: 120 },
     { field: 'bankName', title: '开户行', minWidth: 140 },
     { field: 'accountNoMasked', title: '账号', minWidth: 160 },
     {

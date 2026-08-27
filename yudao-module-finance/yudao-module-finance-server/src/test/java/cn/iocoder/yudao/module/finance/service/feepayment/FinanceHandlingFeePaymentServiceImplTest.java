@@ -41,6 +41,7 @@ class FinanceHandlingFeePaymentServiceImplTest {
         when(bankAccountService.requireEnabledForEntityCompany(8L, 20L))
                 .thenReturn(FinanceCompanyBankAccountDO.builder()
                         .id(8L).entityCompanyDeptId(20L).accountName("基本户")
+                        .accountHolder("甲公司")
                         .bankName("工行").accountNo("62220001")
                         .currency("CNY").status(0).build());
         doAnswer(inv -> {
@@ -69,6 +70,7 @@ class FinanceHandlingFeePaymentServiceImplTest {
         verify(mapper).insert(captor.capture());
         FinanceHandlingFeePaymentDO row = captor.getValue();
         assertEquals("主体甲", row.getEntityCompanyName());
+        assertEquals("甲公司", row.getAccountName());
         assertEquals("****0001", row.getAccountNoMasked());
     }
 
@@ -96,6 +98,20 @@ class FinanceHandlingFeePaymentServiceImplTest {
         req.setAmount(BigDecimal.ZERO);
         ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req));
         assertEquals(HANDLING_FEE_PAYMENT_AMOUNT_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateRejectsAccountFromOtherCompany() {
+        when(mapper.selectById(1L)).thenReturn(FinanceHandlingFeePaymentDO.builder()
+                .id(1L).entityCompanyDeptId(20L).companyBankAccountId(8L).build());
+        when(bankAccountService.requireEnabledForEntityCompany(99L, 20L))
+                .thenThrow(new ServiceException(COMPANY_BANK_ACCOUNT_ENTITY_MISMATCH));
+        FinanceHandlingFeePaymentSaveReqVO req = baseReq();
+        req.setId(1L);
+        req.setCompanyBankAccountId(99L);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.update(req));
+        assertEquals(COMPANY_BANK_ACCOUNT_ENTITY_MISMATCH.getCode(), ex.getCode());
+        verify(mapper, never()).updateById(any(FinanceHandlingFeePaymentDO.class));
     }
 
     @Test
@@ -214,6 +230,7 @@ class FinanceHandlingFeePaymentServiceImplTest {
     private FinanceCompanyBankAccountDO enabledCnyAccount() {
         return FinanceCompanyBankAccountDO.builder()
                 .id(8L).entityCompanyDeptId(20L).accountName("基本户")
+                .accountHolder("甲公司")
                 .bankName("工行").accountNo("62220001")
                 .currency("CNY").status(0).build();
     }
