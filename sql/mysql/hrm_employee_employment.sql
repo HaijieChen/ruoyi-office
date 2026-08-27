@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `hrm_employee_employment` (
   `updater` varchar(64) DEFAULT '',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` bit(1) NOT NULL DEFAULT b'0',
+  `tenant_id` bigint NOT NULL DEFAULT 0 COMMENT '租户编号',
   PRIMARY KEY (`id`),
   KEY `idx_employee` (`employee_id`, `deleted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='员工任职公司';

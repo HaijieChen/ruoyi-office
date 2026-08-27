@@ -97,13 +97,11 @@ async function loadCategoryList() {
 
 /** 获取所有流程定义数据 */
 async function loadProcessDefinitionList() {
-  // 流程定义（后端已按 canStart 过滤；此处防御性再滤一层，勿硬编码业务权限）
+  // 流程定义：后端已按可见性/发起范围/业务权限过滤，这里不再按 canStart 二次隐藏
   const list = await getProcessDefinitionList({
     suspensionState: 1,
   });
-  processDefinitionList.value = (list || []).filter(
-    (item) => item.canStart !== false,
-  );
+  processDefinitionList.value = list || [];
 
   // 空搜索，初始化相关数据
   handleQuery();
@@ -154,9 +152,7 @@ const processDefinitionGroup = computed(() => {
 });
 
 /**
- * 处理选择流程。
- * - 默认：留在 BPM 壳内，form 按 embed-registry 挂 FormBody
- * - EXP-87 薪税：跳转业务创建页（禁止壳内嵌 / 禁止通用 createProcessInstance）
+ * 处理选择流程：留在 BPM 壳内，form 按 embed-registry 挂 FormBody。
  */
 async function handleSelect(
   row: BpmProcessDefinitionApi.ProcessDefinition,

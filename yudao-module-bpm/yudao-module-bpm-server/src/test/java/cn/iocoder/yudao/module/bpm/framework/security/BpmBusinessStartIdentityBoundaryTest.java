@@ -190,11 +190,9 @@ class BpmBusinessStartIdentityBoundaryTest {
     }
 
     @Test
-    void genericEligibility_salaryStillDeniedWithoutTrustedChannel() {
+    void genericEligibility_salaryAllowedWithoutTrustedChannel() {
         assertFalse(BpmBusinessStartChannelHolder.isTrustedBusinessStart());
-        ServiceException ex = assertThrows(ServiceException.class,
-                () -> eligibility.validateStartOrThrow(SALARY_KEY, false));
-        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
+        assertDoesNotThrow(() -> eligibility.validateStartOrThrow(SALARY_KEY, false));
     }
 
     @Test

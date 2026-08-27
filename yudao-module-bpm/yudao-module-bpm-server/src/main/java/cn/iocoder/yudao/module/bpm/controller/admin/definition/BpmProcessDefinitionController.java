@@ -3,7 +3,6 @@ package cn.iocoder.yudao.module.bpm.controller.admin.definition;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
-import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.process.BpmProcessDefinitionPageReqVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.process.BpmProcessDefinitionRespVO;
@@ -15,8 +14,6 @@ import cn.iocoder.yudao.module.bpm.service.definition.BpmCategoryService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmFormService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmModelService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessDefinitionService;
-import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessStartEligibility;
-import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessStartEligibilityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,10 +54,6 @@ public class BpmProcessDefinitionController {
     private BpmFormService formService;
     @Resource
     private BpmCategoryService categoryService;
-    @Resource
-    private BpmProcessStartEligibilityService processStartEligibilityService;
-    @Resource
-    private SecurityFrameworkService securityFrameworkService;
     @Resource
     private BpmModelService modelService;
 
@@ -104,16 +97,11 @@ public class BpmProcessDefinitionController {
         Map<String, BpmProcessDefinitionInfoDO> processDefinitionMap = processDefinitionService.getProcessDefinitionInfoMap(
                 convertSet(list, ProcessDefinition::getId));
         Long userId = getLoginUserId();
-        boolean catalogAdmin = securityFrameworkService.hasRole("finance_admin");
         list.removeIf(processDefinition -> {
             BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionMap.get(processDefinition.getId());
             if (processDefinitionInfo == null || Boolean.FALSE.equals(processDefinitionInfo.getVisible())) {
                 return true;
             }
-            if (catalogAdmin) {
-                return false;
-            }
-            // 目录可见性只跟流程设计（可见开关 + 发起人/发起部门），不再叠加业务菜单权限
             return !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId);
         });
 
@@ -216,10 +204,16 @@ public class BpmProcessDefinitionController {
         if (vo == null) {
             return;
         }
-        BpmProcessStartEligibility eligibility = processStartEligibilityService.evaluate(vo.getKey());
-        vo.setCanStart(eligibility.isCanStart());
-        vo.setRequiredStartPermission(eligibility.getRequiredStartPermission());
-        vo.setCannotStartReason(eligibility.getCannotStartReason());
+        boolean canStart = true;
+        if (StrUtil.isNotBlank(vo.getId())) {
+            BpmProcessDefinitionInfoDO info = processDefinitionService.getProcessDefinitionInfo(vo.getId());
+            canStart = info != null
+                    && !Boolean.FALSE.equals(info.getVisible())
+                    && processDefinitionService.canUserStartProcessDefinition(info, getLoginUserId());
+        }
+        vo.setCanStart(canStart);
+        vo.setRequiredStartPermission(null);
+        vo.setCannotStartReason(canStart ? null : "当前流程未对你开放发起");
     }
 
 }

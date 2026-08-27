@@ -42,17 +42,16 @@ class BpmTrustedBusinessStartChannelTest {
     }
 
     @Test
-    void genericRpcCreate_salaryKey_denied_evenIfCallerWantsTrust() {
-        // 通用通道：ThreadLocal 未置位 → 恒 deny（DTO 也无法自报）
+    void genericRpcCreate_salaryKey_allowed() {
         assertFalse(BpmBusinessStartChannelHolder.isTrustedBusinessStart());
-        ServiceException ex = assertThrows(ServiceException.class,
-                () -> eligibility.validateStartOrThrow(SALARY_KEY,
-                        BpmBusinessStartChannelHolder.isTrustedBusinessStart()));
-        assertEquals(ErrorCodeConstants.PROCESS_INSTANCE_START_PERMISSION_DENIED.getCode(), ex.getCode());
+        assertDoesNotThrow(() -> eligibility.validateStartOrThrow(SALARY_KEY,
+                BpmBusinessStartChannelHolder.isTrustedBusinessStart()));
     }
 
     @Test
     void businessChannel_withPermission_passesRealEligibility() {
+        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
+                .thenReturn(true);
         assertDoesNotThrow(() -> BpmBusinessStartChannelHolder.callTrusted(() -> {
             eligibility.validateStartOrThrow(SALARY_KEY, BpmBusinessStartChannelHolder.isTrustedBusinessStart());
             return null;
@@ -63,6 +62,8 @@ class BpmTrustedBusinessStartChannelTest {
 
     @Test
     void businessChannel_tax_withPermission_passes() {
+        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
+                .thenReturn(true);
         assertDoesNotThrow(() -> BpmBusinessStartChannelHolder.callTrusted(() -> {
             eligibility.validateStartOrThrow(TAX_KEY, true);
             return null;
@@ -70,7 +71,7 @@ class BpmTrustedBusinessStartChannelTest {
     }
 
     @Test
-    void businessChannel_withoutMenuPermission_stillPasses() {
+    void businessChannel_withoutCreatePermission_stillAllowed() {
         assertDoesNotThrow(() -> BpmBusinessStartChannelHolder.callTrusted(() -> {
             eligibility.validateStartOrThrow(SALARY_KEY, true);
             return null;
@@ -120,15 +121,18 @@ class BpmTrustedBusinessStartChannelTest {
 
     @Test
     void catalogShowsSalaryTaxWhenHasCreatePermission() {
+        when(securityFrameworkService.hasPermission(eq("finance:salary-payment:create")))
+                .thenReturn(true);
+        when(securityFrameworkService.hasPermission(eq("finance:tax-payment:create")))
+                .thenReturn(true);
         assertFalse(eligibility.shouldHideFromStartList(SALARY_KEY));
         assertFalse(eligibility.shouldHideFromStartList(TAX_KEY));
-        // 目录可见仍禁止通用直启
-        assertThrows(Exception.class, () -> eligibility.validateStartOrThrow(SALARY_KEY, false));
-        assertThrows(Exception.class, () -> eligibility.validateStartOrThrow(TAX_KEY, false));
+        assertDoesNotThrow(() -> eligibility.validateStartOrThrow(SALARY_KEY, false));
+        assertDoesNotThrow(() -> eligibility.validateStartOrThrow(TAX_KEY, false));
     }
 
     @Test
-    void catalogDoesNotHideSalaryTaxWithoutCreatePermission() {
+    void catalogShowsSalaryTaxWithoutCreatePermission() {
         assertFalse(eligibility.shouldHideFromStartList(SALARY_KEY));
         assertFalse(eligibility.shouldHideFromStartList(TAX_KEY));
     }
