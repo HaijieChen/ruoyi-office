@@ -3,6 +3,7 @@ import { ref, watch } from 'vue';
 
 import { Checkbox, Form, FormItem } from 'ant-design-vue';
 
+import { isCopyServiceTask } from './copy-task';
 import { installedComponent } from './data';
 
 defineOptions({ name: 'ElementTaskConfig' });
@@ -23,6 +24,7 @@ const taskConfigForm = ref({
   exclusive: false,
 });
 const witchTaskComponent = ref();
+const copyMode = ref(false);
 
 const bpmnElement = ref();
 
@@ -50,12 +52,17 @@ watch(
   { immediate: true },
 );
 watch(
-  () => props.type,
+  () => [props.id, props.type],
   () => {
-    if (props.type) {
-      // @ts-ignore
-      witchTaskComponent.value = installedComponent[props.type].component;
+    if (!props.type) {
+      return;
     }
+    const bo = bpmnInstances().bpmnElement?.businessObject;
+    copyMode.value = props.type === 'ServiceTask' && isCopyServiceTask(bo);
+    // @ts-ignore
+    witchTaskComponent.value = copyMode.value
+      ? installedComponent.UserTask.component
+      : installedComponent[props.type].component;
   },
   { immediate: true },
 );
@@ -86,7 +93,11 @@ watch(
           排除
         </Checkbox>
       </FormItem>
-      <component :is="witchTaskComponent" v-bind="$props" />
+      <component
+        :is="witchTaskComponent"
+        v-bind="$props"
+        :copy-mode="copyMode"
+      />
     </Form>
   </div>
 </template>

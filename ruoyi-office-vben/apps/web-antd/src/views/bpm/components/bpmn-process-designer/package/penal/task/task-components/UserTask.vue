@@ -55,6 +55,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  copyMode: {
+    type: Boolean,
+    default: false,
+  },
 });
 const prefix = inject('prefix');
 const userTaskForm = ref({
@@ -349,7 +353,7 @@ onBeforeUnmount(() => {
 
 <template>
   <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 18 }">
-    <FormItem label="规则类型" name="candidateStrategy">
+    <FormItem :label="copyMode ? '抄送人设置' : '规则类型'" name="candidateStrategy">
       <Select
         v-model:value="userTaskForm.candidateStrategy"
         allow-clear
@@ -357,7 +361,11 @@ onBeforeUnmount(() => {
         @change="changeCandidateStrategy"
       >
         <SelectOption
-          v-for="(dict, index) in CANDIDATE_STRATEGY"
+          v-for="(dict, index) in (copyMode
+            ? CANDIDATE_STRATEGY.filter(
+                (item) => item.value !== CandidateStrategy.START_USER,
+              )
+            : CANDIDATE_STRATEGY)"
           :key="index"
           :value="dict.value"
         >
@@ -571,7 +579,7 @@ onBeforeUnmount(() => {
       <ProcessExpressionSelectModalComp @select="selectProcessExpression" />
     </FormItem>
 
-    <FormItem label="跳过表达式" name="skipExpression">
+    <FormItem v-if="!copyMode" label="跳过表达式" name="skipExpression">
       <Textarea
         v-model:value="userTaskForm.skipExpression"
         allow-clear

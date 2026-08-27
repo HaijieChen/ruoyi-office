@@ -315,6 +315,35 @@ ContextPadProvider.prototype.getContextPadEntries = function (element) {
           'bpmn-icon-user-task',
           translate('Append Task'),
         ),
+        'append.copy-task': {
+          group: 'model',
+          className: 'bpmn-icon-send',
+          title: translate('追加抄送'),
+          action: {
+            click(event, current) {
+              const shape = elementFactory.createShape({
+                type: 'bpmn:ServiceTask',
+              });
+              shape.businessObject.name = '抄送人';
+              shape.businessObject.delegateExpression =
+                '${bpmCopyTaskDelegate}';
+              if (autoPlace) {
+                autoPlace.append(current, shape);
+              } else {
+                create.start(event, shape, { source: current });
+              }
+            },
+            dragstart(event, current) {
+              const shape = elementFactory.createShape({
+                type: 'bpmn:ServiceTask',
+              });
+              shape.businessObject.name = '抄送人';
+              shape.businessObject.delegateExpression =
+                '${bpmCopyTaskDelegate}';
+              create.start(event, shape, { source: current });
+            },
+          },
+        },
         'append.intermediate-event': appendAction(
           'bpmn:IntermediateThrowEvent',
           'bpmn-icon-intermediate-event-none',

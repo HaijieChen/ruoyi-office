@@ -120,6 +120,14 @@ public class BpmnModelUtils {
      * @param userTask 任务节点
      * @return 候选人策略
      */
+    public static boolean isCopyServiceTask(FlowElement element) {
+        if (!(element instanceof ServiceTask serviceTask)) {
+            return false;
+        }
+        String implementation = StrUtil.blankToDefault(serviceTask.getImplementation(), "");
+        return implementation.contains("bpmCopyTaskDelegate");
+    }
+
     public static Integer parseCandidateStrategy(FlowElement userTask) {
         Integer candidateStrategy = NumberUtils.parseInt(userTask.getAttributeValue(
                 BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));

@@ -80,6 +80,22 @@ public class BpmTaskCandidateInvoker {
             // 2. 具体策略校验
             getCandidateStrategy(strategy).validateParam(param);
         });
+        List<ServiceTask> serviceTaskList = BpmnModelUtils.getBpmnModelElements(bpmnModel, ServiceTask.class);
+        serviceTaskList.forEach(serviceTask -> {
+            if (!BpmnModelUtils.isCopyServiceTask(serviceTask)) {
+                return;
+            }
+            Integer strategy = BpmnModelUtils.parseCandidateStrategy(serviceTask);
+            String param = BpmnModelUtils.parseCandidateParam(serviceTask);
+            if (strategy == null) {
+                throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, serviceTask.getName());
+            }
+            BpmTaskCandidateStrategy candidateStrategy = getCandidateStrategy(strategy);
+            if (candidateStrategy.isParamRequired() && StrUtil.isBlank(param)) {
+                throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, serviceTask.getName());
+            }
+            candidateStrategy.validateParam(param);
+        });
     }
 
     /**

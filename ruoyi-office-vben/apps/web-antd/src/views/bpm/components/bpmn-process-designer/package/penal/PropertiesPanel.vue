@@ -18,6 +18,7 @@ import ElementMultiInstance from './multi-instance/ElementMultiInstance.vue';
 import ElementOtherConfig from './other/ElementOtherConfig.vue';
 import ElementProperties from './properties/ElementProperties.vue';
 import SignalAndMassage from './signal-message/SignalAndMessage.vue';
+import { isCopyServiceTask } from './task/copy-task';
 import { getTaskCollapseItemName, isTaskCollapseItemShow } from './task/data';
 import ElementTask from './task/ElementTask.vue';
 import TimeEventConfig from './time-event-config/TimeEventConfig.vue';
@@ -321,7 +322,7 @@ watch(() => props.businessObject, syncFromBusinessObject, { deep: true });
       </CollapsePanel>
       <CollapsePanel
         key="task"
-        :header="getTaskCollapseItemName(elementType)"
+        :header="getTaskCollapseItemName(elementType, elementBusinessObject)"
         v-if="isTaskCollapseItemShow(elementType)"
       >
         <template #extra>
@@ -332,7 +333,7 @@ watch(() => props.businessObject, syncFromBusinessObject, { deep: true });
       <CollapsePanel
         key="multiInstance"
         header="多人审批方式"
-        v-if="elementType.includes('Task')"
+        v-if="elementType.includes('Task') && !isCopyServiceTask(elementBusinessObject)"
       >
         <template #extra>
           <IconifyIcon icon="ep:help-filled" />

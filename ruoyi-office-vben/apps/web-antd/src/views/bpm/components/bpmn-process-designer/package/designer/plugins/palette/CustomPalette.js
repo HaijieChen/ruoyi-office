@@ -38,6 +38,18 @@ F.prototype.getPaletteEntries = function () {
   const globalConnect = this._globalConnect;
   const translate = this._translate;
 
+  function createCopyTask(event) {
+    const shape = elementFactory.createShape({ type: 'bpmn:ServiceTask' });
+    const bo = shape.businessObject;
+    bo.name = '抄送人';
+    bo.delegateExpression = '${bpmCopyTaskDelegate}';
+    bo.$attrs = {
+      ...(bo.$attrs || {}),
+      'flowable:delegateExpression': '${bpmCopyTaskDelegate}',
+    };
+    create.start(event, shape);
+  }
+
   function createAction(type, group, className, title, options) {
     function createListener(event) {
       const shape = Object.assign(
@@ -166,6 +178,15 @@ F.prototype.getPaletteEntries = function () {
       'bpmn-icon-user-task',
       translate('Create User Task'),
     ),
+    'create.copy-task': {
+      group: 'activity',
+      className: 'bpmn-icon-send',
+      title: translate('创建抄送'),
+      action: {
+        dragstart: createCopyTask,
+        click: createCopyTask,
+      },
+    },
     'create.call-activity': createAction(
       'bpmn:CallActivity',
       'activity',
