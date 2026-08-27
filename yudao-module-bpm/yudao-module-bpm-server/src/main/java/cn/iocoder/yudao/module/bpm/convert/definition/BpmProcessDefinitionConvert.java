@@ -65,8 +65,8 @@ public interface BpmProcessDefinitionConvert {
             }
             return vo;
         });
-        // 排序
-        result.sort(Comparator.comparing(BpmProcessDefinitionRespVO::getSort));
+        result.sort(Comparator.comparing(BpmProcessDefinitionRespVO::getSort,
+                Comparator.nullsLast(Comparator.naturalOrder())));
         return result;
     }
 
