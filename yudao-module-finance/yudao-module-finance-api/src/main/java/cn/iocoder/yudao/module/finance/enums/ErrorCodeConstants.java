@@ -334,4 +334,9 @@ public interface ErrorCodeConstants {
 
     ErrorCode BUSINESS_STAFF_INVALID = new ErrorCode(1_040_000_040, "业务人员须为提单人任职公司下的员工");
 
+    // ========== 手续费付款 1-040-012-000 ==========
+    ErrorCode HANDLING_FEE_PAYMENT_NOT_EXISTS = new ErrorCode(1_040_012_000, "手续费付款记录不存在");
+    ErrorCode HANDLING_FEE_PAYMENT_AMOUNT_INVALID = new ErrorCode(1_040_012_001, "手续费金额必须大于 0");
+    ErrorCode HANDLING_FEE_PAYMENT_IMPORT_EMPTY = new ErrorCode(1_040_012_002, "手续费导入数据不能为空");
+
 }
