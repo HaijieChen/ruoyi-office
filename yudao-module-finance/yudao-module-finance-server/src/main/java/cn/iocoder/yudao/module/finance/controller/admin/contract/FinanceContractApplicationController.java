@@ -111,7 +111,7 @@ public class FinanceContractApplicationController {
     @PostMapping("/cancel")
     @Operation(summary = "申请人撤回（仅用印前；同步取消 Flowable）")
     @Parameter(name = "id", description = "申请编号", required = true)
-    @PreAuthorize("@ss.hasPermission('finance:contract-application:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Boolean> cancel(@RequestParam("id") Long id) {
         contractApplicationService.cancel(id, getLoginUserId());
         return success(true);

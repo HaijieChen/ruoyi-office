@@ -5,7 +5,6 @@ import type { Component } from 'vue';
  * key = processDefinition.key（与后端 PROCESS_KEY 一致）。
  *
  * 合同 / 付款 / 开票 / 薪税 / 出差 / 外出：壳内嵌业务 form-body。
- * submit 走各自业务 API，不走通用 createProcessInstance。
  */
 export const CREATE_SHELL_EMBED_REGISTRY: Record<
   string,

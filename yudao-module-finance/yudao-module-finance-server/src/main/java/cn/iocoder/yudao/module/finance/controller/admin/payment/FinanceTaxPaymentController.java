@@ -99,7 +99,7 @@ public class FinanceTaxPaymentController {
 
     @PutMapping("/cancel")
     @Operation(summary = "申请人撤回")
-    @PreAuthorize("@ss.hasPermission('finance:tax-payment:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Boolean> cancel(@RequestParam("id") Long id) {
         FinancePaymentApplicationDO app = paymentApplicationService.getApplication(id);
         assertTax(app);

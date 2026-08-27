@@ -100,7 +100,7 @@ public class FinanceSalaryPaymentController {
 
     @PutMapping("/cancel")
     @Operation(summary = "申请人撤回")
-    @PreAuthorize("@ss.hasPermission('finance:salary-payment:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Boolean> cancel(@RequestParam("id") Long id) {
         FinancePaymentApplicationDO app = paymentApplicationService.getApplication(id);
         assertSalary(app);

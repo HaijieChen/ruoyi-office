@@ -43,30 +43,15 @@ public final class BpmEmbedProcessStartPermissionRegistry {
     }
 
     /**
-     * 仅允许嵌入通用发起壳的 key（前端 CREATE_SHELL_EMBED_REGISTRY 对齐）。
-     * 薪资/税金：目录可露出，但<strong>不</strong>走壳内嵌表单（跳转独立业务页）。
+     * 允许嵌入通用发起壳的 key（前端 CREATE_SHELL_EMBED_REGISTRY 对齐）。
      */
     public static boolean isCreateShellEmbedAllowed(String processKey) {
-        if (StrUtil.isBlank(processKey)) {
-            return false;
-        }
-        String key = processKey.trim();
-        if ("finance_salary_payment_apply".equals(key) || "finance_tax_payment_apply".equals(key)) {
-            return false;
-        }
-        return isEmbedProcess(key);
+        return isEmbedProcess(processKey);
     }
 
-    /** 统一目录卡片点击后应 router 跳转的业务创建页 path（与前端 redirect-registry 对齐）。 */
+    /** 统一目录一律壳内发起，不再跳转独立业务页。 */
     public static String catalogRedirectPath(String processKey) {
-        if (StrUtil.isBlank(processKey)) {
-            return null;
-        }
-        return switch (processKey.trim()) {
-            case "finance_salary_payment_apply" -> "/finance/salary-payment";
-            case "finance_tax_payment_apply" -> "/finance/tax-payment";
-            default -> null;
-        };
+        return null;
     }
 
     private BpmEmbedProcessStartPermissionRegistry() {

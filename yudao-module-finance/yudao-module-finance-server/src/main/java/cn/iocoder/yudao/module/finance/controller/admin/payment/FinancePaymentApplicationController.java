@@ -59,7 +59,7 @@ public class FinancePaymentApplicationController {
 
     @PutMapping("/cancel")
     @Operation(summary = "申请人撤回付款（同步落 CANCELLED）")
-    @PreAuthorize("@ss.hasPermission('finance:payment-application:create')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<Boolean> cancel(@RequestParam("id") Long id) {
         paymentApplicationService.cancel(id, getLoginUserId());
         return success(true);
