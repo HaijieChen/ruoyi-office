@@ -9,7 +9,7 @@ import { handleTree } from '@vben/utils';
 
 import { z } from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
-import { getSimpleUserList } from '#/api/system/user';
+import { getSimpleUserList, getUserPage } from '#/api/system/user';
 
 /** 关联数据 */
 let userList: SystemUserApi.User[] = [];
@@ -78,8 +78,31 @@ export function useFormSchema(): VbenFormSchema[] {
         api: getSimpleUserList,
         labelField: 'nickname',
         valueField: 'id',
-        placeholder: '请选择负责人',
+        placeholder: '请选择负责人，支持姓名检索',
         clearable: true,
+        filterable: true,
+      },
+      dependencies: {
+        triggerFields: ['id'],
+        componentProps: (values) => ({
+          api: async () => {
+            if (!values?.id) {
+              return getSimpleUserList();
+            }
+            const { list } = await getUserPage({
+              pageNo: 1,
+              pageSize: 200,
+              deptId: values.id,
+              status: CommonStatusEnum.ENABLE,
+            });
+            return list;
+          },
+          labelField: 'nickname',
+          valueField: 'id',
+          placeholder: '请选择本部门人员，支持检索',
+          clearable: true,
+          filterable: true,
+        }),
       },
       rules: z.number().optional(),
     },
