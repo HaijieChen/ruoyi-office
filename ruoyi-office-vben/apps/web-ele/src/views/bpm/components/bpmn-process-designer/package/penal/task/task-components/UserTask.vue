@@ -403,11 +403,16 @@ onBeforeUnmount(() => {
         v-model="userTaskForm.candidateParam"
         :data="deptTreeOptions"
         :props="defaultProps"
-        placeholder="加载中，请稍后"
+        placeholder="请选择部门，可输入搜索"
         multiple
         check-strictly
         show-checkbox
         filterable
+        :filter-node-method="
+          (value: string, data: any) =>
+            !value ||
+            String(data?.name ?? data?.label ?? '').includes(value)
+        "
         @change="updateElementTask"
       />
     </ElFormItem>

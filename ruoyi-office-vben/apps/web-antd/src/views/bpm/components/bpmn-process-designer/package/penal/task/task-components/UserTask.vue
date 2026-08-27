@@ -84,6 +84,18 @@ const defaultProps = {
   label: 'name',
   value: 'id',
 };
+
+/** 指定部门：按名称过滤（含嵌套部门） */
+function filterDeptTreeNode(input: string, node: any) {
+  const keyword = (input || '').trim().toLowerCase();
+  if (!keyword) {
+    return true;
+  }
+  const raw = node?.dataRef ?? node?.node ?? node?.props ?? node;
+  const label =
+    raw?.name ?? raw?.label ?? raw?.title ?? node?.name ?? node?.title ?? '';
+  return String(label).toLowerCase().includes(keyword);
+}
 // 表单内用户字段选项, 必须是必填和用户选择器
 const userFieldOnFormOptions = computed(() => {
   return formFieldOptions.filter((item) => item.type === 'UserSelect');
@@ -413,11 +425,13 @@ onBeforeUnmount(() => {
         v-model:value="userTaskForm.candidateParam"
         :tree-data="deptTreeOptions"
         :field-names="defaultProps"
-        placeholder="加载中，请稍后"
+        placeholder="请选择部门，可输入搜索"
         multiple
         tree-checkable
         show-search
         tree-node-filter-prop="name"
+        :filter-tree-node="filterDeptTreeNode"
+        tree-default-expand-all
         @change="updateElementTask"
       />
     </FormItem>

@@ -44,6 +44,17 @@ import {
 
 defineOptions({ name: 'CopyTaskNodeConfig' });
 
+function filterDeptTreeNode(input: string, node: any) {
+  const keyword = (input || '').trim().toLowerCase();
+  if (!keyword) {
+    return true;
+  }
+  const raw = node?.dataRef ?? node?.node ?? node?.props ?? node;
+  const label =
+    raw?.name ?? raw?.label ?? raw?.title ?? node?.name ?? node?.title ?? '';
+  return String(label).toLowerCase().includes(keyword);
+}
+
 const props = defineProps({
   flowNode: {
     type: Object as () => SimpleFlowNode,
@@ -299,13 +310,15 @@ defineExpose({ showCopyTaskNodeConfig }); // 暴露方法给父组件
                   value: 'id',
                   children: 'children',
                 }"
-                empty-text="加载中，请稍后"
+                empty-text="请选择部门，可输入搜索"
                 multiple
                 :check-strictly="true"
                 allow-clear
                 tree-checkable
                 show-search
                 tree-node-filter-prop="name"
+                :filter-tree-node="filterDeptTreeNode"
+                tree-default-expand-all
               />
             </FormItem>
             <FormItem
