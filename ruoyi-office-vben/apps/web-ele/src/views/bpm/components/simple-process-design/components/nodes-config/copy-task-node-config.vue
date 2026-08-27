@@ -298,7 +298,11 @@ defineExpose({ showCopyTaskNodeConfig }); // 暴露方法给父组件
               />
             </ElFormItem>
             <ElFormItem
-              v-if="configForm.candidateStrategy === CandidateStrategy.POST"
+              v-if="
+                configForm.candidateStrategy === CandidateStrategy.POST ||
+                configForm.candidateStrategy ===
+                  CandidateStrategy.START_USER_COMPANY_POST
+              "
               label="指定岗位"
               name="postIds"
             >

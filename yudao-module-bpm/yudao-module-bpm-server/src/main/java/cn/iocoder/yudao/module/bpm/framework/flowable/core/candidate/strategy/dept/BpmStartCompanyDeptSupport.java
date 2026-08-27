@@ -16,14 +16,14 @@ import java.util.Set;
 /**
  * 按发起任职公司，从勾选部门中筛出属于该公司的部门。
  */
-final class BpmStartCompanyDeptSupport {
+public final class BpmStartCompanyDeptSupport {
 
     private static final String ORG_TYPE_COMPANY = "1";
 
     private BpmStartCompanyDeptSupport() {
     }
 
-    static Long resolveStartCompanyDeptId(Map<String, Object> processVariables,
+    public static Long resolveStartCompanyDeptId(Map<String, Object> processVariables,
                                           Long startUserId,
                                           DeptApi deptApi,
                                           AdminUserApi adminUserApi) {
@@ -66,7 +66,7 @@ final class BpmStartCompanyDeptSupport {
         return matched;
     }
 
-    static Long findCompanyId(Long deptId, DeptApi deptApi) {
+    public static Long findCompanyId(Long deptId, DeptApi deptApi) {
         if (deptId == null || deptId <= 0) {
             return null;
         }

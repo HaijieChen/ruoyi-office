@@ -35,6 +35,7 @@ public enum BpmTaskCandidateStrategyEnum implements ArrayValuable<Integer> {
     START_USER_COMPANY_FINANCE(52, "发起人公司财务"),
     START_USER_COMPANY_DEPT_LEADER(53, "发起人公司指定部门负责人"),
     START_USER_COMPANY_DEPT_MEMBER(54, "发起人公司指定部门成员"),
+    START_USER_COMPANY_POST(55, "发起人公司指定岗位"),
     EXPRESSION(60, "流程表达式"), // 表达式 ExpressionManager
     ASSIGN_EMPTY(1, "审批人为空"),
     ;

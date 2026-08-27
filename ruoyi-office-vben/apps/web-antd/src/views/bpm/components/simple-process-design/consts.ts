@@ -310,6 +310,10 @@ export enum CandidateStrategy {
    */
   START_USER_COMPANY_DEPT_MEMBER = 54,
   /**
+   * 发起人公司指定岗位
+   */
+  START_USER_COMPANY_POST = 55,
+  /**
    * 表单内用户字段
    */
   FORM_USER = 50,
@@ -702,6 +706,10 @@ export const CANDIDATE_STRATEGY: DictDataType[] = [
   {
     label: '发起人公司指定部门成员',
     value: CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER as any,
+  },
+  {
+    label: '发起人公司指定岗位',
+    value: CandidateStrategy.START_USER_COMPANY_POST as any,
   },
   { label: '流程表达式', value: CandidateStrategy.EXPRESSION as any },
 ];

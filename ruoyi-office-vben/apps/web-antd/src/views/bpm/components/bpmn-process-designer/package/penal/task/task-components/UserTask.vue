@@ -412,7 +412,11 @@ onBeforeUnmount(() => {
       />
     </FormItem>
     <FormItem
-      v-if="userTaskForm.candidateStrategy === CandidateStrategy.POST"
+      v-if="
+        userTaskForm.candidateStrategy === CandidateStrategy.POST ||
+        userTaskForm.candidateStrategy ===
+          CandidateStrategy.START_USER_COMPANY_POST
+      "
       label="指定岗位"
       name="candidateParam"
     >

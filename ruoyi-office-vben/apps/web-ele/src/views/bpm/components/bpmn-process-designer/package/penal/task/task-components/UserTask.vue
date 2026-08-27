@@ -411,7 +411,11 @@ onBeforeUnmount(() => {
       />
     </ElFormItem>
     <ElFormItem
-      v-if="userTaskForm.candidateStrategy === CandidateStrategy.POST"
+      v-if="
+        userTaskForm.candidateStrategy === CandidateStrategy.POST ||
+        userTaskForm.candidateStrategy ===
+          CandidateStrategy.START_USER_COMPANY_POST
+      "
       label="指定岗位"
       prop="candidateParam"
     >

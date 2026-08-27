@@ -324,7 +324,9 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
 
     // 指定岗位
     if (
-      configForm.value?.candidateStrategy === CandidateStrategy.POST &&
+      (configForm.value?.candidateStrategy === CandidateStrategy.POST ||
+        configForm.value?.candidateStrategy ===
+          CandidateStrategy.START_USER_COMPANY_POST) &&
       configForm.value.postIds?.length > 0
     ) {
       const candidateNames: string[] = [];
@@ -333,7 +335,11 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
           candidateNames.push(item.name);
         }
       });
-      showText = `指定岗位: ${candidateNames.join(',')}`;
+      showText =
+        configForm.value.candidateStrategy ===
+        CandidateStrategy.START_USER_COMPANY_POST
+          ? `发起人公司指定岗位: ${candidateNames.join(',')}`
+          : `指定岗位: ${candidateNames.join(',')}`;
     }
     // 指定用户组
     if (
@@ -451,7 +457,8 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
         candidateParam = deptIds?.concat(`|${configForm.value.deptLevel}`);
         break;
       }
-      case CandidateStrategy.POST: {
+      case CandidateStrategy.POST:
+      case CandidateStrategy.START_USER_COMPANY_POST: {
         candidateParam = configForm.value.postIds?.join(',');
         break;
       }
@@ -529,7 +536,8 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
         }
         break;
       }
-      case CandidateStrategy.POST: {
+      case CandidateStrategy.POST:
+      case CandidateStrategy.START_USER_COMPANY_POST: {
         configForm.value.postIds = candidateParam
           .split(',')
           .map((item) => +item);
