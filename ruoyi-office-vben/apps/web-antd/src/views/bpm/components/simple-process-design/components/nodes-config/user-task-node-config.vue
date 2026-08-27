@@ -742,6 +742,8 @@ onMounted(() => {
                 :check-strictly="true"
                 allow-clear
                 tree-checkable
+                show-search
+                tree-node-filter-prop="name"
               />
             </FormItem>
             <FormItem

@@ -408,6 +408,8 @@ onBeforeUnmount(() => {
         placeholder="加载中，请稍后"
         multiple
         tree-checkable
+        show-search
+        tree-node-filter-prop="name"
         @change="updateElementTask"
       />
     </FormItem>

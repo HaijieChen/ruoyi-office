@@ -8,7 +8,7 @@ import { useRouter } from 'vue-router';
 import { Page, useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
-import { message } from 'ant-design-vue';
+import { Modal, message } from 'ant-design-vue';
 import type { SystemDeptApi } from '#/api/system/dept';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -142,23 +142,56 @@ async function handleGenerateUser(row: EmployeeArchiveApi.EmployeeArchive) {
   }
 }
 
-/** 批量生成用户 */
-async function handleBatchGenerateUser() {
-  if (isEmpty(checkedIds.value)) {
-    message.warning('请先选择要生成用户的记录');
-    return;
+/** 当前筛选下尚未生成账号的员工 */
+async function collectPendingUserIds() {
+  const formValues = await gridApi.formApi.getValues();
+  const queryParams: Record<string, any> = { ...formValues };
+  if (!queryParams.deptId || queryParams.deptId === '') {
+    delete queryParams.deptId;
   }
-  const hideLoading = message.loading('正在批量生成用户...', 0);
+  if (!queryParams.deptName || queryParams.deptName === '') {
+    delete queryParams.deptId;
+    delete queryParams.deptName;
+  }
+  const { list } = await getEmployeeArchivePage({
+    pageNo: 1,
+    pageSize: 500,
+    ...queryParams,
+  });
+  return list
+    .filter((item) => !item.userGenerated && item.id)
+    .map((item) => item.id as number);
+}
+
+async function doBatchGenerateUser(ids: number[]) {
+  const hideLoading = message.loading('正在批量生成账号...', 0);
   try {
-    await batchGenerateUserForEmployee(checkedIds.value);
-    message.success('批量生成用户成功');
+    await batchGenerateUserForEmployee(ids);
+    message.success(`已生成 ${ids.length} 个登录账号`);
     checkedIds.value = [];
     onRefresh();
   } catch (error) {
-    message.error('批量生成用户失败');
+    message.error('批量生成账号失败');
   } finally {
     hideLoading();
   }
+}
+
+/** 批量生成用户：已勾选则生成勾选的；未勾选则为当前筛选下尚未生成账号的员工生成 */
+async function handleBatchGenerateUser() {
+  if (!isEmpty(checkedIds.value)) {
+    await doBatchGenerateUser(checkedIds.value);
+    return;
+  }
+  const ids = await collectPendingUserIds();
+  if (isEmpty(ids)) {
+    message.info('没有需要生成账号的员工');
+    return;
+  }
+  Modal.confirm({
+    title: `将为 ${ids.length} 名尚未生成账号的员工创建登录账号（工号即用户名）？`,
+    onOk: () => doBatchGenerateUser(ids),
+  });
 }
 
 /** 复选框变化事件 */
@@ -256,10 +289,9 @@ onActivated(() => {
               onClick: handleImport,
             },
             {
-              label: '批量生成用户',
+              label: '生成账号',
               type: 'primary',
               icon: ACTION_ICON.ADD,
-              disabled: isEmpty(checkedIds),
               auth: ['hrm:employee-archive:create'],
               onClick: handleBatchGenerateUser,
             },

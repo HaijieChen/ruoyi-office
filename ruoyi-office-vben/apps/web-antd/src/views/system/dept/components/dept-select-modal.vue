@@ -5,7 +5,7 @@ import { computed, reactive, ref, watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { message, Tree } from 'ant-design-vue';
+import { Input, message, Tree } from 'ant-design-vue';
 
 import { useDeptSelectData } from './dept-select-data';
 
@@ -39,9 +39,54 @@ const formData = reactive({
 
 // 树选中的 keys（用于 v-model）
 const selectedKeys = ref<number[]>([]);
+const searchValue = ref('');
+const expandedKeys = ref<number[]>([]);
 
 const modalTitle = computed(() =>
   props.allowCompany ? '选择部门或公司' : '选择部门',
+);
+
+type DeptNode = SystemDeptApi.Dept & { children?: DeptNode[] };
+
+function collectIds(nodes: DeptNode[]): number[] {
+  const ids: number[] = [];
+  for (const node of nodes) {
+    if (node.id != null) {
+      ids.push(node.id);
+    }
+    if (node.children?.length) {
+      ids.push(...collectIds(node.children));
+    }
+  }
+  return ids;
+}
+
+const filteredTree = computed(() => {
+  const keyword = searchValue.value.trim().toLowerCase();
+  if (!keyword) {
+    return treeData.value as DeptNode[];
+  }
+  const walk = (nodes: DeptNode[]): DeptNode[] => {
+    const out: DeptNode[] = [];
+    for (const node of nodes) {
+      const children = node.children?.length ? walk(node.children) : [];
+      if (node.name?.toLowerCase().includes(keyword) || children.length) {
+        out.push({ ...node, children });
+      }
+    }
+    return out;
+  };
+  return walk(treeData.value as DeptNode[]);
+});
+
+watch(
+  filteredTree,
+  (nodes) => {
+    if (searchValue.value.trim()) {
+      expandedKeys.value = collectIds(nodes);
+    }
+  },
+  { immediate: true },
 );
 
 // 同步 selectedDept 和 selectedKeys
@@ -61,6 +106,7 @@ const [Modal, modalApi] = useVbenModal({
     return handleConfirm();
   },
   async onOpened() {
+    searchValue.value = '';
     await loadTreeData();
   },
 });
@@ -145,9 +191,16 @@ defineExpose({
 <template>
   <Modal>
     <div class="dept-select-container">
+      <Input
+        v-model:value="searchValue"
+        allow-clear
+        class="mb-3"
+        placeholder="搜索部门或公司"
+      />
       <Tree
         v-model:selected-keys="selectedKeys"
-        :tree-data="treeData as any"
+        v-model:expanded-keys="expandedKeys"
+        :tree-data="filteredTree as any"
         :field-names="{ children: 'children', title: 'name', key: 'id' }"
         :block-node="true"
         :show-line="{ showLeafIcon: false }"

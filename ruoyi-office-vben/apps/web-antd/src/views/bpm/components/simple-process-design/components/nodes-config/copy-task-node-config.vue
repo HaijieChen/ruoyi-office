@@ -304,6 +304,8 @@ defineExpose({ showCopyTaskNodeConfig }); // 暴露方法给父组件
                 :check-strictly="true"
                 allow-clear
                 tree-checkable
+                show-search
+                tree-node-filter-prop="name"
               />
             </FormItem>
             <FormItem

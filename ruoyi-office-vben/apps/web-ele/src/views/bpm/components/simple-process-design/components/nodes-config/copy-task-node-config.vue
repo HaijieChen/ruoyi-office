@@ -296,6 +296,7 @@ defineExpose({ showCopyTaskNodeConfig }); // 暴露方法给父组件
                 :check-strictly="true"
                 clearable
                 :show-checkbox="true"
+                filterable
               />
             </ElFormItem>
             <ElFormItem

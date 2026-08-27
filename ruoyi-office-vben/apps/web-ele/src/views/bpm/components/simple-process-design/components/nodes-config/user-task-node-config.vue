@@ -710,6 +710,7 @@ onMounted(() => {
                 :check-strictly="true"
                 clearable
                 :show-checkbox="true"
+                filterable
               />
             </ElFormItem>
             <ElFormItem

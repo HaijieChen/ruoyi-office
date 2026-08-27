@@ -407,6 +407,7 @@ onBeforeUnmount(() => {
         multiple
         check-strictly
         show-checkbox
+        filterable
         @change="updateElementTask"
       />
     </ElFormItem>
