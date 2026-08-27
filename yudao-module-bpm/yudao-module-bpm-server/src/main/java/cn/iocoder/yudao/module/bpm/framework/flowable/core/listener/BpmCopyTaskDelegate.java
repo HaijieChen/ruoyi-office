@@ -17,7 +17,7 @@ import static cn.iocoder.yudao.module.bpm.framework.flowable.core.listener.BpmCo
 /**
  * 处理抄送用户的 {@link JavaDelegate} 的实现类
  * <p>
- * 目前只有仿钉钉/飞书模式的【抄送节点】使用
+ * 简易设计器抄送节点与 BPMN 设计器抄送 ServiceTask 共用
  *
  * @author jason
  */

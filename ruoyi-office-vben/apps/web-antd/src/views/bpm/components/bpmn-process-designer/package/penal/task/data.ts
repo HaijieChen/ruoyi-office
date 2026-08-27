@@ -1,3 +1,4 @@
+import { isCopyServiceTask } from './copy-task';
 import CallActivity from './task-components/CallActivity.vue';
 import ReceiveTask from './task-components/ReceiveTask.vue';
 import ScriptTask from './task-components/ScriptTask.vue';
@@ -29,7 +30,11 @@ export const installedComponent = {
 
 export const getTaskCollapseItemName = (
   elementType: keyof typeof installedComponent,
+  businessObject?: any,
 ) => {
+  if (elementType === 'ServiceTask' && isCopyServiceTask(businessObject)) {
+    return '抄送人';
+  }
   return installedComponent[elementType].name;
 };
 
