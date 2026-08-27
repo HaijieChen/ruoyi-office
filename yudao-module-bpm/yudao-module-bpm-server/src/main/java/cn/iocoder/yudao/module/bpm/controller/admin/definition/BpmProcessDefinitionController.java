@@ -130,11 +130,8 @@ public class BpmProcessDefinitionController {
             Model model = modelByKey.get(vo.getKey());
             String code = model != null && StrUtil.isNotBlank(model.getCategory())
                     ? model.getCategory() : vo.getCategory();
-            if (StrUtil.isBlank(code)) {
-                code = "default";
-            }
             vo.setCategory(code);
-            BpmCategoryDO category = categoryMap.get(code);
+            BpmCategoryDO category = StrUtil.isNotBlank(code) ? categoryMap.get(code) : null;
             if (category != null) {
                 vo.setCategoryName(category.getName());
             }

@@ -6,7 +6,6 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
-import { groupBy } from '@vben/utils';
 
 import {
   Card,
@@ -134,38 +133,38 @@ function handleQuery() {
   }
 }
 
-/** 流程定义的分组：分类字典对不上时仍展示，避免整页空白 */
+function matchesModelCategory(
+  item: BpmProcessDefinitionApi.ProcessDefinition,
+  category: BpmCategoryApi.Category,
+) {
+  if (item.categoryName && item.categoryName === category.name) {
+    return true;
+  }
+  return Boolean(item.category && item.category === category.code);
+}
+
+/** 与流程模型页相同：按分类名称/编码归组，缺分类进未分类，不并进默认分类 */
 const processDefinitionGroup = computed(() => {
   const list = filteredProcessDefinitionList.value || [];
-  if (!list.length) {
-    return {};
-  }
-  const grouped = groupBy(
-    list,
-    (item: BpmProcessDefinitionApi.ProcessDefinition) => {
-      const raw = (item.category || item.categoryName || '').trim();
-      return !raw || raw === 'undefined' ? 'default' : raw;
-    },
-  ) as Record<string, BpmProcessDefinitionApi.ProcessDefinition[]>;
   const orderedGroup: Record<
     string,
     BpmProcessDefinitionApi.ProcessDefinition[]
   > = {};
-  categoryList.value.forEach((category: BpmCategoryApi.Category) => {
-    const bucket = grouped[category.code] || grouped[category.name];
-    if (bucket?.length) {
-      orderedGroup[category.code] = bucket;
-      delete grouped[category.code];
-      delete grouped[category.name];
+  if (!list.length) {
+    return orderedGroup;
+  }
+  const used = new Set<string>();
+  (categoryList.value || []).forEach((category: BpmCategoryApi.Category) => {
+    const items = list.filter((item) => matchesModelCategory(item, category));
+    if (items.length) {
+      orderedGroup[category.code] = items;
+      items.forEach((item) => used.add(item.id));
     }
   });
-  Object.entries(grouped).forEach(([code, items]) => {
-    if (!items?.length) {
-      return;
-    }
-    const key = !code || code === 'undefined' ? 'default' : code;
-    orderedGroup[key] = (orderedGroup[key] || []).concat(items);
-  });
+  const rest = list.filter((item) => !used.has(item.id));
+  if (rest.length) {
+    orderedGroup.uncategorized = rest;
+  }
   return orderedGroup;
 });
 
@@ -215,7 +214,7 @@ const availableCategories = computed(() => {
         code,
         name:
           sample?.categoryName ||
-          (code === 'default' ? '默认分类' : code === 'uncategorized' ? '未分类' : code),
+          (code === 'uncategorized' ? '未分类' : code),
       };
     });
   return [...fromDict, ...extras];
