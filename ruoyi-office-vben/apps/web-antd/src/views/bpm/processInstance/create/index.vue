@@ -6,7 +6,6 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
-import { groupBy } from '@vben/utils';
 
 import {
   Card,
@@ -92,18 +91,25 @@ async function getList() {
 
 /** 获取所有流程分类数据 */
 async function loadCategoryList() {
-  categoryList.value = await getCategorySimpleList();
+  try {
+    categoryList.value = (await getCategorySimpleList()) || [];
+  } catch {
+    categoryList.value = [];
+  }
 }
 
 /** 获取所有流程定义数据 */
 async function loadProcessDefinitionList() {
-  // 流程定义：后端已按可见性/发起范围/业务权限过滤，这里不再按 canStart 二次隐藏
-  const list = await getProcessDefinitionList({
-    suspensionState: 1,
-  });
-  processDefinitionList.value = list || [];
-
-  // 空搜索，初始化相关数据
+  // 流程定义：后端已按可见性/发起范围过滤，这里不再按 canStart 二次隐藏
+  try {
+    const list = await getProcessDefinitionList({
+      suspensionState: 1,
+    });
+    processDefinitionList.value = list || [];
+  } catch {
+    processDefinitionList.value = [];
+    message.error('加载可发起流程失败');
+  }
   handleQuery();
 }
 
@@ -127,34 +133,38 @@ function handleQuery() {
   }
 }
 
-/** 流程定义的分组：分类字典对不上时仍展示，避免整页空白 */
+function matchesModelCategory(
+  item: BpmProcessDefinitionApi.ProcessDefinition,
+  category: BpmCategoryApi.Category,
+) {
+  if (item.categoryName && item.categoryName === category.name) {
+    return true;
+  }
+  return Boolean(item.category && item.category === category.code);
+}
+
+/** 与流程模型页相同：按分类名称/编码归组，缺分类进未分类，不并进默认分类 */
 const processDefinitionGroup = computed(() => {
   const list = filteredProcessDefinitionList.value || [];
-  if (!list.length) {
-    return {};
-  }
-  const grouped = groupBy(
-    list,
-    (item: BpmProcessDefinitionApi.ProcessDefinition) =>
-      item.category || item.categoryName || 'uncategorized',
-  ) as Record<string, BpmProcessDefinitionApi.ProcessDefinition[]>;
   const orderedGroup: Record<
     string,
     BpmProcessDefinitionApi.ProcessDefinition[]
   > = {};
-  categoryList.value.forEach((category: BpmCategoryApi.Category) => {
-    const bucket = grouped[category.code] || grouped[category.name];
-    if (bucket?.length) {
-      orderedGroup[category.code] = bucket;
-      delete grouped[category.code];
-      delete grouped[category.name];
+  if (!list.length) {
+    return orderedGroup;
+  }
+  const used = new Set<string>();
+  (categoryList.value || []).forEach((category: BpmCategoryApi.Category) => {
+    const items = list.filter((item) => matchesModelCategory(item, category));
+    if (items.length) {
+      orderedGroup[category.code] = items;
+      items.forEach((item) => used.add(item.id));
     }
   });
-  Object.entries(grouped).forEach(([code, items]) => {
-    if (items?.length && code && code !== 'undefined') {
-      orderedGroup[code] = items;
-    }
-  });
+  const rest = list.filter((item) => !used.has(item.id));
+  if (rest.length) {
+    orderedGroup.uncategorized = rest;
+  }
   return orderedGroup;
 });
 
@@ -197,7 +207,7 @@ const availableCategories = computed(() => {
   );
   const known = new Set(fromDict.map((c: BpmCategoryApi.Category) => c.code));
   const extras = codes
-    .filter((code) => !known.has(code) && code && code !== 'undefined')
+    .filter((code) => !known.has(code))
     .map((code) => {
       const sample = grouped[code]?.[0];
       return {
