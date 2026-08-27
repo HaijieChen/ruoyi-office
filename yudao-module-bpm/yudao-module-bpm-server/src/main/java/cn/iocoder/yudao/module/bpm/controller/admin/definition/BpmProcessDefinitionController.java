@@ -99,7 +99,10 @@ public class BpmProcessDefinitionController {
         Long userId = getLoginUserId();
         list.removeIf(processDefinition -> {
             BpmProcessDefinitionInfoDO processDefinitionInfo = processDefinitionMap.get(processDefinition.getId());
-            if (processDefinitionInfo == null || Boolean.FALSE.equals(processDefinitionInfo.getVisible())) {
+            if (processDefinitionInfo == null) {
+                return false;
+            }
+            if (Boolean.FALSE.equals(processDefinitionInfo.getVisible())) {
                 return true;
             }
             return !processDefinitionService.canUserStartProcessDefinition(processDefinitionInfo, userId);

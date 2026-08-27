@@ -127,25 +127,32 @@ function handleQuery() {
   }
 }
 
-/** 流程定义的分组 */
+/** 流程定义的分组：分类字典对不上时仍展示，避免整页空白 */
 const processDefinitionGroup = computed(() => {
-  if (!processDefinitionList.value?.length) {
+  const list = filteredProcessDefinitionList.value || [];
+  if (!list.length) {
     return {};
   }
-  // 按照 categoryList 的顺序重新组织数据
   const grouped = groupBy(
-    filteredProcessDefinitionList.value,
-    (item) => item.categoryName || item.category,
-  );
+    list,
+    (item: BpmProcessDefinitionApi.ProcessDefinition) =>
+      item.category || (item as any).categoryName || 'uncategorized',
+  ) as Record<string, BpmProcessDefinitionApi.ProcessDefinition[]>;
   const orderedGroup: Record<
     string,
     BpmProcessDefinitionApi.ProcessDefinition[]
   > = {};
   categoryList.value.forEach((category: BpmCategoryApi.Category) => {
-    const bucket =
-      grouped[category.name] || grouped[category.code];
-    if (bucket) {
-      orderedGroup[category.code] = bucket as BpmProcessDefinitionApi.ProcessDefinition[];
+    const bucket = grouped[category.code] || grouped[category.name];
+    if (bucket?.length) {
+      orderedGroup[category.code] = bucket;
+      delete grouped[category.code];
+      delete grouped[category.name];
+    }
+  });
+  Object.entries(grouped).forEach(([code, items]) => {
+    if (items?.length) {
+      orderedGroup[code] = items;
     }
   });
   return orderedGroup;
@@ -180,15 +187,22 @@ async function handleSelect(
 
 /** 过滤出有流程的分类列表。目的：只展示有流程的分类 */
 const availableCategories = computed(() => {
-  if (!categoryList.value?.length || !processDefinitionGroup.value) {
+  const grouped = processDefinitionGroup.value || {};
+  const codes = Object.keys(grouped);
+  if (!codes.length) {
     return [];
   }
-  // 获取所有有流程的分类代码
-  const availableCategoryCodes = Object.keys(processDefinitionGroup.value);
-  // 过滤出有流程的分类
-  return categoryList.value.filter((category: BpmCategoryApi.Category) =>
-    availableCategoryCodes.includes(category.code),
+  const fromDict = (categoryList.value || []).filter(
+    (category: BpmCategoryApi.Category) => codes.includes(category.code),
   );
+  const known = new Set(fromDict.map((c: BpmCategoryApi.Category) => c.code));
+  const extras = codes
+    .filter((code) => !known.has(code))
+    .map((code) => ({
+      code,
+      name: code === 'uncategorized' ? '未分类' : code,
+    }));
+  return [...fromDict, ...extras];
 });
 
 /** 监听可用分类变化，自动设置正确的活动分类 */
