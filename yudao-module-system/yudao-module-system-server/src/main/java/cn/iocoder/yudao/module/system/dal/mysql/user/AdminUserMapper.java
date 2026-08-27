@@ -25,15 +25,22 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
         return selectOne(AdminUserDO::getMobile, mobile);
     }
 
+    /** 选择器「未分配部门」哨兵，匹配 dept_id 为空的用户。 */
+    long UNASSIGNED_DEPT_ID = -1L;
+
     default PageResult<AdminUserDO> selectPage(UserPageReqVO reqVO, Collection<Long> deptIds, Collection<Long> userIds) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<AdminUserDO>()
+        LambdaQueryWrapperX<AdminUserDO> wrapper = new LambdaQueryWrapperX<AdminUserDO>()
                 .likeIfPresent(AdminUserDO::getUsername, reqVO.getUsername())
                 .likeIfPresent(AdminUserDO::getMobile, reqVO.getMobile())
                 .eqIfPresent(AdminUserDO::getStatus, reqVO.getStatus())
                 .betweenIfPresent(AdminUserDO::getCreateTime, reqVO.getCreateTime())
-                .inIfPresent(AdminUserDO::getDeptId, deptIds)
-                .inIfPresent(AdminUserDO::getId, userIds)
-                .orderByDesc(AdminUserDO::getId));
+                .inIfPresent(AdminUserDO::getId, userIds);
+        if (reqVO.getDeptId() != null && reqVO.getDeptId() == UNASSIGNED_DEPT_ID) {
+            wrapper.isNull(AdminUserDO::getDeptId);
+        } else {
+            wrapper.inIfPresent(AdminUserDO::getDeptId, deptIds);
+        }
+        return selectPage(reqVO, wrapper.orderByDesc(AdminUserDO::getId));
     }
 
     default List<AdminUserDO> selectListByNickname(String nickname) {

@@ -305,8 +305,12 @@ public class AdminUserServiceImpl implements AdminUserService {
             }
         }
 
-        // 分页查询
-        return userMapper.selectPage(reqVO, getDeptCondition(reqVO.getDeptId()), userIds);
+        // 分页查询（deptId=-1 表示未分配部门，不展开组织树）
+        Collection<Long> deptIds = reqVO.getDeptId() != null
+                && reqVO.getDeptId() == AdminUserMapper.UNASSIGNED_DEPT_ID
+                ? null
+                : getDeptCondition(reqVO.getDeptId());
+        return userMapper.selectPage(reqVO, deptIds, userIds);
     }
 
     @Override

@@ -86,7 +86,10 @@ const [Modal, modalApi] = useVbenModal({
       const deptData = await getSimpleDeptList();
       deptList.value = deptData;
       const treeData = handleTree(deptData);
-      deptTree.value = treeData.map((node) => processDeptNode(node));
+      deptTree.value = [
+        { key: '-1', title: '未分配部门', name: '未分配部门' },
+        ...treeData.map((node) => processDeptNode(node)),
+      ];
       expandedKeys.value = deptTree.value.map((node) => node.key);
 
       // 加载初始用户数据
