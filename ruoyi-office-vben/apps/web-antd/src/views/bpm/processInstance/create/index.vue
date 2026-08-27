@@ -92,18 +92,25 @@ async function getList() {
 
 /** 获取所有流程分类数据 */
 async function loadCategoryList() {
-  categoryList.value = await getCategorySimpleList();
+  try {
+    categoryList.value = (await getCategorySimpleList()) || [];
+  } catch {
+    categoryList.value = [];
+  }
 }
 
 /** 获取所有流程定义数据 */
 async function loadProcessDefinitionList() {
-  // 流程定义：后端已按可见性/发起范围/业务权限过滤，这里不再按 canStart 二次隐藏
-  const list = await getProcessDefinitionList({
-    suspensionState: 1,
-  });
-  processDefinitionList.value = list || [];
-
-  // 空搜索，初始化相关数据
+  // 流程定义：后端已按可见性/发起范围过滤，这里不再按 canStart 二次隐藏
+  try {
+    const list = await getProcessDefinitionList({
+      suspensionState: 1,
+    });
+    processDefinitionList.value = list || [];
+  } catch {
+    processDefinitionList.value = [];
+    message.error('加载可发起流程失败');
+  }
   handleQuery();
 }
 
@@ -135,8 +142,10 @@ const processDefinitionGroup = computed(() => {
   }
   const grouped = groupBy(
     list,
-    (item: BpmProcessDefinitionApi.ProcessDefinition) =>
-      item.category || item.categoryName || 'uncategorized',
+    (item: BpmProcessDefinitionApi.ProcessDefinition) => {
+      const raw = (item.category || item.categoryName || '').trim();
+      return !raw || raw === 'undefined' ? 'default' : raw;
+    },
   ) as Record<string, BpmProcessDefinitionApi.ProcessDefinition[]>;
   const orderedGroup: Record<
     string,
@@ -151,9 +160,11 @@ const processDefinitionGroup = computed(() => {
     }
   });
   Object.entries(grouped).forEach(([code, items]) => {
-    if (items?.length && code && code !== 'undefined') {
-      orderedGroup[code] = items;
+    if (!items?.length) {
+      return;
     }
+    const key = !code || code === 'undefined' ? 'default' : code;
+    orderedGroup[key] = (orderedGroup[key] || []).concat(items);
   });
   return orderedGroup;
 });
@@ -197,14 +208,14 @@ const availableCategories = computed(() => {
   );
   const known = new Set(fromDict.map((c: BpmCategoryApi.Category) => c.code));
   const extras = codes
-    .filter((code) => !known.has(code) && code && code !== 'undefined')
+    .filter((code) => !known.has(code))
     .map((code) => {
       const sample = grouped[code]?.[0];
       return {
         code,
         name:
           sample?.categoryName ||
-          (code === 'uncategorized' ? '未分类' : code),
+          (code === 'default' ? '默认分类' : code === 'uncategorized' ? '未分类' : code),
       };
     });
   return [...fromDict, ...extras];
