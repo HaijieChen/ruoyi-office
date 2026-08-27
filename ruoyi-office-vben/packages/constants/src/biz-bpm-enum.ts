@@ -24,6 +24,8 @@ export enum BpmCandidateStrategyEnum {
    * 发起人公司财务
    */
   START_USER_COMPANY_FINANCE = 52,
+  START_USER_COMPANY_DEPT_LEADER = 53,
+  START_USER_COMPANY_DEPT_MEMBER = 54,
   /**
    * 表单内用户字段
    */

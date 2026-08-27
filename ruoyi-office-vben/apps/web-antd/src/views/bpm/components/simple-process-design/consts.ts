@@ -302,6 +302,14 @@ export enum CandidateStrategy {
    */
   START_USER_COMPANY_FINANCE = 52,
   /**
+   * 发起人公司指定部门负责人
+   */
+  START_USER_COMPANY_DEPT_LEADER = 53,
+  /**
+   * 发起人公司指定部门成员
+   */
+  START_USER_COMPANY_DEPT_MEMBER = 54,
+  /**
    * 表单内用户字段
    */
   FORM_USER = 50,
@@ -686,6 +694,14 @@ export const CANDIDATE_STRATEGY: DictDataType[] = [
   {
     label: '发起人公司财务',
     value: CandidateStrategy.START_USER_COMPANY_FINANCE as any,
+  },
+  {
+    label: '发起人公司指定部门负责人',
+    value: CandidateStrategy.START_USER_COMPANY_DEPT_LEADER as any,
+  },
+  {
+    label: '发起人公司指定部门成员',
+    value: CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER as any,
   },
   { label: '流程表达式', value: CandidateStrategy.EXPRESSION as any },
 ];

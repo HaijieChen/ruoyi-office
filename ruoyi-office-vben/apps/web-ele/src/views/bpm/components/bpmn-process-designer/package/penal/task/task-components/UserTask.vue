@@ -389,7 +389,11 @@ onBeforeUnmount(() => {
         userTaskForm.candidateStrategy === CandidateStrategy.DEPT_MEMBER ||
         userTaskForm.candidateStrategy === CandidateStrategy.DEPT_LEADER ||
         userTaskForm.candidateStrategy ===
-          CandidateStrategy.MULTI_LEVEL_DEPT_LEADER
+          CandidateStrategy.MULTI_LEVEL_DEPT_LEADER ||
+        userTaskForm.candidateStrategy ===
+          CandidateStrategy.START_USER_COMPANY_DEPT_LEADER ||
+        userTaskForm.candidateStrategy ===
+          CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER
       "
       label="指定部门"
       prop="candidateParam"

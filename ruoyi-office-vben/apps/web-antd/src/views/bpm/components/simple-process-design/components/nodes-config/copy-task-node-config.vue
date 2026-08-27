@@ -281,7 +281,11 @@ defineExpose({ showCopyTaskNodeConfig }); // 暴露方法给父组件
                 configForm.candidateStrategy ===
                   CandidateStrategy.DEPT_LEADER ||
                 configForm.candidateStrategy ===
-                  CandidateStrategy.MULTI_LEVEL_DEPT_LEADER
+                  CandidateStrategy.MULTI_LEVEL_DEPT_LEADER ||
+                configForm.candidateStrategy ===
+                  CandidateStrategy.START_USER_COMPANY_DEPT_LEADER ||
+                configForm.candidateStrategy ===
+                  CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER
               "
               label="指定部门"
               name="deptIds"

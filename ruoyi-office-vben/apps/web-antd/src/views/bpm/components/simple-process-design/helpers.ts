@@ -286,7 +286,11 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
       (configForm.value?.candidateStrategy === CandidateStrategy.DEPT_MEMBER ||
         configForm.value?.candidateStrategy === CandidateStrategy.DEPT_LEADER ||
         configForm.value?.candidateStrategy ===
-          CandidateStrategy.MULTI_LEVEL_DEPT_LEADER) &&
+          CandidateStrategy.MULTI_LEVEL_DEPT_LEADER ||
+        configForm.value?.candidateStrategy ===
+          CandidateStrategy.START_USER_COMPANY_DEPT_LEADER ||
+        configForm.value?.candidateStrategy ===
+          CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER) &&
       configForm.value?.deptIds?.length > 0
     ) {
       const candidateNames: string[] = [];
@@ -303,6 +307,16 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
         configForm.value.candidateStrategy === CandidateStrategy.DEPT_LEADER
       ) {
         showText = `部门的负责人：${candidateNames.join(',')}`;
+      } else if (
+        configForm.value.candidateStrategy ===
+        CandidateStrategy.START_USER_COMPANY_DEPT_LEADER
+      ) {
+        showText = `发起人公司指定部门负责人：${candidateNames.join(',')}`;
+      } else if (
+        configForm.value.candidateStrategy ===
+        CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER
+      ) {
+        showText = `发起人公司指定部门成员：${candidateNames.join(',')}`;
       } else {
         showText = `多级部门的负责人：${candidateNames.join(',')}`;
       }
@@ -407,7 +421,9 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
     }
     switch (configForm.value.candidateStrategy) {
       case CandidateStrategy.DEPT_LEADER:
-      case CandidateStrategy.DEPT_MEMBER: {
+      case CandidateStrategy.DEPT_MEMBER:
+      case CandidateStrategy.START_USER_COMPANY_DEPT_LEADER:
+      case CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER: {
         candidateParam = configForm.value.deptIds?.join(',');
         break;
       }
@@ -475,7 +491,9 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
     }
     switch (candidateStrategy) {
       case CandidateStrategy.DEPT_LEADER:
-      case CandidateStrategy.DEPT_MEMBER: {
+      case CandidateStrategy.DEPT_MEMBER:
+      case CandidateStrategy.START_USER_COMPANY_DEPT_LEADER:
+      case CandidateStrategy.START_USER_COMPANY_DEPT_MEMBER: {
         configForm.value.deptIds = candidateParam
           .split(',')
           .map((item) => +item);
