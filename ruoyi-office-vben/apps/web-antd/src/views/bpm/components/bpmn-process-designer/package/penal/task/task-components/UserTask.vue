@@ -25,6 +25,7 @@ import {
   Button,
   Form,
   FormItem,
+  Input,
   Select,
   SelectOption,
   Textarea,
@@ -81,21 +82,49 @@ const { formFieldOptions } = useFormFieldsPermission(FieldPermissionType.READ);
 // 定义 TreeSelect 的默认属性映射
 const defaultProps = {
   children: 'children',
-  label: 'name',
+  label: 'fullName',
   value: 'id',
 };
 
-/** 指定部门：按名称过滤（含嵌套部门） */
-function filterDeptTreeNode(input: string, node: any) {
-  const keyword = (input || '').trim().toLowerCase();
-  if (!keyword) {
-    return true;
-  }
-  const raw = node?.dataRef ?? node?.node ?? node?.props ?? node;
-  const label =
-    raw?.name ?? raw?.label ?? raw?.title ?? node?.name ?? node?.title ?? '';
-  return String(label).toLowerCase().includes(keyword);
+const deptKeyword = ref('');
+
+function withDeptFullName(nodes: any[], prefix = ''): any[] {
+  return (nodes || []).map((node) => {
+    const fullName = prefix ? `${prefix} / ${node.name}` : node.name;
+    return {
+      ...node,
+      fullName,
+      children: node.children?.length
+        ? withDeptFullName(node.children, node.name)
+        : node.children,
+    };
+  });
 }
+
+function filterDeptTree(nodes: any[], keyword: string): any[] {
+  const kw = keyword.trim().toLowerCase();
+  if (!kw) {
+    return nodes || [];
+  }
+  const walk = (list: any[]): any[] => {
+    const out: any[] = [];
+    for (const node of list || []) {
+      const children = node.children?.length ? walk(node.children) : [];
+      const hit =
+        String(node.name || '').toLowerCase().includes(kw) ||
+        String(node.fullName || '').toLowerCase().includes(kw);
+      if (hit || children.length) {
+        out.push({ ...node, children });
+      }
+    }
+    return out;
+  };
+  return walk(nodes || []);
+}
+
+const displayDeptTree = computed(() =>
+  filterDeptTree(withDeptFullName(deptTreeOptions.value || []), deptKeyword.value),
+);
 // 表单内用户字段选项, 必须是必填和用户选择器
 const userFieldOnFormOptions = computed(() => {
   return formFieldOptions.filter((item) => item.type === 'UserSelect');
@@ -420,17 +449,20 @@ onBeforeUnmount(() => {
       label="指定部门"
       name="candidateParam"
     >
+      <Input
+        v-model:value="deptKeyword"
+        allow-clear
+        class="mb-1"
+        placeholder="搜索部门"
+      />
       <TreeSelect
         ref="treeRef"
         v-model:value="userTaskForm.candidateParam"
-        :tree-data="deptTreeOptions"
+        :tree-data="displayDeptTree"
         :field-names="defaultProps"
-        placeholder="请选择部门，可输入搜索"
+        placeholder="请选择部门"
         multiple
         tree-checkable
-        show-search
-        tree-node-filter-prop="name"
-        :filter-tree-node="filterDeptTreeNode"
         tree-default-expand-all
         @change="updateElementTask"
       />
