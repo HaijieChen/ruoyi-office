@@ -210,6 +210,7 @@ export type UserTaskFormType = {
   formUser?: string; // 表单内用户字段
   maxRemindCount?: number;
   postIds?: number[]; // 岗位
+  jobPositions?: string[]; // 职务字典值
   reasonRequire: boolean;
   rejectHandlerType?: RejectHandlerType;
   returnNodeId?: string;
@@ -249,6 +250,7 @@ export type CopyTaskFormType = {
   formDept?: string; // 表单内部门字段
   formUser?: string; // 表单内用户字段
   postIds?: number[]; // 岗位
+  jobPositions?: string[]; // 职务字典值
   roleIds?: number[]; // 角色
   userGroups?: number[]; // 用户组
   userIds?: number[]; // 用户
@@ -383,6 +385,13 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
           ? `发起人公司指定岗位: ${candidateNames.join(',')}`
           : `指定岗位: ${candidateNames.join(',')}`;
     }
+    if (
+      configForm.value?.candidateStrategy ===
+        CandidateStrategy.START_USER_COMPANY_JOB_POSITION &&
+      configForm.value.jobPositions?.length > 0
+    ) {
+      showText = `发起人公司指定职务: ${configForm.value.jobPositions.join(',')}`;
+    }
     // 指定用户组
     if (
       configForm.value?.candidateStrategy === CandidateStrategy.USER_GROUP &&
@@ -498,6 +507,10 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
         candidateParam = configForm.value.postIds?.join(',');
         break;
       }
+      case CandidateStrategy.START_USER_COMPANY_JOB_POSITION: {
+        candidateParam = configForm.value.jobPositions?.join(',');
+        break;
+      }
       case CandidateStrategy.ROLE: {
         candidateParam = configForm.value.roleIds?.join(',');
         break;
@@ -577,6 +590,12 @@ export function useNodeForm(nodeType: BpmNodeTypeEnum) {
         configForm.value.postIds = candidateParam
           .split(',')
           .map((item) => +item);
+        break;
+      }
+      case CandidateStrategy.START_USER_COMPANY_JOB_POSITION: {
+        configForm.value.jobPositions = candidateParam
+          .split(',')
+          .filter((item) => item);
         break;
       }
       case CandidateStrategy.ROLE: {

@@ -12,8 +12,10 @@ import { useVbenDrawer } from '@vben/common-ui';
 import {
   BpmModelFormType,
   BpmNodeTypeEnum,
+  DICT_TYPE,
   ProcessVariableEnum,
 } from '@vben/constants';
+import { getDictOptions } from '@vben/hooks';
 import { IconifyIcon } from '@vben/icons';
 import { cloneDeep } from '@vben/utils';
 
@@ -727,6 +729,21 @@ onMounted(() => {
                   :value="item.id!"
                 />
               </ElSelect>
+            </ElFormItem>
+            <ElFormItem
+              v-if="
+                configForm.candidateStrategy ===
+                CandidateStrategy.START_USER_COMPANY_JOB_POSITION
+              "
+              label="指定职务"
+              name="jobPositions"
+            >
+              <ElSelect
+                v-model="configForm.jobPositions"
+                clearable
+                multiple
+                :options="getDictOptions(DICT_TYPE.HRM_JOB_POSITION)"
+              />
             </ElFormItem>
             <ElFormItem
               v-if="configForm.candidateStrategy === CandidateStrategy.USER"

@@ -27,6 +27,7 @@ export enum BpmCandidateStrategyEnum {
   START_USER_COMPANY_DEPT_LEADER = 53,
   START_USER_COMPANY_DEPT_MEMBER = 54,
   START_USER_COMPANY_POST = 55,
+  START_USER_COMPANY_JOB_POSITION = 56,
   /**
    * 表单内用户字段
    */
