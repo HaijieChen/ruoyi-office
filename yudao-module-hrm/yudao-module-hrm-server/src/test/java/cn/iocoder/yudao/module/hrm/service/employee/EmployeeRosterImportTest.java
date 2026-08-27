@@ -655,6 +655,62 @@ class EmployeeRosterImportTest {
     }
 
     @Test
+    void importBindsDeptUnderCompanyNameWhenDeptNameDuplicates() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            DeptRespDTO d1 = new DeptRespDTO();
+            d1.setId(11L);
+            d1.setName("财务部");
+            d1.setParentId(100L);
+            d1.setOrgType("0");
+            d1.setStatus(0);
+            DeptRespDTO d2 = new DeptRespDTO();
+            d2.setId(12L);
+            d2.setName("财务部");
+            d2.setParentId(200L);
+            d2.setOrgType("0");
+            d2.setStatus(0);
+            DeptRespDTO c1 = new DeptRespDTO();
+            c1.setId(100L);
+            c1.setName("文枢科技");
+            c1.setOrgType("1");
+            c1.setParentId(0L);
+            c1.setStatus(0);
+            DeptRespDTO c2 = new DeptRespDTO();
+            c2.setId(200L);
+            c2.setName("另一家公司");
+            c2.setOrgType("1");
+            c2.setParentId(0L);
+            c2.setStatus(0);
+            when(deptApi.getSimpleDeptList()).thenReturn(CommonResult.success(List.of(d1, d2, c1, c2)));
+            when(deptApi.getDept(11L)).thenReturn(CommonResult.success(d1));
+            when(deptApi.getDept(12L)).thenReturn(CommonResult.success(d2));
+            when(deptApi.getDept(100L)).thenReturn(CommonResult.success(c1));
+            when(deptApi.getDept(200L)).thenReturn(CommonResult.success(c2));
+
+            EmployeeRosterImportExcelVO row = baseRow("110101199001011005", "消歧员");
+            row.setDeptName("财务部");
+            row.setCompanyName("文枢科技");
+            when(employeeArchiveMapper.selectByIdCard("110101199001011005")).thenReturn(null);
+            doAnswer(inv -> {
+                EmployeeDO e = inv.getArgument(0);
+                e.setId(301L);
+                return 1;
+            }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
+            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+
+            EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
+            assertEquals(List.of("消歧员"), resp.getCreateNames());
+            assertTrue(resp.getFailureRows().isEmpty());
+            ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
+            verify(employeeArchiveMapper).insert(captor.capture());
+            assertEquals(11L, captor.getValue().getDeptId());
+            assertEquals(100L, captor.getValue().getCompanyId());
+        }
+    }
+
+    @Test
     void getEmployeeArchiveFillsDeptAndCompanyNamesForEdit() {
         EmployeeDO archive = new EmployeeDO();
         archive.setId(9L);

@@ -459,7 +459,8 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     /**
-     * 花名册导入：部门名 → 有效 deptId（及公司）。缺失/不存在/重名/禁用均行级失败。
+     * 花名册导入：部门名 → 有效 deptId（及公司）。
+     * 填写了单位名称时，只在该公司下匹配部门，避免跨公司同名部门失败。
      */
     void bindDeptForImport(EmployeeSaveReqVO req, Map<String, List<DeptRespDTO>> deptsByName) {
         String rawName = req.getDeptName();
@@ -472,17 +473,48 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw new IllegalArgumentException(
                     "部门不存在或未启用：" + name + "（须与组织架构中的部门名称完全一致）");
         }
-        if (matches.size() > 1) {
-            throw new IllegalArgumentException(
-                    "部门名称在系统中存在多个匹配，无法唯一绑定：" + name + "，请联系管理员处理重名部门");
+        String companyName = StrUtil.trim(req.getCompanyName());
+        DeptRespDTO dept;
+        Long companyId;
+        if (StrUtil.isNotBlank(companyName)) {
+            DeptRespDTO picked = null;
+            Long pickedCompanyId = null;
+            for (DeptRespDTO candidate : matches) {
+                Long cid = findCompanyIdByDeptId(candidate.getId());
+                if (cid == null) {
+                    continue;
+                }
+                CommonResult<DeptRespDTO> company = deptApi.getDept(cid);
+                String nodeName = company != null && company.isSuccess() && company.getData() != null
+                        ? StrUtil.trim(company.getData().getName()) : null;
+                if (companyName.equals(nodeName)) {
+                    if (picked != null) {
+                        throw new IllegalArgumentException(
+                                "部门名称在该单位下无法唯一绑定：" + name);
+                    }
+                    picked = candidate;
+                    pickedCompanyId = cid;
+                }
+            }
+            if (picked == null) {
+                throw new IllegalArgumentException("部门不属于单位：" + companyName + " / " + name);
+            }
+            dept = picked;
+            companyId = pickedCompanyId;
+            req.setCompanyName(companyName);
+        } else {
+            if (matches.size() > 1) {
+                throw new IllegalArgumentException(
+                        "部门名称在系统中存在多个匹配，无法唯一绑定：" + name
+                                + "，请填写单位名称以区分，或联系管理员处理重名部门");
+            }
+            dept = matches.get(0);
+            companyId = findCompanyIdByDeptId(dept.getId());
         }
-        DeptRespDTO dept = matches.get(0);
         req.setDeptId(dept.getId());
         req.setDeptName(dept.getName());
-        Long companyId = findCompanyIdByDeptId(dept.getId());
         if (companyId != null) {
             req.setCompanyId(companyId);
-            // 未填单位名称时用公司节点名称补全，便于编辑页展示
             if (StrUtil.isBlank(req.getCompanyName())) {
                 CommonResult<DeptRespDTO> company = deptApi.getDept(companyId);
                 if (company != null && company.isSuccess() && company.getData() != null
