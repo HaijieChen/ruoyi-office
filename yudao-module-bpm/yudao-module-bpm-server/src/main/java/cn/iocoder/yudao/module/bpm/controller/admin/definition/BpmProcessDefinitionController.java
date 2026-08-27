@@ -112,10 +112,15 @@ public class BpmProcessDefinitionController {
         Set<String> categoryCodes = new HashSet<>();
         for (ProcessDefinition definition : list) {
             Model model = modelByKey.get(definition.getKey());
-            String code = model != null && StrUtil.isNotBlank(model.getCategory())
-                    ? model.getCategory() : definition.getCategory();
-            if (StrUtil.isNotBlank(code)) {
-                categoryCodes.add(code);
+            BpmProcessDefinitionInfoDO info = processDefinitionMap.get(definition.getId());
+            if (model != null && StrUtil.isNotBlank(model.getCategory())) {
+                categoryCodes.add(model.getCategory());
+            }
+            if (info != null && StrUtil.isNotBlank(info.getCategory())) {
+                categoryCodes.add(info.getCategory());
+            }
+            if (StrUtil.isNotBlank(definition.getCategory())) {
+                categoryCodes.add(definition.getCategory());
             }
         }
         Map<String, BpmCategoryDO> categoryMap = categoryService.getCategoryMap(categoryCodes);
@@ -130,8 +135,8 @@ public class BpmProcessDefinitionController {
             if (category != null) {
                 vo.setCategoryName(category.getName());
             }
-            vo.setCanStart(true);
         }
+        fillStartEligibility(voList);
         return success(voList);
     }
 

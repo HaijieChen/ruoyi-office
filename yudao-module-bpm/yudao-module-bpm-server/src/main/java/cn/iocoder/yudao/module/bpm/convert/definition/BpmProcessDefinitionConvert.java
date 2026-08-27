@@ -54,8 +54,16 @@ public interface BpmProcessDefinitionConvert {
             if (processDefinitionInfo != null) {
                 form = MapUtil.get(formMap, processDefinitionInfo.getFormId(), BpmFormDO.class);
             }
-            BpmCategoryDO category = MapUtil.get(categoryMap, definition.getCategory(), BpmCategoryDO.class);
-            return buildProcessDefinition(definition, deployment, processDefinitionInfo, form, category, null);
+            String categoryCode = processDefinitionInfo != null
+                    && cn.hutool.core.util.StrUtil.isNotBlank(processDefinitionInfo.getCategory())
+                    ? processDefinitionInfo.getCategory() : definition.getCategory();
+            BpmCategoryDO category = MapUtil.get(categoryMap, categoryCode, BpmCategoryDO.class);
+            BpmProcessDefinitionRespVO vo = buildProcessDefinition(
+                    definition, deployment, processDefinitionInfo, form, category, null);
+            if (cn.hutool.core.util.StrUtil.isNotBlank(categoryCode)) {
+                vo.setCategory(categoryCode);
+            }
+            return vo;
         });
         // 排序
         result.sort(Comparator.comparing(BpmProcessDefinitionRespVO::getSort));

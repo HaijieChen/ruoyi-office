@@ -136,7 +136,7 @@ const processDefinitionGroup = computed(() => {
   const grouped = groupBy(
     list,
     (item: BpmProcessDefinitionApi.ProcessDefinition) =>
-      item.category || (item as any).categoryName || 'uncategorized',
+      item.category || item.categoryName || 'uncategorized',
   ) as Record<string, BpmProcessDefinitionApi.ProcessDefinition[]>;
   const orderedGroup: Record<
     string,
@@ -151,7 +151,7 @@ const processDefinitionGroup = computed(() => {
     }
   });
   Object.entries(grouped).forEach(([code, items]) => {
-    if (items?.length) {
+    if (items?.length && code && code !== 'undefined') {
       orderedGroup[code] = items;
     }
   });
@@ -197,11 +197,16 @@ const availableCategories = computed(() => {
   );
   const known = new Set(fromDict.map((c: BpmCategoryApi.Category) => c.code));
   const extras = codes
-    .filter((code) => !known.has(code))
-    .map((code) => ({
-      code,
-      name: code === 'uncategorized' ? '未分类' : code,
-    }));
+    .filter((code) => !known.has(code) && code && code !== 'undefined')
+    .map((code) => {
+      const sample = grouped[code]?.[0];
+      return {
+        code,
+        name:
+          sample?.categoryName ||
+          (code === 'uncategorized' ? '未分类' : code),
+      };
+    });
   return [...fromDict, ...extras];
 });
 
