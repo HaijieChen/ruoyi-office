@@ -25,6 +25,7 @@ import org.flowable.engine.runtime.ProcessInstance;
 import java.util.*;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.MODEL_DEPLOY_FAIL_CANDIDATE_STRATEGY_INVALID;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG;
 
 /**
@@ -212,9 +213,10 @@ public class BpmTaskCandidateInvoker {
 
     private BpmTaskCandidateStrategy getCandidateStrategy(Integer strategy) {
         BpmTaskCandidateStrategyEnum strategyEnum = BpmTaskCandidateStrategyEnum.valueOf(strategy);
-        Assert.notNull(strategyEnum, "策略(%s) 不存在", strategy);
-        BpmTaskCandidateStrategy strategyObj = strategyMap.get(strategyEnum);
-        Assert.notNull(strategyObj, "策略(%s) 不存在", strategy);
+        BpmTaskCandidateStrategy strategyObj = strategyEnum == null ? null : strategyMap.get(strategyEnum);
+        if (strategyObj == null) {
+            throw exception(MODEL_DEPLOY_FAIL_CANDIDATE_STRATEGY_INVALID, String.valueOf(strategy));
+        }
         return strategyObj;
     }
 

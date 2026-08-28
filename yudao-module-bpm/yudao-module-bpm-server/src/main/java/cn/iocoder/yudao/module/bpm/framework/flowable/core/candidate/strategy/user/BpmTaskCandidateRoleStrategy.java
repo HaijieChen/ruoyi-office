@@ -9,6 +9,9 @@ import cn.iocoder.yudao.module.system.api.permission.RoleApi;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -41,7 +44,7 @@ public class BpmTaskCandidateRoleStrategy implements BpmTaskCandidateStrategy {
     public void validateParam(String param) {
         Set<Long> roleIds = resolveRoleIds(param);
         if (CollUtil.isEmpty(roleIds)) {
-            throw new IllegalArgumentException("角色候选人参数无效（无有效 role id/code）: " + param);
+            throw exception(MODEL_DEPLOY_FAIL_TASK_CANDIDATE_NOT_CONFIG, "角色 " + param);
         }
         roleApi.validRoleList(roleIds);
     }
