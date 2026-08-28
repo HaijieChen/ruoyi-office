@@ -228,8 +228,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     @Override
     public PageResult<FinanceExpenseReimbursementRespVO> getPage(FinanceExpenseReimbursementPageReqVO reqVO,
                                                                  Long userId, boolean canQueryAll) {
-        Long forceApplicant = canQueryAll ? null : userId;
-        PageResult<FinanceExpenseReimbursementDO> page = mapper.selectPage(reqVO, forceApplicant);
+        PageResult<FinanceExpenseReimbursementDO> page = mapper.selectPage(reqVO, null);
         List<FinanceExpenseReimbursementRespVO> list = new ArrayList<>();
         for (FinanceExpenseReimbursementDO header : page.getList()) {
             list.add(toResp(header, canQueryAll));

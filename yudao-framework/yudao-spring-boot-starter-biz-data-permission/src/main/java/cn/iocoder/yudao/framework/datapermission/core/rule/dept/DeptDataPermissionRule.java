@@ -14,7 +14,7 @@ import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
@@ -23,8 +23,11 @@ import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -45,7 +48,7 @@ import java.util.Set;
  *
  * @author 宇擎源码
  */
-@AllArgsConstructor
+@RequiredArgsConstructor
 @Slf4j
 public class DeptDataPermissionRule implements DataPermissionRule {
 
@@ -66,7 +69,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
      * key：表名
      * value：字段名
      */
-    private final Map<String, String> deptColumns = new HashMap<>();
+    private final Map<String, Set<String>> deptColumns = new HashMap<>();
     /**
      * 基于用户的表字段配置
      * 一般情况下，每个表的部门编号字段是 dept_id，通过该配置自定义。
@@ -144,19 +147,21 @@ public class DeptDataPermissionRule implements DataPermissionRule {
     }
 
     private Expression buildDeptExpression(String tableName, Alias tableAlias, Set<Long> deptIds) {
-        // 如果不存在配置，则无需作为条件
-        String columnName = deptColumns.get(tableName);
-        if (StrUtil.isEmpty(columnName)) {
+        Set<String> columnNames = deptColumns.get(tableName);
+        if (CollUtil.isEmpty(columnNames) || CollUtil.isEmpty(deptIds)) {
             return null;
         }
-        // 如果为空，则无条件
-        if (CollUtil.isEmpty(deptIds)) {
-            return null;
+        List<LongValue> values = CollectionUtils.convertList(deptIds, LongValue::new);
+        Expression result = null;
+        for (String columnName : columnNames) {
+            InExpression in = new InExpression(MyBatisUtils.buildColumn(tableName, tableAlias, columnName),
+                    new ParenthesedExpressionList(new ExpressionList<LongValue>(values)));
+            result = result == null ? in : new OrExpression(result, in);
         }
-        // 拼接条件
-        return new InExpression(MyBatisUtils.buildColumn(tableName, tableAlias, columnName),
-                // Parenthesis 的目的，是提供 (1,2,3) 的 () 左右括号
-                new ParenthesedExpressionList(new ExpressionList<LongValue>(CollectionUtils.convertList(deptIds, LongValue::new))));
+        if (result != null && columnNames.size() > 1) {
+            return new ParenthesedExpressionList(result);
+        }
+        return result;
     }
 
     private Expression buildUserExpression(String tableName, Alias tableAlias, Boolean self, Long userId) {
@@ -184,7 +189,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
     }
 
     public void addDeptColumn(String tableName, String columnName) {
-        deptColumns.put(tableName, columnName);
+        deptColumns.computeIfAbsent(tableName, key -> new LinkedHashSet<>()).add(columnName);
         TABLE_NAMES.add(tableName);
     }
 

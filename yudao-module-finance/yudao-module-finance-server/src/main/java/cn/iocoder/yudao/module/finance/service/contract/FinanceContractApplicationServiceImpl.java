@@ -363,10 +363,6 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     @Override
     public PageResult<FinanceContractApplicationDO> getApplicationPage(FinanceContractApplicationPageReqVO pageReqVO,
                                                                        Long userId, boolean manageAll) {
-        if (!manageAll) {
-            // BS：强制本人；忽略客户端伪造的 applicantUserId
-            pageReqVO.setApplicantUserId(userId);
-        }
         return applicationMapper.selectPage(pageReqVO);
     }
 

@@ -600,8 +600,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     public PageResult<FinancePaymentApplicationDO> getApplicationPage(FinancePaymentApplicationPageReqVO pageReqVO,
                                                                       Long loginUserId, boolean manageAll) {
-        Long filterApplicant = manageAll ? null : loginUserId;
-        return applicationMapper.selectPage(pageReqVO, filterApplicant);
+        return applicationMapper.selectPage(pageReqVO, null);
     }
 
     @Override

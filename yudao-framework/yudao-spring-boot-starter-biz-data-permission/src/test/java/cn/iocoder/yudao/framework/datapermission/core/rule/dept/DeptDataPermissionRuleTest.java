@@ -207,6 +207,27 @@ class DeptDataPermissionRuleTest extends BaseMockitoUnitTest {
         }
     }
 
+    @Test
+    public void testGetExpression_multipleDeptColumnsOr() {
+        try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock
+                     = mockStatic(SecurityFrameworkUtils.class)) {
+            String tableName = "finance_contract_application";
+            Alias tableAlias = new Alias("t");
+            LoginUser loginUser = randomPojo(LoginUser.class, o -> o.setId(1L)
+                    .setUserType(UserTypeEnum.ADMIN.getValue()));
+            securityFrameworkUtilsMock.when(SecurityFrameworkUtils::getLoginUser).thenReturn(loginUser);
+            DeptDataPermissionRespDTO deptDataPermission = new DeptDataPermissionRespDTO()
+                    .setDeptIds(CollUtil.newLinkedHashSet(10L, 20L));
+            when(permissionApi.getDeptDataPermission(same(1L))).thenReturn(success(deptDataPermission));
+            rule.addDeptColumn(tableName, "entity_company_dept_id");
+            rule.addDeptColumn(tableName, "applicant_dept_id");
+
+            Expression expression = rule.getExpression(tableName, tableAlias);
+            assertEquals("(t.entity_company_dept_id IN (10, 20) OR t.applicant_dept_id IN (10, 20))",
+                    expression.toString());
+        }
+    }
+
     @Test // 拼接 Dept 和 User 的条件（dept + self 符合）
     public void testGetExpression_yesDeptColumn_yesSelfColumn() {
         try (MockedStatic<SecurityFrameworkUtils> securityFrameworkUtilsMock
