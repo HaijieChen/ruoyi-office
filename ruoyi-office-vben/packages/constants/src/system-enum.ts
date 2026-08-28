@@ -52,6 +52,7 @@ export const SystemDataScopeEnum = {
   DEPT_ONLY: 3, // 部门数据权限
   DEPT_AND_CHILD: 4, // 部门及以下数据权限
   DEPT_SELF: 5, // 仅本人数据权限
+  EMPLOYMENT_COMPANY: 6, // 任职公司数据权限
 };
 
 /**

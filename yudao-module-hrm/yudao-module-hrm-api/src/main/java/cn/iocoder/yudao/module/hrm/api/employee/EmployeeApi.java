@@ -42,5 +42,9 @@ public interface EmployeeApi {
     CommonResult<Boolean> isColleague(@RequestParam("userId") Long userId,
                                       @RequestParam("staffUserId") Long staffUserId);
 
+    @GetMapping(PREFIX + "/employment-company-dept-ids")
+    @Operation(summary = "用户全部任职公司部门编号")
+    CommonResult<List<Long>> listEmploymentCompanyDeptIds(@RequestParam("userId") Long userId);
+
 }
 

@@ -16,6 +16,9 @@ import cn.iocoder.yudao.module.system.dal.mysql.permission.RoleMenuMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.permission.UserRoleMapper;
 import cn.iocoder.yudao.module.system.dal.redis.RedisKeyConstants;
 import cn.iocoder.yudao.module.system.enums.permission.DataScopeEnum;
+import cn.iocoder.yudao.module.hrm.api.employee.EmployeeApi;
+import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
+import cn.iocoder.yudao.module.system.enums.OrgTypeEnum;
 import cn.iocoder.yudao.module.system.service.dept.DeptService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
@@ -58,6 +61,8 @@ public class PermissionServiceImpl implements PermissionService {
     private DeptService deptService;
     @Resource
     private AdminUserService userService;
+    @Resource
+    private EmployeeApi employeeApi;
 
     @Override
     public boolean hasAnyPermissions(Long userId, String... permissions) {
@@ -323,10 +328,57 @@ public class PermissionServiceImpl implements PermissionService {
                 result.setSelf(true);
                 continue;
             }
+            // 情况六，任职公司及其下属部门
+            if (Objects.equals(role.getDataScope(), DataScopeEnum.EMPLOYMENT_COMPANY.getScope())) {
+                Set<Long> companyDeptIds = resolveEmploymentCompanyDeptIds(userId, userDeptId);
+                if (CollUtil.isEmpty(companyDeptIds)) {
+                    result.setSelf(true);
+                    continue;
+                }
+                for (Long companyDeptId : companyDeptIds) {
+                    CollUtil.addAll(result.getDeptIds(), deptService.getChildDeptIdListFromCache(companyDeptId));
+                    CollUtil.addAll(result.getDeptIds(), companyDeptId);
+                }
+                continue;
+            }
             // 未知情况，error log 即可
             log.error("[getDeptDataPermission][LoginUser({}) role({}) 无法处理]", userId, toJsonString(result));
         }
         return result;
+    }
+
+    private Set<Long> resolveEmploymentCompanyDeptIds(Long userId, Supplier<Long> userDeptId) {
+        Set<Long> companyDeptIds = new LinkedHashSet<>();
+        if (employeeApi != null) {
+            try {
+                List<Long> fromEmployment = employeeApi.listEmploymentCompanyDeptIds(userId).getCheckedData();
+                if (fromEmployment != null) {
+                    fromEmployment.stream().filter(Objects::nonNull).forEach(companyDeptIds::add);
+                }
+            } catch (Exception ex) {
+                log.warn("[resolveEmploymentCompanyDeptIds][userId({}) 读取任职公司失败]", userId, ex);
+            }
+        }
+        if (CollUtil.isEmpty(companyDeptIds) && userDeptId.get() != null) {
+            Long companyDeptId = findCompanyDeptId(userDeptId.get());
+            CollectionUtils.addIfNotNull(companyDeptIds, companyDeptId);
+        }
+        return companyDeptIds;
+    }
+
+    private Long findCompanyDeptId(Long deptId) {
+        Long current = deptId;
+        for (int i = 0; i < 16 && current != null && current > 0; i++) {
+            DeptDO dept = deptService.getDept(current);
+            if (dept == null) {
+                return null;
+            }
+            if (OrgTypeEnum.COMPANY.getValue().equals(dept.getOrgType())) {
+                return dept.getId();
+            }
+            current = dept.getParentId();
+        }
+        return null;
     }
 
     /**

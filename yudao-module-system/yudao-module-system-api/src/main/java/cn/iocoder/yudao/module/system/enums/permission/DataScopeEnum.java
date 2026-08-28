@@ -23,7 +23,9 @@ public enum DataScopeEnum implements ArrayValuable<Integer> {
     DEPT_ONLY(3), // 部门数据权限
     DEPT_AND_CHILD(4), // 部门及以下数据权限
 
-    SELF(5); // 仅本人数据权限
+    SELF(5), // 仅本人数据权限
+
+    EMPLOYMENT_COMPANY(6); // 任职公司数据权限（全部任职公司及其下属部门）
 
     /**
      * 范围

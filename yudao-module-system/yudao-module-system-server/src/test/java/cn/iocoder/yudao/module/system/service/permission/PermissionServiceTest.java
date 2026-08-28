@@ -14,6 +14,8 @@ import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.dal.mysql.permission.RoleMenuMapper;
 import cn.iocoder.yudao.module.system.dal.mysql.permission.UserRoleMapper;
 import cn.iocoder.yudao.module.system.enums.permission.DataScopeEnum;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.hrm.api.employee.EmployeeApi;
 import cn.iocoder.yudao.module.system.service.dept.DeptService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import jakarta.annotation.Resource;
@@ -56,6 +58,8 @@ public class PermissionServiceTest extends BaseDbUnitTest {
     private DeptService deptService;
     @MockitoBean
     private AdminUserService userService;
+    @MockitoBean
+    private EmployeeApi employeeApi;
 
     @Test
     public void testHasAnyPermissions_superAdmin() {
@@ -521,6 +525,30 @@ public class PermissionServiceTest extends BaseDbUnitTest {
             assertFalse(result.getAll());
             assertTrue(result.getSelf());
             assertTrue(CollUtil.isEmpty(result.getDeptIds()));
+        }
+    }
+
+    @Test
+    public void testGetDeptDataPermission_EmploymentCompany() {
+        try (MockedStatic<SpringUtil> springUtilMockedStatic = mockStatic(SpringUtil.class)) {
+            springUtilMockedStatic.when(() -> SpringUtil.getBean(eq(PermissionServiceImpl.class)))
+                    .thenReturn(permissionService);
+
+            Long userId = 1L;
+            userRoleMapper.insert(randomPojo(UserRoleDO.class).setUserId(userId).setRoleId(2L));
+            RoleDO roleDO = randomPojo(RoleDO.class, o -> o.setDataScope(DataScopeEnum.EMPLOYMENT_COMPANY.getScope())
+                    .setStatus(CommonStatusEnum.ENABLE.getStatus()));
+            when(roleService.getRoleListFromCache(eq(singleton(2L)))).thenReturn(toList(roleDO));
+            when(employeeApi.listEmploymentCompanyDeptIds(eq(userId)))
+                    .thenReturn(CommonResult.success(List.of(10L, 20L)));
+            when(deptService.getChildDeptIdListFromCache(eq(10L))).thenReturn(Set.of(11L));
+            when(deptService.getChildDeptIdListFromCache(eq(20L))).thenReturn(Set.of(21L));
+
+            DeptDataPermissionRespDTO result = permissionService.getDeptDataPermission(userId);
+
+            assertFalse(result.getAll());
+            assertFalse(result.getSelf());
+            assertEquals(Set.of(10L, 11L, 20L, 21L), result.getDeptIds());
         }
     }
 

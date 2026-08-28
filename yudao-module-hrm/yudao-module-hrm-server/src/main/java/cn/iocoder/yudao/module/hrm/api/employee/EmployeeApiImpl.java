@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.hrm.api.employee;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO;
 import cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeUpdateReqDTO;
+import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmploymentVO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeDO;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeMapper;
 import cn.iocoder.yudao.module.hrm.service.employee.EmployeeService;
@@ -79,6 +80,19 @@ public class EmployeeApiImpl implements EmployeeApi {
         }
         return success(employeeService.listColleaguesByUserId(userId).stream()
                 .anyMatch(item -> staffUserId.equals(item.getUserId())));
+    }
+
+    @Override
+    public CommonResult<List<Long>> listEmploymentCompanyDeptIds(Long userId) {
+        if (userId == null) {
+            return success(List.of());
+        }
+        List<Long> companyDeptIds = employeeService.listMyEmployments(userId).stream()
+                .map(EmployeeEmploymentVO::getCompanyDeptId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        return success(companyDeptIds);
     }
 
 }
