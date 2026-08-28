@@ -70,9 +70,30 @@ onMounted(load);
         <Form :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
           <Form.Item label="登录 MFA">
             <Radio.Group v-model:value="mode">
-              <Radio.Button value="OFF">关</Radio.Button>
-              <Radio.Button value="OPTIONAL">可选</Radio.Button>
-              <Radio.Button value="REQUIRED">强制</Radio.Button>
+              <Radio value="OFF" class="!mb-3 !flex items-start">
+                <span>
+                  关
+                  <div class="text-xs text-gray-500">
+                    普通用户登录不校验 MFA
+                  </div>
+                </span>
+              </Radio>
+              <Radio value="OPTIONAL" class="!mb-3 !flex items-start">
+                <span>
+                  已绑定则校验
+                  <div class="text-xs text-gray-500">
+                    已开启 MFA 的用户登录必须验证；未开启的可直接登录
+                  </div>
+                </span>
+              </Radio>
+              <Radio value="REQUIRED" class="!flex items-start">
+                <span>
+                  强制
+                  <div class="text-xs text-gray-500">
+                    所有用户必须绑定并使用 MFA 登录
+                  </div>
+                </span>
+              </Radio>
             </Radio.Group>
           </Form.Item>
           <Form.Item v-if="mode !== 'OFF'" label="允许因子">
