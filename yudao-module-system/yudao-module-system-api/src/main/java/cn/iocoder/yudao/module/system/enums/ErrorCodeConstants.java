@@ -92,6 +92,8 @@ public interface ErrorCodeConstants {
     ErrorCode DEPT_IMPORT_NO_FULL_DATA_SCOPE = new ErrorCode(1_002_004_017, "整树导入需要全部数据权限");
     /** 组织导入：空文件 */
     ErrorCode DEPT_IMPORT_EMPTY = new ErrorCode(1_002_004_018, "导入文件无有效数据行");
+    /** 删除组织：包含数据权限外的节点 */
+    ErrorCode DEPT_DELETE_DENIED = new ErrorCode(1_002_004_019, "无权删除数据权限范围外的部门");
 
     // ========== 岗位模块 1-002-005-000 ==========
     ErrorCode POST_NOT_FOUND = new ErrorCode(1_002_005_000, "当前岗位不存在");

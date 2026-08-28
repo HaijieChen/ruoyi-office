@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
+import cn.iocoder.yudao.framework.datapermission.core.util.DataPermissionUtils;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
@@ -94,14 +95,18 @@ public class DeptServiceImpl implements DeptService {
     @Override
     public void deleteDept(Long id) {
         deptMutationLock.execute(() -> {
-            // 校验是否存在
-            validateDeptExists(id);
-            // 校验是否有子部门
-            if (deptMapper.selectCountByParentId(id) > 0) {
-                throw exception(DEPT_EXITS_CHILDREN);
+            DeptDO visible = deptMapper.selectById(id);
+            if (visible == null) {
+                DeptDO raw = DataPermissionUtils.executeIgnore(() -> deptMapper.selectById(id));
+                throw exception(raw == null ? DEPT_NOT_FOUND : DEPT_DELETE_DENIED);
             }
-            // 删除部门
-            deptMapper.deleteById(id);
+            DataPermissionUtils.executeIgnore(() -> {
+                if (deptMapper.selectCountByParentId(id) > 0) {
+                    throw exception(DEPT_EXITS_CHILDREN);
+                }
+                deptMapper.deleteById(id);
+                return null;
+            });
             return null;
         });
     }
@@ -109,15 +114,42 @@ public class DeptServiceImpl implements DeptService {
     @Override
     public void deleteDeptList(List<Long> ids) {
         deptMutationLock.execute(() -> {
-            // 校验是否有子部门
-            for (Long id : ids) {
-                if (deptMapper.selectCountByParentId(id) > 0) {
-                    throw exception(DEPT_EXITS_CHILDREN);
-                }
+            if (CollUtil.isEmpty(ids)) {
+                return null;
             }
-
-            // 批量删除部门
-            deptMapper.deleteByIds(ids);
+            Set<Long> requested = new LinkedHashSet<>(ids);
+            List<DeptDO> visible = deptMapper.selectByIds(requested);
+            if (visible.size() != requested.size()) {
+                throw exception(DEPT_DELETE_DENIED);
+            }
+            DataPermissionUtils.executeIgnore(() -> {
+                Set<Long> remaining = new LinkedHashSet<>(requested);
+                Map<Long, Long> parentMap = new HashMap<>();
+                for (DeptDO row : visible) {
+                    parentMap.put(row.getId(), row.getParentId());
+                }
+                while (!remaining.isEmpty()) {
+                    List<Long> leaves = new ArrayList<>();
+                    for (Long id : remaining) {
+                        boolean hasChildInBatch = remaining.stream()
+                                .anyMatch(other -> !other.equals(id) && id.equals(parentMap.get(other)));
+                        if (!hasChildInBatch) {
+                            leaves.add(id);
+                        }
+                    }
+                    if (leaves.isEmpty()) {
+                        throw exception(DEPT_EXITS_CHILDREN);
+                    }
+                    for (Long id : leaves) {
+                        if (deptMapper.selectCountByParentId(id) > 0) {
+                            throw exception(DEPT_EXITS_CHILDREN);
+                        }
+                    }
+                    deptMapper.deleteByIds(leaves);
+                    leaves.forEach(remaining::remove);
+                }
+                return null;
+            });
             return null;
         });
     }
