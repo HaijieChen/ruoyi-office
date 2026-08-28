@@ -67,6 +67,17 @@ export function useFormSchema(): VbenFormSchema[] {
       },
       rules: 'required',
     },
+    {
+      fieldName: 'attachmentUrls',
+      label: '附件',
+      component: 'FileUpload',
+      help: '上传病假条等资料',
+      componentProps: {
+        helpText: '上传病假条等资料',
+        multiple: true,
+        maxNumber: 10,
+      },
+    },
   ];
 }
 
@@ -200,6 +211,16 @@ export function useDetailFormSchema(): DescriptionItemSchema[] {
     {
       label: '原因',
       field: 'reason',
+    },
+    {
+      label: '附件',
+      field: 'attachmentUrls',
+      render: (val) => {
+        if (!Array.isArray(val) || val.length === 0) {
+          return '';
+        }
+        return val.join('\n');
+      },
     },
   ];
 }

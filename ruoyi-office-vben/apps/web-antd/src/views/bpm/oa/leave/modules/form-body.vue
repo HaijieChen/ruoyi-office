@@ -11,6 +11,7 @@ import { DatePicker, Form, Input, Select, message } from 'ant-design-vue';
 import type { Dayjs } from 'dayjs';
 
 import { createLeave } from '#/api/bpm/oa/leave';
+import { FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'BpmOALeaveFormBody' });
 
@@ -28,6 +29,7 @@ const formData = ref<{
   type?: number;
   reason?: string;
   range?: [Dayjs, Dayjs];
+  attachmentUrls?: string[];
 }>({});
 
 function applyLoginUser() {
@@ -56,14 +58,18 @@ async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number 
   }
   submitting.value = true;
   try {
-    await createLeave({
+    const payload: Record<string, unknown> = {
       type: Number(formData.value.type),
       reason: String(formData.value.reason).trim(),
       startTime: range[0].valueOf(),
       endTime: range[1].valueOf(),
       startCompanyDeptId: ctx?.startCompanyDeptId,
       startDeptId: ctx?.startDeptId,
-    } as any);
+    };
+    if (formData.value.attachmentUrls?.length) {
+      payload.attachmentUrls = formData.value.attachmentUrls;
+    }
+    await createLeave(payload as any);
     message.success('提交成功');
     emit('success');
   } finally {
@@ -101,6 +107,20 @@ defineExpose({ reset, submit, getPredictVariables: () => ({}), submitting });
     </Form.Item>
     <Form.Item label="原因" name="reason">
       <Input.TextArea v-model:value="formData.reason" :rows="3" placeholder="请填写请假原因" />
+    </Form.Item>
+    <Form.Item label="附件">
+      <FileUpload
+        :value="formData.attachmentUrls || []"
+        :max-number="10"
+        :max-size="20"
+        :multiple="true"
+        help-text="上传病假条等资料"
+        @update:value="
+          (v: string | string[]) => {
+            formData.attachmentUrls = Array.isArray(v) ? v : v ? [v] : [];
+          }
+        "
+      />
     </Form.Item>
   </Form>
 </template>
