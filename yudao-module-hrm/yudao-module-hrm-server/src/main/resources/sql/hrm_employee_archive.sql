@@ -61,8 +61,11 @@ CREATE TABLE `hrm_employee` (
   `active_id_card` varchar(18) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
       GENERATED ALWAYS AS (IF(`deleted` = 0, NULLIF(TRIM(`id_card`), ''), NULL)) STORED
       COMMENT '在职身份证 NULLIF(TRIM) active-only 唯一',
+  `active_employee_no` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+      GENERATED ALWAYS AS (IF(`deleted` = 0, NULLIF(TRIM(`employee_no`), ''), NULL)) STORED
+      COMMENT '在职工号 NULLIF(TRIM) active-only 唯一',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE KEY `uk_employee_no` (`employee_no`,`deleted`,`tenant_id`) USING BTREE,
+  UNIQUE KEY `uk_hrm_employee_active_employee_no` (`tenant_id`,`active_employee_no`) USING BTREE,
   UNIQUE KEY `uk_hrm_employee_active_id_card` (`tenant_id`,`active_id_card`) USING BTREE,
   KEY `idx_dept_id` (`dept_id`) USING BTREE,
   KEY `idx_employee_status` (`employee_status`) USING BTREE,
