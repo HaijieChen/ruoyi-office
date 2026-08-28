@@ -32,6 +32,9 @@ public class BpmOALeaveCreateReqVO {
     @Schema(description = "原因", requiredMode = Schema.RequiredMode.REQUIRED, example = "阅读宇擎源码")
     private String reason;
 
+    @Schema(description = "附件 URL 数组")
+    private List<String> attachmentUrls;
+
     @Schema(description = "发起人自选审批人 Map", example = "{taskKey1: [1, 2]}")
     private Map<String, List<Long>> startUserSelectAssignees;
 

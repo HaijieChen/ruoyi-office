@@ -3,14 +3,17 @@ package cn.iocoder.yudao.module.bpm.dal.dataobject.oa;
 import cn.iocoder.yudao.framework.mybatis.core.dataobject.BaseDO;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * OA 请假申请 DO
@@ -20,7 +23,7 @@ import java.time.LocalDateTime;
  * @author jason
  * @author 宇擎源码
  */
-@TableName("bpm_oa_leave")
+@TableName(value = "bpm_oa_leave", autoResultMap = true)
 @KeySequence("bpm_oa_leave_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
 @Data
 @Builder
@@ -47,6 +50,11 @@ public class BpmOALeaveDO extends BaseDO {
      * 原因
      */
     private String reason;
+    /**
+     * 附件 URL 数组（病假条等）
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<String> attachmentUrls;
     /**
      * 开始时间
      */
