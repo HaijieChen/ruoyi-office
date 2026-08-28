@@ -138,6 +138,7 @@ onMounted(load);
           <Descriptions.Item label="期间">{{ bill.periodLabel }}</Descriptions.Item>
           <Descriptions.Item v-if="bill.entityCompanyName" label="主体公司">{{ bill.entityCompanyName }}</Descriptions.Item>
           <Descriptions.Item label="收款户名">{{ bill.payeeAccountName }}</Descriptions.Item>
+          <Descriptions.Item label="开户行">{{ bill.payeeBankName || '—' }}</Descriptions.Item>
           <Descriptions.Item label="收款账号">{{ bill.payeeAccountNo }}</Descriptions.Item>
           <Descriptions.Item label="申请金额">{{ bill.applyAmount }}</Descriptions.Item>
           <Descriptions.Item label="实报金额">{{ bill.approvedAmount }}</Descriptions.Item>

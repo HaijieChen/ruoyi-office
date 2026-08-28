@@ -106,7 +106,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (StrUtil.isBlank(reqVO.getPeriodLabel()) || !reqVO.getPeriodLabel().trim().matches("\\d{4}-\\d{2}")) {
             throw exception(EXPENSE_REIMBURSEMENT_PERIOD_INVALID);
         }
-        if (StrUtil.isBlank(reqVO.getPayeeAccountName()) || StrUtil.isBlank(reqVO.getPayeeAccountNo())) {
+        if (StrUtil.isBlank(reqVO.getPayeeAccountName())
+                || StrUtil.isBlank(reqVO.getPayeeBankName())
+                || StrUtil.isBlank(reqVO.getPayeeAccountNo())) {
             throw exception(EXPENSE_REIMBURSEMENT_FIELD_REQUIRED);
         }
         Long actualUserId = reqVO.getActualUserId() != null ? reqVO.getActualUserId() : userId;
@@ -147,6 +149,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .processTitle(title)
                 .periodLabel(reqVO.getPeriodLabel().trim())
                 .payeeAccountName(reqVO.getPayeeAccountName().trim())
+                .payeeBankName(reqVO.getPayeeBankName().trim())
                 .payeeAccountNo(reqVO.getPayeeAccountNo().trim())
                 .applyAmount(apply)
                 .proxyTicket(proxy)
@@ -234,6 +237,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         vo.setProcessTitle(header.getProcessTitle());
         vo.setPeriodLabel(header.getPeriodLabel());
         vo.setPayeeAccountName(header.getPayeeAccountName());
+        vo.setPayeeBankName(header.getPayeeBankName());
         vo.setPayeeAccountNo(revealAccount
                 ? header.getPayeeAccountNo()
                 : FinanceCompanyBankAccountService.maskAccountNo(header.getPayeeAccountNo()));
@@ -243,7 +247,10 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         vo.setStatus(header.getStatus());
         vo.setProcessInstanceId(header.getProcessInstanceId());
         vo.setApplicantUserId(header.getApplicantUserId());
+        vo.setActualUserId(header.getActualUserId());
         vo.setApplicantDeptId(header.getApplicantDeptId());
+        vo.setEntityCompanyDeptId(header.getEntityCompanyDeptId());
+        vo.setEntityCompanyName(header.getEntityCompanyName());
         vo.setApplyDate(header.getApplyDate());
         vo.setFinanceComment(header.getFinanceComment());
         vo.setActualPayDate(header.getActualPayDate());

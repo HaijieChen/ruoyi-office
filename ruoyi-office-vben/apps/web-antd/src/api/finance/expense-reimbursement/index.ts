@@ -25,6 +25,7 @@ export namespace FinanceExpenseApi {
     processTitle?: string;
     periodLabel: string;
     payeeAccountName: string;
+    payeeBankName?: string;
     payeeAccountNo: string;
     applyAmount: number;
     approvedAmount?: number;
@@ -47,6 +48,7 @@ export namespace FinanceExpenseApi {
     proxyTicket: boolean;
     actualUserId?: number;
     payeeAccountName: string;
+    payeeBankName?: string;
     payeeAccountNo: string;
     lines: Line[];
   }

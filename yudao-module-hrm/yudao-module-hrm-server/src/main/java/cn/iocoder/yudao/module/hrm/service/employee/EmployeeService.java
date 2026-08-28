@@ -38,6 +38,8 @@ public interface EmployeeService {
     void applySigningEmployment(Long employeeId, Long companyDeptId, Long deptId,
                                 String companyName, String deptName);
 
+    cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeWageCardRespVO getWageCardByUserId(Long userId);
+
     /**
      * 更新员工档案
      *

@@ -1102,6 +1102,18 @@ public class EmployeeServiceImpl implements EmployeeService {
         result.add(vo);
     }
 
+    @Override
+    public EmployeeWageCardRespVO getWageCardByUserId(Long userId) {
+        if (userId == null) {
+            return EmployeeWageCardRespVO.fromArchive(null);
+        }
+        try {
+            return EmployeeWageCardRespVO.fromArchive(employeeArchiveMapper.selectByUserId(userId));
+        } catch (RuntimeException ignored) {
+            return EmployeeWageCardRespVO.fromArchive(null);
+        }
+    }
+
     void saveContracts(Long employeeId, List<EmployeeContractVO> contracts) {
         if (CollUtil.isEmpty(contracts)) {
             return;

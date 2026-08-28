@@ -13,6 +13,7 @@ public class FinanceExpenseReimbursementRespVO {
     private String processTitle;
     private String periodLabel;
     private String payeeAccountName;
+    private String payeeBankName;
     private String payeeAccountNo;
     private BigDecimal applyAmount;
     private BigDecimal approvedAmount;

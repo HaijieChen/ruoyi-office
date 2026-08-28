@@ -63,8 +63,12 @@ function onPrint() {
           <tr>
             <th>收款户名</th>
             <td>{{ bill.payeeAccountName }}</td>
+            <th>开户行</th>
+            <td>{{ bill.payeeBankName || '—' }}</td>
+          </tr>
+          <tr>
             <th>账号</th>
-            <td>{{ bill.payeeAccountNo }}</td>
+            <td colspan="3">{{ bill.payeeAccountNo }}</td>
           </tr>
         </tbody>
       </table>
