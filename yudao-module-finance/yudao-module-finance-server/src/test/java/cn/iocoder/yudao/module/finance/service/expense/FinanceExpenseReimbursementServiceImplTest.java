@@ -72,9 +72,13 @@ class FinanceExpenseReimbursementServiceImplTest {
         company.setName("测试公司");
         company.setOrgType("1");
         when(deptApi.getDept(10L)).thenReturn(CommonResult.success(company));
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<org.flowable.engine.TaskService> taskServiceProvider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(taskServiceProvider.getIfAvailable()).thenReturn(null);
         service = new FinanceExpenseReimbursementServiceImpl(mapper, lineMapper, users, bpm,
                 mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class),
-                predoc, deptApi);
+                predoc, deptApi, taskServiceProvider);
     }
 
     @Test

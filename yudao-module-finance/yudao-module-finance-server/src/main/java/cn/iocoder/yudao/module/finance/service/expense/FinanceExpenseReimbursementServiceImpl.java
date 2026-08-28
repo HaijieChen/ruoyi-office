@@ -20,6 +20,8 @@ import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
+import org.flowable.engine.TaskService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -67,6 +69,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private final FinanceCompanyBankAccountService companyBankAccountService;
     private final FinanceExpensePredocService predocService;
     private final DeptApi deptApi;
+    private final ObjectProvider<TaskService> taskServiceProvider;
 
     public FinanceExpenseReimbursementServiceImpl(FinanceExpenseReimbursementMapper mapper,
                                                   FinanceExpenseReimbursementLineMapper lineMapper,
@@ -74,7 +77,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                                                   FinanceBpmProcessInstanceApi processInstanceApi,
                                                   FinanceCompanyBankAccountService companyBankAccountService,
                                                   FinanceExpensePredocService predocService,
-                                                  DeptApi deptApi) {
+                                                  DeptApi deptApi,
+                                                  ObjectProvider<TaskService> taskServiceProvider) {
         this.mapper = mapper;
         this.lineMapper = lineMapper;
         this.adminUserApi = adminUserApi;
@@ -82,6 +86,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         this.companyBankAccountService = companyBankAccountService;
         this.predocService = predocService;
         this.deptApi = deptApi;
+        this.taskServiceProvider = taskServiceProvider;
     }
 
     @Override
@@ -185,7 +190,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("applyAmount", apply);
+        // 网关条件 ${applyAmount > 300} 需要数字类型；BigDecimal 在 JUEL 里比较会失败
+        vars.put("applyAmount", apply.doubleValue());
         vars.put("periodLabel", header.getPeriodLabel());
         if (reqVO.getStartCompanyDeptId() != null) {
             vars.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());
@@ -269,7 +275,24 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (canQueryAll || Objects.equals(header.getApplicantUserId(), userId)) {
             return;
         }
+        if (isActiveTaskCandidateOrAssignee(header, userId)) {
+            return;
+        }
         throw exception(EXPENSE_REIMBURSEMENT_ACCESS_DENIED);
+    }
+
+    private boolean isActiveTaskCandidateOrAssignee(FinanceExpenseReimbursementDO header, Long userId) {
+        if (userId == null || StrUtil.isBlank(header.getProcessInstanceId())) {
+            return false;
+        }
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            return false;
+        }
+        return taskService.createTaskQuery()
+                .processInstanceId(header.getProcessInstanceId())
+                .taskCandidateOrAssigned(String.valueOf(userId))
+                .count() > 0;
     }
 
     @Override
