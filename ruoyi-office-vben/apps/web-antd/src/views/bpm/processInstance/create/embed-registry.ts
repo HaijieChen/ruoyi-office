@@ -36,7 +36,9 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
  * path 与后端 BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath 对齐。
  * openCreate=1 打开创建表单（各业务页须支持）。
  */
-export const CREATE_SHELL_REDIRECT_REGISTRY: Record<string, string> = {};
+export const CREATE_SHELL_REDIRECT_REGISTRY: Record<string, string> = {
+  oa_seal_apply_bill: '/oa/seal/seal-apply-info',
+};
 
 export function resolveCreateShellEmbedLoader(key?: null | string) {
   if (!key) return undefined;
