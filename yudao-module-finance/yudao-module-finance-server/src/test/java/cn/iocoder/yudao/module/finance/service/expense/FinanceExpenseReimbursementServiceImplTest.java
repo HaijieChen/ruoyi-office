@@ -26,6 +26,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_FIELD_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINES_EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -89,8 +90,17 @@ class FinanceExpenseReimbursementServiceImplTest {
                 ArgumentCaptor.forClass(FinanceExpenseReimbursementDO.class);
         verify(mapper).insert(cap.capture());
         assertEquals(new BigDecimal("30.00"), cap.getValue().getApplyAmount());
+        assertEquals("工商银行", cap.getValue().getPayeeBankName());
         assertEquals("【报销】-张三-2026-08-30.00", cap.getValue().getProcessTitle());
         verify(mapper).updateById(any(FinanceExpenseReimbursementDO.class));
+    }
+
+    @Test
+    void missingPayeeBankNameRejected() {
+        FinanceExpenseReimbursementCreateReqVO req = baseReq(false);
+        req.setPayeeBankName("  ");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_FIELD_REQUIRED.getCode(), ex.getCode());
     }
 
     @Test
@@ -163,6 +173,7 @@ class FinanceExpenseReimbursementServiceImplTest {
         req.setPeriodLabel("2026-08");
         req.setProxyTicket(proxy);
         req.setPayeeAccountName("张三");
+        req.setPayeeBankName("工商银行");
         req.setPayeeAccountNo("622200001111");
         req.setLines(List.of(line, line2));
         return req;

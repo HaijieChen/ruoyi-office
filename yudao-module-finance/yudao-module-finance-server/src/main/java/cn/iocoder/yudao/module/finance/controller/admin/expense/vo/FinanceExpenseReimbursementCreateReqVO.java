@@ -19,6 +19,8 @@ public class FinanceExpenseReimbursementCreateReqVO {
     @NotBlank
     private String payeeAccountName;
     @NotBlank
+    private String payeeBankName;
+    @NotBlank
     private String payeeAccountNo;
     @NotEmpty
     @Valid

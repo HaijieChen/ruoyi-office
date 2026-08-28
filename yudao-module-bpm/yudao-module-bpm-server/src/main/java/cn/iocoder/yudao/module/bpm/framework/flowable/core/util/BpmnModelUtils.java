@@ -129,14 +129,15 @@ public class BpmnModelUtils {
     }
 
     public static Integer parseCandidateStrategy(FlowElement userTask) {
-        Integer candidateStrategy = NumberUtils.parseInt(userTask.getAttributeValue(
-                BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
-        // TODO @芋艿 尝试从 ExtensionElement 取. 后续相关扩展是否都可以 存 extensionElement。 如表单权限。 按钮权限
-        if (candidateStrategy == null) {
-            ExtensionElement element = CollUtil.getFirst(userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
-            candidateStrategy = element != null ? NumberUtils.parseInt(element.getElementText()) : null;
+        // 设计器改规则写在 extension；节点属性可能残留导入时的旧值，优先 extension
+        ExtensionElement element = CollUtil.getFirst(
+                userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
+        Integer fromExt = element != null ? NumberUtils.parseInt(element.getElementText()) : null;
+        if (fromExt != null) {
+            return fromExt;
         }
-        return candidateStrategy;
+        return NumberUtils.parseInt(userTask.getAttributeValue(
+                BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_STRATEGY));
     }
 
     /**
@@ -146,6 +147,11 @@ public class BpmnModelUtils {
      * @return 候选人参数
      */
     public static String parseCandidateParam(FlowElement userTask) {
+        ExtensionElement extParam = CollUtil.getFirst(
+                userTask.getExtensionElements().get(BpmnModelConstants.USER_TASK_CANDIDATE_PARAM));
+        if (extParam != null && StrUtil.isNotBlank(extParam.getElementText())) {
+            return extParam.getElementText();
+        }
         String candidateParam = userTask.getAttributeValue(
                 BpmnModelConstants.NAMESPACE, BpmnModelConstants.USER_TASK_CANDIDATE_PARAM);
         if (candidateParam == null) {

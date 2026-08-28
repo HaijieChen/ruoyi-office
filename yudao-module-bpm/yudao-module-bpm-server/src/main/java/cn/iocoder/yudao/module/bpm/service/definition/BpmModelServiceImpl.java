@@ -269,6 +269,17 @@ public class BpmModelServiceImpl implements BpmModelService {
         if (Objects.equals(candidateStrategy, BpmTaskCandidateStrategyEnum.APPROVE_USER_SELECT.getStrategy())) {
             throw exception(MODEL_DEPLOY_FAIL_FIRST_USER_TASK_CANDIDATE_STRATEGY_ERROR, firUserTask.getName());
         }
+        List<ServiceTask> serviceTasks = BpmnModelUtils.getBpmnModelElements(bpmnModel, ServiceTask.class);
+        serviceTasks.forEach(serviceTask -> {
+            if (StrUtil.isNotBlank(serviceTask.getImplementation())) {
+                return;
+            }
+            if ("http".equalsIgnoreCase(serviceTask.getType())) {
+                return;
+            }
+            throw exception(MODEL_DEPLOY_FAIL_SERVICE_TASK_IMPL_NOT_CONFIG,
+                    StrUtil.blankToDefault(serviceTask.getName(), serviceTask.getId()));
+        });
     }
 
     @Override

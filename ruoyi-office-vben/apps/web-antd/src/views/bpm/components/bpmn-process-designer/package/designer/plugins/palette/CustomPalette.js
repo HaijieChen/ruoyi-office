@@ -1,5 +1,7 @@
 import PaletteProvider from 'bpmn-js/lib/features/palette/PaletteProvider';
 
+import { createCopyServiceTaskShape } from '../../../penal/task/copy-task';
+
 export default function CustomPalette(
   palette,
   create,
@@ -39,15 +41,7 @@ F.prototype.getPaletteEntries = function () {
   const translate = this._translate;
 
   function createCopyTask(event) {
-    const shape = elementFactory.createShape({ type: 'bpmn:ServiceTask' });
-    const bo = shape.businessObject;
-    bo.name = '抄送人';
-    bo.delegateExpression = '${bpmCopyTaskDelegate}';
-    bo.$attrs = {
-      ...(bo.$attrs || {}),
-      'flowable:delegateExpression': '${bpmCopyTaskDelegate}',
-    };
-    create.start(event, shape);
+    create.start(event, createCopyServiceTaskShape(elementFactory));
   }
 
   function createAction(type, group, className, title, options) {

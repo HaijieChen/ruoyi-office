@@ -205,6 +205,19 @@ export function listEmployeeColleagues() {
   );
 }
 
+export interface EmployeeWageCard {
+  name?: string;
+  bankName?: string;
+  bankAccount?: string;
+}
+
+export function getEmployeeWageCardByUserId(userId: number) {
+  return requestClient.get<EmployeeWageCard>(
+    '/hrm/employee-archive/bank-by-user-id',
+    { params: { userId } },
+  );
+}
+
 /** 查询员工档案详情 */
 export function getEmployeeArchive(id: number) {
   return requestClient.get<EmployeeArchiveApi.EmployeeArchive>(

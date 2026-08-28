@@ -35,6 +35,10 @@ public interface ErrorCodeConstants {
     /** 嵌入式业务表单必须配置 requiredStartPermission（权威元数据），否则禁止发布 */
     ErrorCode MODEL_DEPLOY_FAIL_START_PERMISSION_NOT_CONFIG = new ErrorCode(1_009_002_009,
             "部署流程失败，原因：嵌入式流程【{}】未配置发起权限 requiredStartPermission");
+    ErrorCode MODEL_DEPLOY_FAIL_SERVICE_TASK_IMPL_NOT_CONFIG = new ErrorCode(1_009_002_010,
+            "部署流程失败，原因：服务任务({})未配置实现。抄送请从左侧拖入「抄送」节点，并在右侧配置抄送人后再发布");
+    ErrorCode MODEL_DEPLOY_FAIL_CANDIDATE_STRATEGY_INVALID = new ErrorCode(1_009_002_011,
+            "部署流程失败，原因：审批人规则无效（{}）。请在【流程设计】里重新选择该节点的审批人");
 
     // ========== 流程定义 1-009-003-000 ==========
     ErrorCode PROCESS_DEFINITION_KEY_NOT_MATCH = new ErrorCode(1_009_003_000, "流程定义的标识期望是({})，当前是({})，请修改 BPMN 流程图");

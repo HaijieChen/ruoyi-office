@@ -85,6 +85,13 @@ public class EmployeeController {
                 cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId()));
     }
 
+    @GetMapping("/bank-by-user-id")
+    @Operation(summary = "按系统用户查工资卡（报销预填，登录即可）")
+    @Parameter(name = "userId", description = "系统用户编号", required = true, example = "1")
+    public CommonResult<EmployeeWageCardRespVO> getWageCardByUserId(@RequestParam("userId") Long userId) {
+        return success(employeeArchiveService.getWageCardByUserId(userId));
+    }
+
     @GetMapping("/get")
     @Operation(summary = "获得员工档案")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")

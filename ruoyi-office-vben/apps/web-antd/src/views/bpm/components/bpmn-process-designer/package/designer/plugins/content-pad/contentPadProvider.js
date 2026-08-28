@@ -1,3 +1,4 @@
+import { createCopyServiceTaskShape } from '../../../penal/task/copy-task';
 import { getChildLanes } from 'bpmn-js/lib/features/modeling/util/LaneUtil';
 import { isAny } from 'bpmn-js/lib/features/modeling/util/ModelingUtil';
 import { isEventSubProcess, isExpanded } from 'bpmn-js/lib/util/DiUtil';
@@ -321,12 +322,7 @@ ContextPadProvider.prototype.getContextPadEntries = function (element) {
           title: translate('追加抄送'),
           action: {
             click(event, current) {
-              const shape = elementFactory.createShape({
-                type: 'bpmn:ServiceTask',
-              });
-              shape.businessObject.name = '抄送人';
-              shape.businessObject.delegateExpression =
-                '${bpmCopyTaskDelegate}';
+              const shape = createCopyServiceTaskShape(elementFactory);
               if (autoPlace) {
                 autoPlace.append(current, shape);
               } else {
@@ -334,12 +330,7 @@ ContextPadProvider.prototype.getContextPadEntries = function (element) {
               }
             },
             dragstart(event, current) {
-              const shape = elementFactory.createShape({
-                type: 'bpmn:ServiceTask',
-              });
-              shape.businessObject.name = '抄送人';
-              shape.businessObject.delegateExpression =
-                '${bpmCopyTaskDelegate}';
+              const shape = createCopyServiceTaskShape(elementFactory);
               create.start(event, shape, { source: current });
             },
           },

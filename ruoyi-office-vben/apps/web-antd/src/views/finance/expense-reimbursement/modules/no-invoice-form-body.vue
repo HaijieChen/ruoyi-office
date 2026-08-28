@@ -20,6 +20,10 @@ import dayjs from 'dayjs';
 import { getOutingPage } from '#/api/bpm/oa/outing';
 import { getTripPage } from '#/api/bpm/oa/trip';
 import { createNoInvoiceExpense } from '#/api/finance/expense-reimbursement';
+import { getEmployeeWageCardByUserId } from '#/api/hrm/employee';
+import { getSimpleDeptList } from '#/api/system/dept';
+import { getSimpleUserList } from '#/api/system/user';
+import { mapWageCardToPayee } from '../payee-prefill';
 
 defineOptions({ name: 'FinanceExpenseNoInvoiceFormBody' });
 
@@ -48,14 +52,32 @@ interface LineRow {
 const formData = ref<{
   userNickname?: string;
   deptName?: string;
+  entityCompanyName?: string;
+  actualUserId?: number;
   periodLabel?: string;
   payeeAccountName?: string;
+  payeeBankName?: string;
   payeeAccountNo?: string;
   lines: LineRow[];
 }>({
   periodLabel: dayjs().format('YYYY-MM'),
   lines: [{}],
 });
+
+const userOptionsAll = ref<{ label: string; value: number; deptId?: number; deptName?: string }[]>([]);
+const deptById = ref<Record<number, { name?: string; parentId?: number; orgType?: string }>>({});
+
+function companyOfDept(deptId?: number) {
+  let id = deptId;
+  for (let i = 0; i < 16 && id; i++) {
+    const d = deptById.value[id];
+    if (!d) return undefined;
+    if (String(d.orgType) === '1') return d.name;
+    if (!d.parentId || d.parentId === id) return undefined;
+    id = d.parentId;
+  }
+  return undefined;
+}
 
 const categoryOptions = computed(() =>
   getDictOptions('finance_expense_category', 'string').map((d) => ({
@@ -64,9 +86,33 @@ const categoryOptions = computed(() =>
   })),
 );
 
+async function applyPayeeFromUser(userId?: number) {
+  if (userId == null || Number.isNaN(Number(userId))) {
+    Object.assign(formData.value, mapWageCardToPayee(null));
+    return;
+  }
+  try {
+    const card = await getEmployeeWageCardByUserId(Number(userId));
+    Object.assign(formData.value, mapWageCardToPayee(card));
+  } catch {
+    Object.assign(formData.value, mapWageCardToPayee(null));
+  }
+}
+
 function applyLoginUser() {
   formData.value.userNickname = userStore.userInfo?.nickname || '';
   formData.value.deptName = (userStore.userInfo as any)?.deptName || '';
+  formData.value.actualUserId = Number(userStore.userInfo?.id);
+  formData.value.entityCompanyName =
+    companyOfDept(Number((userStore.userInfo as any)?.deptId)) || '';
+  void applyPayeeFromUser(formData.value.actualUserId);
+}
+
+function onActualUserChange(id?: number) {
+  const hit = userOptionsAll.value.find((u) => u.value === Number(id));
+  formData.value.deptName = hit?.deptName || formData.value.deptName;
+  formData.value.entityCompanyName = companyOfDept(hit?.deptId) || '';
+  void applyPayeeFromUser(id);
 }
 
 async function loadPredocOptions() {
@@ -174,6 +220,7 @@ async function reset() {
   formData.value = {
     periodLabel: dayjs().format('YYYY-MM'),
     payeeAccountName: '',
+    payeeBankName: '',
     payeeAccountNo: '',
     lines: [{}],
   };
@@ -184,6 +231,7 @@ async function reset() {
 const rules: Record<string, Rule[]> = {
   periodLabel: [{ required: true, message: '请填写费用归属期间', trigger: 'blur' }],
   payeeAccountName: [{ required: true, message: '请填写收款户名', trigger: 'blur' }],
+  payeeBankName: [{ required: true, message: '请填写开户行', trigger: 'blur' }],
   payeeAccountNo: [{ required: true, message: '请填写收款账号', trigger: 'blur' }],
 };
 
@@ -230,7 +278,9 @@ async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number 
     await createNoInvoiceExpense({
       periodLabel: String(formData.value.periodLabel),
       proxyTicket: false,
+      actualUserId: formData.value.actualUserId,
       payeeAccountName: String(formData.value.payeeAccountName),
+      payeeBankName: String(formData.value.payeeBankName),
       payeeAccountNo: String(formData.value.payeeAccountNo),
       lines,
       startCompanyDeptId: ctx?.startCompanyDeptId,
@@ -244,7 +294,26 @@ async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number 
 }
 
 applyLoginUser();
-onMounted(loadPredocOptions);
+onMounted(async () => {
+  await loadPredocOptions();
+  try {
+    const [users, depts] = await Promise.all([getSimpleUserList(), getSimpleDeptList()]);
+    const dmap: Record<number, { name?: string; parentId?: number; orgType?: string }> = {};
+    for (const d of depts || []) {
+      if (d.id != null) dmap[Number(d.id)] = d;
+    }
+    deptById.value = dmap;
+    userOptionsAll.value = (users || []).map((u) => ({
+      label: u.nickname || String(u.id),
+      value: Number(u.id),
+      deptId: u.deptId,
+      deptName: (u as any).deptName,
+    }));
+    onActualUserChange(formData.value.actualUserId);
+  } catch {
+    message.warning('人员列表加载失败，仅可报自己');
+  }
+});
 defineExpose({ reset, submit, getPredictVariables, submitting });
 </script>
 
@@ -259,6 +328,20 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     <Form.Item label="申请人">
       <Input :value="formData.userNickname" disabled />
     </Form.Item>
+    <Form.Item label="实际报销人">
+      <Select
+        v-model:value="formData.actualUserId"
+        class="w-full"
+        show-search
+        option-filter-prop="label"
+        :options="userOptionsAll"
+        placeholder="默认申请人，可改为被报销人"
+        @change="onActualUserChange"
+      />
+    </Form.Item>
+    <Form.Item label="主体公司">
+      <Input :value="formData.entityCompanyName" disabled />
+    </Form.Item>
     <Form.Item label="部门">
       <Input :value="formData.deptName" disabled />
     </Form.Item>
@@ -267,6 +350,9 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     </Form.Item>
     <Form.Item label="收款户名" name="payeeAccountName">
       <Input v-model:value="formData.payeeAccountName" placeholder="员工卡户名" />
+    </Form.Item>
+    <Form.Item label="开户行" name="payeeBankName">
+      <Input v-model:value="formData.payeeBankName" placeholder="工资开户行" />
     </Form.Item>
     <Form.Item label="收款账号" name="payeeAccountNo">
       <Input v-model:value="formData.payeeAccountNo" placeholder="员工卡账号" />
