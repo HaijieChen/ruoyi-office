@@ -4,6 +4,7 @@ import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReq
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeContractVO;
@@ -28,7 +29,9 @@ import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
 import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
+import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserCreateReqDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,6 +79,8 @@ class EmployeeServiceImplTest {
     private DeptApi deptApi;
     @Mock
     private AdminUserApi adminUserApi;
+    @Mock
+    private PermissionApi permissionApi;
     @Mock
     private ConfigApi configApi;
 
@@ -686,6 +691,38 @@ class EmployeeServiceImplTest {
         company.setOrgType("1");
         when(deptApi.getDept(deptId)).thenReturn(CommonResult.success(dept));
         when(deptApi.getDept(companyId)).thenReturn(CommonResult.success(company));
+    }
+
+    @Test
+    void generateUserAssignsRolesWhenProvided() {
+        EmployeeDO employee = new EmployeeDO();
+        employee.setId(1L);
+        employee.setEmployeeNo("10000100");
+        employee.setName("张三");
+        employee.setUserGenerated(false);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(employee);
+        when(adminUserApi.createUser(any(AdminUserCreateReqDTO.class))).thenReturn(CommonResult.success(88L));
+        when(permissionApi.assignUserRole(eq(88L), eq(List.of(2L, 3L)))).thenReturn(CommonResult.success(true));
+
+        Long userId = employeeService.generateUserForEmployee(1L, List.of(2L, 3L));
+
+        assertEquals(88L, userId);
+        verify(permissionApi).assignUserRole(88L, List.of(2L, 3L));
+    }
+
+    @Test
+    void generateUserSkipsAssignWhenNoRoles() {
+        EmployeeDO employee = new EmployeeDO();
+        employee.setId(1L);
+        employee.setEmployeeNo("10000100");
+        employee.setName("张三");
+        employee.setUserGenerated(false);
+        when(employeeArchiveMapper.selectById(1L)).thenReturn(employee);
+        when(adminUserApi.createUser(any(AdminUserCreateReqDTO.class))).thenReturn(CommonResult.success(88L));
+
+        employeeService.generateUserForEmployee(1L, List.of());
+
+        verify(permissionApi, never()).assignUserRole(any(), any());
     }
 
 }

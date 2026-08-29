@@ -20,6 +20,7 @@ import cn.iocoder.yudao.module.infra.api.file.FileAccessApi;
 import cn.iocoder.yudao.module.infra.api.file.dto.FileRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
+import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserCreateReqDTO;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserUpdateReqDTO;
@@ -117,6 +118,9 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Resource
     private AdminUserApi adminUserApi;
+
+    @Resource
+    private PermissionApi permissionApi;
 
     @Resource
     private ConfigApi configApi;
@@ -1627,7 +1631,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long generateUserForEmployee(Long employeeId) {
+    public Long generateUserForEmployee(Long employeeId, Collection<Long> roleIds) {
         // 1. 校验员工存在
         EmployeeDO employee = employeeArchiveMapper.selectById(employeeId);
         if (employee == null) {
@@ -1659,6 +1663,10 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Long userId = adminUserApi.createUser(userCreateReqDTO).getCheckedData();
 
+        if (CollUtil.isNotEmpty(roleIds)) {
+            permissionApi.assignUserRole(userId, roleIds).checkError();
+        }
+
         EmployeeDO updateObj = new EmployeeDO();
         updateObj.setId(employeeId);
         updateObj.setUserId(userId);
@@ -1670,13 +1678,13 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void batchGenerateUserForEmployee(List<Long> employeeIds) {
+    public void batchGenerateUserForEmployee(List<Long> employeeIds, Collection<Long> roleIds) {
         if (CollUtil.isEmpty(employeeIds)) {
             return;
         }
         for (Long employeeId : employeeIds) {
             try {
-                generateUserForEmployee(employeeId);
+                generateUserForEmployee(employeeId, roleIds);
             } catch (Exception e) {
                 // 记录错误，继续处理下一个
             }

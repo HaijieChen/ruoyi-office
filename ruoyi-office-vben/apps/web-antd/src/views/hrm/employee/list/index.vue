@@ -26,6 +26,7 @@ import { DeptSelectModal } from '#/views/system/dept/components';
 
 import { useGridColumns, useGridFormSchema } from './data';
 import ImportModal from './modules/import-modal.vue';
+import GenerateRoleModal from './modules/generate-role-modal.vue';
 
 defineOptions({ name: 'HrmEmployeeArchiveList' });
 
@@ -40,6 +41,17 @@ const deptSelectModalRef = ref<InstanceType<typeof DeptSelectModal>>();
 const [ImportModalComp, importModalApi] = useVbenModal({
   connectedComponent: ImportModal,
 });
+
+const [GenerateRoleModalComp, generateRoleModalApi] = useVbenModal({
+  connectedComponent: GenerateRoleModal,
+});
+
+function pickRoles(): Promise<number[] | null> {
+  return new Promise((resolve) => {
+    generateRoleModalApi.setData({ resolve, settled: false });
+    generateRoleModalApi.open();
+  });
+}
 
 /** 刷新表格 */
 function onRefresh() {
@@ -130,9 +142,13 @@ async function handleGenerateUser(row: EmployeeArchiveApi.EmployeeArchive) {
     message.warning('该员工已生成用户，无需重复生成');
     return;
   }
+  const roleIds = await pickRoles();
+  if (roleIds === null) {
+    return;
+  }
   const hideLoading = message.loading('正在生成用户...', 0);
   try {
-    await generateUserForEmployee(row.id as number);
+    await generateUserForEmployee(row.id as number, roleIds);
     message.success('生成用户成功');
     onRefresh();
   } catch (error) {
@@ -164,9 +180,13 @@ async function collectPendingUserIds() {
 }
 
 async function doBatchGenerateUser(ids: number[]) {
+  const roleIds = await pickRoles();
+  if (roleIds === null) {
+    return;
+  }
   const hideLoading = message.loading('正在批量生成账号...', 0);
   try {
-    await batchGenerateUserForEmployee(ids);
+    await batchGenerateUserForEmployee(ids, roleIds);
     message.success(`已生成 ${ids.length} 个登录账号`);
     checkedIds.value = [];
     onRefresh();
@@ -346,6 +366,7 @@ onActivated(() => {
       @select="handleDeptSelect"
     />
     <ImportModalComp @success="onRefresh" />
+    <GenerateRoleModalComp />
   </Page>
 </template>
 
