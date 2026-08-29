@@ -232,7 +232,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     @Override
     public PageResult<FinanceExpenseReimbursementRespVO> getPage(FinanceExpenseReimbursementPageReqVO reqVO,
                                                                  Long userId, boolean canQueryAll) {
-        PageResult<FinanceExpenseReimbursementDO> page = mapper.selectPage(reqVO, null);
+        PageResult<FinanceExpenseReimbursementDO> page = mapper.selectPage(reqVO, (Long) null);
         List<FinanceExpenseReimbursementRespVO> list = new ArrayList<>();
         for (FinanceExpenseReimbursementDO header : page.getList()) {
             list.add(toResp(header, canQueryAll));
