@@ -538,7 +538,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
                 v-if="task.assigneeUser || task.ownerUser"
               >
                 <!-- 信息：头像昵称 -->
-                <div class="relative flex h-8 items-center rounded-3xl pr-2">
+                <div class="relative flex min-h-9 items-center overflow-visible rounded-3xl py-0.5 pr-2">
                   <template
                     v-if="
                       task.assigneeUser?.avatar || task.assigneeUser?.nickname
@@ -580,7 +580,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
                         getTaskDisplayStatus(task, activity),
                       )
                     "
-                    class="absolute left-6 top-5 flex items-center rounded-full border-2 border-solid border-white p-1"
+                    class="absolute bottom-0 left-7 flex size-3.5 items-center justify-center rounded-full border border-solid border-white"
                     :style="{
                       backgroundColor:
                         statusIconMap[getTaskDisplayStatus(task, activity)]
@@ -633,7 +633,7 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
             <div
               v-for="(user, userIndex) in activity.candidateUsers"
               :key="userIndex"
-              class="relative flex h-8 items-center rounded-3xl pr-2"
+              class="relative flex min-h-9 items-center overflow-visible rounded-3xl py-0.5 pr-2"
             >
               <Avatar
                 class="!m-1"
@@ -648,14 +648,14 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
                 {{ user.nickname }}
               </span>
 
-              <!-- 候选任务状态图标 -->
+              <!-- 候选任务状态图标：贴头像右下，不挡住字 -->
               <div
                 v-if="showStatusIcon"
-                class="absolute left-6 top-5 flex items-center rounded-full border-2 border-solid border-white p-1"
+                class="absolute bottom-0 left-7 flex size-3.5 items-center justify-center rounded-full border border-solid border-white"
                 :style="{ backgroundColor: statusIconMap['-1']?.color }"
               >
                 <IconifyIcon
-                  class="text-xs text-white"
+                  class="size-2 text-white"
                   :icon="statusIconMap['-1']?.icon || 'lucide:clock'"
                 />
               </div>
@@ -696,6 +696,12 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
 }
 
 /* Timeline垂直样式（保持原有样式） */
+:deep(.ant-timeline-item),
+:deep(.ant-timeline-item-head),
+:deep(.ant-timeline-item-content) {
+  overflow: visible;
+}
+
 :deep(.ant-timeline-item) {
   padding-bottom: 20px;
 }

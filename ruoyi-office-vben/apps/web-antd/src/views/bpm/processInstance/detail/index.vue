@@ -484,7 +484,7 @@ onMounted(async () => {
                   :xl="isPShellCustom ? 7 : 4"
                   class="h-full"
                 >
-                  <div class="timeline-pane mt-4 max-h-[70vh] overflow-y-auto pr-1">
+                  <div class="timeline-pane mt-4 max-h-[70vh] overflow-x-visible overflow-y-auto px-1 py-1">
                     <ProcessInstanceTimeline :activity-nodes="activityNodes" />
                   </div>
                 </Col>
@@ -634,6 +634,7 @@ onMounted(async () => {
 
 .tab-pane-content {
   padding-right: 12px;
-  overflow: hidden auto;
+  overflow-x: visible;
+  overflow-y: auto;
 }
 </style>
