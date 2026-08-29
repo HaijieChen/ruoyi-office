@@ -213,6 +213,9 @@ async function submitForm() {
         ...(detailForm.value.value || {}),
         startCompanyDeptId: startCompanyDeptId.value,
         startDeptId: startDeptId.value,
+        startEmploymentLabel: employmentOptions.value.find(
+          (o) => o.value === startCompanyDeptId.value,
+        )?.label,
       },
       startUserSelectAssignees: startUserSelectAssignees.value,
     });

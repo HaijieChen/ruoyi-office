@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCo
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
@@ -76,6 +77,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private final ObjectProvider<FinanceApprovedSalesBusinessOrderService> autoBusinessOrderProvider;
     @Resource
     private FinanceBusinessStaffSupport businessStaffSupport;
+    @Resource
+    private FinanceProcessParticipantSupport processParticipantSupport;
 
     private static final org.slf4j.Logger log =
             org.slf4j.LoggerFactory.getLogger(FinanceContractApplicationServiceImpl.class);
@@ -311,11 +314,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     @Override
     public FinanceContractApplicationDO getApplication(Long id, Long userId, boolean manageAll) {
         FinanceContractApplicationDO application = getApplication(id);
-        // C29 / CS-R1：本人 / FA(manageAll) / 当前 process 上 active 任务候选人·办理人 可读
-        if (manageAll || Objects.equals(application.getApplicantUserId(), userId)) {
-            return application;
-        }
-        if (isActiveTaskCandidateOrAssignee(application, userId)) {
+        if (manageAll || processParticipantSupport.canReadBill(
+                userId, application.getApplicantUserId(), application.getProcessInstanceId())) {
             return application;
         }
         throw exception(CONTRACT_APPLICATION_ACCESS_DENIED);
@@ -330,10 +330,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         if (application == null) {
             return false;
         }
-        if (Objects.equals(application.getApplicantUserId(), userId)) {
-            return true;
-        }
-        return isActiveTaskCandidateOrAssignee(application, userId);
+        return processParticipantSupport.canReadBill(
+                userId, application.getApplicantUserId(), application.getProcessInstanceId());
     }
 
     /**

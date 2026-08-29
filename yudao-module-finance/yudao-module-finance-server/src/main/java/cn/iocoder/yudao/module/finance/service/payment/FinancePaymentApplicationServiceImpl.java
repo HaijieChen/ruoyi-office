@@ -39,6 +39,7 @@ import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
 import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
+import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
@@ -110,6 +111,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private final FinancePaymentTaxLineMapper taxLineMapper;
     @Resource
     private FinanceBusinessStaffSupport businessStaffSupport;
+    @Resource
+    private FinanceProcessParticipantSupport processParticipantSupport;
 
     public FinancePaymentApplicationServiceImpl(FinancePaymentApplicationMapper applicationMapper,
                                                 FinancePaymentApplicationNoRedisDAO applicationNoRedisDAO,
@@ -566,8 +569,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     public FinancePaymentApplicationDO getApplicationForRead(Long id, Long userId, boolean manageAll) {
         FinancePaymentApplicationDO application = getApplication(id);
-        if (manageAll || Objects.equals(application.getApplicantUserId(), userId)
-                || isActiveTaskCandidateOrAssignee(application, userId)) {
+        if (manageAll || processParticipantSupport.canReadBill(
+                userId, application.getApplicantUserId(), application.getProcessInstanceId())) {
             return application;
         }
         throw exception(PAYMENT_APPLICATION_ACCESS_DENIED);
@@ -591,10 +594,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (application == null) {
             return false;
         }
-        if (Objects.equals(application.getApplicantUserId(), userId)) {
-            return true;
-        }
-        return isActiveTaskCandidateOrAssignee(application, userId);
+        return processParticipantSupport.canReadBill(
+                userId, application.getApplicantUserId(), application.getProcessInstanceId());
     }
 
     @Override

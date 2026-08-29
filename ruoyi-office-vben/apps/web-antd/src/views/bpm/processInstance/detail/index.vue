@@ -27,6 +27,7 @@ import {
   getApprovalDetail as getApprovalDetailApi,
   getProcessInstanceBpmnModelView,
 } from '#/api/bpm/processInstance';
+import { getSimpleDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
 import {
   hydrateRemoteDataSourceRules,
@@ -194,6 +195,7 @@ async function getApprovalDetail() {
     processInstance.value = data.processInstance;
     processDefinition.value = data.processDefinition;
     nodeKeyName.value = data.todoTask?.name;
+    await resolveStartEmployment();
 
     // 设置表单信息
     if (processDefinition.value.formType === BpmModelFormType.NORMAL) {
@@ -276,6 +278,38 @@ async function getProcessModelView() {
 
 // 审批节点信息
 const activityNodes = ref<BpmProcessInstanceApi.ApprovalNodeInfo[]>([]);
+const startEmploymentLabel = ref('');
+
+function readVarId(vars: Record<string, any> | undefined, key: string): number | undefined {
+  const raw = vars?.[key];
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+async function resolveStartEmployment() {
+  const vars = processInstance.value?.formVariables || {};
+  const snapshot = vars.startEmploymentLabel;
+  if (typeof snapshot === 'string' && snapshot.trim()) {
+    startEmploymentLabel.value = snapshot.trim();
+    return;
+  }
+  const companyId = readVarId(vars, 'startCompanyDeptId');
+  const deptId = readVarId(vars, 'startDeptId');
+  if (!companyId && !deptId) {
+    startEmploymentLabel.value = '';
+    return;
+  }
+  try {
+    const depts = await getSimpleDeptList();
+    const nameOf = (id?: number) =>
+      depts?.find((d) => Number(d.id) === id)?.name || (id != null ? String(id) : '');
+    const companyName = nameOf(companyId);
+    const deptName = deptId && deptId !== companyId ? nameOf(deptId) : '';
+    startEmploymentLabel.value = [companyName, deptName].filter(Boolean).join(' / ');
+  } catch {
+    startEmploymentLabel.value = [companyId, deptId].filter(Boolean).join(' / ');
+  }
+}
 /**
  * 设置表单权限
  */
@@ -406,6 +440,13 @@ onMounted(async () => {
                   :xl="isPShellCustom ? 17 : 20"
                   class="h-full"
                 >
+                  <div
+                    v-if="startEmploymentLabel"
+                    class="mb-3 text-sm text-gray-700"
+                  >
+                    <span class="text-gray-500">任职：</span>
+                    {{ startEmploymentLabel }}
+                  </div>
                   <!-- NORMAL: form-create -->
                   <div
                     v-if="
@@ -524,6 +565,13 @@ onMounted(async () => {
         padding: '0px',
       }"
     >
+      <div
+        v-if="startEmploymentLabel"
+        class="mb-3 px-4 pt-3 text-sm text-gray-700"
+      >
+        <span class="text-gray-500">任职：</span>
+        {{ startEmploymentLabel }}
+      </div>
       <BusinessFormComponent
         ref="businessFormRef"
         :id="processInstance?.businessKey"

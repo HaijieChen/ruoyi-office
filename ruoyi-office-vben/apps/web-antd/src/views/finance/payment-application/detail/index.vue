@@ -247,7 +247,9 @@ async function loadData() {
     const entities = payEntityOptions.value;
     payEntityCompanyDeptId.value =
       entities[0]?.value ?? detail.value?.entityCompanyDeptId;
-    await loadAccounts(payEntityCompanyDeptId.value);
+    if (isCashierNode.value && resolvedTaskId.value) {
+      await loadAccounts(payEntityCompanyDeptId.value);
+    }
   } catch (error) {
     detail.value = null;
     message.error(error instanceof Error ? error.message : '加载付款详情失败');

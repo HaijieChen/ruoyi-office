@@ -15,6 +15,8 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.expense.FinanceExpenseReim
 import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementMapper;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
+import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
+import jakarta.annotation.Resource;
 import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
@@ -70,6 +72,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private final FinanceExpensePredocService predocService;
     private final DeptApi deptApi;
     private final ObjectProvider<TaskService> taskServiceProvider;
+    @Resource
+    private FinanceProcessParticipantSupport processParticipantSupport;
 
     public FinanceExpenseReimbursementServiceImpl(FinanceExpenseReimbursementMapper mapper,
                                                   FinanceExpenseReimbursementLineMapper lineMapper,
@@ -278,10 +282,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     }
 
     private void assertCanRead(FinanceExpenseReimbursementDO header, Long userId, boolean canQueryAll) {
-        if (canQueryAll || Objects.equals(header.getApplicantUserId(), userId)) {
-            return;
-        }
-        if (isActiveTaskCandidateOrAssignee(header, userId)) {
+        if (canQueryAll || processParticipantSupport.canReadBill(
+                userId, header.getApplicantUserId(), header.getProcessInstanceId())) {
             return;
         }
         throw exception(EXPENSE_REIMBURSEMENT_ACCESS_DENIED);

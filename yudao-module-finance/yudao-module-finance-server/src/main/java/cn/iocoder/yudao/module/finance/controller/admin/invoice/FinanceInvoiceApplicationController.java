@@ -159,7 +159,7 @@ public class FinanceInvoiceApplicationController {
     @GetMapping("/get")
     @Operation(summary = "获得开票申请详情")
     @Parameter(name = "id", description = "申请编号", required = true)
-    @PreAuthorize("@ss.hasPermission('finance:invoice-application:query')")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:query') or @financeInvoiceAccess.canTaskContextOrOwnerRead(#id)")
     public CommonResult<FinanceInvoiceApplicationRespVO> getApplication(@RequestParam("id") Long id) {
         FinanceInvoiceApplicationDO application = invoiceApplicationService.getApplication(id);
         FinanceInvoiceApplicationRespVO respVO = BeanUtils.toBean(application, FinanceInvoiceApplicationRespVO.class);

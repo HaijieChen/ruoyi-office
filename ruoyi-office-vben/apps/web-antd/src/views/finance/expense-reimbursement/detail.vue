@@ -54,15 +54,22 @@ async function load() {
   try {
     bill.value = await getExpenseReimbursement(queryId.value);
     approvedAmount.value = Number(bill.value?.applyAmount || 0);
-    const page = await getCompanyBankAccountPage({
-      pageNo: 1,
-      pageSize: 100,
-      status: 0,
-    });
-    accountOptions.value = (page?.list || []).map((a) => ({
-      value: a.id,
-      label: `${a.accountName} ${a.accountNoMasked || ""}`,
-    }));
+    accountOptions.value = [];
+    if (bill.value?.status === 'WAIT_PAY') {
+      try {
+        const page = await getCompanyBankAccountPage({
+          pageNo: 1,
+          pageSize: 100,
+          status: 0,
+        });
+        accountOptions.value = (page?.list || []).map((a) => ({
+          value: a.id,
+          label: `${a.accountName} ${a.accountNoMasked || ""}`,
+        }));
+      } catch {
+        accountOptions.value = [];
+      }
+    }
   } finally {
     loading.value = false;
   }
