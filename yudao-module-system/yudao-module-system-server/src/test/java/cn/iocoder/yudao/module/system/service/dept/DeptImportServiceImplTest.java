@@ -181,6 +181,46 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    void parentByNameResolvesAndDuplicateNameUsesLatest() throws Exception {
+        List<DeptImportExcelVO> rows = List.of(
+                row("一级虚拟总管", "", "公司", "1", "启用", "CNY", null),
+                row("上海文枢网络科技有限公司", "一级虚拟总管", "公司", "2", "启用", "CNY", null),
+                row("二级虚拟分管01", "上海文枢网络科技有限公司", "部门", "3", "启用", null, null),
+                row("总经办", "二级虚拟分管01", "部门", "4", "启用", null, null),
+                row("综管部", "总经办", "部门", "5", "启用", null, null),
+                row("苏州拓巨信息科技有限公司", "一级虚拟总管", "公司", "2", "启用", "CNY", null),
+                row("总经办", "苏州拓巨信息科技有限公司", "部门", "3", "启用", null, null),
+                row("财务部", "总经办", "部门", "4", "启用", null, null)
+        );
+        byte[] bytes = writeExcel(rows);
+        try (MockedStatic<?> login = mockLogin()) {
+            DeptImportRespVO preview = deptImportService.validateImport(xlsxFile(bytes));
+            assertTrue(preview.getCanCommit(), () -> String.valueOf(preview.getErrors()));
+            assertEquals(8, preview.getCreateCount());
+            DeptImportRespVO committed = deptImportService.importDepts(xlsxFile(bytes), preview.getFileDigest());
+            assertTrue(committed.getCanCommit());
+            List<DeptDO> all = deptMapper.selectList(new DeptListReqVO());
+            assertEquals(8, all.size());
+            DeptDO wenshuZongjing = all.stream()
+                    .filter(d -> "综管部".equals(d.getName()))
+                    .findFirst().orElseThrow();
+            DeptDO finance = all.stream()
+                    .filter(d -> "财务部".equals(d.getName()))
+                    .findFirst().orElseThrow();
+            DeptDO firstZongjing = all.stream()
+                    .filter(d -> "总经办".equals(d.getName())
+                            && !d.getId().equals(finance.getParentId()))
+                    .findFirst().orElseThrow();
+            assertEquals(firstZongjing.getId(), wenshuZongjing.getParentId());
+            DeptDO secondZongjing = all.stream()
+                    .filter(d -> d.getId().equals(finance.getParentId()))
+                    .findFirst().orElseThrow();
+            assertEquals("总经办", secondZongjing.getName());
+            assertNotEquals(firstZongjing.getId(), secondZongjing.getId());
+        }
+    }
+
+    @Test
     void invalidLeaderStillRejectedWithoutCurrency() throws Exception {
         List<DeptImportExcelVO> rows = List.of(
                 row("文枢科技", "", "公司", "0", "启用", "EUR", "no_such_user")

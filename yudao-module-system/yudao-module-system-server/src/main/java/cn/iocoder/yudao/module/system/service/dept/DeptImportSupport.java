@@ -202,6 +202,32 @@ public final class DeptImportSupport {
         return s == null ? "" : new String(s.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
     }
 
+    public static String lastPathSegment(String path) {
+        if (StrUtil.isBlank(path)) {
+            return path;
+        }
+        int idx = path.lastIndexOf(PATH_SEPARATOR);
+        return idx < 0 ? path : path.substring(idx + 1);
+    }
+
+    /**
+     * 上级列：完整路径优先，否则按名称取最近一次出现的节点。
+     *
+     * @return 父节点完整路径；根返回空串；无法解析返回 null
+     */
+    public static String resolveParentRef(String parentRef,
+                                          Map<String, NormalizedRow> fileByFullPath,
+                                          Map<String, DeptDO> existingByPath,
+                                          Map<String, String> lastFullPathByName) {
+        if (StrUtil.isBlank(parentRef)) {
+            return "";
+        }
+        if (fileByFullPath.containsKey(parentRef) || existingByPath.containsKey(parentRef)) {
+            return parentRef;
+        }
+        return lastFullPathByName.get(parentRef);
+    }
+
     public record PathIndex(Map<String, DeptDO> uniquePaths, List<String> ambiguousPaths) {
     }
 
@@ -222,6 +248,10 @@ public final class DeptImportSupport {
             String phone,
             String email
     ) {
+        public NormalizedRow withPaths(String newParentPath, String newOrgPath) {
+            return new NormalizedRow(rowNumber, name, newParentPath, newOrgPath, orgType, sort, status,
+                    functionalCurrency, leaderUsername, leaderUserId, phone, email);
+        }
     }
 
 }

@@ -51,8 +51,10 @@ import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.buil
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.error;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.isBlankRow;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.isValidEmail;
+import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.lastPathSegment;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.orgTypeFromLabel;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.pathDepth;
+import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.resolveParentRef;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.sameAsExisting;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.sha256Hex;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.statusFromLabel;
@@ -248,7 +250,6 @@ public class DeptImportServiceImpl implements DeptImportService {
             }
         }
 
-        Map<String, DeptImportSupport.NormalizedRow> filePathRows = new LinkedHashMap<>();
         List<DeptImportSupport.NormalizedRow> normalizedAll = new ArrayList<>();
 
         for (RowWithNumber item : rows) {
@@ -347,48 +348,79 @@ public class DeptImportServiceImpl implements DeptImportService {
             DeptImportSupport.NormalizedRow normalized = new DeptImportSupport.NormalizedRow(
                     rowNumber, name, parentPath, orgPath, orgType, sort, status,
                     currency, leaderUsername, leaderUserId, phone, email);
-
-            if (filePathRows.containsKey(orgPath)) {
-                errors.add(error(rowNumber, orgPath, "orgPath", "PATH_DUPLICATE",
-                        "文件内组织路径重复（与第 " + filePathRows.get(orgPath).rowNumber() + " 行）"));
-                continue;
-            }
-            filePathRows.put(orgPath, normalized);
             normalizedAll.add(normalized);
         }
 
-        // 父路径解析 + 类型规则 + 既有冲突
+        Map<String, String> lastFullPathByName = new LinkedHashMap<>();
+        for (Map.Entry<String, DeptDO> e : existingByPath.entrySet()) {
+            lastFullPathByName.put(lastPathSegment(e.getKey()), e.getKey());
+        }
+        Map<String, DeptImportSupport.NormalizedRow> fileByFullPath = new LinkedHashMap<>();
+        Map<Integer, DeptImportSupport.NormalizedRow> resolvedByRow = new LinkedHashMap<>();
+        boolean progressed = true;
+        while (progressed) {
+            progressed = false;
+            for (DeptImportSupport.NormalizedRow row : normalizedAll) {
+                if (resolvedByRow.containsKey(row.rowNumber())) {
+                    continue;
+                }
+                String parentFull = resolveParentRef(row.parentPath(), fileByFullPath,
+                        existingByPath, lastFullPathByName);
+                if (parentFull == null) {
+                    continue;
+                }
+                String fullPath = buildPath(StrUtil.isBlank(parentFull) ? null : parentFull, row.name());
+                if (pathDepth(fullPath) > MAX_DEPTH) {
+                    errors.add(error(row.rowNumber(), fullPath, "orgPath", "DEPTH_LIMIT",
+                            "组织树深度不能超过 " + MAX_DEPTH + " 层"));
+                    resolvedByRow.put(row.rowNumber(), row);
+                    progressed = true;
+                    continue;
+                }
+                if (fileByFullPath.containsKey(fullPath)) {
+                    errors.add(error(row.rowNumber(), fullPath, "orgPath", "PATH_DUPLICATE",
+                            "文件内组织路径重复（与第 " + fileByFullPath.get(fullPath).rowNumber() + " 行）"));
+                    resolvedByRow.put(row.rowNumber(), row);
+                    progressed = true;
+                    continue;
+                }
+                String canonicalParent = StrUtil.isBlank(parentFull) ? null : parentFull;
+                DeptImportSupport.NormalizedRow resolved = row.withPaths(canonicalParent, fullPath);
+                fileByFullPath.put(fullPath, resolved);
+                lastFullPathByName.put(row.name(), fullPath);
+                resolvedByRow.put(row.rowNumber(), resolved);
+                progressed = true;
+            }
+        }
+        for (DeptImportSupport.NormalizedRow row : normalizedAll) {
+            if (!resolvedByRow.containsKey(row.rowNumber())) {
+                errors.add(error(row.rowNumber(), row.orgPath(), "parentPath", "PARENT_NOT_FOUND",
+                        "上级组织路径不存在：" + row.parentPath()));
+            }
+        }
+
         int createCount = 0;
         int skipCount = 0;
         List<DeptImportSupport.NormalizedRow> toCreate = new ArrayList<>();
-
-        // 多轮：确保乱序时父节点可解析（文件内父）
-        for (DeptImportSupport.NormalizedRow row : normalizedAll) {
-            String parentPath = row.parentPath();
-            boolean parentOk = true;
+        for (DeptImportSupport.NormalizedRow row : resolvedByRow.values()) {
+            if (row.orgPath() == null || errors.stream().anyMatch(e -> e.getRowNumber() == row.rowNumber())) {
+                continue;
+            }
             String parentOrgType = null;
-            if (StrUtil.isNotBlank(parentPath)) {
-                if (filePathRows.containsKey(parentPath)) {
-                    parentOrgType = filePathRows.get(parentPath).orgType();
-                } else if (existingByPath.containsKey(parentPath)) {
-                    parentOrgType = String.valueOf(existingByPath.get(parentPath).getOrgType());
-                } else {
-                    errors.add(error(row.rowNumber(), row.orgPath(), "parentPath", "PARENT_NOT_FOUND",
-                            "上级组织路径不存在：" + parentPath));
-                    parentOk = false;
+            if (StrUtil.isNotBlank(row.parentPath())) {
+                if (fileByFullPath.containsKey(row.parentPath())) {
+                    parentOrgType = fileByFullPath.get(row.parentPath()).orgType();
+                } else if (existingByPath.containsKey(row.parentPath())) {
+                    parentOrgType = String.valueOf(existingByPath.get(row.parentPath()).getOrgType());
                 }
             }
-            if (parentOk && OrgTypeEnum.COMPANY.getValue().equals(row.orgType())
-                    && StrUtil.isNotBlank(parentPath)
+            if (OrgTypeEnum.COMPANY.getValue().equals(row.orgType())
+                    && StrUtil.isNotBlank(row.parentPath())
                     && OrgTypeEnum.DEPARTMENT.getValue().equals(String.valueOf(parentOrgType))) {
                 errors.add(error(row.rowNumber(), row.orgPath(), "orgType", "PARENT_TYPE_INVALID",
                         "公司不能挂在部门下"));
-                parentOk = false;
-            }
-            if (!parentOk) {
                 continue;
             }
-
             DeptDO existing = existingByPath.get(row.orgPath());
             if (existing != null) {
                 if (sameAsExisting(row, existing)) {
