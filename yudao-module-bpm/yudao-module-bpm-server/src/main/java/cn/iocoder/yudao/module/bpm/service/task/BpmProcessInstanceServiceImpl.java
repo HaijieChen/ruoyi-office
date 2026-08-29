@@ -612,13 +612,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
             if (BpmnModelUtils.isSequentialUserTask(flowNode)) {
                 List<Long> candidateUserIds = getTaskCandidateUserList(bpmnModel, flowNode.getId(),
                         startUserId, processDefinition.getId(), processVariables);
-                // 截取当前审批人位置后面的候选人，不包含当前审批人
-                ActivityNodeTask approvalTaskInfo = CollUtil.getFirst(activityNode.getTasks());
-                Assert.notNull(approvalTaskInfo, "任务不能为空");
-                int index = CollUtil.indexOf(candidateUserIds,
-                        userId -> ObjectUtils.equalsAny(userId, approvalTaskInfo.getOwner(),
-                                approvalTaskInfo.getAssignee())); // 委派或者向前加签情况，需要先比较 owner
-                activityNode.setCandidateUserIds(CollUtil.sub(candidateUserIds, index + 1, candidateUserIds.size()));
+                activityNode.setCandidateUserIds(
+                        sliceSequentialCandidatesAfterCurrent(candidateUserIds, activityNode.getTasks()));
             }
             if (BpmSimpleModelNodeTypeEnum.CHILD_PROCESS.getType().equals(activityNode.getNodeType())) {
                 activityNode.setProcessInstanceId(firstActivity.getCalledProcessInstanceId());
@@ -758,6 +753,41 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         Set<Long> userIds = taskCandidateInvoker.calculateUsersByActivity(bpmnModel, activityId,
                 startUserId, processDefinitionId, processVariables);
         return new ArrayList<>(userIds);
+    }
+
+    /**
+     * 依次审批：从「当前进行中」任务之后截候选人。不能用已办完的第一个人，否则后续人会整段重画。
+     */
+    static List<Long> sliceSequentialCandidatesAfterCurrent(List<Long> candidateUserIds,
+                                                            List<ActivityNodeTask> tasks) {
+        if (CollUtil.isEmpty(candidateUserIds)) {
+            return candidateUserIds;
+        }
+        Set<Long> shownUserIds = new HashSet<>();
+        ActivityNodeTask current = null;
+        if (CollUtil.isNotEmpty(tasks)) {
+            for (ActivityNodeTask task : tasks) {
+                CollUtil.addIfAbsent(shownUserIds, task.getOwner());
+                CollUtil.addIfAbsent(shownUserIds, task.getAssignee());
+                if (current == null && ObjectUtils.equalsAny(task.getStatus(),
+                        BpmTaskStatusEnum.RUNNING.getStatus(), BpmTaskStatusEnum.WAIT.getStatus())) {
+                    current = task;
+                }
+            }
+            if (current == null) {
+                current = CollUtil.getLast(tasks);
+            }
+        }
+        int index = -1;
+        if (current != null) {
+            ActivityNodeTask currentTask = current;
+            index = CollUtil.indexOf(candidateUserIds,
+                    userId -> ObjectUtils.equalsAny(userId, currentTask.getOwner(), currentTask.getAssignee()));
+        }
+        List<Long> sliced = index < 0
+                ? new ArrayList<>(candidateUserIds)
+                : CollUtil.sub(candidateUserIds, index + 1, candidateUserIds.size());
+        return CollectionUtils.filterList(sliced, userId -> userId != null && !shownUserIds.contains(userId));
     }
 
     @Override
