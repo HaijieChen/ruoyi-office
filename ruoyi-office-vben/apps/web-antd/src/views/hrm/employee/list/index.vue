@@ -164,6 +164,19 @@ function pendingGenerateIds(rows: EmployeeArchiveApi.EmployeeArchive[]) {
     .map((item) => item.id as number);
 }
 
+async function confirmSkipGenerated(skipped: number, pending: number) {
+  if (skipped <= 0) {
+    return true;
+  }
+  return new Promise<boolean>((resolve) => {
+    Modal.confirm({
+      title: `将跳过 ${skipped} 名已生成账号的员工，为 ${pending} 名生成？`,
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
+  });
+}
+
 /** 当前筛选下尚未生成账号的员工 */
 async function collectPendingUserIds() {
   const formValues = await gridApi.formApi.getValues();
@@ -203,18 +216,22 @@ async function doBatchGenerateUser(ids: number[]) {
   }
 }
 
-/** 批量生成用户：已勾选则只生成未建账号的；未勾选则为当前筛选下尚未生成账号的员工生成 */
+/** 批量生成用户：勾选不禁用；提交时丢掉已有账号。未勾选则按筛选未生成批量生成 */
 async function handleBatchGenerateUser() {
   const records = (gridApi.grid.getCheckboxRecords() ??
     []) as EmployeeArchiveApi.EmployeeArchive[];
-  const checkedPending = pendingGenerateIds(records);
   if (!isEmpty(checkedIds.value) || !isEmpty(records)) {
+    const checkedPending = pendingGenerateIds(records);
+    const skipped = records.length - checkedPending.length;
     if (isEmpty(checkedPending)) {
       message.warning(
-        isEmpty(checkedIds.value)
+        isEmpty(records) && isEmpty(checkedIds.value)
           ? '请先选择要生成用户的记录'
           : '所选员工均已生成账号',
       );
+      return;
+    }
+    if (!(await confirmSkipGenerated(skipped, checkedPending.length))) {
       return;
     }
     await doBatchGenerateUser(checkedPending);
@@ -276,11 +293,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
           });
         },
       },
-    },
-    checkboxConfig: {
-      checkMethod: ({ row }: { row: EmployeeArchiveApi.EmployeeArchive }) =>
-        !row.userGenerated,
-      highlight: true,
     },
     rowConfig: {
       keyField: 'id',
