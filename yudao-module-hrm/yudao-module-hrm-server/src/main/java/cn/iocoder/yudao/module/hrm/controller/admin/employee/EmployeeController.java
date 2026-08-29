@@ -185,8 +185,9 @@ public class EmployeeController {
     @Operation(summary = "为员工生成系统用户")
     @Parameter(name = "id", description = "员工编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create')")
-    public CommonResult<Long> generateUserForEmployee(@RequestParam("id") Long id) {
-        Long userId = employeeArchiveService.generateUserForEmployee(id);
+    public CommonResult<Long> generateUserForEmployee(@RequestParam("id") Long id,
+                                                      @RequestParam(value = "roleIds", required = false) List<Long> roleIds) {
+        Long userId = employeeArchiveService.generateUserForEmployee(id, roleIds);
         return success(userId);
     }
 
@@ -194,11 +195,12 @@ public class EmployeeController {
     @Operation(summary = "批量为员工生成系统用户")
     @Parameter(name = "ids", description = "员工编号列表", required = true, example = "[1,2,3]")
     @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create')")
-    public CommonResult<Boolean> batchGenerateUserForEmployee(@RequestParam("ids") String ids) {
+    public CommonResult<Boolean> batchGenerateUserForEmployee(@RequestParam("ids") String ids,
+                                                              @RequestParam(value = "roleIds", required = false) List<Long> roleIds) {
         List<Long> idList = List.of(ids.split(",")).stream()
                 .map(Long::valueOf)
                 .collect(java.util.stream.Collectors.toList());
-        employeeArchiveService.batchGenerateUserForEmployee(idList);
+        employeeArchiveService.batchGenerateUserForEmployee(idList, roleIds);
         return success(true);
     }
 

@@ -282,17 +282,24 @@ export function importEmployeeRoster(file: File) {
   );
 }
 
+function roleIdsQuery(roleIds?: number[]) {
+  return roleIds?.length ? `&roleIds=${roleIds.join(',')}` : '';
+}
+
 /** 为员工生成系统用户 */
-export function generateUserForEmployee(id: number) {
+export function generateUserForEmployee(id: number, roleIds?: number[]) {
   return requestClient.post<number>(
-    `/hrm/employee-archive/generate-user?id=${id}`,
+    `/hrm/employee-archive/generate-user?id=${id}${roleIdsQuery(roleIds)}`,
   );
 }
 
 /** 批量为员工生成系统用户 */
-export function batchGenerateUserForEmployee(ids: number[]) {
+export function batchGenerateUserForEmployee(
+  ids: number[],
+  roleIds?: number[],
+) {
   return requestClient.post<boolean>(
-    `/hrm/employee-archive/batch-generate-user?ids=${ids.join(',')}`,
+    `/hrm/employee-archive/batch-generate-user?ids=${ids.join(',')}${roleIdsQuery(roleIds)}`,
   );
 }
 

@@ -91,15 +91,15 @@ public interface EmployeeService {
      * @param employeeId 员工编号
      * @return 生成的用户编号
      */
-    Long generateUserForEmployee(Long employeeId);
+    Long generateUserForEmployee(Long employeeId, java.util.Collection<Long> roleIds);
 
     /**
      * 批量为员工生成系统用户
      *
      * @param employeeIds 员工编号列表
-     * @return 生成结果（成功数量、失败数量）
+     * @param roleIds 可选角色，整批共用；空则只建账号
      */
-    void batchGenerateUserForEmployee(List<Long> employeeIds);
+    void batchGenerateUserForEmployee(List<Long> employeeIds, java.util.Collection<Long> roleIds);
 
     /**
      * 获得文枢花名册导出列表（52 列）

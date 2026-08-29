@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.annotation.Resource;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -24,6 +25,12 @@ public class PermissionApiImpl implements PermissionApi {
     @Override
     public CommonResult<Set<Long>> getUserRoleIdListByRoleIds(Collection<Long> roleIds) {
         return success(permissionService.getUserRoleIdListByRoleId(roleIds));
+    }
+
+    @Override
+    public CommonResult<Boolean> assignUserRole(Long userId, Collection<Long> roleIds) {
+        permissionService.assignUserRole(userId, roleIds == null ? Set.of() : new HashSet<>(roleIds));
+        return success(true);
     }
 
     @Override
