@@ -189,7 +189,7 @@ const rules: Record<string, Rule[]> = {
   ],
   currency: [{ required: true, message: '请选择币种' }],
   invoiceCompanyDeptId: [
-    { required: true, message: '请选择开票公司', trigger: 'change' },
+    { required: true, message: '请选择主体公司', trigger: 'change' },
   ],
   invoiceType: [
     { required: true, message: '请选择发票类型', trigger: 'change' },
@@ -676,7 +676,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
     throw new Error('validation');
   }
   if (!formData.value.invoiceCompanyDeptId) {
-    message.warning('请选择开票公司');
+    message.warning('请选择主体公司');
     throw new Error('validation');
   }
   onCompanyChange(formData.value.invoiceCompanyDeptId);
@@ -746,6 +746,24 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
       :label-col="{ span: 5 }"
       :wrapper-col="{ span: 18 }"
     >
+      <Form.Item label="主体公司" name="invoiceCompanyDeptId" required>
+        <Select
+          v-model:value="formData.invoiceCompanyDeptId"
+          class="w-full"
+          show-search
+          allow-clear
+          :loading="loadingCompany"
+          :options="companyOptions"
+          option-filter-prop="label"
+          placeholder="请选择主体公司"
+          @change="(v: any) => onCompanyChange(v)"
+          @dropdown-visible-change="
+            (open: boolean) => {
+              if (open && companyOptions.length === 0) loadCompanyOptions();
+            }
+          "
+        />
+      </Form.Item>
       <Form.Item label="业务人员" name="businessStaffUserId">
         <Select
           v-model:value="formData.businessStaffUserId"
@@ -806,24 +824,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             { label: '美元 USD', value: 'USD' },
             { label: '港币 HKD', value: 'HKD' },
           ]"
-        />
-      </Form.Item>
-      <Form.Item label="开票公司" name="invoiceCompanyDeptId" required>
-        <Select
-          v-model:value="formData.invoiceCompanyDeptId"
-          class="w-full"
-          show-search
-          allow-clear
-          :loading="loadingCompany"
-          :options="companyOptions"
-          option-filter-prop="label"
-          placeholder="请选择组织架构中的公司"
-          @change="(v: any) => onCompanyChange(v)"
-          @dropdown-visible-change="
-            (open: boolean) => {
-              if (open && companyOptions.length === 0) loadCompanyOptions();
-            }
-          "
         />
       </Form.Item>
       <Form.Item label="发票类型" name="invoiceType" required>

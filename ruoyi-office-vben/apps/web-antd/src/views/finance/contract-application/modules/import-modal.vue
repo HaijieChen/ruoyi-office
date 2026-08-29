@@ -90,7 +90,7 @@ async function handleDownloadTemplate() {
         type="info"
         show-icon
         message="请先下载导入模板，按表头填写后上传"
-        description="导入后即为已通过，不走审批。对方客商按名称精确匹配已启用档案；签约主体按公司名称精确匹配；申请人填系统登录账号。合同业务单号已存在则该行失败。"
+        description="导入后即为已通过，不走审批。对方客商按名称精确匹配已启用档案；主体公司按公司名称精确匹配；申请人填系统登录账号。合同业务单号已存在则该行失败。"
       />
 
       <Upload

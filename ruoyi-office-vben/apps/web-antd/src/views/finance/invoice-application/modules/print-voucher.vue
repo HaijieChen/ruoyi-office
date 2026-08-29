@@ -21,7 +21,7 @@ const fields = computed(() => [
   { label: '购方税号', value: props.detail?.buyerTaxNo },
   { label: '地址电话', value: props.detail?.buyerAddressPhone, span: 2 as const },
   { label: '开户行账号', value: props.detail?.buyerBankAccount, span: 2 as const },
-  { label: '开票公司', value: props.detail?.invoiceCompany },
+  { label: '主体公司', value: props.detail?.invoiceCompany },
   { label: '发票类型', value: props.detail?.invoiceType },
   { label: '产品类型', value: props.detail?.taxContent },
   { label: '创建时间', value: displayDateTime(props.detail?.createTime) },

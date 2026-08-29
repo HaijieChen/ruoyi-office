@@ -196,7 +196,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         fieldName: 'signCompany',
-        label: '签约主体',
+        label: '主体公司',
         component: 'Input',
       },
     ],
@@ -205,7 +205,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: [
       { field: 'applicationNo', title: '业务单号', minWidth: 150 },
       { field: 'counterpartyName', title: '对方', minWidth: 120 },
-      { field: 'signCompany', title: '签约主体', minWidth: 100 },
+      { field: 'signCompany', title: '主体公司', minWidth: 100 },
       { field: 'fileType', title: '文件类型', minWidth: 110 },
       { field: 'fileName', title: '文件名称', minWidth: 140 },
       {

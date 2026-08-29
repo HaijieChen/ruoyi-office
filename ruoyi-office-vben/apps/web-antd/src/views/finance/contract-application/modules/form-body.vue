@@ -117,7 +117,7 @@ const rules = computed<Record<string, Rule[]>>(() => ({
     { required: true, message: '请选择对方客商', trigger: 'change' },
   ],
   entityCompanyDeptId: [
-    { required: true, message: '请选择签约主体', trigger: 'change' },
+    { required: true, message: '请选择主体公司', trigger: 'change' },
   ],
   currency: [
     {
@@ -365,6 +365,27 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     :label-col="{ span: 7 }"
     :wrapper-col="{ span: 15 }"
   >
+    <Form.Item label="主体公司" name="entityCompanyDeptId">
+      <Select
+        v-model:value="formData.entityCompanyDeptId"
+        class="w-full"
+        show-search
+        option-filter-prop="label"
+        :loading="loadingCompany"
+        :options="companyOptions"
+        placeholder="请选择主体公司"
+        @change="(v: any) => {
+          if (formData.amountNa) {
+            return;
+          }
+          void defaultCurrencyFromCompanyAccounts(Number(v)).then((currency) => {
+            if (!formData.amountNa) {
+              formData.currency = currency;
+            }
+          });
+        }"
+      />
+    </Form.Item>
     <Form.Item label="业务人员" name="businessStaffUserId">
       <Select
         v-model:value="formData.businessStaffUserId"
@@ -409,27 +430,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           { label: '港币 HKD', value: 'HKD' },
         ]"
         placeholder="CNY/USD/HKD"
-      />
-    </Form.Item>
-    <Form.Item label="签约主体" name="entityCompanyDeptId">
-      <Select
-        v-model:value="formData.entityCompanyDeptId"
-        class="w-full"
-        show-search
-        option-filter-prop="label"
-        :loading="loadingCompany"
-        :options="companyOptions"
-        placeholder="请选择签约主体公司"
-        @change="(v: any) => {
-          if (formData.amountNa) {
-            return;
-          }
-          void defaultCurrencyFromCompanyAccounts(Number(v)).then((currency) => {
-            if (!formData.amountNa) {
-              formData.currency = currency;
-            }
-          });
-        }"
       />
     </Form.Item>
     <Form.Item label="文件类型" name="fileType">

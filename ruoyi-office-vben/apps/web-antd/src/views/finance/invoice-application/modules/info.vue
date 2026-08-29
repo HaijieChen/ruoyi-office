@@ -107,7 +107,7 @@ const lineColumns = [
     width: 120,
   },
   {
-    title: '开票公司',
+    title: '主体公司',
     dataIndex: 'invoiceCompany',
     key: 'invoiceCompany',
     ellipsis: true,
@@ -202,7 +202,7 @@ const [Modal, modalApi] = useVbenModal({
           <DescriptionsItem label="开户行账号" :span="2">
             {{ detail.buyerBankAccount || '-' }}
           </DescriptionsItem>
-          <DescriptionsItem label="开票公司">
+          <DescriptionsItem label="主体公司">
             {{ detail.invoiceCompany || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="发票类型">

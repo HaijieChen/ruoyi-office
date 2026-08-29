@@ -433,7 +433,7 @@ watch(
           <DescriptionsItem label="对方">
             {{ detail.counterpartyName || '-' }}
           </DescriptionsItem>
-          <DescriptionsItem label="签约主体">
+          <DescriptionsItem label="主体公司">
             {{ detail.entityCompanyName || detail.signCompany || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="文件名称" :span="2">
