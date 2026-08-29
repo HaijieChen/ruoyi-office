@@ -158,6 +158,12 @@ async function handleGenerateUser(row: EmployeeArchiveApi.EmployeeArchive) {
   }
 }
 
+function pendingGenerateIds(rows: EmployeeArchiveApi.EmployeeArchive[]) {
+  return rows
+    .filter((item) => !item.userGenerated && item.id)
+    .map((item) => item.id as number);
+}
+
 /** 当前筛选下尚未生成账号的员工 */
 async function collectPendingUserIds() {
   const formValues = await gridApi.formApi.getValues();
@@ -197,10 +203,21 @@ async function doBatchGenerateUser(ids: number[]) {
   }
 }
 
-/** 批量生成用户：已勾选则生成勾选的；未勾选则为当前筛选下尚未生成账号的员工生成 */
+/** 批量生成用户：已勾选则只生成未建账号的；未勾选则为当前筛选下尚未生成账号的员工生成 */
 async function handleBatchGenerateUser() {
-  if (!isEmpty(checkedIds.value)) {
-    await doBatchGenerateUser(checkedIds.value);
+  const records = (gridApi.grid.getCheckboxRecords() ??
+    []) as EmployeeArchiveApi.EmployeeArchive[];
+  const checkedPending = pendingGenerateIds(records);
+  if (!isEmpty(checkedIds.value) || !isEmpty(records)) {
+    if (isEmpty(checkedPending)) {
+      message.warning(
+        isEmpty(checkedIds.value)
+          ? '请先选择要生成用户的记录'
+          : '所选员工均已生成账号',
+      );
+      return;
+    }
+    await doBatchGenerateUser(checkedPending);
     return;
   }
   const ids = await collectPendingUserIds();
@@ -259,6 +276,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
           });
         },
       },
+    },
+    checkboxConfig: {
+      checkMethod: ({ row }: { row: EmployeeArchiveApi.EmployeeArchive }) =>
+        !row.userGenerated,
+      highlight: true,
     },
     rowConfig: {
       keyField: 'id',

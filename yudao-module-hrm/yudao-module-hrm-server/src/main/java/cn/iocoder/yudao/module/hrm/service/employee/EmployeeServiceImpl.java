@@ -1638,8 +1638,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             throw exception(EMPLOYEE_ARCHIVE_NOT_EXISTS);
         }
 
-        // 2. 校验是否已生成用户
-        if (employee.getUserGenerated() != null && employee.getUserGenerated() && employee.getUserId() != null) {
+        if (alreadyHasUser(employee)) {
             throw new RuntimeException("该员工已生成用户，无需重复生成");
         }
 
@@ -1677,18 +1676,25 @@ public class EmployeeServiceImpl implements EmployeeService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void batchGenerateUserForEmployee(List<Long> employeeIds, Collection<Long> roleIds) {
         if (CollUtil.isEmpty(employeeIds)) {
             return;
         }
         for (Long employeeId : employeeIds) {
             try {
-                generateUserForEmployee(employeeId, roleIds);
+                EmployeeDO employee = employeeArchiveMapper.selectById(employeeId);
+                if (employee == null || alreadyHasUser(employee)) {
+                    continue;
+                }
+                getSelf().generateUserForEmployee(employeeId, roleIds);
             } catch (Exception e) {
-                // 记录错误，继续处理下一个
+                log.warn("[batchGenerateUserForEmployee][employeeId({}) 生成失败]", employeeId, e);
             }
         }
+    }
+
+    private static boolean alreadyHasUser(EmployeeDO employee) {
+        return Boolean.TRUE.equals(employee.getUserGenerated()) && employee.getUserId() != null;
     }
 
     private void syncEmployeeToUser(EmployeeSaveReqVO employee, Long userId) {

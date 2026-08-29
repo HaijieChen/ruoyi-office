@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.hrm.service.employee;
 import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentSaveReqVO;
 import cn.iocoder.yudao.common.server.attachment.dal.dataobject.AttachmentDO;
 import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
+import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
@@ -723,6 +724,37 @@ class EmployeeServiceImplTest {
         employeeService.generateUserForEmployee(1L, List.of());
 
         verify(permissionApi, never()).assignUserRole(any(), any());
+    }
+
+    @Test
+    void batchGenerateSkipsAlreadyGeneratedAndCreatesTheRest() {
+        EmployeeDO already = new EmployeeDO();
+        already.setId(403L);
+        already.setEmployeeNo("10000089");
+        already.setName("周俊升");
+        already.setUserGenerated(true);
+        already.setUserId(220L);
+        EmployeeDO pending = new EmployeeDO();
+        pending.setId(404L);
+        pending.setEmployeeNo("10000090");
+        pending.setName("赵春华");
+        pending.setUserGenerated(false);
+        when(employeeArchiveMapper.selectById(403L)).thenReturn(already);
+        when(employeeArchiveMapper.selectById(404L)).thenReturn(pending);
+        when(adminUserApi.createUser(any(AdminUserCreateReqDTO.class))).thenReturn(CommonResult.success(221L));
+
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+            employeeService.batchGenerateUserForEmployee(List.of(403L, 404L), List.of());
+        }
+
+        verify(adminUserApi, never()).createUser(argThat(req -> "10000089".equals(req.getUsername())));
+        verify(adminUserApi).createUser(argThat(req -> "10000090".equals(req.getUsername())));
+        ArgumentCaptor<EmployeeDO> updateCaptor = ArgumentCaptor.forClass(EmployeeDO.class);
+        verify(employeeArchiveMapper).updateById(updateCaptor.capture());
+        assertEquals(404L, updateCaptor.getValue().getId());
+        assertEquals(221L, updateCaptor.getValue().getUserId());
+        assertTrue(updateCaptor.getValue().getUserGenerated());
     }
 
 }
