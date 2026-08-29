@@ -55,13 +55,16 @@ async function load() {
     bill.value = await getExpenseReimbursement(queryId.value);
     approvedAmount.value = Number(bill.value?.applyAmount || 0);
     accountOptions.value = [];
-    if (bill.value?.status === 'WAIT_PAY') {
+    if (bill.value?.status === 'WAIT_PAY' && props.isApproval !== false) {
       try {
-        const page = await getCompanyBankAccountPage({
-          pageNo: 1,
-          pageSize: 100,
-          status: 0,
-        });
+        const page = await getCompanyBankAccountPage(
+          {
+            pageNo: 1,
+            pageSize: 100,
+            status: 0,
+          },
+          { hideErrorMessage: true },
+        );
         accountOptions.value = (page?.list || []).map((a) => ({
           value: a.id,
           label: `${a.accountName} ${a.accountNoMasked || ""}`,
@@ -173,7 +176,7 @@ onMounted(load);
           <Input v-model:value="financeComment" placeholder="审核意见" />
           <Button type="primary" @click="onApprove">提交实报金额</Button>
         </div>
-        <div v-if="bill.status === 'WAIT_PAY'" class="mt-6 space-y-2">
+        <div v-if="bill.status === 'WAIT_PAY' && isApproval !== false" class="mt-6 space-y-2">
           <div class="font-medium">出纳登记</div>
           <Select v-model:value="companyBankAccountId" class="w-72" :options="accountOptions" placeholder="公司银行账户" />
           <DatePicker v-model:value="payDate" />

@@ -20,8 +20,10 @@ export namespace SystemDeptApi {
 }
 
 /** 查询部门（精简)列表 */
-export async function getSimpleDeptList() {
-  return requestClient.get<SystemDeptApi.Dept[]>('/system/dept/simple-list');
+export async function getSimpleDeptList(options?: { hideErrorMessage?: boolean }) {
+  return requestClient.get<SystemDeptApi.Dept[]>('/system/dept/simple-list', {
+    hideErrorMessage: options?.hideErrorMessage,
+  });
 }
 
 /** 查询部门列表 */

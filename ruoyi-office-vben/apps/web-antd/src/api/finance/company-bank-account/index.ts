@@ -44,10 +44,11 @@ export namespace FinanceCompanyBankAccountApi {
 
 export function getCompanyBankAccountPage(
   params: FinanceCompanyBankAccountApi.PageQuery,
+  options?: { hideErrorMessage?: boolean },
 ) {
   return requestClient.get<PageResult<FinanceCompanyBankAccountApi.Account>>(
     '/finance/company-bank-account/page',
-    { params },
+    { params, hideErrorMessage: options?.hideErrorMessage },
   );
 }
 
@@ -91,6 +92,6 @@ export function importCompanyBankAccount(file: File) {
 export function getCompanyBankAccountSimpleList(entityCompanyDeptId: number) {
   return requestClient.get<FinanceCompanyBankAccountApi.Account[]>(
     '/finance/company-bank-account/simple-list',
-    { params: { entityCompanyDeptId } },
+    { params: { entityCompanyDeptId }, hideErrorMessage: true },
   );
 }

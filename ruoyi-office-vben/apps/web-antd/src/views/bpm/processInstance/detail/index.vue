@@ -300,7 +300,7 @@ async function resolveStartEmployment() {
     return;
   }
   try {
-    const depts = await getSimpleDeptList();
+    const depts = await getSimpleDeptList({ hideErrorMessage: true });
     const nameOf = (id?: number) =>
       depts?.find((d) => Number(d.id) === id)?.name || (id != null ? String(id) : '');
     const companyName = nameOf(companyId);
@@ -398,8 +398,11 @@ const canShare = computed(() => {
 const userOptions = ref<SystemUserApi.User[]>([]); // 用户列表
 onMounted(async () => {
   await getDetail();
-  // 获得用户列表
-  userOptions.value = await getSimpleUserList();
+  try {
+    userOptions.value = await getSimpleUserList({ hideErrorMessage: true });
+  } catch {
+    userOptions.value = [];
+  }
 });
 </script>
 

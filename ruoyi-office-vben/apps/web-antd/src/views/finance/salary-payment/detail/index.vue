@@ -318,7 +318,9 @@ async function handleGoResubmit() {
 }
 
 watch(payEntityCompanyDeptId, (v) => {
-  void loadAccounts(v);
+  if (isCashierNode.value && resolvedTaskId.value) {
+    void loadAccounts(v);
+  }
 });
 
 onMounted(() => {
