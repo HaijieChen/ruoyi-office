@@ -95,7 +95,7 @@ async function runValidate() {
     preview.value = await validateDeptImport(selectedFile.value);
     if (preview.value.canCommit) {
       message.success(
-        `校验通过：将新增 ${preview.value.createCount}，跳过 ${preview.value.skipCount}`,
+        `校验通过：将新增 ${preview.value.createCount}，更新 ${preview.value.updateCount ?? 0}，跳过 ${preview.value.skipCount}`,
       );
     } else {
       message.warning(
@@ -122,7 +122,7 @@ async function runCommit() {
     preview.value = result;
     if (result.canCommit) {
       message.success(
-        `导入完成：新增 ${result.createCount}，跳过 ${result.skipCount}`,
+        `导入完成：新增 ${result.createCount}，更新 ${result.updateCount ?? 0}，跳过 ${result.skipCount}`,
       );
       emit('success');
       await modalApi.close();
@@ -200,8 +200,8 @@ const confirmLabel = computed(() => {
       <Alert
         type="info"
         show-icon
-        message="仅新增公司/部门树：校验预览通过后整批原子提交"
-        description="同路径且字段一致则跳过；字段冲突、缺父节点、公司挂部门等整批零写入。不含岗位/用户/员工挂靠。单文件 ≤1000 行 / 2MB / 深度 20 / 仅 xlsx。"
+        message="新增或更新公司/部门树：校验预览通过后整批原子提交"
+        description="同路径且字段一致则跳过；不一致则更新（不移动、不删除）。负责人/电话/邮箱为空时保留原值。缺父节点、公司挂部门等仍整批零写入。单文件 ≤1000 行 / 2MB / 深度 20 / 仅 xlsx。"
       />
 
       <Upload
@@ -221,7 +221,7 @@ const confirmLabel = computed(() => {
           show-icon
           :message="
             preview.canCommit
-              ? `可提交：共 ${preview.totalRows} 行，新增 ${preview.createCount}，跳过 ${preview.skipCount}`
+              ? `可提交：共 ${preview.totalRows} 行，新增 ${preview.createCount}，更新 ${preview.updateCount ?? 0}，跳过 ${preview.skipCount}`
               : `不可提交：共 ${preview.totalRows} 行，错误 ${preview.errors?.length ?? 0} 项`
           "
         />

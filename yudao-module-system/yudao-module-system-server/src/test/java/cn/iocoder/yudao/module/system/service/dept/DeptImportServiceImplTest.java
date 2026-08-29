@@ -128,7 +128,7 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    void existingConflictZeroWrite() throws Exception {
+    void existingPathUpdatesFieldsAndKeepsBlankLeader() throws Exception {
         DeptDO existing = new DeptDO();
         existing.setName("文枢科技");
         existing.setParentId(DeptDO.PARENT_ID_ROOT);
@@ -136,20 +136,27 @@ public class DeptImportServiceImplTest extends BaseDbUnitTest {
         existing.setStatus(0);
         existing.setOrgType("1");
         existing.setFunctionalCurrency("CNY");
+        existing.setLeaderUserId(9001L);
+        existing.setPhone("13800000000");
         deptMapper.insert(existing);
         List<DeptImportExcelVO> rows = List.of(
-                row("文枢科技", "", "公司", "9", "启用", "USD", null) // 显示顺序不同
+                row("文枢科技", "", "公司", "9", "启用", "CNY", null)
         );
         byte[] bytes = writeExcel(rows);
         try (MockedStatic<?> login = mockLogin()) {
             DeptImportRespVO preview = deptImportService.validateImport(xlsxFile(bytes));
-            assertFalse(preview.getCanCommit());
-            assertTrue(preview.getErrors().stream().anyMatch(e -> "EXISTING_CONFLICT".equals(e.getCode())));
+            assertTrue(preview.getCanCommit(), () -> String.valueOf(preview.getErrors()));
+            assertEquals(0, preview.getCreateCount());
+            assertEquals(1, preview.getUpdateCount());
 
-            long before = deptMapper.selectList(new DeptListReqVO()).size();
             DeptImportRespVO committed = deptImportService.importDepts(xlsxFile(bytes), preview.getFileDigest());
-            assertFalse(committed.getCanCommit());
-            assertEquals(before, deptMapper.selectList(new DeptListReqVO()).size());
+            assertTrue(committed.getCanCommit());
+            assertEquals(1, committed.getUpdateCount());
+            DeptDO after = deptMapper.selectById(existing.getId());
+            assertEquals(9, after.getSort());
+            assertEquals(9001L, after.getLeaderUserId());
+            assertEquals("13800000000", after.getPhone());
+            assertEquals("CNY", after.getFunctionalCurrency());
         }
     }
 

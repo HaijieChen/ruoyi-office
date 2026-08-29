@@ -28,6 +28,9 @@ public class DeptImportRespVO {
     @Schema(description = "跳过数量（同路径且字段一致）", example = "4")
     private Integer skipCount;
 
+    @Schema(description = "将更新/已更新数量", example = "3")
+    private Integer updateCount;
+
     @Schema(description = "是否可提交（无错误时为 true）", example = "true")
     private Boolean canCommit;
 

@@ -81,6 +81,7 @@ export namespace SystemDeptImportApi {
     totalRows: number;
     createCount: number;
     skipCount: number;
+    updateCount?: number;
     canCommit: boolean;
     errors: ImportError[];
   }

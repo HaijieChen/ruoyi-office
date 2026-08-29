@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportErrorRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportExcelVO;
+import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.enums.OrgTypeEnum;
 
@@ -138,13 +139,32 @@ public final class DeptImportSupport {
         if (!Objects.equals(row.status(), existing.getStatus())) {
             return false;
         }
-        if (!Objects.equals(row.leaderUserId(), existing.getLeaderUserId())) {
+        if (row.leaderUserId() != null && !Objects.equals(row.leaderUserId(), existing.getLeaderUserId())) {
             return false;
         }
-        if (!Objects.equals(trimToNull(row.phone()), trimToNull(existing.getPhone()))) {
+        if (trimToNull(row.phone()) != null
+                && !Objects.equals(trimToNull(row.phone()), trimToNull(existing.getPhone()))) {
             return false;
         }
-        return Objects.equals(trimToNull(row.email()), trimToNull(existing.getEmail()));
+        if (trimToNull(row.email()) != null
+                && !Objects.equals(trimToNull(row.email()), trimToNull(existing.getEmail()))) {
+            return false;
+        }
+        return true;
+    }
+
+    /** Excel 空负责人/电话/邮箱保留库中原值；不改上级。 */
+    public static void applyImportUpdate(NormalizedRow row, DeptDO existing, DeptSaveReqVO updateReq) {
+        updateReq.setId(existing.getId());
+        updateReq.setName(row.name());
+        updateReq.setParentId(existing.getParentId());
+        updateReq.setSort(row.sort());
+        updateReq.setStatus(row.status());
+        updateReq.setOrgType(row.orgType());
+        updateReq.setFunctionalCurrency(existing.getFunctionalCurrency());
+        updateReq.setLeaderUserId(row.leaderUserId() != null ? row.leaderUserId() : existing.getLeaderUserId());
+        updateReq.setPhone(trimToNull(row.phone()) != null ? row.phone() : existing.getPhone());
+        updateReq.setEmail(trimToNull(row.email()) != null ? row.email() : existing.getEmail());
     }
 
     public static DeptImportErrorRespVO error(int rowNumber, String orgPath, String field, String code, String message) {

@@ -144,7 +144,7 @@ public class DeptController {
     }
 
     @PostMapping("/import")
-    @Operation(summary = "导入组织架构（仅新增，整批原子提交）")
+    @Operation(summary = "导入组织架构（新增或同路径更新，整批原子提交）")
     @PreAuthorize("@ss.hasPermission('system:dept:import')")
     @ApiAccessLog(operateType = IMPORT)
     public CommonResult<DeptImportRespVO> importDept(@RequestParam("file") MultipartFile file,

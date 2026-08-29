@@ -55,13 +55,14 @@ import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.last
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.orgTypeFromLabel;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.pathDepth;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.resolveParentRef;
+import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.applyImportUpdate;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.sameAsExisting;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.sha256Hex;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.statusFromLabel;
 import static cn.iocoder.yudao.module.system.service.dept.DeptImportSupport.trimToNull;
 
 /**
- * 组织架构导入：仅新增 + 校验预览后整批原子提交。
+ * 组织架构导入：新增或同路径更新 + 校验预览后整批原子提交。
  */
 @Service
 @Validated
@@ -109,7 +110,6 @@ public class DeptImportServiceImpl implements DeptImportService {
             if (!result.errors().isEmpty()) {
                 return toResp(result, parsed.digest(), false);
             }
-            // 按路径深度父到子创建
             List<DeptImportSupport.NormalizedRow> toCreate = result.toCreate().stream()
                     .sorted(Comparator.comparingInt(r -> pathDepth(r.orgPath())))
                     .toList();
@@ -125,25 +125,26 @@ public class DeptImportServiceImpl implements DeptImportService {
                 createReq.setLeaderUserId(row.leaderUserId());
                 createReq.setPhone(row.phone());
                 createReq.setEmail(row.email());
-                // createDept 内 reentrant 锁 + REQUIRED 事务，挂到本层同一事务
                 Long id = deptService.createDept(createReq);
-                // 供后续子节点解析文件内新建父路径
                 result.createdPathIds().put(row.orgPath(), id);
                 IntConsumer hook = afterEachCreateForTest;
                 if (hook != null) {
                     hook.accept(result.createdPathIds().size());
                 }
             }
-            log.info("[importDepts] tenant import done digest={} total={} create={} skip={}",
-                    parsed.digest(), result.totalRows(), toCreate.size(), result.skipCount());
-            return DeptImportRespVO.builder()
-                    .fileDigest(parsed.digest())
-                    .totalRows(result.totalRows())
-                    .createCount(toCreate.size())
-                    .skipCount(result.skipCount())
-                    .canCommit(true)
-                    .errors(List.of())
-                    .build();
+            for (DeptImportSupport.NormalizedRow row : result.toUpdate()) {
+                DeptDO existing = result.existingByPath().get(row.orgPath());
+                if (existing == null) {
+                    continue;
+                }
+                DeptSaveReqVO updateReq = new DeptSaveReqVO();
+                applyImportUpdate(row, existing, updateReq);
+                deptService.updateDept(updateReq);
+            }
+            log.info("[importDepts] tenant import done digest={} total={} create={} update={} skip={}",
+                    parsed.digest(), result.totalRows(), toCreate.size(),
+                    result.toUpdate().size(), result.skipCount());
+            return toResp(result, parsed.digest(), true);
         });
     }
 
@@ -401,7 +402,9 @@ public class DeptImportServiceImpl implements DeptImportService {
 
         int createCount = 0;
         int skipCount = 0;
+        int updateCount = 0;
         List<DeptImportSupport.NormalizedRow> toCreate = new ArrayList<>();
+        List<DeptImportSupport.NormalizedRow> toUpdate = new ArrayList<>();
         for (DeptImportSupport.NormalizedRow row : resolvedByRow.values()) {
             if (row.orgPath() == null || errors.stream().anyMatch(e -> e.getRowNumber() == row.rowNumber())) {
                 continue;
@@ -426,8 +429,8 @@ public class DeptImportServiceImpl implements DeptImportService {
                 if (sameAsExisting(row, existing)) {
                     skipCount++;
                 } else {
-                    errors.add(error(row.rowNumber(), row.orgPath(), "orgPath", "EXISTING_CONFLICT",
-                            "同路径组织已存在且字段不一致，首版不支持更新"));
+                    updateCount++;
+                    toUpdate.add(row);
                 }
             } else {
                 createCount++;
@@ -439,7 +442,7 @@ public class DeptImportServiceImpl implements DeptImportService {
         // 若父在文件中是 skip（已存在），parent 可解析。无需额外检查。
 
         ValidationResult result = new ValidationResult(
-                rows.size(), createCount, skipCount, errors, toCreate,
+                rows.size(), createCount, skipCount, updateCount, errors, toCreate, toUpdate,
                 existingByPath, new HashMap<>());
         // 文件内已存在路径供 resolve：skip 的也在 existingByPath
         // create 的 id 写入 createdPathIds 在提交阶段
@@ -454,6 +457,7 @@ public class DeptImportServiceImpl implements DeptImportService {
                 .totalRows(result.totalRows())
                 .createCount(result.createCount())
                 .skipCount(result.skipCount())
+                .updateCount(result.updateCount())
                 .canCommit(canCommit)
                 .errors(result.errors())
                 .build();
@@ -469,8 +473,10 @@ public class DeptImportServiceImpl implements DeptImportService {
             int totalRows,
             int createCount,
             int skipCount,
+            int updateCount,
             List<DeptImportErrorRespVO> errors,
             List<DeptImportSupport.NormalizedRow> toCreate,
+            List<DeptImportSupport.NormalizedRow> toUpdate,
             Map<String, DeptDO> existingByPath,
             Map<String, Long> createdPathIds
     ) {
