@@ -30,8 +30,14 @@ import PrintVoucher from './modules/print-voucher.vue';
 
 defineOptions({ name: 'FinanceExpenseReimbursementDetail' });
 
-const props = defineProps<{ id?: string }>();
+const props = defineProps<{
+  activityNodes?: any[];
+  id?: number | string;
+  isApproval?: boolean;
+  processInstance?: any;
+}>();
 const { query } = useRoute();
+const embedded = computed(() => !!props.processInstance);
 const loading = ref(false);
 const bill = ref<FinanceExpenseApi.Bill>();
 const approvedAmount = ref<number>();
@@ -126,7 +132,7 @@ onMounted(load);
 </script>
 
 <template>
-  <Page auto-content-height>
+  <component :is="embedded ? 'div' : Page" v-bind="embedded ? {} : { autoContentHeight: true }">
     <Spin :spinning="loading">
       <div v-if="bill" class="mx-auto max-w-3xl p-4 print:max-w-none">
         <div class="mb-2">
@@ -169,5 +175,5 @@ onMounted(load);
         </div>
       </div>
     </Spin>
-  </Page>
+  </component>
 </template>

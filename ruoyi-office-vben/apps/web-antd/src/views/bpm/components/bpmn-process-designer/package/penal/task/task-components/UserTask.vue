@@ -105,20 +105,19 @@ function filterDeptTree(nodes: any[], keyword: string): any[] {
   if (!kw) {
     return nodes || [];
   }
-  const walk = (list: any[]): any[] => {
-    const out: any[] = [];
+  const out: any[] = [];
+  const walk = (list: any[]) => {
     for (const node of list || []) {
-      const children = node.children?.length ? walk(node.children) : [];
-      const hit =
-        String(node.name || '').toLowerCase().includes(kw) ||
-        String(node.fullName || '').toLowerCase().includes(kw);
-      if (hit || children.length) {
-        out.push({ ...node, children });
+      if (String(node.name || '').toLowerCase().includes(kw)) {
+        out.push({ ...node, children: undefined });
+      }
+      if (node.children?.length) {
+        walk(node.children);
       }
     }
-    return out;
   };
-  return walk(nodes || []);
+  walk(nodes || []);
+  return out;
 }
 
 const displayDeptTree = computed(() =>

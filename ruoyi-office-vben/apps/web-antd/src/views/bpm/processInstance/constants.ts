@@ -10,6 +10,7 @@ export const FINANCE_APPROVAL_PSHELL_VIEW_PATHS = [
   '/finance/salary-payment/detail/index',
   '/finance/tax-payment/detail/index',
   '/finance/invoice-redflush/info/index',
+  '/finance/expense-reimbursement/detail',
 ] as const;
 
 export function isFinanceApprovalPShellViewPath(
