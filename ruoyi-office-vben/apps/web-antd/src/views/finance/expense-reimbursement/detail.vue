@@ -27,6 +27,7 @@ import { getDictLabel } from '@vben/hooks';
 
 import { FileUpload } from '#/components/upload';
 import PrintVoucher from './modules/print-voucher.vue';
+import PredocOverlay from './modules/predoc-overlay.vue';
 
 defineOptions({ name: 'FinanceExpenseReimbursementDetail' });
 
@@ -46,6 +47,19 @@ const payDate = ref<Dayjs>();
 const payVoucherUrl = ref('');
 const companyBankAccountId = ref<number>();
 const accountOptions = ref<{ label: string; value: number }[]>([]);
+const predocOpen = ref(false);
+const overlayType = ref<string>();
+const overlayBillId = ref<number>();
+
+function openPredoc(line: FinanceExpenseApi.Line) {
+  overlayType.value = line.predocType;
+  overlayBillId.value = line.predocBillId;
+  predocOpen.value = true;
+}
+
+function predocLinkLabel(line: FinanceExpenseApi.Line) {
+  return line.predocType === 'OUTING' ? '查看出外申请' : '查看出差申请';
+}
 
 const queryId = computed(() => Number(props.id || query.id));
 
@@ -168,6 +182,14 @@ onMounted(load);
             {{ line.stayCityTier === 'T1' ? ' · 北上广深' : line.stayCityTier === 'OTHER' ? ' · 其他城市' : '' }}
             {{ line.overLimitReason ? ` · 超标：${line.overLimitReason}` : "" }}
             {{ line.remark ? ` · ${line.remark}` : "" }}
+            <Button
+              v-if="line.predocProcessInstanceId"
+              type="link"
+              class="px-1"
+              @click="openPredoc(line)"
+            >
+              {{ predocLinkLabel(line) }}
+            </Button>
           </div>
         </div>
         <div
@@ -196,5 +218,10 @@ onMounted(load);
         </div>
       </div>
     </Spin>
+    <PredocOverlay
+      v-model:open="predocOpen"
+      :predoc-type="overlayType"
+      :bill-id="overlayBillId"
+    />
   </component>
 </template>

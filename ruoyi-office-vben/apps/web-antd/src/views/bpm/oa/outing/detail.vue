@@ -14,7 +14,8 @@ import { useDescription } from '#/components/description';
 import { useDetailFormSchema } from './data';
 
 const props = defineProps<{
-  id: string;
+  id?: string;
+  embedded?: boolean;
 }>();
 
 const { query } = useRoute();
@@ -35,6 +36,8 @@ async function getDetailData() {
   try {
     loading.value = true;
     formData.value = await getOuting(Number(props.id || queryId.value));
+  } catch {
+    formData.value = undefined;
   } finally {
     loading.value = false;
   }
@@ -46,7 +49,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <ContentWrap class="m-2">
+  <div v-if="embedded">
+    <Spin :spinning="loading" tip="加载中...">
+      <div v-if="!formData && !loading">无法加载前置单据</div>
+      <Descriptions v-else :data="formData" />
+    </Spin>
+  </div>
+  <ContentWrap v-else class="m-2">
     <Spin :spinning="loading" tip="加载中...">
       <Descriptions :data="formData" />
     </Spin>

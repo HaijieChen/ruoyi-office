@@ -25,6 +25,7 @@ import { getSimpleDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
 import { FileUpload } from '#/components/upload';
 import { mapWageCardToPayee } from '../payee-prefill';
+import PredocOverlay from './predoc-overlay.vue';
 
 defineOptions({ name: 'FinanceExpenseNoInvoiceFormBody' });
 
@@ -36,8 +37,8 @@ const emit = defineEmits<{
 const userStore = useUserStore();
 const formRef = ref();
 const submitting = ref(false);
-const tripOptions = ref<{ label: string; value: string; type: 'TRIP'; city?: string }[]>([]);
-const outingOptions = ref<{ label: string; value: string; type: 'OUTING'; city?: string }[]>([]);
+const tripOptions = ref<{ label: string; value: string; type: 'TRIP'; billId?: number; city?: string }[]>([]);
+const outingOptions = ref<{ label: string; value: string; type: 'OUTING'; billId?: number; city?: string }[]>([]);
 
 interface LineRow {
   category?: string;
@@ -45,6 +46,7 @@ interface LineRow {
   amount?: number;
   predocType?: string;
   predocProcessInstanceId?: string;
+  predocBillId?: number;
   remark?: string;
   stayCityTier?: string;
   overLimitReason?: string;
@@ -129,6 +131,7 @@ async function loadPredocOptions() {
       .map((t) => ({
         value: String(t.processInstanceId),
         type: 'TRIP' as const,
+        billId: t.id,
         city: t.destination,
         label: `出差#${t.id} ${t.destination || ''}`.trim(),
       }));
@@ -137,6 +140,7 @@ async function loadPredocOptions() {
       .map((t) => ({
         value: String(t.processInstanceId),
         type: 'OUTING' as const,
+        billId: t.id,
         city: t.location,
         label: `外出#${t.id} ${t.location || ''}`.trim(),
       }));
@@ -156,11 +160,26 @@ function lineDetailsEnabled(line: LineRow) {
   return true;
 }
 
+const predocOpen = ref(false);
+const overlayType = ref<string>();
+const overlayBillId = ref<number>();
+
+function openPredoc(line: LineRow) {
+  overlayType.value = line.predocType;
+  overlayBillId.value = line.predocBillId;
+  predocOpen.value = true;
+}
+
+function predocLinkLabel(line: LineRow) {
+  return line.predocType === 'OUTING' ? '查看出外申请' : '查看出差申请';
+}
+
 function onCategoryChange(index: number) {
   const line = formData.value.lines[index];
   if (!line) return;
   line.predocProcessInstanceId = undefined;
   line.predocType = undefined;
+  line.predocBillId = undefined;
   line.stayCityTier = undefined;
   line.overLimitReason = undefined;
 }
@@ -177,6 +196,7 @@ function onPredocChange(index: number, processInstanceId?: string) {
   line.predocProcessInstanceId = processInstanceId;
   const hit = [...tripOptions.value, ...outingOptions.value].find((o) => o.value === processInstanceId);
   line.predocType = hit?.type;
+  line.predocBillId = hit?.billId;
   line.stayCityTier = ['北京', '上海', '广州', '深圳'].includes(String(hit?.city || ''))
     ? 'T1'
     : hit?.city
@@ -384,6 +404,14 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
           @change="(v) => onPredocChange(index, v as string)"
         />
+        <Button
+          v-if="line.predocProcessInstanceId"
+          type="link"
+          class="px-1"
+          @click="openPredoc(line)"
+        >
+          {{ predocLinkLabel(line) }}
+        </Button>
         <template v-if="lineDetailsEnabled(line)">
           <DatePicker
             :value="line.feeDate ? dayjs(line.feeDate) : undefined"
@@ -429,4 +457,9 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
       />
     </Form.Item>
   </Form>
+  <PredocOverlay
+    v-model:open="predocOpen"
+    :predoc-type="overlayType"
+    :bill-id="overlayBillId"
+  />
 </template>
