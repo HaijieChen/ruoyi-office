@@ -3,6 +3,8 @@ import { onBeforeUnmount, reactive, ref, toRaw, watch } from 'vue';
 
 import { Form, FormItem, Input } from 'ant-design-vue';
 
+import { resolveInputChangeValue } from './input-change-value';
+
 defineOptions({ name: 'ElementBaseInfo' });
 
 const props = defineProps<{
@@ -57,11 +59,12 @@ const resetBaseInfo = () => {
   // console.log(elementBaseInfo.value, 'elementBaseInfo22222222222')
 };
 const handleKeyUpdate = (value: any) => {
+  const next = resolveInputChangeValue(value);
   // 校验 value 的值，只有 XML NCName 通过的情况下，才进行赋值。否则，会导致流程图报错，无法绘制的问题
-  if (!value) {
+  if (!next) {
     return;
   }
-  if (!/[a-z_][-\w.$]*/i.test(value)) {
+  if (!/[a-z_][-\w.$]*/i.test(next)) {
     // console.log('key 不满足 XML NCName 规则，所以不进行赋值');
     return;
   }
@@ -69,7 +72,7 @@ const handleKeyUpdate = (value: any) => {
 
   // 在 BPMN 的 XML 中，流程标识 key，其实对应的是 id 节点
   if (elementBaseInfo.value) {
-    elementBaseInfo.value.id = value;
+    elementBaseInfo.value.id = next;
   }
 
   setTimeout(() => {
@@ -78,12 +81,13 @@ const handleKeyUpdate = (value: any) => {
 };
 
 const handleNameUpdate = (value: any) => {
+  const next = resolveInputChangeValue(value);
   // console.log(elementBaseInfo, 'elementBaseInfo');
-  if (!value) {
+  if (!next) {
     return;
   }
   if (elementBaseInfo.value) {
-    elementBaseInfo.value.name = value;
+    elementBaseInfo.value.name = next;
   }
 
   setTimeout(() => {
