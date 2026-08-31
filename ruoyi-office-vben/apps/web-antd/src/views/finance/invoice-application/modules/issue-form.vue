@@ -20,6 +20,7 @@ import {
   ocrInvoiceApplication,
 } from '#/api/finance/invoice-application';
 import { FileUpload } from '#/components/upload';
+import { useUpload } from '#/components/upload/use-upload';
 import { displayDateTime } from '#/utils/display-time';
 
 defineOptions({ name: 'FinanceInvoiceIssueForm' });
@@ -32,7 +33,10 @@ interface DraftInvoice {
   amount?: number;
   invoiceNo?: string;
   invoiceDate?: string;
+  _uploadEpoch?: number;
 }
+
+const { httpRequest } = useUpload();
 
 const formData = ref({
   applicationId: undefined as number | undefined,
@@ -101,51 +105,63 @@ const historyColumns = [
   },
 ];
 
-async function recognize(url: string, file?: File): Promise<DraftInvoice> {
-  const path = String(url).split('?')[0] || '';
-  const base = path.substring(path.lastIndexOf('/') + 1);
+function unwrapOcr(raw: any) {
+  if (!raw || typeof raw !== 'object') return raw;
+  if (raw.amount != null || raw.invoiceNo || raw.feeDate) return raw;
+  if (raw.data && typeof raw.data === 'object') return raw.data;
+  return raw;
+}
+
+function rawUploadFile(file: File) {
+  const inner = (file as any)?.originFileObj;
+  return inner instanceof Blob ? inner : file;
+}
+
+function applyOcr(draft: DraftInvoice, ocr: any) {
+  if (ocr?.amount != null) draft.amount = Number(ocr.amount);
+  if (ocr?.invoiceNo) draft.invoiceNo = String(ocr.invoiceNo);
+  if (ocr?.feeDate) draft.invoiceDate = String(ocr.feeDate).slice(0, 10);
+}
+
+async function uploadAndOcr(file: File, onUploadProgress?: any) {
+  const raw = rawUploadFile(file);
+  const hide = message.loading({ content: '正在识别发票...', duration: 0 });
   const draft: DraftInvoice = {
-    url,
-    name: base || 'invoice',
+    url: '',
+    name: file.name || 'invoice',
   };
   try {
-    const raw = await ocrInvoiceApplication(url, file);
-    const ocr =
-      raw && typeof raw === 'object' && (raw as any).amount == null && (raw as any).data
-        ? (raw as any).data
-        : raw;
-    if (ocr?.amount != null) draft.amount = Number(ocr.amount);
-    if (ocr?.invoiceNo) draft.invoiceNo = String(ocr.invoiceNo);
-    if (ocr?.feeDate) draft.invoiceDate = String(ocr.feeDate).slice(0, 10);
-    if (ocr?.invoiceNo || ocr?.feeDate || ocr?.amount != null) {
+    if (raw instanceof Blob) {
+      applyOcr(draft, unwrapOcr(await ocrInvoiceApplication('', raw as File)));
+    }
+    const res = await httpRequest(raw, onUploadProgress);
+    const url =
+      typeof res === 'string'
+        ? res
+        : String((res as any)?.url || (res as any)?.data || '');
+    draft.url = url;
+    if (!draft.amount && !draft.invoiceNo && url) {
+      applyOcr(draft, unwrapOcr(await ocrInvoiceApplication(url)));
+    }
+    if (draft.invoiceNo || draft.invoiceDate || draft.amount != null) {
       message.success('已识别发票信息，请核对');
     } else {
       message.warning('未识别到金额/发票号，请手填');
     }
-  } catch {
+    formData.value.drafts = [...formData.value.drafts, draft];
+    return res;
+  } catch (e) {
     message.warning('识别失败，请手填金额和发票号');
+    throw e;
+  } finally {
+    hide();
   }
-  return draft;
 }
 
-async function onFileUploadUpdate(val: string | string[], files?: any[]) {
-  const list = Array.isArray(val) ? val : val ? [val] : [];
-  const existingByUrl = new Map(formData.value.drafts.map((d) => [d.url, d]));
-  const next: DraftInvoice[] = [];
-  for (const [idx, url] of list.entries()) {
-    const kept = existingByUrl.get(url);
-    if (kept) {
-      next.push(kept);
-      continue;
-    }
-    const hide = message.loading({ content: '正在识别发票...', duration: 0 });
-    try {
-      next.push(await recognize(url, files?.[idx]));
-    } finally {
-      hide();
-    }
-  }
-  formData.value.drafts = next;
+async function onFileUploadUpdate(val: string | string[]) {
+  const list = (Array.isArray(val) ? val : val ? [val] : []).filter(Boolean);
+  const byUrl = new Map(formData.value.drafts.map((d) => [d.url, d]));
+  formData.value.drafts = list.map((url) => byUrl.get(url) || { url, name: url });
 }
 
 function removeDraft(index: number) {
@@ -246,7 +262,9 @@ const [Modal, modalApi] = useVbenModal({
           :max-number="20"
           :max-size="20"
           :multiple="true"
+          :accept="['pdf', 'jpg', 'jpeg', 'png']"
           help-text="上传后自动识别金额、发票号、开票日期，可改；金额必填"
+          :api="(file, progress) => uploadAndOcr(file as File, progress)"
           @update:value="onFileUploadUpdate"
         />
       </Form.Item>
