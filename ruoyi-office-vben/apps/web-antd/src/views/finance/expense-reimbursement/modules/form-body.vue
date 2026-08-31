@@ -58,6 +58,8 @@ interface LineRow {
   overLimitReason?: string;
   invoiceType?: string;
   subItem?: string;
+  _uploading?: boolean;
+  _uploadEpoch?: number;
 }
 
 const formData = ref<{
@@ -268,19 +270,83 @@ function rawUploadFile(file: File) {
   return inner instanceof Blob ? inner : file;
 }
 
+let invoiceUploadChain = Promise.resolve();
+
+function claimOrCloneInvoiceLine(sourceIndex: number): number {
+  const lines = formData.value.lines;
+  const source = lines[sourceIndex];
+  if (!source) return sourceIndex;
+  if (!source.invoiceFileUrl && !source._uploading) {
+    source._uploading = true;
+    return sourceIndex;
+  }
+  const cloned: LineRow = {
+    lineKind: source.lineKind,
+    category: source.category,
+    subItem: source.subItem,
+    predocType: source.predocType,
+    predocProcessInstanceId: source.predocProcessInstanceId,
+    stayCityTier: source.stayCityTier,
+    _uploading: true,
+  };
+  let insertAt = sourceIndex + 1;
+  while (insertAt < lines.length && lines[insertAt]?._uploading) {
+    insertAt++;
+  }
+  lines.splice(insertAt, 0, cloned);
+  return insertAt;
+}
+
 async function uploadInvoice(index: number, file: File, onUploadProgress?: any) {
   const raw = rawUploadFile(file);
-  if (raw instanceof Blob) {
-    await runInvoiceOcr(index, '', raw as File);
-  }
-  return httpRequest(raw, onUploadProgress);
+  const run = invoiceUploadChain.then(async () => {
+    const target = claimOrCloneInvoiceLine(index);
+    try {
+      if (raw instanceof Blob) {
+        await runInvoiceOcr(target, '', raw as File);
+      }
+      const res = await httpRequest(raw, onUploadProgress);
+      const url =
+        typeof res === 'string'
+          ? res
+          : String((res as any)?.url || (res as any)?.data || '');
+      const line = formData.value.lines[target];
+      if (line) {
+        line.invoiceFileUrl = url || line.invoiceFileUrl;
+        line._uploading = false;
+        line._uploadEpoch = (line._uploadEpoch || 0) + 1;
+      }
+      return res;
+    } catch (e) {
+      const line = formData.value.lines[target];
+      if (line) {
+        line._uploading = false;
+        if (target !== index && !line.invoiceFileUrl) {
+          formData.value.lines.splice(target, 1);
+        }
+      }
+      throw e;
+    }
+  });
+  invoiceUploadChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 async function onInvoiceUpload(index: number, val: string | string[]) {
-  const url = Array.isArray(val) ? String(val[0] || '') : String(val || '');
   const line = formData.value.lines[index];
   if (!line) return;
-  line.invoiceFileUrl = url || undefined;
+  const urls = (Array.isArray(val) ? val : val ? [val] : []).filter(Boolean);
+  if (urls.length === 0) {
+    line.invoiceFileUrl = undefined;
+    return;
+  }
+  if (!line.invoiceFileUrl) {
+    line.invoiceFileUrl = String(urls[0]);
+  }
+  line._uploadEpoch = (line._uploadEpoch || 0) + 1;
 }
 
 function onPredocChange(index: number, processInstanceId?: string) {
@@ -576,12 +642,14 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         />
         <template v-if="lineDetailsEnabled(line)">
           <FileUpload
+            :key="`${index}-${line._uploadEpoch || 0}`"
             class="w-48"
             :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
-            :max-number="1"
+            :max-number="20"
+            :multiple="true"
             :max-size="20"
             :accept="['pdf', 'jpg', 'jpeg', 'png']"
-            help-text="先上传发票，自动识别类型"
+            help-text="可一次选多张，每张拆成一行并识别"
             :api="(file, progress) => uploadInvoice(index, file as File, progress)"
             @update:value="(v) => onInvoiceUpload(index, v)"
           />
