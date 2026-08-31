@@ -60,6 +60,8 @@ interface LineRow {
   subItem?: string;
   _uploading?: boolean;
   _uploadEpoch?: number;
+  /** 同组多票拆行：继承费用类型/子项目/前置单，不再展示这些下拉 */
+  _sibling?: boolean;
 }
 
 const formData = ref<{
@@ -222,6 +224,15 @@ function lineDetailsEnabled(line: LineRow) {
   return true;
 }
 
+function applyToSiblings(index: number, patch: (line: LineRow) => void) {
+  const lines = formData.value.lines;
+  for (let i = index + 1; i < lines.length; i++) {
+    const next = lines[i];
+    if (!next?._sibling) break;
+    patch(next);
+  }
+}
+
 function onCategoryChange(index: number) {
   const line = formData.value.lines[index];
   if (!line) return;
@@ -229,6 +240,22 @@ function onCategoryChange(index: number) {
   line.predocType = undefined;
   line.stayCityTier = undefined;
   line.overLimitReason = undefined;
+  applyToSiblings(index, (s) => {
+    s.category = line.category;
+    s.subItem = line.subItem;
+    s.predocProcessInstanceId = undefined;
+    s.predocType = undefined;
+    s.stayCityTier = undefined;
+    s.overLimitReason = undefined;
+  });
+}
+
+function onSubItemChange(index: number) {
+  const line = formData.value.lines[index];
+  if (!line) return;
+  applyToSiblings(index, (s) => {
+    s.subItem = line.subItem;
+  });
 }
 
 function predocOptions(category?: string) {
@@ -290,6 +317,7 @@ function claimOrCloneInvoiceLine(sourceIndex: number): number {
     predocProcessInstanceId: source.predocProcessInstanceId,
     stayCityTier: source.stayCityTier,
     _uploading: true,
+    _sibling: true,
   };
   let insertAt = sourceIndex + 1;
   while (insertAt < lines.length && lines[insertAt]?._uploading) {
@@ -364,6 +392,11 @@ function onPredocChange(index: number, processInstanceId?: string) {
     : hit?.city
       ? 'OTHER'
       : undefined;
+  applyToSiblings(index, (s) => {
+    s.predocProcessInstanceId = line.predocProcessInstanceId;
+    s.predocType = line.predocType;
+    s.stayCityTier = line.stayCityTier;
+  });
 }
 
 function predocCity(line: LineRow) {
@@ -618,32 +651,35 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         :key="index"
         class="mb-2 flex flex-wrap items-center gap-2"
       >
-        <Select
-          v-model:value="line.category"
-          class="w-28"
-          :options="categoryOptions"
-          placeholder="费用类型"
-          @change="onCategoryChange(index)"
-        />
-        <Select
-          v-if="line.category && subItemOptions(line.category).length"
-          v-model:value="line.subItem"
-          class="w-32"
-          :options="subItemOptions(line.category)"
-          placeholder="子项目"
-          allow-clear
-        />
-        <Select
-          v-if="needsPredoc(line)"
-          :value="line.predocProcessInstanceId"
-          class="w-56"
-          :options="predocOptions(line.category)"
-          placeholder="先选已通过出差/外出"
-          allow-clear
-          show-search
-          option-filter-prop="label"
-          @change="(v) => onPredocChange(index, v as string)"
-        />
+        <template v-if="!line._sibling">
+          <Select
+            v-model:value="line.category"
+            class="w-28"
+            :options="categoryOptions"
+            placeholder="费用类型"
+            @change="onCategoryChange(index)"
+          />
+          <Select
+            v-if="line.category && subItemOptions(line.category).length"
+            v-model:value="line.subItem"
+            class="w-32"
+            :options="subItemOptions(line.category)"
+            placeholder="子项目"
+            allow-clear
+            @change="onSubItemChange(index)"
+          />
+          <Select
+            v-if="needsPredoc(line)"
+            :value="line.predocProcessInstanceId"
+            class="w-56"
+            :options="predocOptions(line.category)"
+            placeholder="先选已通过出差/外出"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            @change="(v) => onPredocChange(index, v as string)"
+          />
+        </template>
         <template v-if="lineDetailsEnabled(line)">
           <FileUpload
             :key="`${index}-${line._uploadEpoch || 0}`"
