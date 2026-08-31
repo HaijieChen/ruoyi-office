@@ -31,6 +31,7 @@ import {
 } from '#/api/bpm/model';
 import { getSimpleDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
+import { replaceBpmnProcessName } from '#/views/bpm/components/bpmn-process-designer/package/penal/base/input-change-value';
 
 import BasicInfo from './modules/basic-info.vue';
 import ExtraSetting from './modules/extra-setting.vue';
@@ -260,6 +261,25 @@ async function validateAllSteps() {
 }
 
 const saveLoading = ref<boolean>(false);
+
+function applyProcessNameToBpmn() {
+  if (formData.value?.type !== BpmModelType.BPMN || !formData.value.name) {
+    return;
+  }
+  if (typeof formData.value.bpmnXml === 'string') {
+    formData.value.bpmnXml = replaceBpmnProcessName(
+      formData.value.bpmnXml,
+      formData.value.name,
+    );
+  }
+  if (typeof processData.value === 'string') {
+    processData.value = replaceBpmnProcessName(
+      processData.value,
+      formData.value.name,
+    );
+  }
+}
+
 /** 保存操作 */
 async function handleSave() {
   try {
@@ -270,6 +290,7 @@ async function handleSave() {
       return;
     }
 
+    applyProcessNameToBpmn();
     // 更新表单数据
     const modelData = {
       ...formData.value,
@@ -328,6 +349,7 @@ async function handleDeploy() {
     // 1.2 校验所有步骤
     await validateAllSteps();
 
+    applyProcessNameToBpmn();
     // 2.1 更新表单数据
     const modelData = {
       ...formData.value,

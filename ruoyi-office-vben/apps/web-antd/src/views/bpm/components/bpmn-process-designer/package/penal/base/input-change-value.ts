@@ -14,3 +14,25 @@ export function resolveInputChangeValue(value: unknown): string {
   }
   return '';
 }
+
+/** 把 BPMN 流程名称写回模型，发布时两边才能对上。 */
+export function syncProcessNameToModel(
+  model: { name?: string } | undefined | null,
+  name: string,
+): void {
+  if (!model || !name) {
+    return;
+  }
+  model.name = name;
+}
+
+export function replaceBpmnProcessName(xml: string, name: string): string {
+  if (!xml || !name) {
+    return xml;
+  }
+  const escaped = name.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+  return xml.replace(
+    /(<bpmn2?:process\b[^>]*\bname=")([^"]*)(")/,
+    `$1${escaped}$3`,
+  );
+}

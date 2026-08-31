@@ -271,7 +271,6 @@ defineExpose({ validate });
       <Form.Item label="流程名称" name="name">
         <Input
           v-model:value="modelData.name"
-          :disabled="!!modelData.id"
           allow-clear
           placeholder="请输入流程名称"
         />

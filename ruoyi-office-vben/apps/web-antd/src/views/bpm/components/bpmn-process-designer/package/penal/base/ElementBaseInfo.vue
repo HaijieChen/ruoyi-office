@@ -1,9 +1,12 @@
 <script lang="ts" setup>
-import { onBeforeUnmount, reactive, ref, toRaw, watch } from 'vue';
+import { inject, onBeforeUnmount, reactive, ref, toRaw, watch } from 'vue';
 
 import { Form, FormItem, Input } from 'ant-design-vue';
 
-import { resolveInputChangeValue } from './input-change-value';
+import {
+  resolveInputChangeValue,
+  syncProcessNameToModel,
+} from './input-change-value';
 
 defineOptions({ name: 'ElementBaseInfo' });
 
@@ -28,6 +31,7 @@ interface Model {
 const needProps = ref<Record<string, any>>({});
 const bpmnElement = ref<any>();
 const elementBaseInfo = ref<BusinessObject>({} as any);
+const modelData = inject<{ value?: Model } | undefined>('modelData', undefined);
 // 流程表单的下拉框的数据
 // const forms = ref([])
 // 流程模型的校验
@@ -89,6 +93,8 @@ const handleNameUpdate = (value: any) => {
   if (elementBaseInfo.value) {
     elementBaseInfo.value.name = next;
   }
+  syncProcessNameToModel(props.model, next);
+  syncProcessNameToModel(modelData?.value, next);
 
   setTimeout(() => {
     updateBaseInfo('name');
