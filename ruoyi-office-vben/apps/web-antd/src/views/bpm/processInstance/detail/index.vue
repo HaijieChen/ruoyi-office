@@ -355,6 +355,9 @@ function setFieldPermission(field: string, permission: string) {
  */
 async function handleBeforeApproval(): Promise<boolean> {
   try {
+    if (businessFormLoadError.value) {
+      return false;
+    }
     // 如果是业务表单且有预处理方法，则调用
     if (
       businessFormRef.value &&
@@ -563,7 +566,7 @@ onMounted(async () => {
       </div>
 
       <template #actions>
-        <div class="px-4" v-if="!isPShellCustom || isApproval">
+        <div class="px-4" v-if="!businessFormLoadError && (!isPShellCustom || isApproval)">
           <ProcessInstanceOperationButton
             ref="operationButtonRef"
             :process-instance="processInstance"
@@ -612,7 +615,7 @@ onMounted(async () => {
         :task-id="props.taskId || (route.query.taskId as string)"
       />
       <template #actions>
-        <div class="px-4" v-if="isApproval">
+        <div class="px-4" v-if="!businessFormLoadError && isApproval">
           <ProcessInstanceOperationButton
             ref="operationButtonRef"
             :process-instance="processInstance"

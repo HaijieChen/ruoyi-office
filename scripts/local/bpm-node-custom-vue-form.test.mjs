@@ -72,4 +72,10 @@ test('approval shell prefers todo node Vue path and does not silent-fallback', (
     detail,
     /isFinanceApprovalPShellViewPath\(processDefinition\.value\?\.formCustomViewPath\)/,
   );
+  assert.match(detail, /if \(businessFormLoadError\.value\) \{\s*return false;/);
+  assert.match(
+    detail,
+    /v-if="!businessFormLoadError && \(!isPShellCustom \|\| isApproval\)"/,
+  );
+  assert.match(detail, /v-if="!businessFormLoadError && isApproval"/);
 });
