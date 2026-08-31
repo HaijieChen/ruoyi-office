@@ -29,6 +29,10 @@ public class EmployeeSaveReqVO {
     @Schema(description = "员工编号", example = "10000000")
     private String employeeNo;
 
+    /** 花名册导入：空白工号保持空，不走页面新建的自动生成 */
+    @JsonIgnore
+    private boolean skipAutoEmployeeNo;
+
     @Schema(description = "姓名", requiredMode = Schema.RequiredMode.REQUIRED, example = "张三")
     @NotBlank(message = "姓名不能为空")
     private String name;

@@ -82,6 +82,8 @@ final class EmployeeRosterImportSupport {
         req.setIdCard(idCard);
         req.setMobile(mobile);
         req.setSex(sex);
+        req.setEmployeeNo(trim(row.getEmployeeNo()));
+        req.setSkipAutoEmployeeNo(true);
         req.setCompanyName(trim(row.getCompanyName()));
         req.setDeptName(trim(row.getDeptName()));
         req.setJobPost(resolveDictOrRaw("hrm_job_post", row.getJobPost()));

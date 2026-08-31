@@ -240,4 +240,7 @@ public class EmployeeRosterImportExcelVO {
     @ExcelProperty(value = "任职部门", index = 53)
     private String extraDeptNames;
 
+    @ExcelProperty(value = "员工工号", index = 54)
+    private String employeeNo;
+
 }

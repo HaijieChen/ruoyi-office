@@ -133,8 +133,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         applySocialSecurityRules(createReqVO, null);
         validateRoster(createReqVO, null);
 
-        // 自动生成员工工号（如果未提供）
-        if (createReqVO.getEmployeeNo() == null || createReqVO.getEmployeeNo().trim().isEmpty()) {
+        // 页面新建未填工号时自动生成；花名册导入空白保持空
+        if (!createReqVO.isSkipAutoEmployeeNo()
+                && (createReqVO.getEmployeeNo() == null || createReqVO.getEmployeeNo().trim().isEmpty())) {
             Long maxEmployeeNo = employeeArchiveMapper.selectMaxEmployeeNo();
             Long nextEmployeeNo = maxEmployeeNo + 1;
             createReqVO.setEmployeeNo(String.format("%08d", nextEmployeeNo));
@@ -535,7 +536,9 @@ public class EmployeeServiceImpl implements EmployeeService {
     private void applyImportUpdate(EmployeeServiceImpl self, EmployeeSaveReqVO req, EmployeeDO existing,
                                   List<EmployeeEmploymentVO> extras) {
         req.setId(existing.getId());
-        req.setEmployeeNo(existing.getEmployeeNo());
+        if (StrUtil.isBlank(req.getEmployeeNo())) {
+            req.setEmployeeNo(existing.getEmployeeNo());
+        }
         if (req.getEmployeeStatus() == null) {
             req.setEmployeeStatus(existing.getEmployeeStatus());
         }

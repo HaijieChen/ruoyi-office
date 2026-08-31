@@ -125,13 +125,14 @@ class EmployeeRosterImportTest {
             assertEquals(1, prop.value().length);
             annotated.add(prop.value()[0]);
         }
-        assertEquals(54, annotated.size());
+        assertEquals(55, annotated.size());
         for (int i = 0; i < 52; i++) {
             assertEquals(EmployeeRosterImportExcelVO.TEMPLATE_HEADERS[i], annotated.get(i),
                     "column index " + i);
         }
         assertEquals("任职单位", annotated.get(52));
         assertEquals("任职部门", annotated.get(53));
+        assertEquals("员工工号", annotated.get(54));
 
         // 关键列
         assertEquals("最高学历\n毕业学校", annotated.get(27));
@@ -150,13 +151,14 @@ class EmployeeRosterImportTest {
              org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(in)) {
             var sheet = wb.getSheetAt(0);
             var header = sheet.getRow(1);
-            assertTrue(header.getLastCellNum() >= 54);
+            assertTrue(header.getLastCellNum() >= 55);
             for (int i = 0; i < 52; i++) {
                 assertEquals(EmployeeRosterImportExcelVO.TEMPLATE_HEADERS[i], header.getCell(i).getStringCellValue(),
                         "template column " + i);
             }
             assertEquals("任职单位", header.getCell(52).getStringCellValue());
             assertEquals("任职部门", header.getCell(53).getStringCellValue());
+            assertEquals("员工工号", header.getCell(54).getStringCellValue());
         }
     }
 
@@ -187,6 +189,8 @@ class EmployeeRosterImportTest {
                 .build();
 
         EmployeeSaveReqVO req = EmployeeRosterImportSupport.toSaveReq(row);
+        assertNull(req.getEmployeeNo());
+        assertTrue(req.isSkipAutoEmployeeNo());
         assertEquals("钟伟", req.getName());
         assertEquals("430981198311201111", req.getIdCard());
         assertEquals("15995408684", req.getMobile());
@@ -248,6 +252,51 @@ class EmployeeRosterImportTest {
             ArgumentCaptor<EmployeeDO> insertCap = ArgumentCaptor.forClass(EmployeeDO.class);
             verify(employeeArchiveMapper, atLeastOnce()).insert(insertCap.capture());
             assertEquals("新建员", insertCap.getValue().getName());
+            assertNull(insertCap.getValue().getEmployeeNo());
+            verify(employeeArchiveMapper, never()).selectMaxEmployeeNo();
+        }
+    }
+
+    @Test
+    void importWritesEmployeeNoWhenPresentAndKeepsExistingWhenBlank() {
+        try (MockedStatic<SpringUtil> spring = mockStatic(SpringUtil.class)) {
+            spring.when(() -> SpringUtil.getBean(EmployeeServiceImpl.class)).thenReturn(employeeService);
+
+            EmployeeRosterImportExcelVO createRow = baseRow("110101199001011301", "有工号员");
+            createRow.setEmployeeNo("WS1001");
+            EmployeeRosterImportExcelVO updateRow = baseRow("110101199001011302", "改工号员");
+            updateRow.setEmployeeNo("WS2002");
+            EmployeeRosterImportExcelVO keepRow = baseRow("110101199001011303", "保留工号员");
+
+            when(employeeArchiveMapper.selectByIdCard("110101199001011301")).thenReturn(null);
+            EmployeeDO existingChange = new EmployeeDO();
+            existingChange.setId(301L);
+            existingChange.setEmployeeNo("OLD001");
+            when(employeeArchiveMapper.selectByIdCard("110101199001011302")).thenReturn(existingChange);
+            when(employeeArchiveMapper.selectById(301L)).thenReturn(existingChange);
+            EmployeeDO existingKeep = new EmployeeDO();
+            existingKeep.setId(302L);
+            existingKeep.setEmployeeNo("KEEP001");
+            when(employeeArchiveMapper.selectByIdCard("110101199001011303")).thenReturn(existingKeep);
+            when(employeeArchiveMapper.selectById(302L)).thenReturn(existingKeep);
+            doAnswer(inv -> {
+                EmployeeDO e = inv.getArgument(0);
+                e.setId(300L);
+                return 1;
+            }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
+
+            employeeService.importEmployeeRosterList(List.of(createRow, updateRow, keepRow));
+
+            ArgumentCaptor<EmployeeDO> insertCap = ArgumentCaptor.forClass(EmployeeDO.class);
+            verify(employeeArchiveMapper).insert(insertCap.capture());
+            assertEquals("WS1001", insertCap.getValue().getEmployeeNo());
+
+            ArgumentCaptor<EmployeeDO> updateCap = ArgumentCaptor.forClass(EmployeeDO.class);
+            verify(employeeArchiveMapper, atLeast(2)).updateById(updateCap.capture());
+            assertTrue(updateCap.getAllValues().stream()
+                    .anyMatch(e -> "WS2002".equals(e.getEmployeeNo())));
+            assertTrue(updateCap.getAllValues().stream()
+                    .anyMatch(e -> "KEEP001".equals(e.getEmployeeNo())));
         }
     }
 
@@ -470,7 +519,7 @@ class EmployeeRosterImportTest {
             when(employeeArchiveMapper.selectByIdCard(idCard))
                     .thenReturn(null)
                     .thenReturn(winner);
-            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
             doThrow(new DuplicateKeyException("uk_hrm_employee_active_id_card"))
                     .when(employeeArchiveMapper).insert(any(EmployeeDO.class));
             when(employeeArchiveMapper.selectById(77L)).thenReturn(winner);
@@ -512,7 +561,7 @@ class EmployeeRosterImportTest {
             when(employeeArchiveMapper.selectByIdCard(idCard))
                     .thenReturn(null)
                     .thenReturn(winner);
-            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
             // create 路径会先 default 为正式再 insert；冲突后必须恢复 null 再 update
             doThrow(new DuplicateKeyException("uk_hrm_employee_active_id_card"))
                     .when(employeeArchiveMapper).insert(any(EmployeeDO.class));
@@ -578,7 +627,7 @@ class EmployeeRosterImportTest {
                 e.setId(201L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
 
             EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
             assertEquals(1, resp.getCreateNames().size());
@@ -698,7 +747,7 @@ class EmployeeRosterImportTest {
                 e.setId(301L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
 
             EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
             assertEquals(List.of("消歧员"), resp.getCreateNames());
@@ -772,7 +821,7 @@ class EmployeeRosterImportTest {
                 e.setId(88L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
 
             EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
             assertEquals(List.of("多任职员"), resp.getCreateNames());
