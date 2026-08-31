@@ -37,6 +37,17 @@ class FinancePaymentExp87MigrationContractTest {
     }
 
     @Test
+    void salaryHousingFundSqlIsIdempotentAddColumn() throws Exception {
+        Path sql = findRoot().resolve("sql/mysql/finance_payment_salary_line_housing_fund.sql");
+        assertTrue(Files.exists(sql));
+        String text = Files.readString(sql);
+        assertTrue(text.contains("housing_fund_amount"));
+        assertTrue(text.contains("information_schema"));
+        assertTrue(text.contains("NOT NULL DEFAULT 0.00"));
+        assertFalse(text.contains("CREATE TABLE"));
+    }
+
+    @Test
     void salaryTaxBpmnReusePaymentDelegates() throws Exception {
         Path salary = findRoot().resolve("sql/mysql/bpmn/finance_salary_payment_apply.bpmn20.xml");
         Path tax = findRoot().resolve("sql/mysql/bpmn/finance_tax_payment_apply.bpmn20.xml");

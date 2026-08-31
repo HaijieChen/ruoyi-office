@@ -25,4 +25,7 @@ public class FinancePaymentSalaryLineReqVO {
     @NotNull(message = "社保不能为空")
     private BigDecimal socialInsuranceAmount;
 
+    @Schema(description = "公积金，可不填")
+    private BigDecimal housingFundAmount;
+
 }

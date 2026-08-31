@@ -1454,7 +1454,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             BigDecimal net = nonNeg(line.getNetSalaryAmount());
             BigDecimal tax = nonNeg(line.getPersonalTaxAmount());
             BigDecimal social = nonNeg(line.getSocialInsuranceAmount());
-            BigDecimal lineTotal = net.add(tax).add(social);
+            BigDecimal housing = nonNeg(line.getHousingFundAmount());
+            BigDecimal lineTotal = net.add(tax).add(social).add(housing);
             if (lineTotal.compareTo(ZERO) <= 0) {
                 throw exception(PAYMENT_APPLICATION_LINES_INVALID);
             }
@@ -1468,6 +1469,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .netSalaryAmount(net)
                     .personalTaxAmount(tax)
                     .socialInsuranceAmount(social)
+                    .housingFundAmount(housing)
                     .currency(currency)
                     .lineTotal(lineTotal)
                     .sort(sort++)

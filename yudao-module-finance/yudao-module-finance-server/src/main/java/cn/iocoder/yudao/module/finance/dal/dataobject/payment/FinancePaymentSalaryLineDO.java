@@ -30,6 +30,7 @@ public class FinancePaymentSalaryLineDO extends TenantBaseDO {
     private BigDecimal netSalaryAmount;
     private BigDecimal personalTaxAmount;
     private BigDecimal socialInsuranceAmount;
+    private BigDecimal housingFundAmount;
     private String currency;
     private BigDecimal lineTotal;
     private Integer sort;

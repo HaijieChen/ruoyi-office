@@ -755,6 +755,73 @@ class FinancePaymentApplicationServiceImplTest {
     }
 
     @Test
+    void createAndStartSalaryIncludesHousingFundInApplyAmount() {
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPeriodLabel("2026-08");
+        req.setCurrency("CNY");
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
+        line.setEntityCompanyDeptId(20L);
+        line.setNetSalaryAmount(new BigDecimal("10000.00"));
+        line.setPersonalTaxAmount(BigDecimal.ZERO);
+        line.setSocialInsuranceAmount(BigDecimal.ZERO);
+        line.setHousingFundAmount(new BigDecimal("800.00"));
+        req.setLines(List.of(line));
+
+        service.createAndStartSalary(req, 1L);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals(new BigDecimal("10800.00"), cap.getValue().getApplyAmount());
+        ArgumentCaptor<cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO> lineCap =
+                ArgumentCaptor.forClass(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO.class);
+        verify(salaryLineMapper).insert(lineCap.capture());
+        assertEquals(new BigDecimal("800.00"), lineCap.getValue().getHousingFundAmount());
+        assertEquals(new BigDecimal("10800.00"), lineCap.getValue().getLineTotal());
+    }
+
+    @Test
+    void createAndStartSalaryTreatsNullHousingFundAsZero() {
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPeriodLabel("2026-08");
+        req.setCurrency("CNY");
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
+        line.setEntityCompanyDeptId(20L);
+        line.setNetSalaryAmount(new BigDecimal("10000.00"));
+        line.setPersonalTaxAmount(BigDecimal.ZERO);
+        line.setSocialInsuranceAmount(BigDecimal.ZERO);
+        req.setLines(List.of(line));
+
+        service.createAndStartSalary(req, 1L);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertEquals(new BigDecimal("10000.00"), cap.getValue().getApplyAmount());
+    }
+
+    @Test
+    void createAndStartSalaryRejectsNegativeHousingFund() {
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPeriodLabel("2026-08");
+        req.setCurrency("CNY");
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
+        line.setEntityCompanyDeptId(20L);
+        line.setNetSalaryAmount(new BigDecimal("10000.00"));
+        line.setPersonalTaxAmount(BigDecimal.ZERO);
+        line.setSocialInsuranceAmount(BigDecimal.ZERO);
+        line.setHousingFundAmount(new BigDecimal("-1.00"));
+        req.setLines(List.of(line));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStartSalary(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_LINES_INVALID.getCode(), ex.getCode());
+    }
+
+    @Test
     void createAndStartTaxUsesBusinessChannelApi() {
         cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceTaxPaymentCreateAndStartReqVO req =
                 new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceTaxPaymentCreateAndStartReqVO();
