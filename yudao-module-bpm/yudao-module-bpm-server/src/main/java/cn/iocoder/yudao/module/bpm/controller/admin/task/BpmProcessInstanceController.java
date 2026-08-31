@@ -14,6 +14,7 @@ import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmProcessDefinitio
 import cn.iocoder.yudao.module.bpm.service.definition.BpmCategoryService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceService;
+import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceShareService;
 import cn.iocoder.yudao.module.bpm.service.task.BpmTaskService;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
@@ -29,6 +30,7 @@ import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.history.HistoricTaskInstance;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -64,6 +66,8 @@ public class BpmProcessInstanceController {
     private AdminUserApi adminUserApi;
     @Resource
     private DeptApi deptApi;
+    @Resource
+    private ObjectProvider<BpmFinanceAttachAccess> financeAttachAccessProvider;
 
     @GetMapping("/my-page")
     @Operation(summary = "获得我的实例分页列表", description = "在【我的流程】菜单中，进行调用")
@@ -134,9 +138,9 @@ public class BpmProcessInstanceController {
     @GetMapping("/get")
     @Operation(summary = "获得指定流程实例", description = "在【流程详细】界面中，进行调用")
     @Parameter(name = "id", description = "流程实例的编号", required = true)
-    @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<BpmProcessInstanceRespVO> getProcessInstance(@RequestParam("id") String id) {
-        processInstanceShareService.assertCanViewDetail(getLoginUserId(), id);
+        assertCanGetProcessInstance(id);
         HistoricProcessInstance processInstance = processInstanceService.getHistoricProcessInstance(id);
         if (processInstance == null) {
             return success(null);
@@ -232,6 +236,18 @@ public class BpmProcessInstanceController {
                 processDefinitionService.getProcessDefinitionInfo(historicProcessInstance.getProcessDefinitionId()),
                 tasks, userMap,
                 new UserSimpleBaseVO().setNickname(startUser.getNickname()).setDeptName(dept.getName())));
+    }
+
+    private void assertCanGetProcessInstance(String id) {
+        Long userId = getLoginUserId();
+        if (processInstanceShareService.canViewDetail(userId, id)) {
+            return;
+        }
+        BpmFinanceAttachAccess access = financeAttachAccessProvider.getIfAvailable();
+        if (access != null && access.canReadProcessInstanceViaBill(userId, id)) {
+            return;
+        }
+        processInstanceShareService.assertCanViewDetail(userId, id);
     }
 
 }

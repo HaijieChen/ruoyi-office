@@ -28,4 +28,8 @@ public class FinanceContractAccessPermission {
         }
         return contractApplicationService.canAccessDetail(id, userId);
     }
+
+    public boolean canReadViaAttachingBill(Long id) {
+        return canTaskContextOrOwnerRead(id);
+    }
 }

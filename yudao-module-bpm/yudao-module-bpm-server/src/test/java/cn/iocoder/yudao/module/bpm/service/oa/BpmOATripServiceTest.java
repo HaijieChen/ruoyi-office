@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceInfo;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceStatusEvent;
+import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.controller.admin.oa.vo.BpmOATripCreateReqVO;
@@ -55,6 +56,7 @@ class BpmOATripServiceTest {
     private SecurityFrameworkService securityFrameworkService;
     private ObjectProvider<TaskService> taskServiceProvider;
     private OaBillAccessPermission oaBillAccessPermission;
+    private BpmFinanceAttachAccess financeAttachAccess;
     private BpmOATripServiceImpl service;
 
     @BeforeEach
@@ -82,6 +84,10 @@ class BpmOATripServiceTest {
         ReflectionTestUtils.setField(service, "securityFrameworkService", securityFrameworkService);
         ReflectionTestUtils.setField(service, "oaBillAccessPermission", oaBillAccessPermission);
         ReflectionTestUtils.setField(service, "adminUserApi", adminUserApi);
+        financeAttachAccess = mock(BpmFinanceAttachAccess.class);
+        ObjectProvider<BpmFinanceAttachAccess> attachProvider = mock(ObjectProvider.class);
+        when(attachProvider.getIfAvailable()).thenReturn(financeAttachAccess);
+        ReflectionTestUtils.setField(service, "financeAttachAccessProvider", attachProvider);
     }
 
     @Test
@@ -308,6 +314,16 @@ class BpmOATripServiceTest {
         stubActiveAssignee("proc-1", 8L, 1L);
 
         BpmOATripDO trip = service.getTrip(10L, 8L);
+        assertEquals(10L, trip.getId());
+    }
+
+    @Test
+    void attachingBillViewerGetWithoutNativeAclSucceeds() {
+        when(tripMapper.selectById(10L)).thenReturn(ownedTrip(10L, 1L, "proc-1"));
+        when(securityFrameworkService.hasPermission(QUERY_PERMISSION)).thenReturn(false);
+        when(financeAttachAccess.canReadProcessInstanceViaBill(9L, "proc-1")).thenReturn(true);
+
+        BpmOATripDO trip = service.getTrip(10L, 9L);
         assertEquals(10L, trip.getId());
     }
 

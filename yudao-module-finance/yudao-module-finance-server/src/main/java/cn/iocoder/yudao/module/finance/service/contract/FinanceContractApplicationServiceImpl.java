@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.service.contract;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
@@ -23,6 +24,7 @@ import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
+import jakarta.annotation.Resource;
 import org.springframework.beans.factory.ObjectProvider;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -83,6 +85,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     private static final org.slf4j.Logger log =
             org.slf4j.LoggerFactory.getLogger(FinanceContractApplicationServiceImpl.class);
+
+    @Resource
+    private ObjectProvider<BpmFinanceAttachAccess> financeAttachAccessProvider;
 
     public FinanceContractApplicationServiceImpl(FinanceContractApplicationMapper applicationMapper,
                                                  FinanceContractApplicationNoRedisDAO applicationNoRedisDAO,
@@ -319,7 +324,16 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 userId, application.getApplicantUserId(), application.getProcessInstanceId())) {
             return application;
         }
+        if (canReadViaAttachingPayment(userId, id)) {
+            return application;
+        }
         throw exception(CONTRACT_APPLICATION_ACCESS_DENIED);
+    }
+
+    private boolean canReadViaAttachingPayment(Long userId, Long contractId) {
+        BpmFinanceAttachAccess access = financeAttachAccessProvider == null
+                ? null : financeAttachAccessProvider.getIfAvailable();
+        return access != null && access.canReadContractViaBill(userId, contractId);
     }
 
     @Override
@@ -331,8 +345,11 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         if (application == null) {
             return false;
         }
-        return processParticipantSupport.canReadBill(
-                userId, application.getApplicantUserId(), application.getProcessInstanceId());
+        if (processParticipantSupport.canReadBill(
+                userId, application.getApplicantUserId(), application.getProcessInstanceId())) {
+            return true;
+        }
+        return canReadViaAttachingPayment(userId, id);
     }
 
     /**

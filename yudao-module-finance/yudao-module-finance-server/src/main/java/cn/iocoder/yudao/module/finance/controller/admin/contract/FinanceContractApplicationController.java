@@ -125,7 +125,7 @@ public class FinanceContractApplicationController {
     @GetMapping("/get")
     @Operation(summary = "获得合同签约申请详情")
     // C30 / CS-R5：静态 query 或 本人/任务语境（转办后无 query 的办理人）
-    @PreAuthorize("@ss.hasPermission('finance:contract-application:query') or @financeContractAccess.canTaskContextOrOwnerRead(#id)")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:query') or @financeContractAccess.canTaskContextOrOwnerRead(#id) or @financeContractAccess.canReadViaAttachingBill(#id)")
     public CommonResult<FinanceContractApplicationRespVO> getApplication(@RequestParam("id") Long id) {
         FinanceContractApplicationDO application = contractApplicationService.getApplication(
                 id, getLoginUserId(), manageAll());
