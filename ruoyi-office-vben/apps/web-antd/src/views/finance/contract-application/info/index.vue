@@ -475,8 +475,11 @@ watch(
           <DescriptionsItem label="前置流程" :span="2">
             {{ detail.preProcessRef || '-' }}
           </DescriptionsItem>
-          <DescriptionsItem label="起止日期" :span="2">
-            {{ detail.startDate || '-' }} ~ {{ detail.endDate || '-' }}
+          <DescriptionsItem label="起始日期">
+            {{ detail.startDate || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="结束日期">
+            {{ detail.endDate || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="电子版" :span="2">
             <FilePreviewList :value="detail.draftFileUrl" />

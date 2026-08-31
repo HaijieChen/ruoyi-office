@@ -138,8 +138,11 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="邮寄地址">
           {{ detail.mailAddress || '-' }}
         </Descriptions.Item>
-        <Descriptions.Item label="起止日期" :span="2">
-          {{ detail.startDate || '-' }} ~ {{ detail.endDate || '-' }}
+        <Descriptions.Item label="起始日期">
+          {{ detail.startDate || '-' }}
+        </Descriptions.Item>
+        <Descriptions.Item label="结束日期">
+          {{ detail.endDate || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="电子版" :span="2">
           <FilePreviewList :value="detail.draftFileUrl" />

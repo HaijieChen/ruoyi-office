@@ -28,5 +28,8 @@ class FinanceApprovedSalesBusinessOrderSupportTest {
         FinanceContractApplicationDO purchase = sales(false, "100");
         purchase.setFileType("采购合同");
         assertFalse(FinanceApprovedSalesBusinessOrderSupport.shouldCreate(purchase, 0));
+        FinanceContractApplicationDO paymentBiz = sales(false, "100");
+        paymentBiz.setFileType("付款业务合同");
+        assertFalse(FinanceApprovedSalesBusinessOrderSupport.shouldCreate(paymentBiz, 0));
     }
 }
