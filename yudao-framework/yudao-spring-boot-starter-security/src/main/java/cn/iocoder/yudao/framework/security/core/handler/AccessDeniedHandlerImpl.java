@@ -36,10 +36,14 @@ public class AccessDeniedHandlerImpl implements AccessDeniedHandler {
         // 打印 warn 的原因是，不定期合并 warn，看看有没恶意破坏
         log.warn("[commence][访问 URL({}) 时，用户({}) 权限不够]", request.getRequestURI(),
                 SecurityFrameworkUtils.getLoginUserId(), e);
-        String msg = PermissionDeniedMessageFormatter.formatForCurrentRequest();
-        if (StrUtil.isNotBlank(msg)) {
-            ServletUtils.writeJSON(response, CommonResult.error(FORBIDDEN.getCode(), msg));
-            return;
+        try {
+            String msg = PermissionDeniedMessageFormatter.formatForCurrentRequest();
+            if (StrUtil.isNotBlank(msg)) {
+                ServletUtils.writeJSON(response, CommonResult.error(FORBIDDEN.getCode(), msg));
+                return;
+            }
+        } catch (Exception formatEx) {
+            log.warn("[commence][R1 文案失败，回落通用 403]", formatEx);
         }
         ServletUtils.writeJSON(response, CommonResult.error(FORBIDDEN));
     }

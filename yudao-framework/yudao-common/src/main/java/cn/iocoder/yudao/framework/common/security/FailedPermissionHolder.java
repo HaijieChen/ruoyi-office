@@ -28,16 +28,21 @@ public final class FailedPermissionHolder {
         if (request == null) {
             return;
         }
-        @SuppressWarnings("unchecked")
-        Set<String> codes = (Set<String>) request.getAttribute(REQUEST_ATTRIBUTE);
-        if (codes == null) {
-            codes = new LinkedHashSet<>();
-            request.setAttribute(REQUEST_ATTRIBUTE, codes);
-        }
+        Set<String> codes = new LinkedHashSet<>();
         for (String permission : permissions) {
             if (StrUtil.isNotBlank(permission)) {
                 codes.add(permission);
             }
+        }
+        // 覆盖而非累积：只保留最近一次失败的权限门，避免复合 OR / 体内探测污染后续 403
+        request.setAttribute(REQUEST_ATTRIBUTE, codes);
+    }
+
+    /** 权限检查通过时清空，避免 leftover 标到后续 AccessDeniedException。 */
+    public static void clear() {
+        HttpServletRequest request = ServletUtils.getRequest();
+        if (request != null) {
+            request.removeAttribute(REQUEST_ATTRIBUTE);
         }
     }
 

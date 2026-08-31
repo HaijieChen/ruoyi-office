@@ -302,9 +302,13 @@ public class GlobalExceptionHandler {
     public CommonResult<?> accessDeniedExceptionHandler(HttpServletRequest req, AccessDeniedException ex) {
         log.warn("[accessDeniedExceptionHandler][userId({}) 无法访问 url({})]", WebFrameworkUtils.getLoginUserId(req),
                 req.getRequestURL(), ex);
-        String msg = PermissionDeniedMessageFormatter.formatForCurrentRequest();
-        if (StrUtil.isNotBlank(msg)) {
-            return CommonResult.error(FORBIDDEN.getCode(), msg);
+        try {
+            String msg = PermissionDeniedMessageFormatter.formatForCurrentRequest();
+            if (StrUtil.isNotBlank(msg)) {
+                return CommonResult.error(FORBIDDEN.getCode(), msg);
+            }
+        } catch (Exception formatEx) {
+            log.warn("[accessDeniedExceptionHandler][R1 文案失败，回落通用 403]", formatEx);
         }
         return CommonResult.error(FORBIDDEN);
     }

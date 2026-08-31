@@ -156,7 +156,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const responseData = error?.response?.data ?? error?.data ?? {};
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
-      // 401 仍走登录 hop，不重复 toast。biz 403（权限门）即使 hideErrorMessage 也弹出服务端 msg。
+      // 401 不重复 toast。hideErrorMessage 下仅 R1（缺少权限）403 弹出服务端 msg。
       if (shouldSuppressErrorToast(error)) {
         return;
       }

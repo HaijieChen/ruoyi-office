@@ -76,7 +76,9 @@ public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {
             return false;
         }
         boolean ok = hasAnyPermissionsCache.get(new KeyValue<>(userId, Arrays.asList(permissions)));
-        if (!ok) {
+        if (ok) {
+            FailedPermissionHolder.clear();
+        } else {
             // 只记标识，仍返回 boolean，不改复合门谁能进
             FailedPermissionHolder.record(permissions);
         }
