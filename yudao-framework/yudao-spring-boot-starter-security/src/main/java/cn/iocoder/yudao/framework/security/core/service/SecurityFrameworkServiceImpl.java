@@ -3,6 +3,7 @@ package cn.iocoder.yudao.framework.security.core.service;
 import cn.hutool.core.collection.CollUtil;
 import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
 import cn.iocoder.yudao.framework.common.core.KeyValue;
+import cn.iocoder.yudao.framework.common.security.FailedPermissionHolder;
 import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import com.google.common.cache.CacheLoader;
@@ -74,7 +75,12 @@ public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {
         if (userId == null) {
             return false;
         }
-        return hasAnyPermissionsCache.get(new KeyValue<>(userId, Arrays.asList(permissions)));
+        boolean ok = hasAnyPermissionsCache.get(new KeyValue<>(userId, Arrays.asList(permissions)));
+        if (!ok) {
+            // 只记标识，仍返回 boolean，不改复合门谁能进
+            FailedPermissionHolder.record(permissions);
+        }
+        return ok;
     }
 
     @Override

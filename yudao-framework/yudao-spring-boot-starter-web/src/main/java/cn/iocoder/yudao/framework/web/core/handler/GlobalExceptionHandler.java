@@ -10,6 +10,7 @@ import cn.iocoder.yudao.framework.common.biz.infra.logger.dto.ApiErrorLogCreateR
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.security.PermissionDeniedMessageFormatter;
 import cn.iocoder.yudao.framework.common.util.collection.SetUtils;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.common.util.json.SensitiveJsonSanitizer;
@@ -301,6 +302,10 @@ public class GlobalExceptionHandler {
     public CommonResult<?> accessDeniedExceptionHandler(HttpServletRequest req, AccessDeniedException ex) {
         log.warn("[accessDeniedExceptionHandler][userId({}) 无法访问 url({})]", WebFrameworkUtils.getLoginUserId(req),
                 req.getRequestURL(), ex);
+        String msg = PermissionDeniedMessageFormatter.formatForCurrentRequest();
+        if (StrUtil.isNotBlank(msg)) {
+            return CommonResult.error(FORBIDDEN.getCode(), msg);
+        }
         return CommonResult.error(FORBIDDEN);
     }
 
