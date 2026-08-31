@@ -49,6 +49,7 @@ import {
   financeTimingLabel,
 } from '#/views/finance/shared/display-labels';
 import PrintVoucher from '../modules/print-voucher.vue';
+import PredocOverlay from '../modules/predoc-overlay.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationBpmDetail' });
 
@@ -69,6 +70,14 @@ const props = defineProps<{
   processInstance?: any;
   taskId?: string;
 }>();
+
+const predocOpen = ref(false);
+const overlayKind = ref<'PURCHASE' | 'LEASE' | 'BUSINESS'>();
+
+function openPredoc(kind: 'PURCHASE' | 'LEASE' | 'BUSINESS') {
+  overlayKind.value = kind;
+  predocOpen.value = true;
+}
 
 const FINANCE_NODE = 'taskFinance';
 const CASHIER_NODE = 'taskCashier';
@@ -521,6 +530,18 @@ watch(
             {{ financeProductLabel(detail.costProject) }}
           </Descriptions.Item>
           <Descriptions.Item label="事由">{{ financeReasonLabel(detail.paymentReason) }}</Descriptions.Item>
+          <Descriptions.Item v-if="detail.purchaseProcessInstanceId" label="采购前置">
+            <span>{{ detail.purchaseSnapshot || detail.purchaseProcessInstanceId }}</span>
+            <Button type="link" class="px-1" @click="openPredoc('PURCHASE')">查看采购申请</Button>
+          </Descriptions.Item>
+          <Descriptions.Item v-if="detail.leaseContractApplicationId" label="租赁合同">
+            <span>{{ detail.leaseContractApplicationId }}</span>
+            <Button type="link" class="px-1" @click="openPredoc('LEASE')">查看租赁合同</Button>
+          </Descriptions.Item>
+          <Descriptions.Item v-if="detail.relatedContractApplicationId" label="合同签约">
+            <span>{{ detail.relatedContractApplicationId }}</span>
+            <Button type="link" class="px-1" @click="openPredoc('BUSINESS')">查看付款业务合同</Button>
+          </Descriptions.Item>
           <Descriptions.Item label="时效">{{ financeTimingLabel(detail.paymentTiming) }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ detail.periodLabel || '-' }}</Descriptions.Item>
           <Descriptions.Item label="账户" :span="2">
@@ -603,5 +624,16 @@ watch(
         无法加载详情。请确认 businessKey 与 formCustomViewPath 配置。
       </div>
     </Spin>
+    <PredocOverlay
+      v-model:open="predocOpen"
+      :kind="overlayKind"
+      :purchase-process-instance-id="detail?.purchaseProcessInstanceId"
+      :purchase-snapshot="detail?.purchaseSnapshot"
+      :contract-id="
+        overlayKind === 'LEASE'
+          ? detail?.leaseContractApplicationId
+          : detail?.relatedContractApplicationId
+      "
+    />
   </div>
 </template>

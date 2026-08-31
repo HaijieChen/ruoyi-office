@@ -20,8 +20,10 @@ const router = useRouter();
 const userStore = useUserStore();
 const detail = ref<FinanceContractApplicationApi.Application | null>(null);
 const loading = ref(false);
+const readOnly = ref(false);
 
 const canResubmit = computed(() => {
+  if (readOnly.value) return false;
   const d = detail.value;
   if (!d || d.voided || d.approvalStatus !== 'REJECTED') return false;
   const uid = userStore.userInfo?.id;
@@ -67,7 +69,8 @@ const [Modal, modalApi] = useVbenModal({
       detail.value = null;
       return;
     }
-    const data = modalApi.getData<{ id?: number }>();
+    const data = modalApi.getData<{ id?: number; readOnly?: boolean }>();
+    readOnly.value = !!data?.readOnly;
     if (!data?.id) return;
     loading.value = true;
     try {
@@ -95,6 +98,7 @@ const [Modal, modalApi] = useVbenModal({
           </span>
         </Space>
       </div>
+      <div v-else-if="!detail && !loading">无法加载前置单据</div>
       <Descriptions v-if="detail" bordered :column="2" size="small">
         <Descriptions.Item label="业务单号">
           {{ detail.applicationNo }}

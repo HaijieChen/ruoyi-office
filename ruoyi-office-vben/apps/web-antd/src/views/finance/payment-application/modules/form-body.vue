@@ -8,7 +8,7 @@ import { computed, ref, watch } from 'vue';
 
 import { getDictOptions } from '@vben/hooks';
 
-import { DatePicker, Form, Input, InputNumber, message, Select } from 'ant-design-vue';
+import { Button, DatePicker, Form, Input, InputNumber, message, Select } from 'ant-design-vue';
 
 import { listSelectableContractsForBusinessPayment } from '#/api/finance/contract-application';
 import { getCustomerCompanySimpleList } from '#/api/finance/customer-company';
@@ -24,6 +24,7 @@ import { getSimpleCompanyList } from '#/api/system/dept';
 import { FileUpload } from '#/components/upload';
 import { defaultCurrencyFromCompanyAccounts } from '#/views/finance/shared/account-currency';
 import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
+import PredocOverlay from './predoc-overlay.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationFormBody' });
 
@@ -82,6 +83,21 @@ const currencyTouched = ref(false);
 const isPurchase = computed(() => formData.value.paymentReason === 'PURCHASE');
 const isLease = computed(() => formData.value.paymentReason === 'LEASE');
 const isBusiness = computed(() => formData.value.paymentReason === 'BUSINESS');
+const predocOpen = ref(false);
+const overlayKind = ref<'PURCHASE' | 'LEASE' | 'BUSINESS'>();
+
+function openPurchasePredoc() {
+  overlayKind.value = 'PURCHASE';
+  predocOpen.value = true;
+}
+function openLeasePredoc() {
+  overlayKind.value = 'LEASE';
+  predocOpen.value = true;
+}
+function openBusinessPredoc() {
+  overlayKind.value = 'BUSINESS';
+  predocOpen.value = true;
+}
 const cumulativeAfter = computed(() => {
   const amt = Number(formData.value.applyAmount || 0);
   return Number(cumulativePaid.value) + amt;
@@ -517,21 +533,43 @@ defineExpose({
         />
       </Form.Item>
       <Form.Item v-if="isPurchase" label="采购实例" required>
-        <Select
-          v-model:value="formData.purchaseProcessInstanceId"
-          :options="purchaseOptions"
-          show-search
-          allow-clear
-          placeholder="已通过采购流程"
-        />
+        <div class="flex items-center gap-1">
+          <Select
+            v-model:value="formData.purchaseProcessInstanceId"
+            class="flex-1"
+            :options="purchaseOptions"
+            show-search
+            allow-clear
+            placeholder="已通过采购流程"
+          />
+          <Button
+            v-if="formData.purchaseProcessInstanceId"
+            type="link"
+            class="px-1"
+            @click="openPurchasePredoc"
+          >
+            查看采购申请
+          </Button>
+        </div>
       </Form.Item>
       <Form.Item v-if="isLease" label="租赁合同" required>
-        <Select
-          v-model:value="formData.leaseContractApplicationId"
-          :options="leaseOptions"
-          show-search
-          allow-clear
-        />
+        <div class="flex items-center gap-1">
+          <Select
+            v-model:value="formData.leaseContractApplicationId"
+            class="flex-1"
+            :options="leaseOptions"
+            show-search
+            allow-clear
+          />
+          <Button
+            v-if="formData.leaseContractApplicationId"
+            type="link"
+            class="px-1"
+            @click="openLeasePredoc"
+          >
+            查看租赁合同
+          </Button>
+        </div>
       </Form.Item>
       <Form.Item
         v-if="isBusiness"
@@ -539,13 +577,24 @@ defineExpose({
         name="relatedContractApplicationId"
         required
       >
-        <Select
-          v-model:value="formData.relatedContractApplicationId"
-          :options="relatedContractOptions"
-          show-search
-          placeholder="已通过的付款业务合同"
-          @change="onRelatedContractChange"
-        />
+        <div class="flex items-center gap-1">
+          <Select
+            v-model:value="formData.relatedContractApplicationId"
+            class="flex-1"
+            :options="relatedContractOptions"
+            show-search
+            placeholder="已通过的付款业务合同"
+            @change="onRelatedContractChange"
+          />
+          <Button
+            v-if="formData.relatedContractApplicationId"
+            type="link"
+            class="px-1"
+            @click="openBusinessPredoc"
+          >
+            查看付款业务合同
+          </Button>
+        </div>
       </Form.Item>
       <Form.Item label="收款方" name="payeeCompanyId" required>
         <Select
@@ -598,5 +647,15 @@ defineExpose({
         <Input.TextArea v-model:value="formData.specialNote" :rows="2" />
       </Form.Item>
     </Form>
+    <PredocOverlay
+      v-model:open="predocOpen"
+      :kind="overlayKind"
+      :purchase-process-instance-id="formData.purchaseProcessInstanceId"
+      :contract-id="
+        overlayKind === 'LEASE'
+          ? formData.leaseContractApplicationId
+          : formData.relatedContractApplicationId
+      "
+    />
   </div>
 </template>

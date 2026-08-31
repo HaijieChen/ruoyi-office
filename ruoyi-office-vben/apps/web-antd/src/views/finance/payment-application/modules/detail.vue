@@ -3,7 +3,7 @@ import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
-import { Descriptions, Spin } from 'ant-design-vue';
+import { Button, Descriptions, Spin } from 'ant-design-vue';
 
 import { FilePreviewList } from '#/components/upload';
 import { getPaymentApplication } from '#/api/finance/payment-application';
@@ -16,11 +16,19 @@ import {
   financeTimingLabel,
 } from '#/views/finance/shared/display-labels';
 import PrintVoucher from './print-voucher.vue';
+import PredocOverlay from './predoc-overlay.vue';
 
 defineOptions({ name: 'FinancePaymentApplicationDetail' });
 
 const detail = ref<FinancePaymentApplicationApi.Application | null>(null);
 const loading = ref(false);
+const predocOpen = ref(false);
+const overlayKind = ref<'PURCHASE' | 'LEASE' | 'BUSINESS'>();
+
+function openPredoc(kind: 'PURCHASE' | 'LEASE' | 'BUSINESS') {
+  overlayKind.value = kind;
+  predocOpen.value = true;
+}
 
 const [Modal, modalApi] = useVbenModal({
   async onOpenChange(isOpen: boolean) {
@@ -62,8 +70,34 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="时效">{{ financeTimingLabel(detail.paymentTiming) }}</Descriptions.Item>
         <Descriptions.Item label="产品类型">{{ financeProductLabel(detail.costProject) }}</Descriptions.Item>
         <Descriptions.Item label="事由">{{ financeReasonLabel(detail.paymentReason) }}</Descriptions.Item>
-        <Descriptions.Item label="采购前置">{{ detail.purchaseSnapshot || detail.purchaseProcessInstanceId || '-' }}</Descriptions.Item>
-        <Descriptions.Item label="租赁合同">{{ detail.leaseContractApplicationId || '-' }}</Descriptions.Item>
+        <Descriptions.Item label="采购前置">
+          <span>{{ detail.purchaseSnapshot || detail.purchaseProcessInstanceId || '-' }}</span>
+          <Button
+            v-if="detail.purchaseProcessInstanceId"
+            type="link"
+            class="px-1"
+            @click="openPredoc('PURCHASE')"
+          >
+            查看采购申请
+          </Button>
+        </Descriptions.Item>
+        <Descriptions.Item label="租赁合同">
+          <span>{{ detail.leaseContractApplicationId || '-' }}</span>
+          <Button
+            v-if="detail.leaseContractApplicationId"
+            type="link"
+            class="px-1"
+            @click="openPredoc('LEASE')"
+          >
+            查看租赁合同
+          </Button>
+        </Descriptions.Item>
+        <Descriptions.Item v-if="detail.relatedContractApplicationId" label="合同签约">
+          <span>{{ detail.relatedContractApplicationId }}</span>
+          <Button type="link" class="px-1" @click="openPredoc('BUSINESS')">
+            查看付款业务合同
+          </Button>
+        </Descriptions.Item>
         <Descriptions.Item label="累计已支付">{{ detail.cumulativePaid }}</Descriptions.Item>
         <Descriptions.Item label="本次后累计">{{ detail.cumulativeAfter }}</Descriptions.Item>
         <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
@@ -72,5 +106,16 @@ const [Modal, modalApi] = useVbenModal({
         </Descriptions.Item>
       </Descriptions>
     </Spin>
+    <PredocOverlay
+      v-model:open="predocOpen"
+      :kind="overlayKind"
+      :purchase-process-instance-id="detail?.purchaseProcessInstanceId"
+      :purchase-snapshot="detail?.purchaseSnapshot"
+      :contract-id="
+        overlayKind === 'LEASE'
+          ? detail?.leaseContractApplicationId
+          : detail?.relatedContractApplicationId
+      "
+    />
   </Modal>
 </template>
