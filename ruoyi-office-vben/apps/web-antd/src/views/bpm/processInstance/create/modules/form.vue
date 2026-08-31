@@ -440,8 +440,23 @@ async function initProcessInfo(row: any, formVariables?: any) {
       throw new Error('业务表单未就绪');
     }
 
-    // 3) 业务数据初始化
-    await body.reset({ mode: 'create' });
+    // 3) 业务数据初始化：reset 403 才是发起权限不足
+    try {
+      await body.reset({ mode: 'create' });
+    } catch (error: any) {
+      if (gen !== embedInitGen) return;
+      if (isBizForbidden(error)) {
+        embedReady.value = false;
+        embedLoading.value = false;
+        shellMode.value = 'denied';
+        startDeniedReason.value =
+          startDeniedReason.value ||
+          '无发起权限，请联系管理员分配对应业务角色';
+        embedError.value = null;
+        return;
+      }
+      throw error;
+    }
     if (gen !== embedInitGen) return;
 
     embedReady.value = true;
@@ -457,28 +472,23 @@ async function initProcessInfo(row: any, formVariables?: any) {
     console.error(error);
     embedReady.value = false;
     embedLoading.value = false;
-    // 403：保留空壳，不在这里 message.error（拦截器已 toast R1）
-    const bizMsg =
-      error?.response?.data?.msg ||
-      error?.data?.msg ||
-      error?.message ||
-      '';
-    const isForbidden =
-      error?.data?.code === 403 ||
-      error?.response?.data?.code === 403 ||
-      bizMsg.includes('没有该操作权限') ||
-      bizMsg.includes('缺少权限');
-    if (isForbidden) {
-      shellMode.value = 'denied';
-      startDeniedReason.value =
-        startDeniedReason.value ||
-        '无发起权限，请联系管理员分配对应业务角色';
-      embedError.value = null;
+    const bizMsg = bizErrorMsg(error);
+    // reset 之后的 403（审批详情等）不改写成「无发起权限」；R1 已由拦截器 toast
+    if (isBizForbidden(error)) {
+      embedError.value = bizMsg || '加载业务表单失败';
       return;
     }
     embedError.value = bizMsg || '加载业务表单失败';
     message.error(embedError.value);
   }
+}
+
+function isBizForbidden(error: any) {
+  return error?.data?.code === 403 || error?.response?.data?.code === 403;
+}
+
+function bizErrorMsg(error: any) {
+  return error?.response?.data?.msg || error?.data?.msg || error?.message || '';
 }
 
 /**
