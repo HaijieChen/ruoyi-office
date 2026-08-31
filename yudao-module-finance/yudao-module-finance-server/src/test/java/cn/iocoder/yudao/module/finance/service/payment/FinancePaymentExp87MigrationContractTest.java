@@ -42,7 +42,9 @@ class FinancePaymentExp87MigrationContractTest {
         assertTrue(Files.exists(sql));
         String text = Files.readString(sql);
         assertTrue(text.contains("housing_fund_amount"));
-        assertTrue(text.contains("information_schema"));
+        assertTrue(text.contains("finance_payment_salary_line"));
+        assertTrue(text.contains("ADD COLUMN"));
+        assertTrue(text.contains("information_schema.COLUMNS"));
         assertTrue(text.contains("NOT NULL DEFAULT 0.00"));
         assertFalse(text.contains("CREATE TABLE"));
     }

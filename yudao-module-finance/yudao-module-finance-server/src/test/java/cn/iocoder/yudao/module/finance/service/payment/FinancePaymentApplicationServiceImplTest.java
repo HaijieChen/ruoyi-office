@@ -800,6 +800,11 @@ class FinancePaymentApplicationServiceImplTest {
         ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
         verify(mapper).insert(cap.capture());
         assertEquals(new BigDecimal("10000.00"), cap.getValue().getApplyAmount());
+        ArgumentCaptor<cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO> lineCap =
+                ArgumentCaptor.forClass(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO.class);
+        verify(salaryLineMapper).insert(lineCap.capture());
+        assertEquals(new BigDecimal("0.00"), lineCap.getValue().getHousingFundAmount());
+        assertEquals(new BigDecimal("10000.00"), lineCap.getValue().getLineTotal());
     }
 
     @Test

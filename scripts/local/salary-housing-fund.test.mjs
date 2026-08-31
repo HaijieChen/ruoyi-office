@@ -23,7 +23,14 @@ test('salary forms sum and submit optional housing fund', () => {
   for (const src of [form, body]) {
     assert.match(src, /housingFundAmount/);
     assert.match(src, /placeholder="公积金（选填）"/);
-    assert.match(src, /Number\(l\.housingFundAmount \|\| 0\)/);
+    assert.match(
+      src,
+      /Number\(l\.socialInsuranceAmount \|\| 0\) \+ Number\(l\.housingFundAmount \|\| 0\)|Number\(l\.socialInsuranceAmount \|\| 0\)\s*\+\s*\n\s*Number\(l\.housingFundAmount \|\| 0\)/,
+    );
+    assert.match(
+      src,
+      /housingFundAmount:\s*Number\(l\.housingFundAmount \|\| 0\)/,
+    );
   }
   assert.match(api, /housingFundAmount\?: number/);
 });
