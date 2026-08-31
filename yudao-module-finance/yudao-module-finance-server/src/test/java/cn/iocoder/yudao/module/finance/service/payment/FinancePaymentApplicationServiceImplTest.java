@@ -465,10 +465,15 @@ class FinancePaymentApplicationServiceImplTest {
         cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
                 new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
         line.setEntityCompanyDeptId(20L);
+        line.setCompanyBankAccountId(77L);
         line.setNetSalaryAmount(new BigDecimal("100.00"));
         line.setPersonalTaxAmount(new BigDecimal("10.00"));
         line.setSocialInsuranceAmount(new BigDecimal("20.00"));
         req.setLines(List.of(line));
+        when(companyBankAccountService.requireEnabledForEntityCompany(77L, 20L))
+                .thenReturn(cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                        .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                        .accountHolder("甲").accountNo("622200001111").currency("CNY").status(0).build());
 
         service.resubmitSalary(41L, req, 1L);
 
@@ -701,10 +706,15 @@ class FinancePaymentApplicationServiceImplTest {
         cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
                 new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
         line.setEntityCompanyDeptId(20L);
+        line.setCompanyBankAccountId(77L);
         line.setNetSalaryAmount(new BigDecimal("100.00"));
         line.setPersonalTaxAmount(BigDecimal.ZERO);
         line.setSocialInsuranceAmount(BigDecimal.ZERO);
         req.setLines(List.of(line));
+        when(companyBankAccountService.requireEnabledForEntityCompany(77L, 20L))
+                .thenReturn(cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                        .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                        .accountHolder("甲").accountNo("622200001111").currency("CNY").status(0).build());
 
         Long id = service.createAndStartSalary(req, 1L);
         assertEquals(100L, id);
@@ -716,6 +726,32 @@ class FinancePaymentApplicationServiceImplTest {
         verify(processInstanceApi).createProcessInstanceByBusiness(eq(1L), bpmCap.capture());
         assertEquals(FinancePaymentApplicationService.PROCESS_KEY_SALARY,
                 bpmCap.getValue().getProcessDefinitionKey());
+        ArgumentCaptor<cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO> lineCap =
+                ArgumentCaptor.forClass(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentSalaryLineDO.class);
+        verify(salaryLineMapper).insert(lineCap.capture());
+        assertEquals(77L, lineCap.getValue().getCompanyBankAccountId());
+        assertEquals("基本户", lineCap.getValue().getAccountNameSnapshot());
+    }
+
+    @Test
+    void createAndStartSalaryRejectsMissingLineAccount() {
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinanceSalaryPaymentCreateAndStartReqVO();
+        req.setPaymentTiming(FinancePaymentTimingEnum.IMMEDIATE.getCode());
+        req.setPeriodLabel("2026-08");
+        req.setCurrency("CNY");
+        cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
+                new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
+        line.setEntityCompanyDeptId(20L);
+        line.setNetSalaryAmount(new BigDecimal("100.00"));
+        line.setPersonalTaxAmount(BigDecimal.ZERO);
+        line.setSocialInsuranceAmount(BigDecimal.ZERO);
+        req.setLines(List.of(line));
+        when(companyBankAccountService.requireEnabledForEntityCompany(isNull(), eq(20L)))
+                .thenThrow(new ServiceException(COMPANY_BANK_ACCOUNT_REQUIRED));
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStartSalary(req, 1L));
+        assertEquals(COMPANY_BANK_ACCOUNT_REQUIRED.getCode(), ex.getCode());
     }
 
     @Test
@@ -729,8 +765,13 @@ class FinancePaymentApplicationServiceImplTest {
         cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentTaxLineReqVO line =
                 new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentTaxLineReqVO();
         line.setEntityCompanyDeptId(20L);
+        line.setCompanyBankAccountId(77L);
         line.setVatAmount(new BigDecimal("88.00"));
         req.setLines(List.of(line));
+        when(companyBankAccountService.requireEnabledForEntityCompany(77L, 20L))
+                .thenReturn(cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                        .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                        .accountHolder("甲").accountNo("622200001111").currency("CNY").status(0).build());
 
         Long id = service.createAndStartTax(req, 1L);
         assertEquals(100L, id);
@@ -763,10 +804,15 @@ class FinancePaymentApplicationServiceImplTest {
         cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO line =
                 new cn.iocoder.yudao.module.finance.controller.admin.payment.vo.FinancePaymentSalaryLineReqVO();
         line.setEntityCompanyDeptId(20L);
+        line.setCompanyBankAccountId(77L);
         line.setNetSalaryAmount(new BigDecimal("100.00"));
         line.setPersonalTaxAmount(BigDecimal.ZERO);
         line.setSocialInsuranceAmount(BigDecimal.ZERO);
         req.setLines(List.of(line));
+        when(companyBankAccountService.requireEnabledForEntityCompany(77L, 20L))
+                .thenReturn(cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                        .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                        .accountHolder("甲").accountNo("622200001111").currency("CNY").status(0).build());
 
         service.resubmitSalary(50L, req, 1L);
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =

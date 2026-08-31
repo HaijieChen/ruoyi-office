@@ -13,6 +13,9 @@ public class FinancePaymentTaxLineReqVO {
     @NotNull(message = "主体公司不能为空")
     private Long entityCompanyDeptId;
 
+    @NotNull(message = "公司银行账户不能为空")
+    private Long companyBankAccountId;
+
     private BigDecimal vatAmount;
     private BigDecimal surchargeAmount;
     private BigDecimal stampTaxAmount;

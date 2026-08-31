@@ -13,6 +13,9 @@ public class FinancePaymentSalaryLineReqVO {
     @NotNull(message = "主体公司不能为空")
     private Long entityCompanyDeptId;
 
+    @NotNull(message = "公司银行账户不能为空")
+    private Long companyBankAccountId;
+
     @NotNull(message = "实发薪资不能为空")
     private BigDecimal netSalaryAmount;
 

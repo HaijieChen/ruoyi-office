@@ -1449,6 +1449,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         for (FinancePaymentSalaryLineReqVO line : lines) {
             FinanceEntityCompanyResolver.ResolvedCompany company =
                     entityCompanyResolver.requireByDeptId(line.getEntityCompanyDeptId());
+            FinanceCompanyBankAccountDO account = companyBankAccountService
+                    .requireEnabledForEntityCompany(line.getCompanyBankAccountId(), company.deptId());
             BigDecimal net = nonNeg(line.getNetSalaryAmount());
             BigDecimal tax = nonNeg(line.getPersonalTaxAmount());
             BigDecimal social = nonNeg(line.getSocialInsuranceAmount());
@@ -1459,6 +1461,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             result.add(FinancePaymentSalaryLineDO.builder()
                     .entityCompanyDeptId(company.deptId())
                     .entityCompanyName(company.name())
+                    .companyBankAccountId(account.getId())
+                    .accountNameSnapshot(account.getAccountName())
+                    .bankNameSnapshot(account.getBankName())
+                    .accountNoMaskedSnapshot(FinanceCompanyBankAccountService.maskAccountNo(account.getAccountNo()))
                     .netSalaryAmount(net)
                     .personalTaxAmount(tax)
                     .socialInsuranceAmount(social)
@@ -1487,6 +1493,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         for (FinancePaymentTaxLineReqVO line : lines) {
             FinanceEntityCompanyResolver.ResolvedCompany company =
                     entityCompanyResolver.requireByDeptId(line.getEntityCompanyDeptId());
+            FinanceCompanyBankAccountDO account = companyBankAccountService
+                    .requireEnabledForEntityCompany(line.getCompanyBankAccountId(), company.deptId());
             BigDecimal vat = nonNeg(line.getVatAmount());
             BigDecimal surcharge = nonNeg(line.getSurchargeAmount());
             BigDecimal stamp = nonNeg(line.getStampTaxAmount());
@@ -1498,6 +1506,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             result.add(FinancePaymentTaxLineDO.builder()
                     .entityCompanyDeptId(company.deptId())
                     .entityCompanyName(company.name())
+                    .companyBankAccountId(account.getId())
+                    .accountNameSnapshot(account.getAccountName())
+                    .bankNameSnapshot(account.getBankName())
+                    .accountNoMaskedSnapshot(FinanceCompanyBankAccountService.maskAccountNo(account.getAccountNo()))
                     .vatAmount(vat)
                     .surchargeAmount(surcharge)
                     .stampTaxAmount(stamp)

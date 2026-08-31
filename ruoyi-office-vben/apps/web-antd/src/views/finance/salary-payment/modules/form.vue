@@ -18,6 +18,7 @@ import {
   getSalaryPayment,
   resubmitSalaryPayment,
 } from '#/api/finance/salary-payment';
+import { getCompanyBankAccountSimpleList } from '#/api/finance/company-bank-account';
 import { getSimpleDeptList } from '#/api/system/dept';
 import { FileUpload } from '#/components/upload';
 
@@ -27,6 +28,7 @@ const emit = defineEmits(['success']);
 
 interface Line {
   entityCompanyDeptId?: number;
+  companyBankAccountId?: number;
   netSalaryAmount?: number;
   personalTaxAmount?: number;
   socialInsuranceAmount?: number;
@@ -47,6 +49,7 @@ const form = ref<{
 });
 
 const companyOptions = ref<{ label: string; value: number }[]>([]);
+const accountOptionsByCompany = ref<Record<number, { label: string; value: number }[]>>({});
 const isResubmit = computed(() => !!form.value.id);
 const title = computed(() =>
   isResubmit.value ? '驳回后重提薪资付款' : '新建薪资付款申请',
@@ -63,6 +66,31 @@ onMounted(async () => {
   }
 });
 
+async function loadAccounts(companyId?: number) {
+  if (!companyId) return [];
+  if (accountOptionsByCompany.value[companyId]) {
+    return accountOptionsByCompany.value[companyId];
+  }
+  try {
+    const list = await getCompanyBankAccountSimpleList(companyId);
+    const opts = (list || []).map((a) => ({
+      label: `${a.accountName} / ${a.bankName} / ${a.accountNoMasked || ''}`,
+      value: a.id,
+    }));
+    accountOptionsByCompany.value = { ...accountOptionsByCompany.value, [companyId]: opts };
+    return opts;
+  } catch {
+    accountOptionsByCompany.value = { ...accountOptionsByCompany.value, [companyId]: [] };
+    return [];
+  }
+}
+function accountsFor(companyId?: number) {
+  return companyId ? accountOptionsByCompany.value[companyId] || [] : [];
+}
+function onCompanyChange(line: Line) {
+  line.companyBankAccountId = undefined;
+  if (line.entityCompanyDeptId) void loadAccounts(line.entityCompanyDeptId);
+}
 function addLine() {
   form.value.lines.push({});
 }
@@ -107,12 +135,16 @@ const [Modal, modalApi] = useVbenModal({
         currency: detail.currency || 'CNY',
         specialNote: detail.specialNote,
         evidenceFileUrls: parseEvidence(detail.evidenceFileUrls as any),
-        lines: ((detail as any).salaryLines || []).map((l: any) => ({
-          entityCompanyDeptId: l.entityCompanyDeptId,
-          netSalaryAmount: Number(l.netSalaryAmount || 0),
-          personalTaxAmount: Number(l.personalTaxAmount || 0),
-          socialInsuranceAmount: Number(l.socialInsuranceAmount || 0),
-        })),
+        lines: ((detail as any).salaryLines || []).map((l: any) => {
+          if (l.entityCompanyDeptId) void loadAccounts(l.entityCompanyDeptId);
+          return {
+            entityCompanyDeptId: l.entityCompanyDeptId,
+            companyBankAccountId: l.companyBankAccountId,
+            netSalaryAmount: Number(l.netSalaryAmount || 0),
+            personalTaxAmount: Number(l.personalTaxAmount || 0),
+            socialInsuranceAmount: Number(l.socialInsuranceAmount || 0),
+          };
+        }),
       };
       if (!form.value.lines.length) form.value.lines = [{}];
     } else {
@@ -132,6 +164,10 @@ const [Modal, modalApi] = useVbenModal({
       message.error('请为每行选择主体公司');
       return;
     }
+    if (!form.value.lines.every((l) => l.companyBankAccountId)) {
+      message.error('请为每行选择公司银行账户');
+      return;
+    }
     const payload = {
       paymentTiming: form.value.paymentTiming || 'IMMEDIATE',
       periodLabel: form.value.periodLabel!,
@@ -140,6 +176,7 @@ const [Modal, modalApi] = useVbenModal({
       evidenceFileUrls: form.value.evidenceFileUrls,
       lines: form.value.lines.map((l) => ({
         entityCompanyDeptId: l.entityCompanyDeptId!,
+        companyBankAccountId: l.companyBankAccountId!,
         netSalaryAmount: Number(l.netSalaryAmount || 0),
         personalTaxAmount: Number(l.personalTaxAmount || 0),
         socialInsuranceAmount: Number(l.socialInsuranceAmount || 0),
@@ -208,6 +245,16 @@ const [Modal, modalApi] = useVbenModal({
               style="width: 180px"
               :options="companyOptions"
               placeholder="主体公司"
+              show-search
+              option-filter-prop="label"
+              @change="onCompanyChange(line)"
+            />
+            <Select
+              v-model:value="line.companyBankAccountId"
+              style="width: 240px"
+              :options="accountsFor(line.entityCompanyDeptId)"
+              :disabled="!line.entityCompanyDeptId"
+              placeholder="公司账户"
               show-search
               option-filter-prop="label"
             />

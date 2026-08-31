@@ -13,11 +13,15 @@ export namespace FinanceTaxPaymentApi {
 
   export interface TaxLine {
     entityCompanyDeptId: number;
+    companyBankAccountId: number;
     vatAmount?: number;
     surchargeAmount?: number;
     stampTaxAmount?: number;
     citAmount?: number;
     entityCompanyName?: string;
+    accountNameSnapshot?: string;
+    bankNameSnapshot?: string;
+    accountNoMaskedSnapshot?: string;
     lineTotal?: number;
   }
 

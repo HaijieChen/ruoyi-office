@@ -183,10 +183,18 @@ const payEntityOptions = computed(() => {
 
 const multiEntity = computed(() => payEntityOptions.value.length > 1);
 
+function appliedAccountId(entityCompanyDeptId?: number) {
+  const lines = detail.value?.taxLines || [];
+  const matched = lines.find((l: any) => l.entityCompanyDeptId === entityCompanyDeptId);
+  return matched?.companyBankAccountId as number | undefined;
+}
+
 async function loadAccounts(entityCompanyDeptId?: number) {
   accountOptions.value = [];
-  companyBankAccountId.value = undefined;
-  if (!entityCompanyDeptId) return;
+  if (!entityCompanyDeptId) {
+    companyBankAccountId.value = undefined;
+    return;
+  }
   try {
     const list = await getCompanyBankAccountSimpleList(entityCompanyDeptId);
     accountOptions.value = (list || []).map((a) => ({
@@ -196,6 +204,8 @@ async function loadAccounts(entityCompanyDeptId?: number) {
   } catch {
     accountOptions.value = [];
   }
+  const applied = appliedAccountId(entityCompanyDeptId);
+  companyBankAccountId.value = applied ?? accountOptions.value[0]?.value;
 }
 
 async function loadData() {
@@ -542,6 +552,7 @@ watch(
             :data-source="detail.taxLines"
             :columns="[
               { title: '主体公司', dataIndex: 'entityCompanyName', key: 'a' },
+              { title: '账户', dataIndex: 'accountNameSnapshot', key: 'acct' },
               { title: '增值税', dataIndex: 'vatAmount', key: 'b' },
               { title: '附加税', dataIndex: 'surchargeAmount', key: 'c' },
               { title: '印花税', dataIndex: 'stampTaxAmount', key: 'd' },

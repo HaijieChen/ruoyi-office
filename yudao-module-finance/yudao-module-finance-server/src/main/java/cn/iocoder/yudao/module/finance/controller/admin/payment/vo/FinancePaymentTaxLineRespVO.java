@@ -12,6 +12,10 @@ public class FinancePaymentTaxLineRespVO {
     private Long id;
     private Long entityCompanyDeptId;
     private String entityCompanyName;
+    private Long companyBankAccountId;
+    private String accountNameSnapshot;
+    private String bankNameSnapshot;
+    private String accountNoMaskedSnapshot;
     private BigDecimal vatAmount;
     private BigDecimal surchargeAmount;
     private BigDecimal stampTaxAmount;

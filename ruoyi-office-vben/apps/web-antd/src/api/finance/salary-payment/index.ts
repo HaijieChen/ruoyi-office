@@ -13,10 +13,14 @@ export namespace FinanceSalaryPaymentApi {
 
   export interface SalaryLine {
     entityCompanyDeptId: number;
+    companyBankAccountId: number;
     netSalaryAmount: number;
     personalTaxAmount: number;
     socialInsuranceAmount: number;
     entityCompanyName?: string;
+    accountNameSnapshot?: string;
+    bankNameSnapshot?: string;
+    accountNoMaskedSnapshot?: string;
     lineTotal?: number;
   }
 
