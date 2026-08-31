@@ -457,7 +457,7 @@ async function initProcessInfo(row: any, formVariables?: any) {
     console.error(error);
     embedReady.value = false;
     embedLoading.value = false;
-    // 403「没有该操作权限」：转为友好空态，不弹通用 toast / 不展示「加载业务表单失败」
+    // 403：保留空壳，不在这里 message.error（拦截器已 toast R1）
     const bizMsg =
       error?.response?.data?.msg ||
       error?.data?.msg ||
@@ -466,7 +466,8 @@ async function initProcessInfo(row: any, formVariables?: any) {
     const isForbidden =
       error?.data?.code === 403 ||
       error?.response?.data?.code === 403 ||
-      bizMsg.includes('没有该操作权限');
+      bizMsg.includes('没有该操作权限') ||
+      bizMsg.includes('缺少权限');
     if (isForbidden) {
       shellMode.value = 'denied';
       startDeniedReason.value =

@@ -20,6 +20,7 @@ import { resolveRequestTenantId } from '#/constants/tenant';
 import { useAuthStore } from '#/store';
 
 import { refreshTokenApi } from './core';
+import { shouldSuppressErrorToast } from './error-toast';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 const tenantEnable = isTenantEnable();
@@ -155,15 +156,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const responseData = error?.response?.data ?? error?.data ?? {};
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
-      // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
-      if (error?.data?.code === 401 || responseData?.code === 401) {
-        return;
-      }
-      // 工作台组件可选接口：无权限时静默空态，避免刷「没有该操作权限」
-      if (
-        error?.config?.hideErrorMessage === true ||
-        error?.config?.headers?.['X-Hide-Error-Message'] === '1'
-      ) {
+      // 401 仍走登录 hop，不重复 toast。biz 403（权限门）即使 hideErrorMessage 也弹出服务端 msg。
+      if (shouldSuppressErrorToast(error)) {
         return;
       }
       // 如果没有错误信息，则会根据状态码进行提示
