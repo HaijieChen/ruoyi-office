@@ -88,6 +88,9 @@ public class BpmTaskRespVO {
     @Schema(description = "节点类型", example = "10")
     private Integer nodeType; // 参见 BpmSimpleModelNodeTypeEnum 枚举。
 
+    @Schema(description = "节点自定义 Vue 查看路径，未配置为空", example = "/finance/salary-payment/detail/cashier")
+    private String formCustomViewPath;
+
     @Data
     @Schema(description = "流程实例")
     public static class ProcessInstance {

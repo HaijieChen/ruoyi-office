@@ -102,6 +102,17 @@ public class BpmnModelUtils {
     }
 
     /**
+     * 解析 UserTask 上的自定义 Vue 查看路径。空白视为未配置。
+     */
+    public static String parseFormCustomViewPath(FlowElement flowElement) {
+        String raw = parseExtensionElement(flowElement, BpmnModelConstants.FORM_CUSTOM_VIEW_PATH);
+        if (StrUtil.isBlank(raw)) {
+            return null;
+        }
+        return raw.trim();
+    }
+
+    /**
      * 给节点添加候选人元素
      *
      * @param candidateStrategy 候选人策略

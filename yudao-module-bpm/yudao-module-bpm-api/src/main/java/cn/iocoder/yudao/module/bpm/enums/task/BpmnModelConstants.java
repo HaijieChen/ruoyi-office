@@ -143,4 +143,9 @@ public interface BpmnModelConstants {
      */
     String NODE_TYPE = "nodeType";
 
+    /**
+     * UserTask 自定义 Vue 查看路径（组件路径，不是 BPM 表单 ID）
+     */
+    String FORM_CUSTOM_VIEW_PATH = "formCustomViewPath";
+
 }

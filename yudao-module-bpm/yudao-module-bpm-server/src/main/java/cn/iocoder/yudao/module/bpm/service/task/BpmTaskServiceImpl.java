@@ -200,7 +200,9 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 bpmnModel, todoTask.getTaskDefinitionKey());
         Boolean signEnable = parseSignEnable(bpmnModel, todoTask.getTaskDefinitionKey());
         Boolean reasonRequire = parseReasonRequire(bpmnModel, todoTask.getTaskDefinitionKey());
-        Integer nodeType = parseNodeType(BpmnModelUtils.getFlowElementById(bpmnModel, todoTask.getTaskDefinitionKey()));
+        FlowElement taskElement = BpmnModelUtils.getFlowElementById(bpmnModel, todoTask.getTaskDefinitionKey());
+        Integer nodeType = parseNodeType(taskElement);
+        String formCustomViewPath = BpmnModelUtils.parseFormCustomViewPath(taskElement);
 
         // 4. 任务表单
         BpmFormDO taskForm = null;
@@ -209,7 +211,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         }
 
         return BpmTaskConvert.INSTANCE.buildTodoTask(todoTask, childrenTasks, buttonsSetting, taskForm)
-                .setNodeType(nodeType).setSignEnable(signEnable).setReasonRequire(reasonRequire);
+                .setNodeType(nodeType).setSignEnable(signEnable).setReasonRequire(reasonRequire)
+                .setFormCustomViewPath(formCustomViewPath);
     }
 
     /**
