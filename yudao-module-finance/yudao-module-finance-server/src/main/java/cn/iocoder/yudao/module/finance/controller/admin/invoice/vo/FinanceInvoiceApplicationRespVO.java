@@ -22,6 +22,8 @@ public class FinanceInvoiceApplicationRespVO {
     private String approvalStatus;
     @Schema(description = "办票状态")
     private Integer issueStatus;
+    @Schema(description = "审批流程是否已结束（无流程实例视为已结束，如历史导入）")
+    private Boolean processEnded;
     @Schema(description = "价税合计")
     private BigDecimal totalAmount;
     @Schema(description = "开票币种 CNY/USD/HKD")

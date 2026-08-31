@@ -89,6 +89,11 @@ class FinanceInvoiceApplicationServiceImplTest {
         });
         ReflectionTestUtils.setField(service, "businessStaffSupport", businessStaffSupport);
         ReflectionTestUtils.setField(service, "contractApplicationMapper", contractApplicationMapper);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<org.flowable.engine.HistoryService> historyProvider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(historyProvider.getIfAvailable()).thenReturn(null);
+        ReflectionTestUtils.setField(service, "historyServiceProvider", historyProvider);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("INV-20260729-1");
         when(customerCompanyService.getEnabledCustomerCompany(anyLong())).thenReturn(
@@ -713,6 +718,65 @@ class FinanceInvoiceApplicationServiceImplTest {
                 () -> service.completeIssue(issueReq(100L, "https://cdn.example/a.pdf", "10.00", "INV-A")));
         assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_ISSUE_NOT_ALLOWED.getCode(),
                 ex.getCode());
+    }
+
+    @Test
+    void completeIssueShouldRejectWhenProcessStillRunning() {
+        FinanceInvoiceApplicationDO app = pendingApp(100L);
+        app.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
+        app.setProcessInstanceId("pi-running");
+        when(applicationMapper.selectById(100L)).thenReturn(app);
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<org.flowable.engine.HistoryService> historyProvider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceIds(anySet())).thenReturn(hq);
+        when(hq.finished()).thenReturn(hq);
+        when(hq.list()).thenReturn(List.of());
+        ReflectionTestUtils.setField(service, "historyServiceProvider", historyProvider);
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.completeIssue(issueReq(100L, "https://cdn.example/a.pdf", "10.00", "INV-A")));
+        assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_ISSUE_NOT_ALLOWED.getCode(),
+                ex.getCode());
+        verify(fileMapper, never()).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO.class));
+    }
+
+    @Test
+    void completeIssueShouldAllowWhenProcessEnded() {
+        FinanceInvoiceApplicationDO app = pendingApp(100L);
+        app.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
+        app.setTotalAmount(new BigDecimal("50.00"));
+        app.setProcessInstanceId("pi-ended");
+        when(applicationMapper.selectById(100L)).thenReturn(app);
+        when(fileMapper.selectListByApplicationId(100L)).thenReturn(List.of());
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        org.flowable.engine.history.HistoricProcessInstance hi =
+                mock(org.flowable.engine.history.HistoricProcessInstance.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<org.flowable.engine.HistoryService> historyProvider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceIds(anySet())).thenReturn(hq);
+        when(hq.finished()).thenReturn(hq);
+        when(hq.list()).thenReturn(List.of(hi));
+        when(hi.getId()).thenReturn("pi-ended");
+        when(hi.getEndTime()).thenReturn(new java.util.Date());
+        ReflectionTestUtils.setField(service, "historyServiceProvider", historyProvider);
+
+        service.completeIssue(issueReq(100L, "https://cdn.example/a.pdf", "50.00", "INV-A"));
+
+        ArgumentCaptor<FinanceInvoiceApplicationDO> appCaptor =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
+        verify(applicationMapper).updateById(appCaptor.capture());
+        assertEquals(FinanceInvoiceIssueStatusEnum.FULL.getStatus(), appCaptor.getValue().getIssueStatus());
     }
 
     private static FinanceInvoiceApplicationDO pendingApp(Long id) {

@@ -67,6 +67,8 @@ export namespace FinanceInvoiceApplicationApi {
     currency?: string;
     invoiceType?: string;
     voided?: boolean;
+    /** 审批流程已结束（无流程实例视为已结束） */
+    processEnded?: boolean;
     createTime?: string;
     lines?: Line[];
     files?: IssueFile[];

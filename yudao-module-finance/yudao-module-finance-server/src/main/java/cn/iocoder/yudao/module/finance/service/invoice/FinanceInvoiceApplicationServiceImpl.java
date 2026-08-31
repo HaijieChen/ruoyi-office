@@ -32,6 +32,9 @@ import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanySe
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import jakarta.annotation.Resource;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.history.HistoricProcessInstance;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -39,7 +42,10 @@ import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,6 +97,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     private FinanceBusinessStaffSupport businessStaffSupport;
     @Resource
     private FinanceContractApplicationMapper contractApplicationMapper;
+    @Resource
+    private ObjectProvider<HistoryService> historyServiceProvider;
 
     public FinanceInvoiceApplicationServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
                                                 FinanceInvoiceApplicationLineMapper lineMapper,
@@ -470,7 +478,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     public void completeIssue(FinanceInvoiceApplicationCompleteIssueReqVO reqVO) {
         FinanceInvoiceApplicationDO application = getApplication(reqVO.getApplicationId());
         if (!FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus().equals(application.getApprovalStatus())
-                || Boolean.TRUE.equals(application.getVoided())) {
+                || Boolean.TRUE.equals(application.getVoided())
+                || !isProcessEnded(application.getProcessInstanceId())) {
             throw exception(INVOICE_APPLICATION_ISSUE_NOT_ALLOWED);
         }
         List<FinanceInvoiceApplicationCompleteIssueReqVO.FileItem> files = reqVO.getFiles();
@@ -564,6 +573,45 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     @Override
     public PageResult<FinanceInvoiceApplicationDO> getApplicationPage(FinanceInvoiceApplicationPageReqVO pageReqVO) {
         return applicationMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public Set<String> listEndedProcessInstanceIds(Collection<String> processInstanceIds) {
+        if (CollUtil.isEmpty(processInstanceIds)) {
+            return Collections.emptySet();
+        }
+        Set<String> ids = processInstanceIds.stream()
+                .filter(StrUtil::isNotBlank)
+                .collect(Collectors.toCollection(HashSet::new));
+        if (ids.isEmpty()) {
+            return Collections.emptySet();
+        }
+        HistoryService historyService = historyServiceProvider.getIfAvailable();
+        if (historyService == null) {
+            return Collections.emptySet();
+        }
+        List<HistoricProcessInstance> list = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceIds(ids)
+                .finished()
+                .list();
+        if (CollUtil.isEmpty(list)) {
+            return Collections.emptySet();
+        }
+        Set<String> ended = new HashSet<>();
+        for (HistoricProcessInstance hi : list) {
+            if (hi != null && StrUtil.isNotBlank(hi.getId()) && hi.getEndTime() != null) {
+                ended.add(hi.getId());
+            }
+        }
+        return ended;
+    }
+
+    private boolean isProcessEnded(String processInstanceId) {
+        if (StrUtil.isBlank(processInstanceId)) {
+            // 历史导入无流程：视为已结束
+            return true;
+        }
+        return listEndedProcessInstanceIds(List.of(processInstanceId)).contains(processInstanceId);
     }
 
     @Override

@@ -97,7 +97,7 @@ public interface ErrorCodeConstants {
             "释放商务单开票占用失败，请刷新后重试");
     ErrorCode INVOICE_APPLICATION_LINE_NOT_EXISTS = new ErrorCode(1_040_003_009, "开票申请明细不存在");
     ErrorCode INVOICE_APPLICATION_ISSUE_NOT_ALLOWED = new ErrorCode(1_040_003_010,
-            "仅审批通过且未作废的开票申请可办票");
+            "仅审批流程结束后且未作废的开票申请可办票");
     ErrorCode INVOICE_APPLICATION_LINE_ALREADY_ISSUED = new ErrorCode(1_040_003_011,
             "该明细已开票，一期一行仅允许一张物理票");
     ErrorCode INVOICE_APPLICATION_CUSTOMER_COMPANY_REQUIRED = new ErrorCode(1_040_003_012,

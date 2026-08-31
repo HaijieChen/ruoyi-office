@@ -100,8 +100,8 @@ function handleResubmit(row: FinanceInvoiceApplicationApi.Application) {
 }
 
 function handleIssue(row: FinanceInvoiceApplicationApi.Application) {
-  if (row.approvalStatus !== 'APPROVED') {
-    message.warning('仅审批通过可办票');
+  if (row.approvalStatus !== 'APPROVED' || row.processEnded === false) {
+    message.warning('仅审批流程结束后可办票');
     return;
   }
   issueModalApi.setData({ applicationId: row.id });
@@ -234,7 +234,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '办票',
               auth: ['finance:invoice-application:issue'],
-              ifShow: row.approvalStatus === 'APPROVED' && !row.voided && row.issueStatus !== 2,
+              ifShow:
+                row.approvalStatus === 'APPROVED' &&
+                row.processEnded !== false &&
+                !row.voided &&
+                row.issueStatus !== 2,
               onClick: () => handleIssue(row),
             },
           ]"

@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.finance.controller.admin.invoice;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
@@ -184,6 +185,7 @@ public class FinanceInvoiceApplicationController {
         respVO.setFiles(BeanUtils.toBean(
                 invoiceApplicationService.getApplicationFiles(id),
                 FinanceInvoiceApplicationRespVO.FileItem.class));
+        fillProcessEnded(List.of(respVO));
         return success(respVO);
     }
 
@@ -193,7 +195,32 @@ public class FinanceInvoiceApplicationController {
     public CommonResult<PageResult<FinanceInvoiceApplicationRespVO>> getApplicationPage(
             @Valid FinanceInvoiceApplicationPageReqVO pageReqVO) {
         PageResult<FinanceInvoiceApplicationDO> page = invoiceApplicationService.getApplicationPage(pageReqVO);
-        return success(BeanUtils.toBean(page, FinanceInvoiceApplicationRespVO.class));
+        PageResult<FinanceInvoiceApplicationRespVO> voPage = BeanUtils.toBean(page, FinanceInvoiceApplicationRespVO.class);
+        fillProcessEnded(voPage.getList());
+        return success(voPage);
+    }
+
+    private void fillProcessEnded(List<FinanceInvoiceApplicationRespVO> rows) {
+        if (CollUtil.isEmpty(rows)) {
+            return;
+        }
+        Set<String> ids = new HashSet<>();
+        for (FinanceInvoiceApplicationRespVO row : rows) {
+            if (row != null && StrUtil.isNotBlank(row.getProcessInstanceId())) {
+                ids.add(row.getProcessInstanceId());
+            }
+        }
+        Set<String> ended = invoiceApplicationService.listEndedProcessInstanceIds(ids);
+        for (FinanceInvoiceApplicationRespVO row : rows) {
+            if (row == null) {
+                continue;
+            }
+            if (StrUtil.isBlank(row.getProcessInstanceId())) {
+                row.setProcessEnded(Boolean.TRUE);
+            } else {
+                row.setProcessEnded(ended.contains(row.getProcessInstanceId()));
+            }
+        }
     }
 
     /**
