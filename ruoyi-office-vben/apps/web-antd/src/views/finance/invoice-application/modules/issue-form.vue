@@ -117,38 +117,46 @@ function rawUploadFile(file: File) {
   return inner instanceof Blob ? inner : file;
 }
 
-function applyOcr(draft: DraftInvoice, ocr: any) {
-  if (ocr?.amount != null) draft.amount = Number(ocr.amount);
-  if (ocr?.invoiceNo) draft.invoiceNo = String(ocr.invoiceNo);
-  if (ocr?.feeDate) draft.invoiceDate = String(ocr.feeDate).slice(0, 10);
+function ocrFields(ocr: any): Partial<DraftInvoice> {
+  const out: Partial<DraftInvoice> = {};
+  if (ocr?.amount != null && !Number.isNaN(Number(ocr.amount))) {
+    out.amount = Number(ocr.amount);
+  }
+  if (ocr?.invoiceNo) out.invoiceNo = String(ocr.invoiceNo);
+  if (ocr?.feeDate) out.invoiceDate = String(ocr.feeDate).slice(0, 10);
+  return out;
 }
+
+/** 上传完成前按文件名暂存 OCR，避免 api 写 drafts 与 FileUpload 回写重复一条 */
+const pendingOcrByName = new Map<string, Partial<DraftInvoice>>();
+const pendingOcrByUrl = new Map<string, Partial<DraftInvoice>>();
 
 async function uploadAndOcr(file: File, onUploadProgress?: any) {
   const raw = rawUploadFile(file);
   const hide = message.loading({ content: '正在识别发票...', duration: 0 });
-  const draft: DraftInvoice = {
-    url: '',
-    name: file.name || 'invoice',
-  };
+  let fields: Partial<DraftInvoice> = {};
   try {
     if (raw instanceof Blob) {
-      applyOcr(draft, unwrapOcr(await ocrInvoiceApplication('', raw as File)));
+      fields = ocrFields(unwrapOcr(await ocrInvoiceApplication(undefined as any, raw as File)));
     }
     const res = await httpRequest(raw, onUploadProgress);
     const url =
       typeof res === 'string'
         ? res
         : String((res as any)?.url || (res as any)?.data || '');
-    draft.url = url;
-    if (!draft.amount && !draft.invoiceNo && url) {
-      applyOcr(draft, unwrapOcr(await ocrInvoiceApplication(url)));
+    if (!fields.amount && !fields.invoiceNo && url) {
+      fields = {
+        ...fields,
+        ...ocrFields(unwrapOcr(await ocrInvoiceApplication(url))),
+      };
     }
-    if (draft.invoiceNo || draft.invoiceDate || draft.amount != null) {
+    if (fields.invoiceNo || fields.invoiceDate || fields.amount != null) {
       message.success('已识别发票信息，请核对');
     } else {
       message.warning('未识别到金额/发票号，请手填');
     }
-    formData.value.drafts = [...formData.value.drafts, draft];
+    if (file.name) pendingOcrByName.set(file.name, fields);
+    if (url) pendingOcrByUrl.set(url, fields);
     return res;
   } catch (e) {
     message.warning('识别失败，请手填金额和发票号');
@@ -158,10 +166,29 @@ async function uploadAndOcr(file: File, onUploadProgress?: any) {
   }
 }
 
+function takePendingOcr(url: string): Partial<DraftInvoice> {
+  const byUrl = pendingOcrByUrl.get(url);
+  if (byUrl) {
+    pendingOcrByUrl.delete(url);
+    const name = url.slice(Math.max(0, url.lastIndexOf('/') + 1));
+    if (name) pendingOcrByName.delete(name);
+    return byUrl;
+  }
+  const name = url.slice(Math.max(0, url.lastIndexOf('/') + 1));
+  const byName = name ? pendingOcrByName.get(name) : undefined;
+  if (byName && name) pendingOcrByName.delete(name);
+  return byName || {};
+}
+
 async function onFileUploadUpdate(val: string | string[]) {
   const list = (Array.isArray(val) ? val : val ? [val] : []).filter(Boolean);
   const byUrl = new Map(formData.value.drafts.map((d) => [d.url, d]));
-  formData.value.drafts = list.map((url) => byUrl.get(url) || { url, name: url });
+  formData.value.drafts = list.map((url) => {
+    const kept = byUrl.get(url);
+    if (kept) return kept;
+    const name = url.slice(Math.max(0, url.lastIndexOf('/') + 1));
+    return { url, name: name || 'invoice', ...takePendingOcr(url) };
+  });
 }
 
 function removeDraft(index: number) {
