@@ -28,6 +28,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_FIELD_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_ACCESS_DENIED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINES_EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -42,6 +43,7 @@ class FinanceExpenseReimbursementServiceImplTest {
 
     private FinanceExpenseReimbursementMapper mapper;
     private FinanceExpenseReimbursementLineMapper lineMapper;
+    private FinanceExpensePredocService predoc;
     private FinanceExpenseReimbursementServiceImpl service;
 
     @BeforeEach
@@ -63,7 +65,7 @@ class FinanceExpenseReimbursementServiceImplTest {
             row.setId(88L);
             return 1;
         }).when(mapper).insert(any(FinanceExpenseReimbursementDO.class));
-        FinanceExpensePredocService predoc = mock(FinanceExpensePredocService.class);
+        predoc = mock(FinanceExpensePredocService.class);
         when(predoc.isApprovedTrip(anyLong(), any())).thenReturn(true);
         when(predoc.isApprovedOuting(anyLong(), any())).thenReturn(true);
         cn.iocoder.yudao.module.system.api.dept.DeptApi deptApi =
@@ -146,6 +148,48 @@ class FinanceExpenseReimbursementServiceImplTest {
         req.getLines().get(0).setInvoiceFileUrl(null);
         ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req, 1L));
         assertEquals(EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void getReturnsPredocFieldsAndResolvedBillPk() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).applicantUserId(1L).processInstanceId("exp-pi")
+                .payeeAccountNo("622200001111").build());
+        FinanceExpenseReimbursementLineDO line = FinanceExpenseReimbursementLineDO.builder()
+                .lineKind(FinanceExpenseReimbursementLineDO.KIND_NORMAL)
+                .category("travel")
+                .predocType("TRIP")
+                .predocProcessInstanceId("trip-pi")
+                .amount(new BigDecimal("10"))
+                .build();
+        when(lineMapper.selectByReimbursementId(88L)).thenReturn(List.of(line));
+        when(predoc.resolveBillPk("TRIP", "trip-pi")).thenReturn(42L);
+
+        var vo = service.get(88L, 1L, false);
+        assertEquals("TRIP", vo.getLines().get(0).getPredocType());
+        assertEquals("trip-pi", vo.getLines().get(0).getPredocProcessInstanceId());
+        assertEquals(42L, vo.getLines().get(0).getPredocBillId());
+    }
+
+    @Test
+    void historicAssigneeCanGetBill() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).applicantUserId(1L).processInstanceId("exp-pi")
+                .payeeAccountNo("622200001111").build());
+        when(lineMapper.selectByReimbursementId(88L)).thenReturn(List.of());
+        when(predoc.isProcessAssignee("exp-pi", 9L)).thenReturn(true);
+
+        var vo = service.get(88L, 9L, false);
+        assertEquals(88L, vo.getId());
+    }
+
+    @Test
+    void strangerWithoutQueryOrTaskIsAccessDenied() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).applicantUserId(1L).processInstanceId("exp-pi").build());
+        when(predoc.isProcessAssignee("exp-pi", 9L)).thenReturn(false);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.get(88L, 9L, false));
+        assertEquals(EXPENSE_REIMBURSEMENT_ACCESS_DENIED.getCode(), ex.getCode());
     }
 
     @Test

@@ -285,6 +285,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             lv.setStayCityTier(line.getStayCityTier());
             lv.setOverLimitReason(line.getOverLimitReason());
             lv.setInvoiceFileUrl(line.getInvoiceFileUrl());
+            lv.setPredocType(line.getPredocType());
+            lv.setPredocProcessInstanceId(line.getPredocProcessInstanceId());
+            lv.setPredocBillId(predocService.resolveBillPk(line.getPredocType(), line.getPredocProcessInstanceId()));
             lines.add(lv);
         }
         vo.setLines(lines);
@@ -294,6 +297,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private void assertCanRead(FinanceExpenseReimbursementDO header, Long userId, boolean canQueryAll) {
         if (canQueryAll || processParticipantSupport.canReadBill(
                 userId, header.getApplicantUserId(), header.getProcessInstanceId())) {
+            return;
+        }
+        if (predocService.isProcessAssignee(header.getProcessInstanceId(), userId)) {
             return;
         }
         throw exception(EXPENSE_REIMBURSEMENT_ACCESS_DENIED);

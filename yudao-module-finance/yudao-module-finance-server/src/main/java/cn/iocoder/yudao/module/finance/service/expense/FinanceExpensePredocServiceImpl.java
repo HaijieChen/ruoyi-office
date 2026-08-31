@@ -1,6 +1,10 @@
 package cn.iocoder.yudao.module.finance.service.expense;
 
+import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.TaskService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -11,11 +15,17 @@ public class FinanceExpensePredocServiceImpl implements FinanceExpensePredocServ
 
     private final JdbcTemplate jdbcTemplate;
     private final FinanceRelatedProcessAccess relatedProcessAccess;
+    private final ObjectProvider<TaskService> taskServiceProvider;
+    private final ObjectProvider<HistoryService> historyServiceProvider;
 
     public FinanceExpensePredocServiceImpl(JdbcTemplate jdbcTemplate,
-                                           FinanceRelatedProcessAccess relatedProcessAccess) {
+                                           FinanceRelatedProcessAccess relatedProcessAccess,
+                                           ObjectProvider<TaskService> taskServiceProvider,
+                                           ObjectProvider<HistoryService> historyServiceProvider) {
         this.jdbcTemplate = jdbcTemplate;
         this.relatedProcessAccess = relatedProcessAccess;
+        this.taskServiceProvider = taskServiceProvider;
+        this.historyServiceProvider = historyServiceProvider;
     }
 
     @Override
@@ -154,6 +164,48 @@ public class FinanceExpensePredocServiceImpl implements FinanceExpensePredocServ
                 start == null ? null : start.toLocalDateTime().toLocalDate(),
                 end == null ? null : end.toLocalDateTime().toLocalDate(),
                 rs.getLong("user_id"), java.util.List.of());
+    }
+
+    @Override
+    public Long resolveBillPk(String predocType, String processInstanceId) {
+        if (StrUtil.isBlank(predocType) || StrUtil.isBlank(processInstanceId)) {
+            return null;
+        }
+        String table = TYPE_TRIP.equals(predocType)
+                ? "bpm_oa_business_trip"
+                : TYPE_OUTING.equals(predocType) ? "bpm_oa_outing" : null;
+        if (table == null) {
+            return null;
+        }
+        return jdbcTemplate.query(
+                "SELECT id FROM " + table + " WHERE process_instance_id = ? AND deleted = 0 LIMIT 1",
+                rs -> rs.next() ? rs.getLong(1) : null,
+                processInstanceId.trim());
+    }
+
+    @Override
+    public boolean isProcessAssignee(String processInstanceId, Long userId) {
+        if (userId == null || StrUtil.isBlank(processInstanceId)) {
+            return false;
+        }
+        String uid = String.valueOf(userId);
+        String pid = processInstanceId.trim();
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService != null
+                && taskService.createTaskQuery()
+                .processInstanceId(pid)
+                .taskCandidateOrAssigned(uid)
+                .count() > 0) {
+            return true;
+        }
+        HistoryService historyService = historyServiceProvider.getIfAvailable();
+        if (historyService == null) {
+            return false;
+        }
+        return historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(pid)
+                .taskAssignee(uid)
+                .count() > 0;
     }
 
     static java.util.List<Long> parseIds(String raw) {

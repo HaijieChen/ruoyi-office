@@ -16,6 +16,10 @@ public interface FinanceExpensePredocService {
 
     StayStay resolveStay(Long userId, String predocType, String processInstanceId);
 
+    Long resolveBillPk(String predocType, String processInstanceId);
+
+    boolean isProcessAssignee(String processInstanceId, Long userId);
+
     record StayStay(String city, java.time.LocalDate start, java.time.LocalDate end,
                     Long applicantId, java.util.List<Long> companionIds) {
     }

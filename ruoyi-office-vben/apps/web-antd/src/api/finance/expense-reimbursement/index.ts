@@ -16,6 +16,7 @@ export namespace FinanceExpenseApi {
     invoiceNo?: string;
     predocType?: string;
     predocProcessInstanceId?: string;
+    predocBillId?: number;
     remark?: string;
     stayCityTier?: string;
     overLimitReason?: string;
