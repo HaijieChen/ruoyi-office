@@ -526,7 +526,7 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     /**
      * 获取结束节点的状态
      */
-    private Integer getEndActivityNodeStatus(HistoricTaskInstance task) {
+    static Integer resolveEndActivityNodeStatus(HistoricTaskInstance task) {
         Integer status = FlowableUtils.getTaskStatus(task);
         if (status != null) {
             return status;
@@ -535,18 +535,27 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         return BpmTaskStatusEnum.SKIP.getStatus();
     }
 
-    /** 同节点多人办结：有拒绝则拒绝，否则取最后一笔状态 */
-    private Integer getGroupedEndActivityNodeStatus(List<HistoricTaskInstance> group) {
+    /** 同节点多人办结：拒绝优先；或签一人通过后其余会被系统取消，不能用后结束的取消盖掉通过 */
+    static Integer getGroupedEndActivityNodeStatus(List<HistoricTaskInstance> group) {
         Integer reject = BpmTaskStatusEnum.REJECT.getStatus();
+        Integer approve = BpmTaskStatusEnum.APPROVE.getStatus();
+        boolean anyApprove = false;
         for (HistoricTaskInstance task : group) {
-            if (Objects.equals(getEndActivityNodeStatus(task), reject)) {
+            Integer status = resolveEndActivityNodeStatus(task);
+            if (Objects.equals(status, reject)) {
                 return reject;
             }
+            if (Objects.equals(status, approve)) {
+                anyApprove = true;
+            }
+        }
+        if (anyApprove) {
+            return approve;
         }
         HistoricTaskInstance last = group.stream()
                 .max(Comparator.comparing(HistoricTaskInstance::getEndTime))
                 .orElse(CollUtil.getFirst(group));
-        return getEndActivityNodeStatus(last);
+        return resolveEndActivityNodeStatus(last);
     }
 
     /**
