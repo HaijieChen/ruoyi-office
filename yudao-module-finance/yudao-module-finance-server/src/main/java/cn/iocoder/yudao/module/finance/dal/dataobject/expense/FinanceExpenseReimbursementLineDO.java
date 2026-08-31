@@ -30,6 +30,8 @@ public class FinanceExpenseReimbursementLineDO extends TenantBaseDO {
     private String subItem;
     private LocalDate feeDate;
     private BigDecimal amount;
+    /** 专票税额（可空，OCR 回填后可改） */
+    private BigDecimal taxAmount;
     private String attachments;
     private String invoiceFileUrl;
     private String invoiceNo;

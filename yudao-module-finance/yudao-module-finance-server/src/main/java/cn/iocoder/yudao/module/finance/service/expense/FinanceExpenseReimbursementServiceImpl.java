@@ -184,6 +184,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                     .subItem(line.getSubItem())
                     .feeDate(line.getFeeDate())
                     .amount(line.getAmount().setScale(2, RoundingMode.HALF_UP))
+                    .taxAmount(line.getTaxAmount() == null ? null
+                            : line.getTaxAmount().setScale(2, RoundingMode.HALF_UP))
                     .attachments(line.getAttachments() == null ? null : String.join(",", line.getAttachments()))
                     .invoiceFileUrl(line.getInvoiceFileUrl())
                     .invoiceNo(line.getInvoiceNo())
@@ -271,6 +273,10 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             lv.setCategory(line.getCategory());
             lv.setFeeDate(line.getFeeDate());
             lv.setAmount(line.getAmount());
+            lv.setTaxAmount(line.getTaxAmount());
+            lv.setInvoiceType(line.getInvoiceType());
+            lv.setInvoiceNo(line.getInvoiceNo());
+            lv.setSubItem(line.getSubItem());
             lv.setRemark(line.getRemark());
             lv.setStayCityTier(line.getStayCityTier());
             lv.setOverLimitReason(line.getOverLimitReason());
@@ -359,14 +365,16 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                                          boolean proxy, String invoiceMode, Long userId) {
         boolean noInvoice = FinanceExpenseReimbursementDO.MODE_NO_INVOICE.equals(invoiceMode);
         boolean hasInvoice = StrUtil.isNotBlank(line.getInvoiceFileUrl());
-        if (noInvoice || proxy) {
+        if (noInvoice) {
             if (hasInvoice) {
                 throw exception(EXPENSE_REIMBURSEMENT_INVOICE_FORBIDDEN);
             }
-        } else {
+        } else if (!proxy) {
             if (!hasInvoice || !isAcceptableFileUrl(line.getInvoiceFileUrl().trim())) {
                 throw exception(EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED);
             }
+        } else if (hasInvoice && !isAcceptableFileUrl(line.getInvoiceFileUrl().trim())) {
+            throw exception(EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID);
         }
         String cat = line.getCategory() == null ? "" : line.getCategory().trim();
         String predocType = StrUtil.trimToNull(line.getPredocType());

@@ -10,6 +10,7 @@ export namespace FinanceExpenseApi {
     subItem?: string;
     feeDate: string;
     amount: number;
+    taxAmount?: number;
     attachments?: string[];
     invoiceFileUrl?: string;
     invoiceNo?: string;
@@ -76,12 +77,26 @@ export function ocrExpenseInvoice(fileUrl: string, file?: File) {
       ? (file as any).originFileObj
       : file;
   if (raw instanceof Blob) {
-    return requestClient.upload<{ feeDate?: string; amount?: number; invoiceNo?: string; used?: boolean }>(
+    return requestClient.upload<{
+      feeDate?: string;
+      amount?: number;
+      invoiceNo?: string;
+      taxAmount?: number;
+      invoiceType?: string;
+      used?: boolean;
+    }>(
       '/finance/expense-reimbursement/ocr-invoice',
       { file: raw },
     );
   }
-  return requestClient.post<{ feeDate?: string; amount?: number; invoiceNo?: string; used?: boolean }>(
+  return requestClient.post<{
+    feeDate?: string;
+    amount?: number;
+    invoiceNo?: string;
+    taxAmount?: number;
+    invoiceType?: string;
+    used?: boolean;
+  }>(
     '/finance/expense-reimbursement/ocr-invoice',
     null,
     { params: { fileUrl } },

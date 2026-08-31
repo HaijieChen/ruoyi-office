@@ -32,4 +32,13 @@ class FinanceInvoiceOcrClientTest {
                 FinanceInvoiceOcrClient.parseInvoiceNo("电子发票 发票号码：26317000002934677164 开票日期"));
         assertNull(FinanceInvoiceOcrClient.parseInvoiceNo("无号码"));
     }
+
+    @Test
+    void parseTaxAndInvoiceType() {
+        assertEquals(new java.math.BigDecimal("13.00"),
+                FinanceInvoiceOcrClient.parseTaxAmount("税额：13.00 价税合计"));
+        assertEquals("专票", FinanceInvoiceOcrClient.parseInvoiceType("增值税专用发票"));
+        assertEquals("普票", FinanceInvoiceOcrClient.parseInvoiceType("增值税普通发票"));
+        assertEquals("其他", FinanceInvoiceOcrClient.parseInvoiceType("收据"));
+    }
 }

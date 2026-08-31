@@ -21,6 +21,7 @@ public class FinanceExpenseReimbursementLineReqVO {
     private LocalDate feeDate;
     @NotNull
     private BigDecimal amount;
+    private BigDecimal taxAmount;
     private List<String> attachments;
     private String invoiceFileUrl;
     private String invoiceNo;

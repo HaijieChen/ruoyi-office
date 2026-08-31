@@ -55,7 +55,7 @@ public class FinanceExpenseReimbursementController {
     }
 
     @PostMapping("/ocr-invoice")
-    @Operation(summary = "识别发票日期与金额（失败返回空字段）")
+    @Operation(summary = "识别发票日期、金额、专票税额与票种（失败返回空字段）")
     public CommonResult<FinanceInvoiceOcrClient.Result> ocrInvoice(
             @RequestParam(value = "fileUrl", required = false) String fileUrl,
             @RequestParam(value = "file", required = false) MultipartFile file) throws Exception {

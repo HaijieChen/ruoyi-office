@@ -26,6 +26,25 @@ def health():
     return {"ok": True}
 
 
+def parse_invoice_type(joined):
+    if re.search(r"增值税专用发票|专用发票", joined):
+        return "专票"
+    if re.search(r"增值税普通发票|普通发票|电子发票（普通发票）", joined):
+        return "普票"
+    if "专票" in joined and "普票" not in joined:
+        return "专票"
+    if "普票" in joined:
+        return "普票"
+    return "其他"
+
+
+def parse_tax_amount(joined):
+    taxes = re.findall(r"税额[:：]?\s*[¥￥]?\s*(\d+\.\d{2})", joined)
+    if taxes:
+        return taxes[-1]
+    return None
+
+
 def parse_text(joined):
     dates = re.findall(r"20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}", joined)
     amounts = re.findall(r"(?:价税合计[^¥]{0,40}[¥￥]?|（小写）\s*[¥￥]?)(\d+\.\d{2})", joined)
@@ -41,7 +60,7 @@ def parse_text(joined):
     if not nos:
         nos = re.findall(r"号码[:：]\s*([0-9]{10,20})", joined)
     no = nos[0] if nos else None
-    return fee, amt, no, joined[:2000]
+    return fee, amt, no, parse_tax_amount(joined), parse_invoice_type(joined), joined[:2000]
 
 
 def pdf_text(path):
@@ -92,11 +111,14 @@ def invoice(req: Req):
             urllib.request.urlretrieve(encoded, tmp.name)
             path = tmp.name
         else:
-            return {"feeDate": None, "amount": None, "invoiceNo": None, "rawText": "missing file"}
-        fee, amt, no, joined = recognize_file(path)
-        return {"feeDate": fee, "amount": amt, "invoiceNo": no, "rawText": joined}
+            return {"feeDate": None, "amount": None, "invoiceNo": None, "taxAmount": None,
+                    "invoiceType": "其他", "rawText": "missing file"}
+        fee, amt, no, tax, kind, joined = recognize_file(path)
+        return {"feeDate": fee, "amount": amt, "invoiceNo": no, "taxAmount": tax,
+                "invoiceType": kind, "rawText": joined}
     except Exception as e:
-        return {"feeDate": None, "amount": None, "invoiceNo": None, "rawText": str(e)[:500]}
+        return {"feeDate": None, "amount": None, "invoiceNo": None, "taxAmount": None,
+                "invoiceType": "其他", "rawText": str(e)[:500]}
     finally:
         if tmp and os.path.exists(tmp.name):
             os.unlink(tmp.name)

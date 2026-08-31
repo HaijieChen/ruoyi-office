@@ -29,7 +29,9 @@ public class FinanceInvoiceOcrClient {
     }
 
     public Result recognize(String invoiceFileUrl) {
-        if (StrUtil.isBlank(invoiceFileUrl)) {
+        if (StrUtil.isBlank(invoiceFileUrl)
+                || properties.getBaseUrl() == null
+                || properties.getBaseUrl().isBlank()) {
             return Result.empty();
         }
         return recognizeBytes(download(invoiceFileUrl.trim()));
@@ -57,11 +59,20 @@ public class FinanceInvoiceOcrClient {
             }
             JSONObject json = JSONUtil.parseObj(resp.body());
             String invoiceNo = json.getStr("invoiceNo");
+            String rawText = json.getStr("rawText");
             if (StrUtil.isBlank(invoiceNo)) {
-                invoiceNo = parseInvoiceNo(json.getStr("rawText"));
+                invoiceNo = parseInvoiceNo(rawText);
+            }
+            BigDecimal taxAmount = json.getBigDecimal("taxAmount");
+            if (taxAmount == null) {
+                taxAmount = parseTaxAmount(rawText);
+            }
+            String invoiceType = json.getStr("invoiceType");
+            if (StrUtil.isBlank(invoiceType)) {
+                invoiceType = parseInvoiceType(rawText);
             }
             return new Result(parseDate(json.getStr("feeDate")), json.getBigDecimal("amount"),
-                    json.getStr("rawText"), invoiceNo, false);
+                    rawText, invoiceNo, taxAmount, invoiceType, false);
         } catch (Exception ex) {
             log.warn("[ocr] failed: {}", ex.toString());
             return Result.empty();
@@ -139,14 +150,41 @@ public class FinanceInvoiceOcrClient {
         return null;
     }
 
+    static BigDecimal parseTaxAmount(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("税额[:：]?\\s*[¥￥]?\\s*(\\d+\\.\\d{2})").matcher(raw);
+        String last = null;
+        while (m.find()) {
+            last = m.group(1);
+        }
+        return last == null ? null : new BigDecimal(last);
+    }
+
+    static String parseInvoiceType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "其他";
+        }
+        if (raw.contains("增值税专用发票") || raw.contains("专用发票")
+                || (raw.contains("专票") && !raw.contains("普票"))) {
+            return "专票";
+        }
+        if (raw.contains("增值税普通发票") || raw.contains("普通发票")
+                || raw.contains("电子发票（普通发票）") || raw.contains("普票")) {
+            return "普票";
+        }
+        return "其他";
+    }
+
     public record Result(@JsonFormat(pattern = "yyyy-MM-dd") LocalDate feeDate, BigDecimal amount, String rawText,
-                         String invoiceNo, boolean used) {
+                         String invoiceNo, BigDecimal taxAmount, String invoiceType, boolean used) {
         static Result empty() {
-            return new Result(null, null, null, null, false);
+            return new Result(null, null, null, null, null, "其他", false);
         }
 
         public Result withUsed(boolean usedFlag) {
-            return new Result(feeDate, amount, rawText, invoiceNo, usedFlag);
+            return new Result(feeDate, amount, rawText, invoiceNo, taxAmount, invoiceType, usedFlag);
         }
     }
 }

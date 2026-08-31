@@ -27,10 +27,7 @@ function formatFeeDate(v: unknown) {
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-function categoryText(bill: FinanceExpenseApi.Bill, line: FinanceExpenseApi.Line) {
-  if (bill.proxyTicket) {
-    return line.invoiceType || '-';
-  }
+function categoryText(line: FinanceExpenseApi.Line) {
   const cat = getDictLabel('finance_expense_category', line.category) || line.category || '';
   const sub = line.subItem
     ? getDictLabel('finance_expense_subitem', line.subItem) || line.subItem
@@ -76,8 +73,10 @@ function onPrint() {
         <thead>
           <tr>
             <th>日期</th>
-            <th>{{ bill.proxyTicket ? '发票类型' : '费用类型' }}</th>
+            <th>费用类型</th>
+            <th>发票类型</th>
             <th>金额</th>
+            <th>专票税额</th>
             <th>票号</th>
             <th>说明</th>
           </tr>
@@ -85,14 +84,21 @@ function onPrint() {
         <tbody>
           <tr v-for="(line, i) in bill.lines || []" :key="i">
             <td>{{ formatFeeDate(line.feeDate) }}</td>
-            <td>{{ categoryText(bill, line) }}</td>
+            <td>{{ categoryText(line) }}</td>
+            <td>{{ line.invoiceType || '-' }}</td>
             <td>{{ line.amount }}</td>
+            <td>{{ line.taxAmount ?? '' }}</td>
             <td>{{ line.invoiceNo || '' }}</td>
             <td>{{ line.remark || '' }}</td>
           </tr>
         </tbody>
       </table>
-      <div class="foot">合计 {{ bill.applyAmount }}　实报 {{ bill.approvedAmount ?? '-' }}</div>
+      <div class="foot">
+        合计 {{ bill.applyAmount }}　专票税额
+        {{
+          (bill.lines || []).reduce((s, l) => s + Number(l.taxAmount || 0), 0)
+        }}　实报 {{ bill.approvedAmount ?? '-' }}
+      </div>
     </div>
   </div>
 </template>
