@@ -80,18 +80,15 @@ const resetFormList = () => {
   businessKey.value = formData.value.businessKey;
 
   const pathEl = elExtensionElements.value.values.find(
-    (ex: any) =>
-      ex.$type === `${prefix}:${FORM_CUSTOM_VIEW_PATH_TYPE}` ||
-      ex.$type === `${prefix}:FormCustomViewPath`,
+    (ex: any) => ex.$type === `${prefix}:${FORM_CUSTOM_VIEW_PATH_TYPE}`,
   );
-  formCustomViewPath.value = (pathEl?.value || pathEl?.$body || '').trim();
+  formCustomViewPath.value = (pathEl?.value || '').trim();
 
   // 保留剩余扩展元素，便于后面更新该元素对应属性
   otherExtensions.value = elExtensionElements.value.values.filter(
     (ex: any) =>
       ex.$type !== `${prefix}:FormData` &&
-      ex.$type !== `${prefix}:${FORM_CUSTOM_VIEW_PATH_TYPE}` &&
-      ex.$type !== `${prefix}:FormCustomViewPath`,
+      ex.$type !== `${prefix}:${FORM_CUSTOM_VIEW_PATH_TYPE}`,
   );
 
   // 复制原始值，填充表格
@@ -104,9 +101,6 @@ const updateElementFormKey = () => {
   bpmnInstances().modeling.updateProperties(toRaw(bpmnELement.value), {
     formKey: formKey.value,
   });
-};
-const updateElementFormCustomViewPath = () => {
-  updateElementExtensions();
 };
 const _updateElementBusinessKey = () => {
   bpmnInstances().modeling.updateModdleProperties(
@@ -358,7 +352,7 @@ watch(
           allow-clear
           :options="NODE_VUE_PATH_OPTIONS"
           placeholder="/finance/salary-payment/detail/cashier"
-          @change="updateElementFormCustomViewPath"
+          @change="updateElementExtensions"
         />
       </FormItem>
       <FormItem label="业务标识">
