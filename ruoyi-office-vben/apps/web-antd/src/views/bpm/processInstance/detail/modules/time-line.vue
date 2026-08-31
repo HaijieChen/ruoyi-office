@@ -246,6 +246,22 @@ function handleChildProcess(activity: any) {
   });
 }
 
+function visibleCandidateUsers(
+  activity: BpmProcessInstanceApi.ApprovalNodeInfo,
+) {
+  const shown = new Set(
+    (activity.tasks || []).flatMap((task) => {
+      const ids: number[] = [];
+      if (task.assigneeUser?.id != null) ids.push(task.assigneeUser.id);
+      if (task.ownerUser?.id != null) ids.push(task.ownerUser.id);
+      return ids;
+    }),
+  );
+  return (activity.candidateUsers || []).filter(
+    (user) => user?.id == null || !shown.has(user.id),
+  );
+}
+
 // 判断是否需要显示自定义选择审批人
 function shouldShowCustomUserSelect(
   activity: BpmProcessInstanceApi.ApprovalNodeInfo,
@@ -631,8 +647,8 @@ defineExpose({ setCustomApproveUsers, batchSetCustomApproveUsers });
 
             <!-- 情况二：遍历每个审批节点下的【候选的】task 任务 -->
             <div
-              v-for="(user, userIndex) in activity.candidateUsers"
-              :key="userIndex"
+              v-for="(user, userIndex) in visibleCandidateUsers(activity)"
+              :key="user.id || userIndex"
               class="relative flex min-h-9 items-center overflow-visible rounded-3xl py-0.5 pr-2"
             >
               <Avatar

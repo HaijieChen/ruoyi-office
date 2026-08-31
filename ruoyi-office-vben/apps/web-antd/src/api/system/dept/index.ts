@@ -89,6 +89,11 @@ export namespace SystemDeptImportApi {
   }
 }
 
+/** 导出组织架构（列与导入模板一致） */
+export function exportDept() {
+  return requestClient.download('/system/dept/export-excel');
+}
+
 /** 下载组织架构导入模板 */
 export function getDeptImportTemplate() {
   return requestClient.download('/system/dept/get-import-template');

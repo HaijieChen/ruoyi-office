@@ -5,14 +5,19 @@ import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.http.HttpUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
+import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportExcelVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptRespVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSimpleRespVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
+import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.service.dept.DeptImportService;
+import cn.iocoder.yudao.module.system.service.dept.DeptImportSupport;
 import cn.iocoder.yudao.module.system.service.dept.DeptService;
+import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,7 +34,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
+import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.IMPORT;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 
@@ -43,6 +52,8 @@ public class DeptController {
     private DeptService deptService;
     @Resource
     private DeptImportService deptImportService;
+    @Resource
+    private AdminUserService adminUserService;
 
     @PostMapping("create")
     @Operation(summary = "创建部门")
@@ -117,6 +128,22 @@ public class DeptController {
     public CommonResult<DeptRespVO> getDept(@RequestParam("id") Long id) {
         DeptDO dept = deptService.getDept(id);
         return success(BeanUtils.toBean(dept, DeptRespVO.class));
+    }
+
+    @GetMapping("/export-excel")
+    @Operation(summary = "导出组织架构（列与导入模板一致）")
+    @PreAuthorize("@ss.hasPermission('system:dept:export')")
+    @ApiAccessLog(operateType = EXPORT)
+    public void exportDept(HttpServletResponse response, DeptListReqVO reqVO) throws IOException {
+        List<DeptDO> list = deptService.getDeptList(reqVO);
+        List<Long> leaderIds = list.stream()
+                .map(DeptDO::getLeaderUserId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, AdminUserDO> users = adminUserService.getUserMap(leaderIds);
+        ExcelUtils.write(response, "组织架构.xlsx", "组织架构", DeptImportExcelVO.class,
+                DeptImportSupport.toExportRows(list, users));
     }
 
     @GetMapping("/get-import-template")

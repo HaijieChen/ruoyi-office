@@ -5,12 +5,12 @@ import type { SystemDeptApi } from '#/api/system/dept';
 import { ref } from 'vue';
 
 import { confirm, Page, useVbenModal } from '@vben/common-ui';
-import { isEmpty } from '@vben/utils';
+import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { message } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { deleteDept, deleteDeptList, getDeptList } from '#/api/system/dept';
+import { deleteDept, deleteDeptList, exportDept, getDeptList } from '#/api/system/dept';
 import { $t } from '#/locales';
 
 import { useGridColumns } from './data';
@@ -47,6 +47,12 @@ function handleCreate() {
 /** 导入组织 */
 function handleImport() {
   importModalApi.open();
+}
+
+/** 导出组织 */
+async function handleExport() {
+  const data = await exportDept();
+  downloadFileFromBlobPart({ fileName: '组织架构.xlsx', source: data });
 }
 
 /** 添加下级部门 */
@@ -157,6 +163,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               type: 'primary',
               auth: ['system:dept:import'],
               onClick: handleImport,
+            },
+            {
+              label: '导出组织',
+              type: 'primary',
+              auth: ['system:dept:export'],
+              onClick: handleExport,
             },
             {
               label: isExpanded ? '收缩' : '展开',

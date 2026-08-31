@@ -11,9 +11,14 @@ const modules = import.meta.glob('../views/**/*.{vue,tsx}');
  * 注册一个异步组件
  * @param componentPath 例:/bpm/oa/leave/detail
  */
+const COMPONENT_PATH_ALIASES: Record<string, string> = {
+  '/oa/seal/seal-apply-info': '/oa/seal/sealapply/info/index',
+};
+
 export function registerComponent(componentPath: string) {
+  const resolved = COMPONENT_PATH_ALIASES[componentPath] || componentPath;
   for (const item in modules) {
-    if (item.includes(componentPath)) {
+    if (item.includes(resolved)) {
       // 使用异步组件的方式来动态加载组件
       return defineAsyncComponent(modules[item] as any);
     }

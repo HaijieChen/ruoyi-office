@@ -72,7 +72,9 @@ public class BpmOALeaveDO extends BaseDO {
      *
      * 枚举 {@link BpmTaskStatusEnum}
      * 考虑到简单，所以直接复用了 BpmProcessInstanceStatusEnum 枚举，也可以自己定义一个枚举哈
+     * 库列仍为芋道历史字段 {@code result}
      */
+    @TableField("result")
     private Integer status;
 
     /**

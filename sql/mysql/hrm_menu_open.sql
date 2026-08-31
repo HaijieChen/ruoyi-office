@@ -143,6 +143,17 @@ WHERE @organization_page_menu_id IS NOT NULL
       WHERE `deleted` = b'0' AND `parent_id` = @organization_page_menu_id
         AND `permission` = 'system:dept:import'
   );
+INSERT INTO `system_menu`
+    (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
+     `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
+SELECT '组织导出', 'system:dept:export', 3, 6, @organization_page_menu_id, '', '', NULL, NULL,
+       0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
+WHERE @organization_page_menu_id IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM `system_menu`
+      WHERE `deleted` = b'0' AND `parent_id` = @organization_page_menu_id
+        AND `permission` = 'system:dept:export'
+  );
 
 -- 复用「人力」下已有二级目录：人事档案 / 人事管理
 SET @personnel_archive_menu_id = (

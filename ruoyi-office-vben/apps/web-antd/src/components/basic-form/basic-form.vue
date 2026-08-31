@@ -37,6 +37,8 @@ interface Props {
   timelineDirection?: 'horizontal' | 'vertical'; // 时间轴方向
   activityNodes?: any[]; // 审批节点信息
   hideFooter?: boolean; // 是否隐藏底部
+  /** 嵌在 BPM P-shell 时只渲染单据，不重复审批/流程图 Tab */
+  embedded?: boolean;
   // 表单相关props
   formData?: Record<string, any>; // 表单数据
   formSchema?: VbenFormSchema[]; // 表单schema
@@ -55,6 +57,7 @@ const props = withDefaults(defineProps<Props>(), {
   timelineDirection: 'horizontal',
   activityNodes: () => [],
   hideFooter: false,
+  embedded: false,
   formData: () => ({}),
   formSchema: () => [],
   disabled: false,
@@ -257,7 +260,7 @@ onMounted(async () => {
   initForm();
 
   // 如果已经有 processInstanceId，立即加载流程模型视图和审批详情
-  if (props.headerData.processInstanceId) {
+  if (!props.embedded && props.headerData.processInstanceId) {
     getProcessModelView();
     getApprovalDetailData();
   }
@@ -311,6 +314,7 @@ defineExpose({
             key="2"
             :tab="$t('common.approvalInfo')"
             v-if="
+              !props.embedded &&
               props.headerData.processInstanceId &&
               props.headerData.processStatus
             "
@@ -351,6 +355,7 @@ defineExpose({
             :tab="$t('common.processFlow')"
             :force-render="true"
             v-if="
+              !props.embedded &&
               props.headerData.processInstanceId &&
               props.headerData.processStatus
             "

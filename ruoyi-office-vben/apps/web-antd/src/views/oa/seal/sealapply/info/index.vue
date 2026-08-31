@@ -306,6 +306,7 @@ onMounted(() => {
       :form-data="formData"
       :form-schema="formSchema"
       :disabled="readonly"
+      :embedded="!!props.processInstance"
       @close="handleClose"
       @save="handleSaveAndSubmit(false)"
       @submit="handleSaveAndSubmit(true)"
