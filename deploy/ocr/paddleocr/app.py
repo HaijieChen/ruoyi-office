@@ -58,13 +58,19 @@ def parse_invoice_no(joined):
 
 
 def parse_buyer_name(joined):
-    m = re.search(r"购买方名称[:：]?\s*([^\s销税]{2,80})", joined)
-    if not m:
-        m = re.search(r"购买方[^销]{0,80}名称[:：]\s*([^\s销税]{2,80})", joined)
-    if not m:
-        return None
-    name = re.split(r"[，,。；;]|纳税人识别号|统一社会信用代码|销售方", m.group(1))[0].strip()
-    return name or None
+    compact = re.sub(r"[\s　]+", "", joined)
+    patterns = [
+        r"购买方(?:信息)?名称[:：]?([^销税]{2,80}?)(?:纳税人识别号|统一社会信用代码|销售方|$)",
+        r"购货单位(?:名称)?[:：]?([^销税]{2,80}?)(?:纳税人识别号|统一社会信用代码|销售方|$)",
+        r"购买方[^销]{0,40}名称[:：]?([^销税]{2,80}?)(?:纳税人识别号|统一社会信用代码|销售方|$)",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, compact)
+        if m:
+            name = re.split(r"[，,。；;]|纳税人识别号|统一社会信用代码|销售方", m.group(1))[0].strip()
+            if name:
+                return name
+    return None
 
 
 def parse_text(joined):

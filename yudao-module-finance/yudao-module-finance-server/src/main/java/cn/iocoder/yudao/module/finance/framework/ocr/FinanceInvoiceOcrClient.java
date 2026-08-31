@@ -173,17 +173,20 @@ public class FinanceInvoiceOcrClient {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        java.util.regex.Matcher buyerTitle = java.util.regex.Pattern
-                .compile("购买方名称[:：]?\\s*([^\\s销税]{2,80})")
-                .matcher(raw);
-        if (buyerTitle.find()) {
-            return cleanBuyerName(buyerTitle.group(1));
-        }
-        java.util.regex.Matcher buyerBlock = java.util.regex.Pattern
-                .compile("购买方[^销]{0,80}名称[:：]\\s*([^\\s销税]{2,80})")
-                .matcher(raw);
-        if (buyerBlock.find()) {
-            return cleanBuyerName(buyerBlock.group(1));
+        String compact = raw.replaceAll("[\\s　]+", "");
+        String[] patterns = {
+                "购买方(?:信息)?名称[:：]?([^销税]{2,80}?)(?:纳税人识别号|统一社会信用代码|销售方|$)",
+                "购货单位(?:名称)?[:：]?([^销税]{2,80}?)(?:纳税人识别号|统一社会信用代码|销售方|$)",
+                "购买方[^销]{0,40}名称[:：]?([^销税]{2,80}?)(?:纳税人识别号|统一社会信用代码|销售方|$)",
+        };
+        for (String pattern : patterns) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(pattern).matcher(compact);
+            if (m.find()) {
+                String name = cleanBuyerName(m.group(1));
+                if (name != null) {
+                    return name;
+                }
+            }
         }
         return null;
     }

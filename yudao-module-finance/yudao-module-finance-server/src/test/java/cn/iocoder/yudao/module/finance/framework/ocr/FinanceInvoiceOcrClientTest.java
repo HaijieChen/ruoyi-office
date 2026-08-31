@@ -39,6 +39,10 @@ class FinanceInvoiceOcrClientTest {
     void parseBuyerName() {
         assertEquals("上海文枢科技有限公司",
                 FinanceInvoiceOcrClient.parseBuyerName("购买方名称：上海文枢科技有限公司 纳税人识别号"));
+        assertEquals("上海文枢科技有限公司",
+                FinanceInvoiceOcrClient.parseBuyerName("购买方信息\n名称：上海文枢科技有限公司\n统一社会信用代码"));
+        assertEquals("北京某某科技有限公司",
+                FinanceInvoiceOcrClient.parseBuyerName("购货单位：北京某某科技有限公司 纳税人识别号"));
         assertNull(FinanceInvoiceOcrClient.parseBuyerName("销售方名称：某商户"));
     }
 

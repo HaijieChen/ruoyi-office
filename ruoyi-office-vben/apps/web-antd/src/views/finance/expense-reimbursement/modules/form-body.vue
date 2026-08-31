@@ -256,6 +256,7 @@ function predocLinkLabel(line: LineRow) {
 function onCategoryChange(index: number) {
   const line = formData.value.lines[index];
   if (!line) return;
+  line.subItem = undefined;
   line.predocProcessInstanceId = undefined;
   line.predocType = undefined;
   line.predocBillId = undefined;
@@ -263,7 +264,7 @@ function onCategoryChange(index: number) {
   line.overLimitReason = undefined;
   applyToSiblings(index, (s) => {
     s.category = line.category;
-    s.subItem = line.subItem;
+    s.subItem = undefined;
     s.predocProcessInstanceId = undefined;
     s.predocType = undefined;
     s.stayCityTier = undefined;
@@ -289,13 +290,21 @@ function normalizeCompanyName(name?: string) {
   return String(name || '')
     .replace(/\s+/g, '')
     .replace(/[（）()]/g, '')
-    .replace(/有限责任公司|股份有限公司|有限公司/g, '');
+    .replace(/有限责任公司|股份有限公司|有限公司|集团|公司/g, '');
+}
+
+function unwrapOcr(ocr: any) {
+  if (!ocr || typeof ocr !== 'object') return ocr;
+  if (ocr.buyerName || ocr.invoiceNo || ocr.amount != null || ocr.feeDate) return ocr;
+  if (ocr.data && typeof ocr.data === 'object') return ocr.data;
+  return ocr;
 }
 
 function buyerMatchesEntity(buyer?: string, entity?: string) {
   const a = normalizeCompanyName(buyer);
   const b = normalizeCompanyName(entity);
-  if (!a || !b) return true;
+  if (!a) return true;
+  if (!b) return false;
   return a.includes(b) || b.includes(a);
 }
 
@@ -304,13 +313,15 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
   if (!line) return;
   const hide = message.loading({ content: '正在识别发票...', duration: 0 });
   try {
-    const ocr = await ocrExpenseInvoice(url, file);
+    const ocr = unwrapOcr(await ocrExpenseInvoice(url, file));
     if (ocr?.used || formData.value.lines.some((l, i) => i !== index && l.invoiceNo && l.invoiceNo === ocr?.invoiceNo)) {
       message.error(`发票 ${ocr.invoiceNo || ''} 已被使用`);
       throw new Error('invoice used');
     }
     if (!buyerMatchesEntity(ocr?.buyerName, formData.value.entityCompanyName)) {
-      message.error('与报销主体不匹配，请重新上传发票');
+      message.error(
+        `与报销主体不匹配，请重新上传发票（抬头：${ocr?.buyerName || '未识别'}，主体：${formData.value.entityCompanyName || '未识别'}）`,
+      );
       throw new Error('buyer mismatch');
     }
     if (ocr?.invoiceNo) line.invoiceNo = String(ocr.invoiceNo);
@@ -496,7 +507,15 @@ function needOverLimitReason(line: LineRow) {
 }
 
 function addLine() {
-  formData.value.lines.push({ lineKind: expectedKind() });
+  const lines = formData.value.lines;
+  const last = [...lines].reverse().find((l) => !l._sibling) || lines[lines.length - 1];
+  formData.value.lines.push({
+    lineKind: expectedKind(),
+    category: last?.category,
+    predocType: last?.predocType,
+    predocProcessInstanceId: last?.predocProcessInstanceId,
+    stayCityTier: last?.stayCityTier,
+  });
 }
 
 function removeLine(index: number) {
@@ -706,15 +725,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             @change="onCategoryChange(index)"
           />
           <Select
-            v-if="line.category && subItemOptions(line.category).length"
-            v-model:value="line.subItem"
-            class="w-32"
-            :options="subItemOptions(line.category)"
-            placeholder="子项目"
-            allow-clear
-            @change="onSubItemChange(index)"
-          />
-          <Select
             v-if="needsPredoc(line)"
             :value="line.predocProcessInstanceId"
             class="w-56"
@@ -733,6 +743,19 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           >
             {{ predocLinkLabel(line) }}
           </Button>
+          <Select
+            v-if="
+              line.category &&
+              subItemOptions(line.category).length &&
+              (!needsPredoc(line) || !!line.predocProcessInstanceId)
+            "
+            v-model:value="line.subItem"
+            class="w-32"
+            :options="subItemOptions(line.category)"
+            placeholder="子项目"
+            allow-clear
+            @change="onSubItemChange(index)"
+          />
         </template>
         <template v-if="lineDetailsEnabled(line)">
           <FileUpload
@@ -782,6 +805,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         <Button danger size="small" @click="removeLine(index)">删</Button>
       </div>
       <Button size="small" @click="addLine">加一行</Button>
+      <span class="ml-2 text-xs text-gray-500">同一出差单可加行再选其他子项目</span>
       <div class="mt-1 text-xs text-gray-500">
         合计金额 {{ lineTotal().toFixed(2) }}　专票税额 {{ taxTotal().toFixed(2) }}
       </div>
