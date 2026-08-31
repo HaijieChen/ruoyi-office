@@ -34,6 +34,8 @@ import {
   recordContractSeal,
 } from '#/api/finance/contract-application';
 import { FilePreviewList, FileUpload } from '#/components/upload';
+import { displayDate } from '#/utils/display-time';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 
 defineOptions({ name: 'FinanceContractApplicationBpmInfo' });
 
@@ -439,11 +441,11 @@ watch(
           <DescriptionsItem label="文件名称" :span="2">
             {{ detail.fileName || '-' }}
           </DescriptionsItem>
-          <DescriptionsItem label="文件类型">
+          <DescriptionsItem label="合同类型">
             {{ detail.fileType || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="产品类型">
-            {{ detail.productType || '-' }}
+            {{ financeProductLabel(detail.productType) }}
           </DescriptionsItem>
           <DescriptionsItem label="合同金额">
             {{
@@ -476,10 +478,10 @@ watch(
             {{ detail.preProcessRef || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="起始日期">
-            {{ detail.startDate || '-' }}
+            {{ displayDate(detail.startDate) }}
           </DescriptionsItem>
           <DescriptionsItem label="结束日期">
-            {{ detail.endDate || '-' }}
+            {{ displayDate(detail.endDate) }}
           </DescriptionsItem>
           <DescriptionsItem label="电子版" :span="2">
             <FilePreviewList :value="detail.draftFileUrl" />

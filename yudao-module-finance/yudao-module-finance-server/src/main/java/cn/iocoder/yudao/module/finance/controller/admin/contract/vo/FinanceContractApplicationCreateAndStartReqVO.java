@@ -38,8 +38,8 @@ public class FinanceContractApplicationCreateAndStartReqVO {
     @NotBlank(message = "用印文件名称不能为空")
     private String fileName;
 
-    @Schema(description = "文件类型", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "文件类型不能为空")
+    @Schema(description = "合同类型", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "合同类型不能为空")
     private String fileType;
 
     @Schema(description = "产品类型（仅销售合同必填，字典 finance_product_type）")

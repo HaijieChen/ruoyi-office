@@ -139,7 +139,7 @@ const rules = computed<Record<string, Rule[]>>(() => ({
   fileName: [
     { required: true, message: '请先上传电子版文件', trigger: 'change' },
   ],
-  fileType: [{ required: true, message: '请选择文件类型', trigger: 'change' }],
+  fileType: [{ required: true, message: '请选择合同类型', trigger: 'change' }],
   productType: isSalesLikeContract.value
     ? [{ required: true, message: '请选择产品类型', trigger: 'change' }]
     : [],
@@ -464,7 +464,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         placeholder="CNY/USD/HKD"
       />
     </Form.Item>
-    <Form.Item label="文件类型" name="fileType">
+    <Form.Item label="合同类型" name="fileType">
       <Select
         v-model:value="formData.fileType"
         class="w-full"

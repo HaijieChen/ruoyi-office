@@ -30,7 +30,7 @@ public class FinanceContractApplicationPageReqVO extends PageParam {
     @Schema(description = "币种")
     private String currency;
 
-    @Schema(description = "文件类型")
+    @Schema(description = "合同类型")
     private String fileType;
 
     @Schema(description = "产品类型")

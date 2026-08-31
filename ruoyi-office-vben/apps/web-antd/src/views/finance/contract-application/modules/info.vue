@@ -12,6 +12,8 @@ import { Button, Descriptions, Divider, Space, Spin, message } from 'ant-design-
 
 import { FilePreviewList } from '#/components/upload';
 import { getContractApplication } from '#/api/finance/contract-application';
+import { displayDate } from '#/utils/display-time';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
 defineOptions({ name: 'FinanceContractApplicationInfo' });
@@ -115,11 +117,11 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="文件名称" :span="2">
           {{ detail.fileName }}
         </Descriptions.Item>
-        <Descriptions.Item label="文件类型">
+        <Descriptions.Item label="合同类型">
           {{ detail.fileType }}
         </Descriptions.Item>
         <Descriptions.Item label="产品类型">
-          {{ detail.productType || '-' }}
+          {{ financeProductLabel(detail.productType) }}
         </Descriptions.Item>
         <Descriptions.Item label="合同金额">
           {{ detail.amountNa ? '不适用' : (detail.contractAmount ?? '-') }}
@@ -143,10 +145,10 @@ const [Modal, modalApi] = useVbenModal({
           {{ detail.mailAddress || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="起始日期">
-          {{ detail.startDate || '-' }}
+          {{ displayDate(detail.startDate) }}
         </Descriptions.Item>
         <Descriptions.Item label="结束日期">
-          {{ detail.endDate || '-' }}
+          {{ displayDate(detail.endDate) }}
         </Descriptions.Item>
         <Descriptions.Item label="电子版" :span="2">
           <FilePreviewList :value="detail.draftFileUrl" />

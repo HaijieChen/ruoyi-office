@@ -14,6 +14,8 @@ import {
 } from '#/api/finance/contract-application';
 import { message, Modal } from 'ant-design-vue';
 
+import { displayDate } from '#/utils/display-time';
+
 import FormModal from './modules/form.vue';
 import ImportModal from './modules/import-modal.vue';
 import InfoModal from './modules/info.vue';
@@ -187,7 +189,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
       {
         fieldName: 'fileType',
-        label: '文件类型',
+        label: '合同类型',
         component: 'Select',
         componentProps: {
           allowClear: true,
@@ -206,7 +208,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       { field: 'applicationNo', title: '业务单号', minWidth: 150 },
       { field: 'counterpartyName', title: '对方', minWidth: 120 },
       { field: 'signCompany', title: '主体公司', minWidth: 100 },
-      { field: 'fileType', title: '文件类型', minWidth: 110 },
+      { field: 'fileType', title: '合同类型', minWidth: 110 },
       { field: 'fileName', title: '文件名称', minWidth: 140 },
       {
         field: 'contractAmount',
@@ -221,8 +223,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
         minWidth: 160,
         formatter: ({ row }) => displayStatus(row),
       },
-      { field: 'startDate', title: '起始日', minWidth: 110 },
-      { field: 'endDate', title: '结束日', minWidth: 110 },
+      {
+        field: 'startDate',
+        title: '起始日',
+        minWidth: 110,
+        formatter: ({ cellValue }) => displayDate(cellValue),
+      },
+      {
+        field: 'endDate',
+        title: '结束日',
+        minWidth: 110,
+        formatter: ({ cellValue }) => displayDate(cellValue),
+      },
       {
         field: 'createTime',
         title: '创建时间',

@@ -22,7 +22,7 @@ public class FinanceContractApplicationImportExcelVO {
     private String entityCompanyName;
     @ExcelProperty("对方客商")
     private String counterpartyName;
-    @ExcelProperty("文件类型")
+    @ExcelProperty("合同类型")
     private String fileType;
     @ExcelProperty("产品类型")
     private String productType;

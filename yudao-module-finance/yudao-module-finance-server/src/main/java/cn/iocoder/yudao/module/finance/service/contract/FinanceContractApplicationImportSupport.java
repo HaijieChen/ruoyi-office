@@ -56,7 +56,7 @@ final class FinanceContractApplicationImportSupport {
         }
         String fileType = trimToNull(row.getFileType());
         if (fileType == null || !ALLOWED_FILE_TYPES.contains(fileType)) {
-            return "文件类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同";
+            return "合同类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同";
         }
         boolean sales = SALES_LIKE_FILE_TYPES.contains(fileType);
         String productType = trimToNull(row.getProductType());

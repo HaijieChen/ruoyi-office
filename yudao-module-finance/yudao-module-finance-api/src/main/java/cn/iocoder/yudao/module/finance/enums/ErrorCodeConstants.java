@@ -164,7 +164,7 @@ public interface ErrorCodeConstants {
     ErrorCode CONTRACT_APPLICATION_MAIL_ADDRESS_REQUIRED = new ErrorCode(1_040_005_008,
             "需要邮寄时必须填写邮寄地址");
     ErrorCode CONTRACT_APPLICATION_FILE_TYPE_INVALID = new ErrorCode(1_040_005_009,
-            "文件类型不在允许枚举内");
+            "合同类型不在允许枚举内");
     ErrorCode CONTRACT_APPLICATION_SEAL_FILE_REQUIRED = new ErrorCode(1_040_005_010,
             "用印备案扫描件不能为空");
     ErrorCode CONTRACT_APPLICATION_MAIL_TRACKING_REQUIRED = new ErrorCode(1_040_005_011,
