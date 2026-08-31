@@ -35,7 +35,10 @@ import {
 } from '#/components/form-create';
 import { registerComponent } from '#/utils';
 
-import { isFinanceApprovalPShellViewPath } from '../constants';
+import {
+  isFinanceApprovalPShellViewPath,
+  resolveBusinessFormViewPath,
+} from '../constants';
 
 import ProcessInstanceShareDialog from './modules/share-dialog.vue';
 import ProcessInstanceBpmnViewer from './modules/bpm-viewer.vue';
@@ -150,6 +153,7 @@ const writableFields: Array<string> = []; // 表单可以编辑的字段
 /** 加载流程实例 */
 const BusinessFormComponent = shallowRef<any>(null); // 异步组件
 const businessFormRef = ref(); // 业务表单组件引用
+const businessFormLoadError = ref('');
 
 /** NORMAL form or finance whitelist CUSTOM → unified P-shell */
 const isPShellCustom = computed(() =>
@@ -243,10 +247,20 @@ async function getApprovalDetail() {
         }
       });
     } else {
-      // 注意：data.processDefinition.formCustomViewPath 是组件的全路径，例如说：/crm/contract/detail/index.vue
-      BusinessFormComponent.value = registerComponent(
-        data?.processDefinition?.formCustomViewPath || '',
+      const resolved = resolveBusinessFormViewPath(
+        data?.todoTask,
+        data?.processDefinition?.formCustomViewPath,
       );
+      const loaded = resolved.path
+        ? registerComponent(resolved.path)
+        : undefined;
+      if (resolved.source === 'node' && resolved.path && !loaded) {
+        businessFormLoadError.value = resolved.path;
+        BusinessFormComponent.value = null;
+      } else {
+        businessFormLoadError.value = '';
+        BusinessFormComponent.value = loaded;
+      }
     }
 
     // 获取审批节点，显示 Timeline 的数据
@@ -466,7 +480,14 @@ onMounted(async () => {
                   </div>
                   <!-- Finance CUSTOM whitelist: business form in main column -->
                   <div v-else-if="isPShellCustom" class="h-full">
+                    <div
+                      v-if="businessFormLoadError"
+                      class="p-4 text-sm text-red-600"
+                    >
+                      无法加载节点自定义查看页：{{ businessFormLoadError }}
+                    </div>
                     <BusinessFormComponent
+                      v-else
                       ref="businessFormRef"
                       :id="processInstance?.businessKey"
                       :is-approval="isApproval"
@@ -575,7 +596,11 @@ onMounted(async () => {
         <span class="text-gray-500">任职：</span>
         {{ startEmploymentLabel }}
       </div>
+      <div v-if="businessFormLoadError" class="p-4 text-sm text-red-600">
+        无法加载节点自定义查看页：{{ businessFormLoadError }}
+      </div>
       <BusinessFormComponent
+        v-else
         ref="businessFormRef"
         :id="processInstance?.businessKey"
         :is-approval="isApproval"

@@ -24,3 +24,14 @@ export function isFinanceApprovalPShellViewPath(
     (p) => p === path || p === normalized || p.replace(/\/index$/, '') === normalized,
   );
 }
+
+export function resolveBusinessFormViewPath(
+  todoTask?: { formCustomViewPath?: null | string } | null,
+  processFormCustomViewPath?: null | string,
+): { path: string; source: 'node' | 'process' } {
+  const nodePath = todoTask?.formCustomViewPath?.trim() ?? '';
+  if (nodePath) {
+    return { path: nodePath, source: 'node' };
+  }
+  return { path: processFormCustomViewPath?.trim() || '', source: 'process' };
+}

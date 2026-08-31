@@ -28,3 +28,23 @@ test('designer UserTask form panel writes formCustomViewPath extension body', ()
     /"name":\s*"formCustomViewPath"[\s\S]*?"isBody":\s*true/,
   );
 });
+
+test('approval shell prefers todo node Vue path and does not silent-fallback', () => {
+  const constants = readRepositoryFile(
+    'ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/constants.ts',
+  );
+  const detail = readRepositoryFile(
+    'ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/detail/index.vue',
+  );
+
+  assert.match(constants, /export function resolveBusinessFormViewPath/);
+  assert.match(constants, /source: 'node'/);
+  assert.match(constants, /source: 'process'/);
+  assert.match(detail, /resolveBusinessFormViewPath\(\s*data\?\.todoTask/);
+  assert.match(detail, /resolved\.source === 'node' && resolved\.path && !loaded/);
+  assert.match(detail, /无法加载节点自定义查看页/);
+  assert.match(
+    detail,
+    /isFinanceApprovalPShellViewPath\(processDefinition\.value\?\.formCustomViewPath\)/,
+  );
+});
