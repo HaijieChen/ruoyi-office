@@ -183,6 +183,46 @@ class FinancePaymentApplicationServiceImplTest {
         verify(mapper).insert(cap.capture());
         assertEquals("pi-ok", cap.getValue().getPurchaseProcessInstanceId());
         assertEquals("采购摘要", cap.getValue().getPurchaseSnapshot());
+        assertNull(cap.getValue().getCostProject());
+    }
+
+    @Test
+    void createBusinessWithoutCostProjectFails() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setCostProject("  ");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_FIELD_REQUIRED.getCode(), ex.getCode());
+        verify(mapper, never()).insert(any(FinancePaymentApplicationDO.class));
+    }
+
+    @Test
+    void createOtherWithoutCostProjectOk() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setPaymentReason(FinancePaymentReasonEnum.OTHER.getCode());
+        req.setRelatedContractApplicationId(null);
+        req.setCostProject(null);
+        Long id = service.createAndStart(req, 1L);
+        assertEquals(100L, id);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertNull(cap.getValue().getCostProject());
+        verify(dictDataApi, never()).validateDictDataList(eq("finance_product_type"), anyCollection());
+    }
+
+    @Test
+    void createPurchaseIgnoresSubmittedCostProject() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setPaymentReason(FinancePaymentReasonEnum.PURCHASE.getCode());
+        req.setRelatedContractApplicationId(null);
+        req.setPurchaseProcessInstanceId("pi-ok");
+        req.setCostProject("软件");
+        when(predocService.validateAndSummarizePurchaseRef("pi-ok", 1L)).thenReturn("采购摘要");
+        Long id = service.createAndStart(req, 1L);
+        assertEquals(100L, id);
+        ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
+        verify(mapper).insert(cap.capture());
+        assertNull(cap.getValue().getCostProject());
+        verify(dictDataApi, never()).validateDictDataList(eq("finance_product_type"), anyCollection());
     }
 
     @Test

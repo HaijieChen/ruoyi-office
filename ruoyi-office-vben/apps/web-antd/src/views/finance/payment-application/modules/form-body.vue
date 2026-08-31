@@ -114,7 +114,9 @@ const rules = computed<Record<string, Rule[]>>(() => ({
   relatedContractApplicationId: isBusiness.value
     ? [{ required: true, message: '请选择付款业务合同' }]
     : [],
-  costProject: [{ required: true, message: '请选择产品类型' }],
+  costProject: isBusiness.value
+    ? [{ required: true, message: '请选择产品类型' }]
+    : [],
   evidenceFileUrls: [
     {
       required: true,
@@ -298,6 +300,7 @@ watch(
     if (r === 'BUSINESS') await loadRelatedContracts();
     if (r !== 'BUSINESS') {
       formData.value.relatedContractApplicationId = undefined;
+      formData.value.costProject = undefined;
     }
     emitPredict();
   },
@@ -445,7 +448,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       applyAmount: formData.value.applyAmount!,
       currency,
       businessSettlementTerm: formData.value.businessSettlementTerm!,
-      costProject: formData.value.costProject!,
+      costProject: isBusiness.value ? formData.value.costProject : undefined,
       evidenceFileUrls: urls,
       specialNote: formData.value.specialNote,
       startUserSelectAssignees: ctx?.startUserSelectAssignees,
@@ -526,7 +529,12 @@ defineExpose({
           placeholder="薪资/税金请走独立入口"
         />
       </Form.Item>
-      <Form.Item label="产品类型" name="costProject" required>
+      <Form.Item
+        v-if="isBusiness"
+        label="产品类型"
+        name="costProject"
+        required
+      >
         <Select
           v-model:value="formData.costProject"
           :options="costProjectOptions"

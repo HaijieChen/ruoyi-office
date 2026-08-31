@@ -524,7 +524,7 @@ watch(
             {{ detail.applyAmount }} {{ detail.currency }}
           </Descriptions.Item>
           <Descriptions.Item
-            v-if="!detail.applicationKind || detail.applicationKind === 'ORDINARY'"
+            v-if="detail.paymentReason === 'BUSINESS'"
             label="产品类型"
           >
             {{ financeProductLabel(detail.costProject) }}

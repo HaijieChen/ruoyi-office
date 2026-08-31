@@ -962,16 +962,23 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_EVIDENCE_REQUIRED);
         }
         validateEvidenceUrls(reqVO.getEvidenceFileUrls());
-        if (StrUtil.isBlank(reqVO.getBusinessSettlementTerm())
-                || StrUtil.isBlank(reqVO.getCostProject())) {
+        if (StrUtil.isBlank(reqVO.getBusinessSettlementTerm())) {
             throw exception(PAYMENT_APPLICATION_FIELD_REQUIRED);
         }
         String payMethod = StrUtil.trimToNull(reqVO.getPayMethod());
-        String costProject = reqVO.getCostProject().trim();
         if (payMethod != null) {
             validateDictValue(DICT_PAY_METHOD, payMethod);
         }
-        validateDictValue(DICT_COST_PROJECT, costProject);
+        String reason = reqVO.getPaymentReason();
+        boolean business = FinancePaymentReasonEnum.BUSINESS.getCode().equals(reason);
+        String costProject = null;
+        if (business) {
+            if (StrUtil.isBlank(reqVO.getCostProject())) {
+                throw exception(PAYMENT_APPLICATION_FIELD_REQUIRED);
+            }
+            costProject = reqVO.getCostProject().trim();
+            validateDictValue(DICT_COST_PROJECT, costProject);
+        }
         FinanceCustomerCompanyDO payee = customerCompanyService.getEnabledSupplierCompany(reqVO.getPayeeCompanyId());
         String bankName = StrUtil.blankToDefault(trimToNull(reqVO.getPayeeBankName()), payee.getBankName());
         String bankAccount = StrUtil.blankToDefault(trimToNull(reqVO.getPayeeBankAccount()), payee.getBankAccount());
@@ -979,7 +986,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(CUSTOMER_COMPANY_SUPPLIER_BANK_REQUIRED);
         }
 
-        String reason = reqVO.getPaymentReason();
         String purchasePi = null;
         String purchaseSnapshot = null;
         Long leaseId = null;

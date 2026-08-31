@@ -68,7 +68,9 @@ const [Modal, modalApi] = useVbenModal({
         </Descriptions.Item>
         <Descriptions.Item label="金额">{{ detail.applyAmount }} {{ detail.currency }}</Descriptions.Item>
         <Descriptions.Item label="时效">{{ financeTimingLabel(detail.paymentTiming) }}</Descriptions.Item>
-        <Descriptions.Item label="产品类型">{{ financeProductLabel(detail.costProject) }}</Descriptions.Item>
+        <Descriptions.Item v-if="detail.paymentReason === 'BUSINESS'" label="产品类型">
+          {{ financeProductLabel(detail.costProject) }}
+        </Descriptions.Item>
         <Descriptions.Item label="事由">{{ financeReasonLabel(detail.paymentReason) }}</Descriptions.Item>
         <Descriptions.Item label="采购前置">
           <span>{{ detail.purchaseSnapshot || detail.purchaseProcessInstanceId || '-' }}</span>

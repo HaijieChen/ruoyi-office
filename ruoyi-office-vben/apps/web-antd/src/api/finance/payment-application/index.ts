@@ -41,7 +41,7 @@ export namespace FinancePaymentApplicationApi {
     businessSettlementTerm: string;
     contractSettlementMethod?: string;
     payMethod?: string;
-    costProject: string;
+    costProject?: string;
     accountingSubject?: string;
     evidenceFileUrls?: string;
     specialNote?: string;
@@ -69,7 +69,7 @@ export namespace FinancePaymentApplicationApi {
     currency: string;
     businessSettlementTerm: string;
     payMethod?: string;
-    costProject: string;
+    costProject?: string;
     evidenceFileUrls: string[];
     specialNote?: string;
     applicantDeptId?: number;

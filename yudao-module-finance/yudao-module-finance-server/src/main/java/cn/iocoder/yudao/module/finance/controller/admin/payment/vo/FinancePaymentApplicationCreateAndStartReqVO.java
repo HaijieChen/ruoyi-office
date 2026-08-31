@@ -59,8 +59,7 @@ public class FinancePaymentApplicationCreateAndStartReqVO {
     @Schema(description = "支付方式（已停用，可空）")
     private String payMethod;
 
-    @Schema(description = "费用归属项目")
-    @NotEmpty(message = "费用归属项目不能为空")
+    @Schema(description = "产品类型（事由=BUSINESS 必填，其余事由忽略）")
     private String costProject;
 
     @Schema(description = "付款依据文件 URL 列表")
