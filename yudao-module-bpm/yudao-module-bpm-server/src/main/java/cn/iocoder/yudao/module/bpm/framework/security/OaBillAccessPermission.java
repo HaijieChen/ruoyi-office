@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.bpm.framework.security;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import jakarta.annotation.Resource;
 import org.flowable.engine.TaskService;
 import org.springframework.beans.factory.ObjectProvider;
@@ -19,6 +20,8 @@ public class OaBillAccessPermission {
 
     @Resource
     private ObjectProvider<TaskService> taskServiceProvider;
+    @Resource
+    private ObjectProvider<BpmFinanceAttachAccess> financeAttachAccessProvider;
 
     public boolean canTaskContextOrOwnerRead(Long ownerUserId, String processInstanceId) {
         Long userId = getLoginUserId();
@@ -48,6 +51,11 @@ public class OaBillAccessPermission {
                 .taskCandidateOrAssigned(String.valueOf(userId))
                 .count();
         return count > 0;
+    }
+
+    public boolean canReadViaAttachingBill(Long userId, String processInstanceId) {
+        BpmFinanceAttachAccess access = financeAttachAccessProvider.getIfAvailable();
+        return access != null && access.canReadProcessInstanceViaBill(userId, processInstanceId);
     }
 
 }

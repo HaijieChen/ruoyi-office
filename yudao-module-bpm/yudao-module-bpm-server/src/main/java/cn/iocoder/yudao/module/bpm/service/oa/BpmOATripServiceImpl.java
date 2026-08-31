@@ -11,10 +11,8 @@ import cn.iocoder.yudao.module.bpm.dal.dataobject.oa.BpmOATripDO;
 import cn.iocoder.yudao.module.bpm.dal.mysql.oa.BpmOATripMapper;
 import cn.iocoder.yudao.module.bpm.enums.OaAttendanceSyncStatusEnum;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
-import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.framework.security.OaBillAccessPermission;
 import jakarta.annotation.Resource;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -64,9 +62,6 @@ public class BpmOATripServiceImpl implements BpmOATripService {
 
     @Resource
     private AdminUserApi adminUserApi;
-
-    @Resource
-    private ObjectProvider<BpmFinanceAttachAccess> financeAttachAccessProvider;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -137,15 +132,10 @@ public class BpmOATripServiceImpl implements BpmOATripService {
         if (Objects.equals(trip.getUserId(), userId)
                 || securityFrameworkService.hasPermission(QUERY_PERMISSION)
                 || oaBillAccessPermission.isActiveTaskCandidateOrAssignee(trip.getProcessInstanceId(), userId)
-                || canReadViaAttachingBill(userId, trip.getProcessInstanceId())) {
+                || oaBillAccessPermission.canReadViaAttachingBill(userId, trip.getProcessInstanceId())) {
             return trip;
         }
         throw exception(OA_TRIP_ACCESS_DENIED);
-    }
-
-    private boolean canReadViaAttachingBill(Long userId, String processInstanceId) {
-        BpmFinanceAttachAccess access = financeAttachAccessProvider.getIfAvailable();
-        return access != null && access.canReadProcessInstanceViaBill(userId, processInstanceId);
     }
 
     @Override

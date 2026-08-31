@@ -69,6 +69,10 @@ class BpmOATripServiceTest {
 
         oaBillAccessPermission = new OaBillAccessPermission();
         ReflectionTestUtils.setField(oaBillAccessPermission, "taskServiceProvider", taskServiceProvider);
+        financeAttachAccess = mock(BpmFinanceAttachAccess.class);
+        ObjectProvider<BpmFinanceAttachAccess> attachProvider = mock(ObjectProvider.class);
+        when(attachProvider.getIfAvailable()).thenReturn(financeAttachAccess);
+        ReflectionTestUtils.setField(oaBillAccessPermission, "financeAttachAccessProvider", attachProvider);
 
         cn.iocoder.yudao.module.system.api.user.AdminUserApi adminUserApi =
                 mock(cn.iocoder.yudao.module.system.api.user.AdminUserApi.class);
@@ -84,10 +88,6 @@ class BpmOATripServiceTest {
         ReflectionTestUtils.setField(service, "securityFrameworkService", securityFrameworkService);
         ReflectionTestUtils.setField(service, "oaBillAccessPermission", oaBillAccessPermission);
         ReflectionTestUtils.setField(service, "adminUserApi", adminUserApi);
-        financeAttachAccess = mock(BpmFinanceAttachAccess.class);
-        ObjectProvider<BpmFinanceAttachAccess> attachProvider = mock(ObjectProvider.class);
-        when(attachProvider.getIfAvailable()).thenReturn(financeAttachAccess);
-        ReflectionTestUtils.setField(service, "financeAttachAccessProvider", attachProvider);
     }
 
     @Test
