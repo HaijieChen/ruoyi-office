@@ -4,7 +4,7 @@ import { computed, inject, nextTick, onMounted, ref, toRaw, watch } from 'vue';
 
 import { cloneDeep } from '@vben/utils';
 
-import { Form, FormItem, Select } from 'ant-design-vue';
+import { AutoComplete, Form, FormItem, Select } from 'ant-design-vue';
 
 import { getFormSimpleList } from '#/api/bpm/form';
 
@@ -23,7 +23,17 @@ const props = defineProps({
 const prefix = inject('prefix');
 
 const formKey = ref<number | string | undefined>(undefined);
+const formCustomViewPath = ref('');
 const businessKey = ref('');
+const NODE_VUE_PATH_OPTIONS = [
+  { value: '/finance/payment-application/detail/finance' },
+  { value: '/finance/payment-application/detail/cashier' },
+  { value: '/finance/salary-payment/detail/finance' },
+  { value: '/finance/salary-payment/detail/cashier' },
+  { value: '/finance/tax-payment/detail/finance' },
+  { value: '/finance/tax-payment/detail/cashier' },
+];
+const FORM_CUSTOM_VIEW_PATH_TYPE = 'formCustomViewPath';
 const optionModelTitle = ref('');
 const fieldList = ref<any[]>([]);
 const formFieldForm = ref<any>({});
@@ -69,9 +79,19 @@ const resetFormList = () => {
   // 业务标识 businessKey， 绑定在 formData 中
   businessKey.value = formData.value.businessKey;
 
+  const pathEl = elExtensionElements.value.values.find(
+    (ex: any) =>
+      ex.$type === `${prefix}:${FORM_CUSTOM_VIEW_PATH_TYPE}` ||
+      ex.$type === `${prefix}:FormCustomViewPath`,
+  );
+  formCustomViewPath.value = (pathEl?.value || pathEl?.$body || '').trim();
+
   // 保留剩余扩展元素，便于后面更新该元素对应属性
   otherExtensions.value = elExtensionElements.value.values.filter(
-    (ex: any) => ex.$type !== `${prefix}:FormData`,
+    (ex: any) =>
+      ex.$type !== `${prefix}:FormData` &&
+      ex.$type !== `${prefix}:${FORM_CUSTOM_VIEW_PATH_TYPE}` &&
+      ex.$type !== `${prefix}:FormCustomViewPath`,
   );
 
   // 复制原始值，填充表格
@@ -84,6 +104,9 @@ const updateElementFormKey = () => {
   bpmnInstances().modeling.updateProperties(toRaw(bpmnELement.value), {
     formKey: formKey.value,
   });
+};
+const updateElementFormCustomViewPath = () => {
+  updateElementExtensions();
 };
 const _updateElementBusinessKey = () => {
   bpmnInstances().modeling.updateModdleProperties(
@@ -263,14 +286,23 @@ const _removeField = (field: any, index: any) => {
 };
 
 const updateElementExtensions = () => {
-  // 更新回扩展元素
+  const values = [...(otherExtensions.value || [])];
+  if (formData.value) {
+    values.push(formData.value);
+  }
+  const path = formCustomViewPath.value?.trim();
+  if (path) {
+    values.push(
+      bpmnInstances().moddle.create(
+        `${prefix}:${FORM_CUSTOM_VIEW_PATH_TYPE}`,
+        { value: path },
+      ),
+    );
+  }
   const newElExtensionElements = bpmnInstances().moddle.create(
     `bpmn:ExtensionElements`,
-    {
-      values: [...otherExtensions.value, formData.value],
-    },
+    { values },
   );
-  // 更新到元素上
   bpmnInstances().modeling.updateProperties(toRaw(bpmnELement.value), {
     extensionElements: newElExtensionElements,
   });
@@ -314,6 +346,19 @@ watch(
           allow-clear
           @change="updateElementFormKey"
           :options="formOptions"
+        />
+      </FormItem>
+      <FormItem
+        v-if="type === 'UserTask'"
+        label="自定义查看页"
+        extra="填写 Vue 组件路径，不是「流程表单」的 BPM 表单 ID。清空后该节点待办回退流程级只读详情。"
+      >
+        <AutoComplete
+          v-model:value="formCustomViewPath"
+          allow-clear
+          :options="NODE_VUE_PATH_OPTIONS"
+          placeholder="/finance/salary-payment/detail/cashier"
+          @change="updateElementFormCustomViewPath"
         />
       </FormItem>
       <FormItem label="业务标识">
