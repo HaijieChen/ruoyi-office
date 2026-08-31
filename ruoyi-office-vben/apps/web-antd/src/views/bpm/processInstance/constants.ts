@@ -11,6 +11,8 @@ export const FINANCE_APPROVAL_PSHELL_VIEW_PATHS = [
   '/finance/tax-payment/detail/index',
   '/finance/invoice-redflush/info/index',
   '/finance/expense-reimbursement/detail',
+  '/oa/seal/sealapply/info/index',
+  '/oa/seal/seal-apply-info',
 ] as const;
 
 export function isFinanceApprovalPShellViewPath(
