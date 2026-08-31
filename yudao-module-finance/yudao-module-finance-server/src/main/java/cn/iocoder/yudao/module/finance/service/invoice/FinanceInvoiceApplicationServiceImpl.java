@@ -686,6 +686,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         Map<String, Object> variables = new HashMap<>();
         variables.put("invoiceApplicationId", application.getId());
         variables.put("applicationNo", application.getApplicationNo());
+        variables.put("billCode", application.getApplicationNo());
         variables.put("totalAmount", application.getTotalAmount());
         variables.put("buyerName", application.getBuyerName());
         variables.put("buyerTaxNo", application.getBuyerTaxNo());

@@ -1091,6 +1091,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         Map<String, Object> variables = new HashMap<>();
         variables.put("paymentApplicationId", application.getId());
         variables.put("applicationNo", application.getApplicationNo());
+        variables.put(BpmProcessVariableConstants.BILL_CODE, application.getApplicationNo());
         variables.put("applyAmount", application.getApplyAmount());
         variables.put("payeeName", application.getPayeeName());
         variables.put("paymentReason", application.getPaymentReason());

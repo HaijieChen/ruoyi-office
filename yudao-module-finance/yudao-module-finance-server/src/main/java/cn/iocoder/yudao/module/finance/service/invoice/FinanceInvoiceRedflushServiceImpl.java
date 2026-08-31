@@ -184,6 +184,8 @@ public class FinanceInvoiceRedflushServiceImpl implements FinanceInvoiceRedflush
     private void startProcess(FinanceInvoiceRedflushDO row, Long userId,
                               FinanceInvoiceRedflushCreateAndStartReqVO reqVO) {
         Map<String, Object> variables = new HashMap<>();
+        variables.put("applicationNo", row.getApplicationNo());
+        variables.put("billCode", row.getApplicationNo());
         variables.put("totalAmount", row.getTotalAmount());
         if (reqVO.getStartCompanyDeptId() != null) {
             variables.put("startCompanyDeptId", reqVO.getStartCompanyDeptId());

@@ -106,6 +106,7 @@ class FinancePaymentApplicationServiceImplTest {
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
                 deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
                 salaryLineMapper, taxLineMapper);
+        injectBusinessStaffSupport();
         when(noRedisDAO.generate(any(LocalDate.class))).thenReturn("PAY-20260806-1");
         doAnswer(inv -> {
             FinancePaymentApplicationDO a = inv.getArgument(0);
@@ -130,6 +131,13 @@ class FinancePaymentApplicationServiceImplTest {
         when(pi.getCheckedData()).thenReturn("proc-1");
         when(processInstanceApi.createProcessInstance(anyLong(), any())).thenReturn(pi);
         when(processInstanceApi.createProcessInstanceByBusiness(anyLong(), any())).thenReturn(pi);
+    }
+
+    private void injectBusinessStaffSupport() {
+        cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport staffSupport =
+                mock(cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport.class);
+        when(staffSupport.resolve(anyLong(), any())).thenAnswer(inv -> inv.getArgument(0));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "businessStaffSupport", staffSupport);
     }
 
     private FinancePaymentApplicationCreateAndStartReqVO baseReq() {
@@ -322,6 +330,7 @@ class FinancePaymentApplicationServiceImplTest {
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
                 deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
                 salaryLineMapper, taxLineMapper);
+        injectBusinessStaffSupport();
 
         FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
         req.setId(4L);
@@ -797,6 +806,8 @@ class FinancePaymentApplicationServiceImplTest {
         assertEquals(20L, vars.get(BpmProcessVariableConstants.COMPANY_ID));
         assertEquals("主体甲", vars.get(BpmProcessVariableConstants.COMPANY_NAME));
         assertEquals("USD", vars.get("currency"));
+        assertEquals(vars.get("applicationNo"), vars.get(BpmProcessVariableConstants.BILL_CODE));
+        assertNotNull(vars.get(BpmProcessVariableConstants.BILL_CODE));
     }
 
     @Test

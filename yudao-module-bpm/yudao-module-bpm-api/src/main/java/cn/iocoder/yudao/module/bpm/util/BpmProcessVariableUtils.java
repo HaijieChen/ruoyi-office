@@ -135,7 +135,13 @@ public class BpmProcessVariableUtils {
             return null;
         }
         Object billCode = variables.get(BILL_CODE);
-        return billCode != null ? billCode.toString() : null;
+        if (billCode != null && !billCode.toString().isBlank()) {
+            return billCode.toString();
+        }
+        Object applicationNo = variables.get("applicationNo");
+        return applicationNo != null && !applicationNo.toString().isBlank()
+                ? applicationNo.toString()
+                : null;
     }
 
     /**

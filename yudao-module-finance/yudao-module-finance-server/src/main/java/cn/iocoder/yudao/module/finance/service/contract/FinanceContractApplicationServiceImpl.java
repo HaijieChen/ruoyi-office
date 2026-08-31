@@ -711,6 +711,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         Map<String, Object> variables = new HashMap<>();
         variables.put("contractApplicationId", application.getId());
         variables.put("applicationNo", application.getApplicationNo());
+        variables.put("billCode", application.getApplicationNo());
         variables.put("applicantUserId", application.getApplicantUserId());
         variables.put("signCompany", application.getSignCompany());
         if (application.getEntityCompanyDeptId() != null) {
