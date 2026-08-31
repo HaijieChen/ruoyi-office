@@ -34,6 +34,7 @@ import java.util.List;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_BUSINESS_ORDER_PRODUCT_MISSING;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CONTRACT_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CONTRACT_OCCUPY_EXCEED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CONTRACT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_OCCUPY_CONCURRENT;
@@ -237,6 +238,85 @@ class FinanceInvoiceApplicationServiceImplTest {
                 () -> service.createAndStart(reqVO, 200L));
         assertEquals(INVOICE_APPLICATION_CONTRACT_INVALID.getCode(), ex.getCode());
         verify(applicationMapper, never()).insert(any(FinanceInvoiceApplicationDO.class));
+    }
+
+    @Test
+    void createAndStartShouldOccupyBusinessOrderForGameJointProduct() {
+        when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
+                order(10L, "100.00", "0.00", 50L, "yxly")));
+        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("10.00")), any(), eq("yxly")))
+                .thenReturn(1);
+        when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("proc-yxly"));
+
+        FinanceInvoiceApplicationCreateAndStartReqVO reqVO = req(line(10L, "10.00"));
+        reqVO.setTaxContent("yxly");
+        service.createAndStart(reqVO, 200L);
+
+        verify(businessOrderMapper).increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("10.00")), any(), eq("yxly"));
+        verify(contractApplicationMapper, never()).selectBatchIds(any());
+    }
+
+    @Test
+    void createAndStartShouldRejectWhenContractOpenableExceeded() {
+        FinanceInvoiceApplicationCreateAndStartReqVO reqVO = req();
+        reqVO.setTaxContent("rjxs");
+        FinanceInvoiceApplicationCreateAndStartReqVO.Line line =
+                new FinanceInvoiceApplicationCreateAndStartReqVO.Line();
+        line.setAmount(new BigDecimal("80.00"));
+        line.setSourceContractApplicationId(88L);
+        reqVO.setLines(List.of(line));
+        when(contractApplicationMapper.selectBatchIds(any())).thenReturn(List.of(
+                FinanceContractApplicationDO.builder()
+                        .id(88L)
+                        .fileType("销售合同")
+                        .productType("rjxs")
+                        .approvalStatus("APPROVED")
+                        .amountNa(Boolean.FALSE)
+                        .contractAmount(new BigDecimal("100.00"))
+                        .voided(Boolean.FALSE)
+                        .build()));
+        when(lineMapper.selectListBySourceContractApplicationId(88L)).thenReturn(List.of(
+                FinanceInvoiceApplicationLineDO.builder()
+                        .id(9L).applicationId(9L).sourceContractApplicationId(88L)
+                        .amount(new BigDecimal("40.00")).build()));
+        when(applicationMapper.selectListByIds(any())).thenReturn(List.of(
+                FinanceInvoiceApplicationDO.builder()
+                        .id(9L)
+                        .approvalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus())
+                        .voided(Boolean.FALSE)
+                        .build()));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(reqVO, 200L));
+        assertEquals(INVOICE_APPLICATION_CONTRACT_OCCUPY_EXCEED.getCode(), ex.getCode());
+        verify(applicationMapper, never()).insert(any(FinanceInvoiceApplicationDO.class));
+    }
+
+    @Test
+    void createAndStartShouldAllowAmountNaContractWithoutCap() {
+        FinanceInvoiceApplicationCreateAndStartReqVO reqVO = req();
+        reqVO.setTaxContent("rjxs");
+        FinanceInvoiceApplicationCreateAndStartReqVO.Line line =
+                new FinanceInvoiceApplicationCreateAndStartReqVO.Line();
+        line.setAmount(new BigDecimal("999.00"));
+        line.setSourceContractApplicationId(88L);
+        reqVO.setLines(List.of(line));
+        when(contractApplicationMapper.selectBatchIds(any())).thenReturn(List.of(
+                FinanceContractApplicationDO.builder()
+                        .id(88L)
+                        .fileType("销售合同")
+                        .productType("rjxs")
+                        .approvalStatus("APPROVED")
+                        .amountNa(Boolean.TRUE)
+                        .voided(Boolean.FALSE)
+                        .build()));
+        when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("proc-na"));
+
+        Long appId = service.createAndStart(reqVO, 200L);
+        assertEquals(100L, appId);
+        verify(businessOrderMapper, never()).increaseInvoicedOccupiedAmount(anyLong(), any(), any(), anyString());
     }
 
     @Test

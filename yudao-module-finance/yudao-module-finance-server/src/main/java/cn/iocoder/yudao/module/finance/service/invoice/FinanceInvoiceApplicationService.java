@@ -11,6 +11,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceAppl
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import jakarta.validation.Valid;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -68,5 +69,10 @@ public interface FinanceInvoiceApplicationService {
      * 红冲办票：按原单明细释放商务单占用，标记已红冲并清锁。已红冲则幂等。
      */
     void releaseOccupyForRedFlush(Long predecessorApplicationId);
+
+    /**
+     * 合同已占用开票金额：审批中 + 已通过且未作废。
+     */
+    BigDecimal occupiedInvoiceAmount(Long contractId, Long excludeApplicationId);
 
 }

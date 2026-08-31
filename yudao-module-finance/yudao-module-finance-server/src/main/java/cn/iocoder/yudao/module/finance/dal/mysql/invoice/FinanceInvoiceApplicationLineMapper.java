@@ -20,4 +20,8 @@ public interface FinanceInvoiceApplicationLineMapper extends BaseMapperX<Finance
         return delete(FinanceInvoiceApplicationLineDO::getApplicationId, applicationId);
     }
 
+    default List<FinanceInvoiceApplicationLineDO> selectListBySourceContractApplicationId(Long contractId) {
+        return selectList(FinanceInvoiceApplicationLineDO::getSourceContractApplicationId, contractId);
+    }
+
 }

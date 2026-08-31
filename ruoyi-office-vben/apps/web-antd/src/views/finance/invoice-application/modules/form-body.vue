@@ -64,7 +64,7 @@ interface FormData {
   /** 公司名称快照 */
   invoiceCompany?: string;
   invoiceType?: string;
-  /** 产品类型（字典；品牌商务 = ppsw） */
+  /** 产品类型（字典 key：ppsw/yxly/qdcp/yjcp 走商务单） */
   productType?: string;
   /** 特别开票要求（单据级，不进客户档案） */
   specialInvoiceRequirement?: string;
@@ -105,6 +105,8 @@ interface ContractOption {
   applicationNo?: string;
   productType?: string;
   counterpartyName?: string;
+  invoiceOpenableAmount?: number;
+  amountNa?: boolean;
 }
 
 const formRef = ref();
@@ -126,7 +128,7 @@ let contractSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
 const isResubmit = computed(() => formData.value.mode === 'resubmit');
 
-const PRODUCT_BRAND_COMMERCE = 'ppsw';
+const BUSINESS_ORDER_PRODUCT_TYPES = new Set(['ppsw', 'yxly', 'qdcp', 'yjcp']);
 const invoiceTypeOptions = computed(() =>
   getDictOptions(DICT_TYPE.FINANCE_INVOICE_TYPE)
     .filter((d) => d.value === '专票' || d.value === '普票' || d.label === '专票' || d.label === '普票')
@@ -141,8 +143,8 @@ const productTypeOptions = computed(() =>
     value: d.value as number | string,
   })),
 );
-const isBrandCommerce = computed(
-  () => formData.value.productType === PRODUCT_BRAND_COMMERCE,
+const usesBusinessOrder = computed(() =>
+  BUSINESS_ORDER_PRODUCT_TYPES.has(String(formData.value.productType || '')),
 );
 
 function openableOf(bo: {
@@ -168,23 +170,8 @@ function openableOf(bo: {
  * max=0 且 min=0.01 会形成非法区间，Chrome a11y 显示 valuemax=0，步进/提交易异常。
  */
 function lineAmountMax(line?: LineItem): number | undefined {
-  if (!line?.businessOrderId) {
-    return undefined;
-  }
-  const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
-  if (!opt) {
-    return undefined;
-  }
-  // 仅当选项明确带了可开数字时才限制；缺失则不设 max（避免假 0）
-  if (
-    opt.invoiceOpenableAmount === null ||
-    opt.invoiceOpenableAmount === undefined ||
-    Number.isNaN(Number(opt.invoiceOpenableAmount))
-  ) {
-    return undefined;
-  }
-  const openable = Number(opt.invoiceOpenableAmount);
-  if (!Number.isFinite(openable) || openable <= 0) {
+  const openable = lineOpenableAmount(line);
+  if (openable === undefined || openable <= 0) {
     return undefined;
   }
   return Number(openable.toFixed(2));
@@ -192,10 +179,27 @@ function lineAmountMax(line?: LineItem): number | undefined {
 
 /** 行可开余额：有有效数字返回 number；选项缺失或未知返回 undefined（勿用 ?? 0 抹平） */
 function lineOpenableAmount(line?: LineItem): number | undefined {
-  if (!line?.businessOrderId) {
+  if (usesBusinessOrder.value) {
+    if (!line?.businessOrderId) {
+      return undefined;
+    }
+    const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
+    if (
+      !opt ||
+      opt.invoiceOpenableAmount === null ||
+      opt.invoiceOpenableAmount === undefined
+    ) {
+      return undefined;
+    }
+    const n = Number(opt.invoiceOpenableAmount);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (!line?.sourceContractApplicationId) {
     return undefined;
   }
-  const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
+  const opt = contractOptions.value.find(
+    (o) => o.value === line.sourceContractApplicationId,
+  );
   if (
     !opt ||
     opt.invoiceOpenableAmount === null ||
@@ -229,7 +233,7 @@ const rules: Record<string, Rule[]> = {
         }
         const lines = formData.value.lines || [];
         if (lines.length === 0) throw new Error('请至少添加一行明细');
-        const brand = isBrandCommerce.value;
+        const brand = usesBusinessOrder.value;
         const sumByBo = new Map<number, number>();
         for (const [idx, line] of lines.entries()) {
           if (brand && !line.businessOrderId) {
@@ -241,10 +245,11 @@ const rules: Record<string, Rule[]> = {
           if (!line.amount || line.amount <= 0) {
             throw new Error(`第 ${idx + 1} 行：金额须大于 0`);
           }
-          if (!brand) continue;
           const openable = lineOpenableAmount(line);
           if (openable !== null && openable !== undefined && openable <= 0) {
-            throw new Error(`第 ${idx + 1} 行：该商务单无可开余额，请更换`);
+            throw new Error(
+              `第 ${idx + 1} 行：${brand ? '该商务单' : '该合同'}无可开余额，请更换`,
+            );
           }
           if (
             openable !== null &&
@@ -255,8 +260,10 @@ const rules: Record<string, Rule[]> = {
               `第 ${idx + 1} 行：开票金额不可超过可开余额 ¥${openable.toFixed(2)}`,
             );
           }
-          const prev = sumByBo.get(line.businessOrderId as number) || 0;
-          sumByBo.set(line.businessOrderId as number, prev + Number(line.amount));
+          if (brand && line.businessOrderId) {
+            const prev = sumByBo.get(line.businessOrderId) || 0;
+            sumByBo.set(line.businessOrderId, prev + Number(line.amount));
+          }
         }
         for (const [boId, total] of sumByBo.entries()) {
           const opt = boOptions.value.find((o) => o.value === boId);
@@ -398,21 +405,35 @@ function mapContractOption(row: {
   applicationNo?: string;
   productType?: string;
   counterpartyName?: string;
+  invoiceOpenableAmount?: number;
+  amountNa?: boolean;
 }): ContractOption {
   const no = row.applicationNo || `#${row.id}`;
   const party = row.counterpartyName ? ` / ${row.counterpartyName}` : '';
+  const openable =
+    row.invoiceOpenableAmount === null || row.invoiceOpenableAmount === undefined
+      ? undefined
+      : Number(row.invoiceOpenableAmount);
+  const openableText =
+    openable !== undefined && Number.isFinite(openable)
+      ? ` / 可开¥${openable.toFixed(2)}`
+      : row.amountNa
+        ? ' / 无金额'
+        : '';
   return {
-    label: `${no}${party}`,
+    label: `${no}${party}${openableText}`,
     value: row.id,
     applicationNo: row.applicationNo,
     productType: row.productType,
     counterpartyName: row.counterpartyName,
+    invoiceOpenableAmount: openable,
+    amountNa: row.amountNa,
   };
 }
 
 async function loadContractOptions(keyword?: string) {
   const productType = formData.value.productType;
-  if (!productType || productType === PRODUCT_BRAND_COMMERCE) {
+  if (!productType || BUSINESS_ORDER_PRODUCT_TYPES.has(String(productType))) {
     contractOptions.value = [];
     return;
   }
@@ -453,7 +474,7 @@ function onProductTypeChange() {
   formData.value.lines = [{}];
   boOptions.value = [];
   contractOptions.value = [];
-  if (isBrandCommerce.value) {
+  if (usesBusinessOrder.value) {
     void loadBusinessOrderOptions();
   } else if (formData.value.productType) {
     void loadContractOptions();
@@ -496,6 +517,19 @@ async function onBoChange(index: number, boId?: number) {
     line.businessOrderId = undefined;
     return;
   }
+  if (line.amount === null || line.amount === undefined || line.amount <= 0) {
+    const suggest = Number(opt.invoiceOpenableAmount) || 0;
+    if (suggest > 0) {
+      line.amount = Number(suggest.toFixed(2));
+    }
+  }
+}
+
+function onContractChange(index: number, contractId?: number) {
+  const line = formData.value.lines[index];
+  if (!line || !contractId) return;
+  const opt = contractOptions.value.find((o) => o.value === contractId);
+  if (!opt) return;
   if (line.amount === null || line.amount === undefined || line.amount <= 0) {
     const suggest = Number(opt.invoiceOpenableAmount) || 0;
     if (suggest > 0) {
@@ -699,7 +733,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
     if (!formData.value.productType && detail.taxContent) {
       formData.value.productType = detail.taxContent;
     }
-    if (formData.value.productType === PRODUCT_BRAND_COMMERCE) {
+    if (BUSINESS_ORDER_PRODUCT_TYPES.has(String(formData.value.productType || ''))) {
       await ensureSelectedBoOptions(formData.value.lines);
     } else if (formData.value.productType) {
       await loadContractOptions();
@@ -739,7 +773,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
   onCustomerCompanyChange(formData.value.customerCompanyId);
   submitting.value = true;
   try {
-    const brand = isBrandCommerce.value;
+    const brand = usesBusinessOrder.value;
     const payload = {
       customerCompanyId: formData.value.customerCompanyId as number,
       buyerName: formData.value.buyerName,
@@ -791,7 +825,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
 <template>
   <div>
     <div class="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-800">
-      仅支持「提交即启流」。无草稿。请先选择产品类型：品牌商务填商务单，其他产品填已通过的销售合同。发票类型仅专票/普票。
+      仅支持「提交即启流」。无草稿。品牌商务 / 游戏联运 / 渠道产品推广 / 硬件业务选商务单；其他产品选已通过销售合同。有金额合同可开=签约额−已开票占用。发票类型仅专票/普票。
     </div>
     <div
       v-if="priorBuyerSnapshotHint"
@@ -927,7 +961,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
               </Button>
             </div>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div v-if="isBrandCommerce">
+              <div v-if="usesBusinessOrder">
                 <div class="mb-1 text-xs text-gray-500">商务单</div>
                 <Select
                   v-model:value="line.businessOrderId"
@@ -963,6 +997,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
                   option-filter-prop="label"
                   placeholder="已通过销售合同（同产品）"
                   :filter-option="false"
+                  @change="(v: any) => onContractChange(index, v)"
                   @search="onContractSearch"
                   @dropdown-visible-change="
                     (open: boolean) => {
@@ -977,9 +1012,9 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
                 <InputNumber
                   v-model:value="line.amount"
                   class="w-full"
-                  :placeholder="isBrandCommerce ? '不超过可开' : '开票金额'"
+                  :placeholder="usesBusinessOrder ? '不超过可开' : '开票金额'"
                   :min="0.01"
-                  :max="isBrandCommerce ? lineAmountMax(line) : undefined"
+                  :max="lineAmountMax(line)"
                   :precision="2"
                 />
               </div>

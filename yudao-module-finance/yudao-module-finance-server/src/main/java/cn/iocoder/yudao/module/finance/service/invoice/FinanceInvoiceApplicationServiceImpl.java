@@ -69,7 +69,9 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
      * 明细行「已开票」状态值（一期一行一票；与表头 PARTIAL=1 数值相同，语义不同）
      */
     public static final int LINE_ISSUE_STATUS_ISSUED = 1;
-    public static final String PRODUCT_BRAND_COMMERCE = "ppsw";
+    /** 明细选商务单：品牌商务 / 游戏联运 / 渠道产品推广 / 硬件业务 */
+    public static final Set<String> BUSINESS_ORDER_PRODUCT_TYPES = Set.of(
+            "ppsw", "yxly", "qdcp", "yjcp");
     private static final String SALES_FILE_TYPE = "销售合同";
     private static final String DICT_PRODUCT_TYPE = "finance_product_type";
     private static final Set<String> ALLOWED_INVOICE_TYPES = Set.of("专票", "普票");
@@ -120,7 +122,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         }
         String productType = requireProductType(reqVO.getTaxContent());
         requireInvoiceType(reqVO.getInvoiceType());
-        boolean brandCommerce = isBrandCommerce(productType);
+        boolean brandCommerce = usesBusinessOrder(productType);
 
         Map<Long, BigDecimal> occupyByBo = new LinkedHashMap<>();
         BigDecimal totalAmount = ZERO;
@@ -160,7 +162,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 }
             }
         } else {
-            requireSalesContracts(lines, productType);
+            requireSalesContracts(lines, productType, null);
         }
         String commonProductType = productType;
 
@@ -330,7 +332,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         }
         String productType = requireProductType(reqVO.getTaxContent());
         requireInvoiceType(reqVO.getInvoiceType());
-        boolean brandCommerce = isBrandCommerce(productType);
+        boolean brandCommerce = usesBusinessOrder(productType);
 
         Map<Long, BigDecimal> newOccupyByBo = new LinkedHashMap<>();
         BigDecimal totalAmount = ZERO;
@@ -378,7 +380,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 }
             }
         } else {
-            requireSalesContracts(lines, productType);
+            requireSalesContracts(lines, productType, appId);
         }
         String commonProductType = productType;
 
@@ -738,8 +740,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         return value == null ? ZERO : value;
     }
 
-    private static boolean isBrandCommerce(String productType) {
-        return PRODUCT_BRAND_COMMERCE.equals(productType);
+    static boolean usesBusinessOrder(String productType) {
+        return BUSINESS_ORDER_PRODUCT_TYPES.contains(productType);
     }
 
     private String requireProductType(String productType) {
@@ -762,11 +764,13 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     }
 
     private void requireSalesContracts(List<? extends FinanceInvoiceApplicationCreateAndStartReqVO.Line> lines,
-                                       String productType) {
+                                       String productType, Long excludeApplicationId) {
         List<Long> ids = new ArrayList<>();
+        Map<Long, BigDecimal> occupyByContract = new LinkedHashMap<>();
         for (FinanceInvoiceApplicationCreateAndStartReqVO.Line line : lines) {
             if (line.getSourceContractApplicationId() != null) {
                 ids.add(line.getSourceContractApplicationId());
+                occupyByContract.merge(line.getSourceContractApplicationId(), line.getAmount(), BigDecimal::add);
             }
         }
         if (ids.isEmpty()) {
@@ -785,6 +789,55 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 throw exception(INVOICE_APPLICATION_CONTRACT_INVALID);
             }
         }
+        for (Map.Entry<Long, BigDecimal> entry : occupyByContract.entrySet()) {
+            FinanceContractApplicationDO contract = byId.get(entry.getKey());
+            if (Boolean.TRUE.equals(contract.getAmountNa()) || contract.getContractAmount() == null
+                    || contract.getContractAmount().compareTo(ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal occupied = occupiedInvoiceAmount(entry.getKey(), excludeApplicationId);
+            if (contract.getContractAmount().subtract(occupied).compareTo(entry.getValue()) < 0) {
+                throw exception(INVOICE_APPLICATION_CONTRACT_OCCUPY_EXCEED);
+            }
+        }
+    }
+
+    @Override
+    public BigDecimal occupiedInvoiceAmount(Long contractId, Long excludeApplicationId) {
+        List<FinanceInvoiceApplicationLineDO> lines = lineMapper.selectListBySourceContractApplicationId(contractId);
+        if (CollUtil.isEmpty(lines)) {
+            return ZERO;
+        }
+        Set<Long> appIds = lines.stream()
+                .map(FinanceInvoiceApplicationLineDO::getApplicationId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (excludeApplicationId != null) {
+            appIds.remove(excludeApplicationId);
+        }
+        if (appIds.isEmpty()) {
+            return ZERO;
+        }
+        Map<Long, FinanceInvoiceApplicationDO> apps = applicationMapper.selectListByIds(appIds).stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(FinanceInvoiceApplicationDO::getId, Function.identity(), (a, b) -> a));
+        BigDecimal occupied = ZERO;
+        for (FinanceInvoiceApplicationLineDO line : lines) {
+            if (excludeApplicationId != null && excludeApplicationId.equals(line.getApplicationId())) {
+                continue;
+            }
+            FinanceInvoiceApplicationDO app = apps.get(line.getApplicationId());
+            if (app == null || Boolean.TRUE.equals(app.getVoided())) {
+                continue;
+            }
+            String status = app.getApprovalStatus();
+            if (!FinanceInvoiceApprovalStatusEnum.PENDING.getStatus().equals(status)
+                    && !FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus().equals(status)) {
+                continue;
+            }
+            occupied = occupied.add(defaultZero(line.getAmount()));
+        }
+        return occupied;
     }
 
 }

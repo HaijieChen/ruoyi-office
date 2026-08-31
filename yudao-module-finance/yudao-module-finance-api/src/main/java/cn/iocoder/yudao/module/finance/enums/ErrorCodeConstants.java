@@ -117,7 +117,7 @@ public interface ErrorCodeConstants {
     ErrorCode INVOICE_APPLICATION_BUSINESS_ORDER_PRODUCT_MISSING = new ErrorCode(1_040_003_018,
             "商务单产品类型未固化，无法开票");
     ErrorCode INVOICE_APPLICATION_CONTRACT_REQUIRED = new ErrorCode(1_040_003_019,
-            "非品牌商务开票须选择前置销售合同");
+            "该产品类型须选择前置销售合同");
     ErrorCode INVOICE_APPLICATION_CONTRACT_INVALID = new ErrorCode(1_040_003_020,
             "前置合同须为已通过的销售合同，且产品类型一致");
     ErrorCode INVOICE_APPLICATION_PRODUCT_REQUIRED = new ErrorCode(1_040_003_021,
@@ -128,6 +128,8 @@ public interface ErrorCodeConstants {
             "办票金额必须大于 0");
     ErrorCode INVOICE_APPLICATION_ISSUE_AMOUNT_EXCEED = new ErrorCode(1_040_003_024,
             "办票累计金额不能超过开票申请金额");
+    ErrorCode INVOICE_APPLICATION_CONTRACT_OCCUPY_EXCEED = new ErrorCode(1_040_003_025,
+            "合同可开票金额不足（签约金额减去已开票占用）");
 
     // ========== 客户公司 / 客商 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");

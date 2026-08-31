@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.*;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicationImportService;
 import cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicationService;
+import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationService;
 import cn.iocoder.yudao.module.finance.service.payment.FinancePaymentPredocService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,6 +46,8 @@ public class FinanceContractApplicationController {
     private FinanceContractApplicationImportService contractApplicationImportService;
     @Resource
     private FinancePaymentPredocService paymentPredocService;
+    @Resource
+    private FinanceInvoiceApplicationService invoiceApplicationService;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
 
@@ -126,7 +129,9 @@ public class FinanceContractApplicationController {
     public CommonResult<FinanceContractApplicationRespVO> getApplication(@RequestParam("id") Long id) {
         FinanceContractApplicationDO application = contractApplicationService.getApplication(
                 id, getLoginUserId(), manageAll());
-        return success(BeanUtils.toBean(application, FinanceContractApplicationRespVO.class));
+        FinanceContractApplicationRespVO vo = BeanUtils.toBean(application, FinanceContractApplicationRespVO.class);
+        fillInvoiceOpenable(List.of(vo));
+        return success(vo);
     }
 
     @GetMapping("/page")
@@ -136,7 +141,9 @@ public class FinanceContractApplicationController {
             @Valid FinanceContractApplicationPageReqVO pageReqVO) {
         PageResult<FinanceContractApplicationDO> page = contractApplicationService.getApplicationPage(
                 pageReqVO, getLoginUserId(), manageAll());
-        return success(BeanUtils.toBean(page, FinanceContractApplicationRespVO.class));
+        PageResult<FinanceContractApplicationRespVO> voPage = BeanUtils.toBean(page, FinanceContractApplicationRespVO.class);
+        fillInvoiceOpenable(voPage.getList());
+        return success(voPage);
     }
 
     @GetMapping("/list-selectable-for-bo")
@@ -193,6 +200,22 @@ public class FinanceContractApplicationController {
                                             @RequestParam("mailTrackingNo") String mailTrackingNo) {
         contractApplicationService.recordMail(id, taskId, mailTrackingNo, getLoginUserId());
         return success(true);
+    }
+
+    private void fillInvoiceOpenable(List<FinanceContractApplicationRespVO> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        for (FinanceContractApplicationRespVO vo : list) {
+            if (vo.getId() == null || Boolean.TRUE.equals(vo.getAmountNa())
+                    || vo.getContractAmount() == null
+                    || vo.getContractAmount().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal occupied = invoiceApplicationService.occupiedInvoiceAmount(vo.getId(), null);
+            vo.setInvoiceOccupiedAmount(occupied);
+            vo.setInvoiceOpenableAmount(vo.getContractAmount().subtract(occupied));
+        }
     }
 
     private boolean manageAll() {

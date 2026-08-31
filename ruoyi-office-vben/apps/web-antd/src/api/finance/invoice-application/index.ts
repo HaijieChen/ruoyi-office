@@ -86,7 +86,7 @@ export namespace FinanceInvoiceApplicationApi {
     buyerBankAccount?: string;
     /** 特别开票要求（单据级） */
     specialInvoiceRequirement?: string;
-    /** 产品类型（字典 finance_product_type；品牌商务 = ppsw） */
+    /** 产品类型（字典 finance_product_type；ppsw/yxly/qdcp/yjcp 走商务单） */
     taxContent: string;
     taxRate?: number;
     amountExcludingTax?: number;

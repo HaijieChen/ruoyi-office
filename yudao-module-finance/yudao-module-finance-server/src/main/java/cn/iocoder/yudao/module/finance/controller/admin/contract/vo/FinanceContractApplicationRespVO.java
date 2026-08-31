@@ -48,4 +48,8 @@ public class FinanceContractApplicationRespVO {
     private String remark;
     private Boolean voided;
     private LocalDateTime createTime;
+    @Schema(description = "开票已占用金额（审批中+已通过未作废）")
+    private BigDecimal invoiceOccupiedAmount;
+    @Schema(description = "合同可开余额；无金额合同为空")
+    private BigDecimal invoiceOpenableAmount;
 }

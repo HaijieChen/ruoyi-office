@@ -47,6 +47,8 @@ export namespace FinanceContractApplicationApi {
     remark?: string;
     voided?: boolean;
     createTime?: string;
+    invoiceOccupiedAmount?: number;
+    invoiceOpenableAmount?: number;
   }
 
   export interface CreateAndStartRequest {
