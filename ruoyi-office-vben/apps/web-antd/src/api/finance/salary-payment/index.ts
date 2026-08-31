@@ -17,6 +17,7 @@ export namespace FinanceSalaryPaymentApi {
     netSalaryAmount: number;
     personalTaxAmount: number;
     socialInsuranceAmount: number;
+    housingFundAmount?: number;
     entityCompanyName?: string;
     accountNameSnapshot?: string;
     bankNameSnapshot?: string;

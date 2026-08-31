@@ -32,6 +32,7 @@ interface Line {
   netSalaryAmount?: number;
   personalTaxAmount?: number;
   socialInsuranceAmount?: number;
+  housingFundAmount?: number;
 }
 
 const form = ref<{
@@ -106,7 +107,8 @@ const total = computed(() =>
       s +
       Number(l.netSalaryAmount || 0) +
       Number(l.personalTaxAmount || 0) +
-      Number(l.socialInsuranceAmount || 0)
+      Number(l.socialInsuranceAmount || 0) +
+      Number(l.housingFundAmount || 0)
     );
   }, 0),
 );
@@ -143,6 +145,7 @@ const [Modal, modalApi] = useVbenModal({
             netSalaryAmount: Number(l.netSalaryAmount || 0),
             personalTaxAmount: Number(l.personalTaxAmount || 0),
             socialInsuranceAmount: Number(l.socialInsuranceAmount || 0),
+            housingFundAmount: Number(l.housingFundAmount || 0),
           };
         }),
       };
@@ -180,6 +183,7 @@ const [Modal, modalApi] = useVbenModal({
         netSalaryAmount: Number(l.netSalaryAmount || 0),
         personalTaxAmount: Number(l.personalTaxAmount || 0),
         socialInsuranceAmount: Number(l.socialInsuranceAmount || 0),
+        housingFundAmount: Number(l.housingFundAmount || 0),
       })),
     };
     modalApi.lock();
@@ -275,6 +279,12 @@ const [Modal, modalApi] = useVbenModal({
               :min="0"
               :precision="2"
               placeholder="社保"
+            />
+            <InputNumber
+              v-model:value="line.housingFundAmount"
+              :min="0"
+              :precision="2"
+              placeholder="公积金（选填）"
             />
             <Button danger type="link" @click="removeLine(idx)">删</Button>
           </Space>

@@ -14,7 +14,7 @@ const submitting = ref(false);
 const isResubmit = computed(function () { return !!form.value.id; });
 const total = computed(function () {
   return form.value.lines.reduce(function (s, l) {
-    return s + Number(l.netSalaryAmount || 0) + Number(l.personalTaxAmount || 0) + Number(l.socialInsuranceAmount || 0);
+    return s + Number(l.netSalaryAmount || 0) + Number(l.personalTaxAmount || 0) + Number(l.socialInsuranceAmount || 0) + Number(l.housingFundAmount || 0);
   }, 0);
 });
 onMounted(async function () {
@@ -65,7 +65,7 @@ async function reset(opts) {
       evidenceFileUrls: parseEvidence(detail.evidenceFileUrls),
       lines: (detail.salaryLines || []).map(function (l) {
         if (l.entityCompanyDeptId) loadAccounts(l.entityCompanyDeptId);
-        return { entityCompanyDeptId: l.entityCompanyDeptId, companyBankAccountId: l.companyBankAccountId, netSalaryAmount: Number(l.netSalaryAmount || 0), personalTaxAmount: Number(l.personalTaxAmount || 0), socialInsuranceAmount: Number(l.socialInsuranceAmount || 0) };
+        return { entityCompanyDeptId: l.entityCompanyDeptId, companyBankAccountId: l.companyBankAccountId, netSalaryAmount: Number(l.netSalaryAmount || 0), personalTaxAmount: Number(l.personalTaxAmount || 0), socialInsuranceAmount: Number(l.socialInsuranceAmount || 0), housingFundAmount: Number(l.housingFundAmount || 0) };
       }),
     };
     if (!form.value.lines.length) form.value.lines = [{}];
@@ -85,7 +85,7 @@ async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number 
     specialNote: form.value.specialNote,
     evidenceFileUrls: form.value.evidenceFileUrls,
     lines: form.value.lines.map(function (l) {
-      return { entityCompanyDeptId: l.entityCompanyDeptId, companyBankAccountId: l.companyBankAccountId, netSalaryAmount: Number(l.netSalaryAmount || 0), personalTaxAmount: Number(l.personalTaxAmount || 0), socialInsuranceAmount: Number(l.socialInsuranceAmount || 0) };
+      return { entityCompanyDeptId: l.entityCompanyDeptId, companyBankAccountId: l.companyBankAccountId, netSalaryAmount: Number(l.netSalaryAmount || 0), personalTaxAmount: Number(l.personalTaxAmount || 0), socialInsuranceAmount: Number(l.socialInsuranceAmount || 0), housingFundAmount: Number(l.housingFundAmount || 0) };
     }),
     startCompanyDeptId: ctx?.startCompanyDeptId,
       startDeptId: ctx?.startDeptId,
@@ -118,6 +118,7 @@ defineExpose({ reset: reset, submit: submit, getPredictVariables: getPredictVari
           <InputNumber v-model:value="line.netSalaryAmount" :min="0" :precision="2" placeholder="实发" />
           <InputNumber v-model:value="line.personalTaxAmount" :min="0" :precision="2" placeholder="个税" />
           <InputNumber v-model:value="line.socialInsuranceAmount" :min="0" :precision="2" placeholder="社保" />
+          <InputNumber v-model:value="line.housingFundAmount" :min="0" :precision="2" placeholder="公积金（选填）" />
           <Button danger type="link" @click="removeLine(idx)">删</Button>
         </Space>
       </div>

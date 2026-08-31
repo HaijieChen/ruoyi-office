@@ -534,6 +534,7 @@ watch(
               { title: '实发', dataIndex: 'netSalaryAmount', key: 'b' },
               { title: '个税', dataIndex: 'personalTaxAmount', key: 'c' },
               { title: '社保', dataIndex: 'socialInsuranceAmount', key: 'd' },
+              { title: '公积金', dataIndex: 'housingFundAmount', key: 'hf' },
               { title: '行合计', dataIndex: 'lineTotal', key: 'e' },
             ]"
           />
