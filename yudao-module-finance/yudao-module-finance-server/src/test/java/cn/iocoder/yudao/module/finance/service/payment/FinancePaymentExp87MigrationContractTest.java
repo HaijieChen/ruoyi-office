@@ -77,9 +77,13 @@ class FinancePaymentExp87MigrationContractTest {
 
     @Test
     void detailCashierRequiresCompanyBankAccountId() throws Exception {
+        Path cashier = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/finance/payment-application/detail/cashier.vue");
         Path detail = findRoot().resolve(
                 "ruoyi-office-vben/apps/web-antd/src/views/finance/payment-application/detail/index.vue");
+        String cashierText = Files.readString(cashier);
         String text = Files.readString(detail);
+        assertTrue(cashierText.contains("mode=\"cashier\""));
         assertTrue(text.contains("companyBankAccountId"));
         assertTrue(text.contains("getCompanyBankAccountSimpleList"));
         assertTrue(text.contains("payAmount"));

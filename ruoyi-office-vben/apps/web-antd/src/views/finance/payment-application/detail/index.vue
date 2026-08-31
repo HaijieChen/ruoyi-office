@@ -60,16 +60,20 @@ function dictOptions(dictType: string): DefaultOptionType[] {
   }));
 }
 
-const props = defineProps<{
-  activityNodes?: any[];
-  id?: number | string;
-  isApproval?: boolean;
-  nodeKey?: string;
-  nodeKeyName?: string;
-  processDefinition?: any;
-  processInstance?: any;
-  taskId?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    activityNodes?: any[];
+    id?: number | string;
+    isApproval?: boolean;
+    mode?: 'cashier' | 'finance' | 'readonly';
+    nodeKey?: string;
+    nodeKeyName?: string;
+    processDefinition?: any;
+    processInstance?: any;
+    taskId?: string;
+  }>(),
+  { mode: 'readonly' },
+);
 
 const predocOpen = ref(false);
 const overlayKind = ref<'PURCHASE' | 'LEASE' | 'BUSINESS'>();
@@ -78,11 +82,6 @@ function openPredoc(kind: 'PURCHASE' | 'LEASE' | 'BUSINESS') {
   overlayKind.value = kind;
   predocOpen.value = true;
 }
-
-const FINANCE_NODE = 'taskFinance';
-const CASHIER_NODE = 'taskCashier';
-const CASHIER_KEYS = new Set([CASHIER_NODE, 'cashier']);
-const FINANCE_KEYS = new Set([FINANCE_NODE, 'finance']);
 
 const route = useRoute();
 const router = useRouter();
@@ -133,15 +132,6 @@ function resolveId(): number | undefined {
   return undefined;
 }
 
-function resolveNodeKey(): string {
-  if (props.nodeKey) return props.nodeKey;
-  const q = route.query.nodeKey;
-  if (q !== null && q !== undefined && q !== '') {
-    return String(Array.isArray(q) ? q[0] : q);
-  }
-  return detail.value?.currentNodeKey || '';
-}
-
 function resolveTaskId(): string {
   if (props.taskId) return String(props.taskId);
   const q = route.query.taskId;
@@ -151,10 +141,9 @@ function resolveTaskId(): string {
   return '';
 }
 
-const resolvedNodeKey = computed(() => resolveNodeKey());
 const resolvedTaskId = computed(() => resolveTaskId());
-const isFinanceNode = computed(() => FINANCE_KEYS.has(resolvedNodeKey.value));
-const isCashierNode = computed(() => CASHIER_KEYS.has(resolvedNodeKey.value));
+const isFinanceNode = computed(() => props.mode === 'finance');
+const isCashierNode = computed(() => props.mode === 'cashier');
 
 async function onConfirmMaterials() {
   const id = detail.value?.id;
@@ -384,7 +373,7 @@ watch(
           >确认资料齐全</Button>
           <PrintVoucher :detail="detail" />
           <Tag v-if="isFinanceNode || isCashierNode" color="orange">
-            {{ props.nodeKeyName || resolvedNodeKey }}
+            {{ props.nodeKeyName || props.mode }}
           </Tag>
         </div>
 

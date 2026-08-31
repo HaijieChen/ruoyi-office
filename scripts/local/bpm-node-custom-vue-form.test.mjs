@@ -29,6 +29,31 @@ test('designer UserTask form panel writes formCustomViewPath extension body', ()
   );
 });
 
+test('payment family detail pages split by mode instead of task ids', () => {
+  const families = [
+    'payment-application',
+    'salary-payment',
+    'tax-payment',
+  ];
+  for (const family of families) {
+    const index = readRepositoryFile(
+      `ruoyi-office-vben/apps/web-antd/src/views/finance/${family}/detail/index.vue`,
+    );
+    const finance = readRepositoryFile(
+      `ruoyi-office-vben/apps/web-antd/src/views/finance/${family}/detail/finance.vue`,
+    );
+    const cashier = readRepositoryFile(
+      `ruoyi-office-vben/apps/web-antd/src/views/finance/${family}/detail/cashier.vue`,
+    );
+    assert.doesNotMatch(index, /taskFinance|taskCashier/);
+    assert.match(index, /mode\?: 'cashier' \| 'finance' \| 'readonly'/);
+    assert.match(index, /mode === 'finance'/);
+    assert.match(index, /mode === 'cashier'/);
+    assert.match(finance, /mode="finance"/);
+    assert.match(cashier, /mode="cashier"/);
+  }
+});
+
 test('approval shell prefers todo node Vue path and does not silent-fallback', () => {
   const constants = readRepositoryFile(
     'ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/constants.ts',
