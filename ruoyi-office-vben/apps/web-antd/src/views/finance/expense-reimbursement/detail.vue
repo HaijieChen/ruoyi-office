@@ -163,8 +163,8 @@ onMounted(load);
           <div v-for="(line, i) in bill.lines || []" :key="i">
             {{ formatFeeDate(line.feeDate) }} ·
             <span :class="bill.proxyTicket ? 'print:hidden' : ''">{{ categoryLabel(line) }}</span>
-            <span v-if="bill.proxyTicket"> · 发票 {{ line.invoiceType || '-' }}</span>
-            · {{ line.amount }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
+            · 发票 {{ line.invoiceType || '-' }}
+            · {{ line.amount }}{{ line.taxAmount != null ? ' · 税额 ' + line.taxAmount : '' }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
             {{ line.stayCityTier === 'T1' ? ' · 北上广深' : line.stayCityTier === 'OTHER' ? ' · 其他城市' : '' }}
             {{ line.overLimitReason ? ` · 超标：${line.overLimitReason}` : "" }}
             {{ line.remark ? ` · ${line.remark}` : "" }}

@@ -72,4 +72,7 @@ public interface FinanceContractApplicationService {
 
     /** BO 选择器：已通过且申请人=me */
     java.util.List<FinanceContractApplicationDO> listSelectableForBo(Long applicantUserId);
+
+    /** 业务付款前置：已通过且 fileType=付款业务合同 */
+    java.util.List<FinanceContractApplicationDO> listSelectableForBusinessPayment(Long applicantUserId);
 }

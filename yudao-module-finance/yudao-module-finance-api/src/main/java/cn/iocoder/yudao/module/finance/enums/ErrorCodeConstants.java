@@ -210,6 +210,8 @@ public interface ErrorCodeConstants {
             "关联合同无效：须为已通过且未作废的合同签约申请");
     ErrorCode PAYMENT_RELATED_CONTRACT_REASON_INVALID = new ErrorCode(1_040_006_016,
             "仅业务付款允许关联合同；租赁请使用租赁前置合同");
+    ErrorCode PAYMENT_RELATED_CONTRACT_REQUIRED = new ErrorCode(1_040_006_026,
+            "业务付款必须选择已通过的付款业务合同");
     ErrorCode PAYMENT_APPLICATION_DICT_INVALID = new ErrorCode(1_040_006_017,
             "费用项目、支付方式或费用科目/性质不在启用字典中");
     ErrorCode PAYMENT_APPLICATION_DEPT_REQUIRED = new ErrorCode(1_040_006_018,

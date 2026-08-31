@@ -963,13 +963,14 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
         validateEvidenceUrls(reqVO.getEvidenceFileUrls());
         if (StrUtil.isBlank(reqVO.getBusinessSettlementTerm())
-                || StrUtil.isBlank(reqVO.getPayMethod())
                 || StrUtil.isBlank(reqVO.getCostProject())) {
             throw exception(PAYMENT_APPLICATION_FIELD_REQUIRED);
         }
-        String payMethod = reqVO.getPayMethod().trim();
+        String payMethod = StrUtil.trimToNull(reqVO.getPayMethod());
         String costProject = reqVO.getCostProject().trim();
-        validateDictValue(DICT_PAY_METHOD, payMethod);
+        if (payMethod != null) {
+            validateDictValue(DICT_PAY_METHOD, payMethod);
+        }
         validateDictValue(DICT_COST_PROJECT, costProject);
         FinanceCustomerCompanyDO payee = customerCompanyService.getEnabledSupplierCompany(reqVO.getPayeeCompanyId());
         String bankName = StrUtil.blankToDefault(trimToNull(reqVO.getPayeeBankName()), payee.getBankName());
@@ -997,7 +998,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
         String settlement = null;
         Long relatedContractId = reqVO.getRelatedContractApplicationId();
-        // PAY-R3：仅 BUSINESS 允许可选关联合同；LEASE 结算只来自租赁前置
+        // 业务付款必须关联已通过的付款业务合同；LEASE 结算只来自租赁前置
+        if (FinancePaymentReasonEnum.BUSINESS.getCode().equals(reason) && relatedContractId == null) {
+            throw exception(PAYMENT_RELATED_CONTRACT_REQUIRED);
+        }
         if (relatedContractId != null) {
             if (!FinancePaymentReasonEnum.BUSINESS.getCode().equals(reason)) {
                 throw exception(PAYMENT_RELATED_CONTRACT_REASON_INVALID);
@@ -1005,7 +1009,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             FinanceContractApplicationDO related = contractApplicationMapper.selectById(relatedContractId);
             if (related == null
                     || Boolean.TRUE.equals(related.getVoided())
-                    || !FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(related.getApprovalStatus())) {
+                    || !FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(related.getApprovalStatus())
+                    || !"付款业务合同".equals(StrUtil.trim(related.getFileType()))) {
                 throw exception(PAYMENT_RELATED_CONTRACT_INVALID);
             }
             // 可见性：本人申请的合同（与租赁选择器一致）；FA 全量在租户内已由 TenantBaseDO 隔离

@@ -113,6 +113,14 @@ class FinancePaymentApplicationServiceImplTest {
             return 1;
         }).when(mapper).insert(any(FinancePaymentApplicationDO.class));
 
+        when(contractMapper.selectById(51L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(51L)
+                .applicantUserId(1L)
+                .fileType("付款业务合同")
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .settlementMethod("月结30天")
+                .build());
         when(customerCompanyService.getEnabledSupplierCompany(anyLong())).thenReturn(
                 FinanceCustomerCompanyDO.builder()
                         .id(9L).name("供应商甲").bankName("行").bankAccount("6222")
@@ -132,9 +140,9 @@ class FinancePaymentApplicationServiceImplTest {
         req.setEntityCompanyDeptId(20L);
         req.setApplyAmount(new BigDecimal("100.00"));
         req.setCurrency("CNY");
-        req.setBusinessSettlementTerm("月结30天");
-        req.setPayMethod("wire");
+        req.setBusinessSettlementTerm("2026-08-31");
         req.setCostProject("office_purchase");
+        req.setRelatedContractApplicationId(51L);
         req.setEvidenceFileUrls(List.of("https://x/a.pdf"));
         return req;
     }
@@ -154,6 +162,7 @@ class FinancePaymentApplicationServiceImplTest {
     void createPurchaseRequiresRef() {
         FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
         req.setPaymentReason(FinancePaymentReasonEnum.PURCHASE.getCode());
+        req.setRelatedContractApplicationId(null);
         when(predocService.validateAndSummarizePurchaseRef(isNull(), eq(1L)))
                 .thenThrow(new ServiceException(PAYMENT_PURCHASE_REF_INVALID));
         // blank purchase id path
@@ -165,6 +174,7 @@ class FinancePaymentApplicationServiceImplTest {
     void createPurchaseWithRefOk() {
         FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
         req.setPaymentReason(FinancePaymentReasonEnum.PURCHASE.getCode());
+        req.setRelatedContractApplicationId(null);
         req.setPurchaseProcessInstanceId("pi-ok");
         when(predocService.validateAndSummarizePurchaseRef("pi-ok", 1L)).thenReturn("采购摘要");
         Long id = service.createAndStart(req, 1L);
@@ -870,6 +880,7 @@ class FinancePaymentApplicationServiceImplTest {
         when(contractMapper.selectById(51L)).thenReturn(FinanceContractApplicationDO.builder()
                 .id(51L)
                 .applicantUserId(1L)
+                .fileType("付款业务合同")
                 .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
                 .voided(false)
                 .settlementMethod("月结30天")
@@ -879,6 +890,29 @@ class FinancePaymentApplicationServiceImplTest {
         verify(mapper).insert(cap.capture());
         assertEquals(51L, cap.getValue().getRelatedContractApplicationId());
         assertEquals("月结30天", cap.getValue().getContractSettlementMethod());
+    }
+
+    @Test
+    void businessPaymentRequiresRelatedContract() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        req.setRelatedContractApplicationId(null);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_RELATED_CONTRACT_REQUIRED.getCode(), ex.getCode());
+        verify(mapper, never()).insert(any(FinancePaymentApplicationDO.class));
+    }
+
+    @Test
+    void relatedContractMustBePaymentBusinessType() {
+        FinancePaymentApplicationCreateAndStartReqVO req = baseReq();
+        when(contractMapper.selectById(51L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(51L)
+                .applicantUserId(1L)
+                .fileType("销售合同")
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.createAndStart(req, 1L));
+        assertEquals(PAYMENT_RELATED_CONTRACT_INVALID.getCode(), ex.getCode());
     }
 
     @Test

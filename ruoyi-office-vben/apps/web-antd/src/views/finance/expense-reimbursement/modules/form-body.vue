@@ -48,6 +48,7 @@ interface LineRow {
   category?: string;
   feeDate?: string;
   amount?: number;
+  taxAmount?: number;
   invoiceFileUrl?: string;
   invoiceNo?: string;
   predocType?: string;
@@ -115,9 +116,11 @@ function companyOfDept(deptId?: number) {
   return undefined;
 }
 
-const invoiceTypeOptions = computed(() =>
-  getDictOptions('finance_invoice_type', 'string').map((d) => ({ label: d.label, value: String(d.value) })),
-);
+const invoiceTypeOptions = [
+  { label: '专票', value: '专票' },
+  { label: '普票', value: '普票' },
+  { label: '其他', value: '其他' },
+];
 function subItemOptions(category?: string) {
   return getDictOptions('finance_expense_subitem', 'string')
     .filter((d) => !category || String(d.value).startsWith(String(category) + '.'))
@@ -243,10 +246,10 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
     if (ocr?.invoiceNo) line.invoiceNo = String(ocr.invoiceNo);
     if (ocr?.feeDate) line.feeDate = String(ocr.feeDate).slice(0, 10);
     if (ocr?.amount != null) line.amount = Number(ocr.amount);
-    if (ocr?.invoiceNo || ocr?.feeDate || ocr?.amount != null) {
-      message.success(
-        `已识别${ocr.invoiceNo ? '票号 ' + ocr.invoiceNo : ''}${ocr.feeDate || ocr.amount != null ? ' 日期/金额' : ''}，请核对`,
-      );
+    if (ocr?.taxAmount != null) line.taxAmount = Number(ocr.taxAmount);
+    line.invoiceType = ocr?.invoiceType || '其他';
+    if (ocr?.invoiceNo || ocr?.feeDate || ocr?.amount != null || ocr?.taxAmount != null) {
+      message.success('已识别票号/日期/金额/税额/票种，请核对，可修改');
     } else {
       message.warning('未识别到票号/日期/金额，请手填');
     }
@@ -361,6 +364,10 @@ function lineTotal(): number {
   return formData.value.lines.reduce((s, l) => s + Number(l.amount || 0), 0);
 }
 
+function taxTotal(): number {
+  return formData.value.lines.reduce((s, l) => s + Number(l.taxAmount || 0), 0);
+}
+
 function getPredictVariables(): Record<string, unknown> {
   return {
     applyAmount: lineTotal(),
@@ -392,8 +399,8 @@ const rules: Record<string, Rule[]> = {
 async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number }): Promise<void> {
   await formRef.value?.validate();
   const kind = expectedKind();
-  if (formData.value.proxyTicket && formData.value.lines.some((l) => l.category && !l.invoiceType)) {
-    message.warning('代票请选择发票类型');
+  if (formData.value.lines.some((l) => l.category && !l.invoiceType)) {
+    message.warning('请选择发票类型');
     throw new Error('invoice type');
   }
   const lines = formData.value.lines
@@ -405,6 +412,7 @@ async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number 
       subItem: l.subItem,
       feeDate: String(l.feeDate),
       amount: Number(l.amount),
+      taxAmount: l.taxAmount == null ? undefined : Number(l.taxAmount),
       invoiceFileUrl: l.invoiceFileUrl,
         invoiceNo: l.invoiceNo,
       predocType:
@@ -534,7 +542,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     <Form.Item label="收款账号" name="payeeAccountNo">
       <Input v-model:value="formData.payeeAccountNo" placeholder="员工卡账号" />
     </Form.Item>
-    <Form.Item :label="formData.proxyTicket ? '代票明细' : '普通明细'">
+    <Form.Item label="实际费用">
       <div
         v-for="(line, index) in formData.lines"
         :key="index"
@@ -556,7 +564,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
         />
         <Select
-          v-if="formData.proxyTicket"
           v-model:value="line.invoiceType"
           class="w-28"
           :options="invoiceTypeOptions"
@@ -580,6 +587,12 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             @change="(d) => (line.feeDate = d ? dayjs(d).format('YYYY-MM-DD') : undefined)"
           />
           <InputNumber v-model:value="line.amount" :min="0.01" :precision="2" placeholder="金额" />
+          <InputNumber
+            v-model:value="line.taxAmount"
+            :min="0"
+            :precision="2"
+            placeholder="专票税额"
+          />
           <Input
             v-if="line.category === 'travel' && needOverLimitReason(line)"
             v-model:value="line.overLimitReason"
@@ -587,7 +600,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             placeholder="超标原因"
           />
           <FileUpload
-            v-if="!formData.proxyTicket"
             class="w-48"
             :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
             :max-number="1"
@@ -597,14 +609,20 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             :api="(file, progress) => uploadInvoice(index, file as File, progress)"
             @update:value="(v) => onInvoiceUpload(index, v)"
           />
-          <span v-if="line.invoiceNo" class="text-xs text-gray-600">票号 {{ line.invoiceNo }}</span>
+          <Input
+            v-model:value="line.invoiceNo"
+            class="w-40"
+            placeholder="票号"
+          />
           <Input v-model:value="line.remark" class="w-36" placeholder="说明" />
         </template>
         <span v-else-if="needsPredoc(line)" class="text-xs text-gray-500">请先选择关联单</span>
         <Button danger size="small" @click="removeLine(index)">删</Button>
       </div>
       <Button size="small" @click="addLine">加一行</Button>
-      <div class="mt-1 text-xs text-gray-500">合计 {{ lineTotal().toFixed(2) }}</div>
+      <div class="mt-1 text-xs text-gray-500">
+        合计金额 {{ lineTotal().toFixed(2) }}　专票税额 {{ taxTotal().toFixed(2) }}
+      </div>
       <div
         v-if="formData.lines.some((l) => l.category === 'travel')"
         class="mt-1 text-xs text-amber-700"

@@ -27,7 +27,7 @@ public class FinancePaymentApplicationCreateAndStartReqVO {
     @Schema(description = "租赁合同申请 id（事由=LEASE 必填）")
     private Long leaseContractApplicationId;
 
-    @Schema(description = "可选关联合同申请 id（带出结算方式）")
+    @Schema(description = "关联合同申请 id（事由=BUSINESS 必填，须为付款业务合同）")
     private Long relatedContractApplicationId;
 
     @Schema(description = "收款方客商 id")
@@ -52,12 +52,11 @@ public class FinancePaymentApplicationCreateAndStartReqVO {
     @NotEmpty(message = "币种不能为空")
     private String currency;
 
-    @Schema(description = "业务结算账期")
+    @Schema(description = "业务结算账期（日期 YYYY-MM-DD）")
     @NotEmpty(message = "业务结算账期不能为空")
     private String businessSettlementTerm;
 
-    @Schema(description = "支付方式")
-    @NotEmpty(message = "支付方式不能为空")
+    @Schema(description = "支付方式（已停用，可空）")
     private String payMethod;
 
     @Schema(description = "费用归属项目")

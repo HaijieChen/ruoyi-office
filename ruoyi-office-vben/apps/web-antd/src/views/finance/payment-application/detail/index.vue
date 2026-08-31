@@ -516,7 +516,7 @@ watch(
           </Descriptions.Item>
           <Descriptions.Item
             v-if="!detail.applicationKind || detail.applicationKind === 'ORDINARY'"
-            label="产品名称"
+            label="产品类型"
           >
             {{ financeProductLabel(detail.costProject) }}
           </Descriptions.Item>

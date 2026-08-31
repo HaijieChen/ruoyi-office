@@ -148,6 +148,15 @@ public class FinanceContractApplicationController {
                 FinanceContractApplicationRespVO.class));
     }
 
+    @GetMapping("/list-selectable-for-business-payment")
+    @Operation(summary = "付款可选付款业务合同（已通过 · fileType=付款业务合同 · 本人申请）")
+    @PreAuthorize("@ss.hasAnyPermissions('finance:payment-application:create', 'finance:payment-application:query', 'finance:contract-application:query')")
+    public CommonResult<java.util.List<FinanceContractApplicationRespVO>> listSelectableForBusinessPayment() {
+        return success(BeanUtils.toBean(
+                contractApplicationService.listSelectableForBusinessPayment(getLoginUserId()),
+                FinanceContractApplicationRespVO.class));
+    }
+
     @GetMapping("/list-selectable-for-lease-payment")
     @Operation(summary = "付款可选租赁合同（已通过 · fileType=租赁合同 · 本人申请）")
     @PreAuthorize("@ss.hasPermission('finance:contract-application:query')")

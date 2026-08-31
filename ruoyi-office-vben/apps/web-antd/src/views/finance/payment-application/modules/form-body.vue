@@ -8,9 +8,9 @@ import { computed, ref, watch } from 'vue';
 
 import { getDictOptions } from '@vben/hooks';
 
-import { Form, Input, InputNumber, message, Select } from 'ant-design-vue';
+import { DatePicker, Form, Input, InputNumber, message, Select } from 'ant-design-vue';
 
-import { listSelectableContractsForBo } from '#/api/finance/contract-application';
+import { listSelectableContractsForBusinessPayment } from '#/api/finance/contract-application';
 import { getCustomerCompanySimpleList } from '#/api/finance/customer-company';
 import {
   createAndStartPaymentApplication,
@@ -52,7 +52,6 @@ interface FormData {
   applyAmount?: number;
   currency?: string;
   businessSettlementTerm?: string;
-  payMethod?: string;
   costProject?: string;
   evidenceFileUrls?: string[];
   specialNote?: string;
@@ -88,16 +87,18 @@ const cumulativeAfter = computed(() => {
   return Number(cumulativePaid.value) + amt;
 });
 
-const rules: Record<string, Rule[]> = {
+const rules = computed<Record<string, Rule[]>>(() => ({
   paymentTiming: [{ required: true, message: '请选择支付时效' }],
   paymentReason: [{ required: true, message: '请选择付款事由' }],
   entityCompanyDeptId: [{ required: true, message: '请选择主体公司' }],
   payeeCompanyId: [{ required: true, message: '请选择收款方' }],
   applyAmount: [{ required: true, message: '请输入金额' }],
   currency: [{ required: true, message: '请选择币种' }],
-  businessSettlementTerm: [{ required: true, message: '请填写账期' }],
-  payMethod: [{ required: true, message: '请选择支付方式' }],
-  costProject: [{ required: true, message: '请选择产品名称' }],
+  businessSettlementTerm: [{ required: true, message: '请选择账期' }],
+  relatedContractApplicationId: isBusiness.value
+    ? [{ required: true, message: '请选择付款业务合同' }]
+    : [],
+  costProject: [{ required: true, message: '请选择产品类型' }],
   evidenceFileUrls: [
     {
       required: true,
@@ -108,7 +109,7 @@ const rules: Record<string, Rule[]> = {
       },
     },
   ],
-};
+}));
 
 async function loadSuppliers() {
   try {
@@ -184,7 +185,7 @@ async function loadLease() {
 }
 
 async function loadRelatedContracts() {
-  const list = (await listSelectableContractsForBo()) || [];
+  const list = (await listSelectableContractsForBusinessPayment()) || [];
   relatedContractOptions.value = list.map((c) => ({
     label: `${c.applicationNo || c.id} ${c.fileName || c.counterpartyName || ''}`,
     value: c.id,
@@ -337,7 +338,6 @@ async function reset(opts?: { id?: number; mode?: string }) {
       applyAmount: detail.applyAmount,
       currency: detail.currency || 'CNY',
       businessSettlementTerm: detail.businessSettlementTerm,
-      payMethod: detail.payMethod,
       costProject: detail.costProject,
       evidenceFileUrls: parseEvidenceUrls(detail.evidenceFileUrls),
       specialNote: detail.specialNote,
@@ -391,6 +391,10 @@ async function submit(ctx?: SubmitContext): Promise<void> {
     message.error('房屋租赁须选择已通过的租赁合同');
     throw new Error('validation');
   }
+  if (isBusiness.value && !formData.value.relatedContractApplicationId) {
+    message.error('业务付款须选择已通过的付款业务合同');
+    throw new Error('validation');
+  }
   await formRef.value?.validate();
   submitting.value = true;
   try {
@@ -425,7 +429,6 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       applyAmount: formData.value.applyAmount!,
       currency,
       businessSettlementTerm: formData.value.businessSettlementTerm!,
-      payMethod: formData.value.payMethod!,
       costProject: formData.value.costProject!,
       evidenceFileUrls: urls,
       specialNote: formData.value.specialNote,
@@ -507,6 +510,12 @@ defineExpose({
           placeholder="薪资/税金请走独立入口"
         />
       </Form.Item>
+      <Form.Item label="产品类型" name="costProject" required>
+        <Select
+          v-model:value="formData.costProject"
+          :options="costProjectOptions"
+        />
+      </Form.Item>
       <Form.Item v-if="isPurchase" label="采购实例" required>
         <Select
           v-model:value="formData.purchaseProcessInstanceId"
@@ -524,13 +533,17 @@ defineExpose({
           allow-clear
         />
       </Form.Item>
-      <Form.Item v-if="isBusiness" label="关联合同（可选）">
+      <Form.Item
+        v-if="isBusiness"
+        label="合同签约"
+        name="relatedContractApplicationId"
+        required
+      >
         <Select
           v-model:value="formData.relatedContractApplicationId"
           :options="relatedContractOptions"
           show-search
-          allow-clear
-          placeholder="本人已通过合同，带出结算方式"
+          placeholder="已通过的付款业务合同"
           @change="onRelatedContractChange"
         />
       </Form.Item>
@@ -564,18 +577,11 @@ defineExpose({
         />
       </Form.Item>
       <Form.Item label="账期" name="businessSettlementTerm" required>
-        <Input v-model:value="formData.businessSettlementTerm" />
-      </Form.Item>
-      <Form.Item label="支付方式" name="payMethod" required>
-        <Select
-          v-model:value="formData.payMethod"
-          :options="dictOptions('finance_pay_method')"
-        />
-      </Form.Item>
-      <Form.Item label="产品名称" name="costProject" required>
-        <Select
-          v-model:value="formData.costProject"
-          :options="costProjectOptions"
+        <DatePicker
+          v-model:value="formData.businessSettlementTerm"
+          value-format="YYYY-MM-DD"
+          class="w-full"
+          placeholder="请选择账期日期"
         />
       </Form.Item>
       <Form.Item label="付款依据" name="evidenceFileUrls" required>
