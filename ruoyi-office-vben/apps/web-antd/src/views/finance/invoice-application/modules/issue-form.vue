@@ -9,7 +9,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Table,
   message,
 } from 'ant-design-vue';
 
@@ -21,7 +20,7 @@ import {
 } from '#/api/finance/invoice-application';
 import { FileUpload } from '#/components/upload';
 import { useUpload } from '#/components/upload/use-upload';
-import { displayDateTime } from '#/utils/display-time';
+import IssueFilesTable from './issue-files-table.vue';
 
 defineOptions({ name: 'FinanceInvoiceIssueForm' });
 
@@ -61,49 +60,6 @@ const totalIssued = computed(() => historyIssued.value + draftIssued.value);
 const remaining = computed(() =>
   Number((formData.value.applyAmount - historyIssued.value).toFixed(2)),
 );
-
-const historyColumns = [
-  {
-    title: '附件',
-    dataIndex: 'fileName',
-    key: 'fileName',
-    ellipsis: true,
-    customRender: ({
-      record,
-    }: {
-      record: FinanceInvoiceApplicationApi.IssueFile;
-    }) => record.fileName || record.fileUrl || '-',
-  },
-  {
-    title: '金额',
-    dataIndex: 'amount',
-    key: 'amount',
-    width: 110,
-    customRender: ({ text }: { text?: number }) =>
-      text != null ? `¥${Number(text).toFixed(2)}` : '-',
-  },
-  {
-    title: '发票号',
-    dataIndex: 'invoiceNo',
-    key: 'invoiceNo',
-    width: 140,
-    customRender: ({ text }: { text?: string }) => text || '-',
-  },
-  {
-    title: '开票日期',
-    dataIndex: 'invoiceDate',
-    key: 'invoiceDate',
-    width: 120,
-    customRender: ({ text }: { text?: string }) => text || '-',
-  },
-  {
-    title: '上传时间',
-    dataIndex: 'createTime',
-    key: 'createTime',
-    width: 160,
-    customRender: ({ text }: { text?: string }) => displayDateTime(text) || '-',
-  },
-];
 
 function unwrapOcr(raw: any) {
   if (!raw || typeof raw !== 'object') return raw;
@@ -273,14 +229,7 @@ const [Modal, modalApi] = useVbenModal({
     </div>
     <div v-if="formData.history.length" class="mb-4">
       <div class="mb-2 text-sm font-medium">办票历史</div>
-      <Table
-        size="small"
-        :columns="historyColumns"
-        :data-source="formData.history"
-        :pagination="false"
-        row-key="id"
-        bordered
-      />
+      <IssueFilesTable :files="formData.history" />
     </div>
     <Form :label-col="{ span: 4 }" :wrapper-col="{ span: 20 }">
       <Form.Item label="本次发票" required>

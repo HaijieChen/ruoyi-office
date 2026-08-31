@@ -60,3 +60,17 @@ export async function previewAuthUrl(url: string) {
   const obj = URL.createObjectURL(blob);
   window.open(obj, '_blank');
 }
+
+export async function downloadAuthFile(url: string, fileName?: string) {
+  const blob = await fetchPreviewBlob(url);
+  const obj = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = obj;
+  const path = String(url).split('?')[0] || '';
+  a.download =
+    fileName || path.slice(Math.max(0, path.lastIndexOf('/') + 1)) || 'file';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(obj), 1000);
+}

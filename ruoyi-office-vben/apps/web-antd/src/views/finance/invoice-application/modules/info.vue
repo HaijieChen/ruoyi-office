@@ -21,6 +21,7 @@ import {
 import { getInvoiceApplication } from '#/api/finance/invoice-application';
 import { displayDateTime } from '#/utils/display-time';
 import { financeProductLabel } from '#/views/finance/shared/display-labels';
+import IssueFilesTable from './issue-files-table.vue';
 import PrintVoucher from './print-voucher.vue';
 import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
@@ -41,49 +42,6 @@ const issueLabel: Record<number, string> = {
   1: '部分开票',
   2: '全部开票',
 };
-
-const issueFileColumns = [
-  {
-    title: '附件',
-    dataIndex: 'fileName',
-    key: 'fileName',
-    ellipsis: true,
-    customRender: ({
-      record,
-    }: {
-      record: FinanceInvoiceApplicationApi.IssueFile;
-    }) => record.fileName || record.fileUrl || '-',
-  },
-  {
-    title: '金额',
-    dataIndex: 'amount',
-    key: 'amount',
-    width: 110,
-    customRender: ({ text }: { text?: number }) =>
-      text != null ? `¥${Number(text).toFixed(2)}` : '-',
-  },
-  {
-    title: '发票号',
-    dataIndex: 'invoiceNo',
-    key: 'invoiceNo',
-    width: 140,
-    customRender: ({ text }: { text?: string }) => text || '-',
-  },
-  {
-    title: '开票日期',
-    dataIndex: 'invoiceDate',
-    key: 'invoiceDate',
-    width: 120,
-    customRender: ({ text }: { text?: string }) => text || '-',
-  },
-  {
-    title: '上传时间',
-    dataIndex: 'createTime',
-    key: 'createTime',
-    width: 160,
-    customRender: ({ text }: { text?: string }) => displayDateTime(text) || '-',
-  },
-];
 
 const lineColumns = [
   {
@@ -290,15 +248,10 @@ const [Modal, modalApi] = useVbenModal({
         <div v-if="detail.files?.length" class="mb-2 mt-4 text-sm font-medium">
           办票记录
         </div>
-        <Table
+        <IssueFilesTable
           v-if="detail.files?.length"
-          size="small"
-          :columns="issueFileColumns"
-          :data-source="detail.files"
-          :pagination="false"
-          row-key="id"
-          bordered
           class="mb-2"
+          :files="detail.files"
         />
 
         <Divider orientation="left" class="!mt-6">审批全貌</Divider>
