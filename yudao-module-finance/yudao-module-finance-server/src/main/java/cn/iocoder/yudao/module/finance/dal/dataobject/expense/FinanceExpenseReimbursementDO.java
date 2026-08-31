@@ -48,4 +48,6 @@ public class FinanceExpenseReimbursementDO extends TenantBaseDO {
     private String financeComment;
     private LocalDate actualPayDate;
     private String payVoucherUrl;
+    /** 其他附件 URL，逗号分隔，最多 30 个 */
+    private String extraAttachments;
 }

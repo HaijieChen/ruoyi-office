@@ -316,6 +316,8 @@ public interface ErrorCodeConstants {
             "差旅住宿超标须填写超标原因");
     ErrorCode EXPENSE_REIMBURSEMENT_INVOICE_USED = new ErrorCode(1_040_008_023,
             "发票已被使用");
+    ErrorCode EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED = new ErrorCode(1_040_008_024,
+            "其他附件最多 30 个");
 
     // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
     /** 交易币种仅允许 CNY/USD/HKD */

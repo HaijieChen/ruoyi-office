@@ -26,6 +26,9 @@ public class FinanceExpenseReimbursementCreateReqVO {
     @Valid
     private List<FinanceExpenseReimbursementLineReqVO> lines;
 
+    /** 其他附件 URL（行程单等），最多 30 个 */
+    private List<String> extraAttachments;
+
     private Long startCompanyDeptId;
     private Long startDeptId;
 }

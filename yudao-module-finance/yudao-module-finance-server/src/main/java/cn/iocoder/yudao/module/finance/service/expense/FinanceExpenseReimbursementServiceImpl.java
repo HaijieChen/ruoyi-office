@@ -57,6 +57,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_INVALID;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_USED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_OVER_LIMIT_REASON_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_STAY_TIER_REQUIRED;
 
@@ -146,6 +147,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             throw exception(EXPENSE_REIMBURSEMENT_AMOUNT_INVALID);
         }
         apply = apply.setScale(2, RoundingMode.HALF_UP);
+        List<String> extraAttachments = normalizeExtraAttachments(reqVO.getExtraAttachments());
         AdminUserRespDTO user = requireUser(actualUserId);
         if (user.getDeptId() == null) {
             throw exception(EXPENSE_REIMBURSEMENT_DEPT_REQUIRED);
@@ -171,6 +173,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .entityCompanyDeptId(company == null ? null : company.getId())
                 .entityCompanyName(company == null ? null : company.getName())
                 .applyDate(LocalDate.now())
+                .extraAttachments(extraAttachments.isEmpty() ? null : String.join(",", extraAttachments))
                 .build();
         mapper.insert(header);
 
@@ -266,6 +269,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         vo.setFinanceComment(header.getFinanceComment());
         vo.setActualPayDate(header.getActualPayDate());
         vo.setCompanyBankAccountId(header.getCompanyBankAccountId());
+        vo.setExtraAttachments(splitCsv(header.getExtraAttachments()));
         List<FinanceExpenseReimbursementLineReqVO> lines = new ArrayList<>();
         for (FinanceExpenseReimbursementLineDO line : lineMapper.selectByReimbursementId(header.getId())) {
             FinanceExpenseReimbursementLineReqVO lv = new FinanceExpenseReimbursementLineReqVO();
@@ -499,6 +503,40 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             id = parent;
         }
         return null;
+    }
+
+    static List<String> normalizeExtraAttachments(List<String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return List.of();
+        }
+        List<String> urls = new ArrayList<>();
+        for (String item : raw) {
+            if (StrUtil.isBlank(item)) {
+                continue;
+            }
+            for (String part : item.split("[,，]")) {
+                if (StrUtil.isNotBlank(part)) {
+                    urls.add(part.trim());
+                }
+            }
+        }
+        if (urls.size() > 30) {
+            throw exception(EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED);
+        }
+        return urls;
+    }
+
+    private static List<String> splitCsv(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return List.of();
+        }
+        List<String> urls = new ArrayList<>();
+        for (String part : raw.split("[,，]")) {
+            if (StrUtil.isNotBlank(part)) {
+                urls.add(part.trim());
+            }
+        }
+        return urls;
     }
 
     private AdminUserRespDTO requireUser(Long userId) {

@@ -170,6 +170,17 @@ onMounted(load);
             {{ line.remark ? ` · ${line.remark}` : "" }}
           </div>
         </div>
+        <div
+          v-if="(bill.extraAttachments || []).length"
+          class="mt-3 print:hidden"
+        >
+          <div class="mb-1 text-sm font-medium">其他附件</div>
+          <FileUpload
+            :value="bill.extraAttachments || []"
+            :max-number="30"
+            disabled
+          />
+        </div>
         <div v-if="bill.status === 'PENDING'" class="mt-6 space-y-2">
           <div class="font-medium">财务实报</div>
           <InputNumber v-model:value="approvedAmount" :min="0.01" :precision="2" class="w-40" />

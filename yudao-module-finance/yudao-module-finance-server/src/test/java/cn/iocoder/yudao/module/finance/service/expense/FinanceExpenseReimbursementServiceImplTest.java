@@ -27,6 +27,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_FIELD_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINES_EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -154,6 +155,18 @@ class FinanceExpenseReimbursementServiceImplTest {
         req.getLines().get(0).setPredocType(null);
         ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req, 1L));
         assertEquals(EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void extraAttachmentsOverThirtyRejected() {
+        FinanceExpenseReimbursementCreateReqVO req = baseReq(false);
+        java.util.ArrayList<String> urls = new java.util.ArrayList<>();
+        for (int i = 0; i < 31; i++) {
+            urls.add("https://files.example/a" + i + ".pdf");
+        }
+        req.setExtraAttachments(urls);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED.getCode(), ex.getCode());
     }
 
     private static FinanceExpenseReimbursementCreateReqVO baseReq(boolean proxy) {

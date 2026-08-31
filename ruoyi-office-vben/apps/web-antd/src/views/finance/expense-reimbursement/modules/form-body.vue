@@ -72,10 +72,12 @@ const formData = ref<{
   payeeAccountName?: string;
   payeeBankName?: string;
   payeeAccountNo?: string;
+  extraAttachments: string[];
   lines: LineRow[];
 }>({
   proxyTicket: false,
   periodLabel: dayjs().format('YYYY-MM'),
+  extraAttachments: [],
   lines: [{}],
 });
 
@@ -449,6 +451,7 @@ async function reset() {
     payeeAccountName: '',
     payeeBankName: '',
     payeeAccountNo: '',
+    extraAttachments: [],
     lines: [{ lineKind: 'NORMAL' }],
   };
   applyLoginUser();
@@ -519,6 +522,7 @@ async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number 
       payeeAccountName: String(formData.value.payeeAccountName),
       payeeBankName: String(formData.value.payeeBankName),
       payeeAccountNo: String(formData.value.payeeAccountNo),
+      extraAttachments: formData.value.extraAttachments || [],
       lines,
       startCompanyDeptId: ctx?.startCompanyDeptId,
       startDeptId: ctx?.startDeptId,
@@ -697,6 +701,23 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
       >
         住宿上限＝同性房间数×城市标准×天数（结束日-开始日，至少 1 天）。男女分开算房间；奇数 (n+1)/2 间、偶数 n/2 间。北上广深 400、其他 300。超标须填原因，不拦金额。
       </div>
+    </Form.Item>
+    <Form.Item label="其他附件">
+      <FileUpload
+        :value="formData.extraAttachments || []"
+        :max-number="30"
+        :multiple="true"
+        :max-size="20"
+        help-text="行程单等其他材料，最多 30 个"
+        @update:value="
+          (v) =>
+            (formData.extraAttachments = Array.isArray(v)
+              ? v.filter(Boolean)
+              : v
+                ? [String(v)]
+                : [])
+        "
+      />
     </Form.Item>
   </Form>
 </template>

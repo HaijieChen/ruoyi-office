@@ -41,6 +41,7 @@ export namespace FinanceExpenseApi {
     financeComment?: string;
     actualPayDate?: string;
     companyBankAccountId?: number;
+    extraAttachments?: string[];
     lines?: Line[];
   }
 
@@ -51,6 +52,7 @@ export namespace FinanceExpenseApi {
     payeeAccountName: string;
     payeeBankName?: string;
     payeeAccountNo: string;
+    extraAttachments?: string[];
     lines: Line[];
   }
 
