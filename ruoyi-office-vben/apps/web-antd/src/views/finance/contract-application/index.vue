@@ -153,6 +153,7 @@ function displayStatus(row: FinanceContractApplicationApi.Application) {
 const FILE_TYPE_OPTIONS = [
   { label: '采购合同', value: '采购合同' },
   { label: '销售合同', value: '销售合同' },
+  { label: '付款业务合同', value: '付款业务合同' },
   { label: '租赁合同', value: '租赁合同' },
   { label: '借款合同', value: '借款合同' },
 ];
@@ -220,6 +221,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
         minWidth: 160,
         formatter: ({ row }) => displayStatus(row),
       },
+      { field: 'startDate', title: '起始日', minWidth: 110 },
       { field: 'endDate', title: '结束日', minWidth: 110 },
       {
         field: 'createTime',

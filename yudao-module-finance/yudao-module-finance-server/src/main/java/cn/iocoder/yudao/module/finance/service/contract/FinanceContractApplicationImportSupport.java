@@ -10,8 +10,8 @@ import java.util.Set;
 final class FinanceContractApplicationImportSupport {
 
     private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
-            "采购合同", "销售合同", "租赁合同", "借款合同");
-    private static final String SALES_FILE_TYPE = "销售合同";
+            "采购合同", "销售合同", "付款业务合同", "租赁合同", "借款合同");
+    private static final Set<String> SALES_LIKE_FILE_TYPES = Set.of("销售合同", "付款业务合同");
     private static final Set<String> ALLOWED_SETTLEMENT_METHODS = Set.of(
             "CPA", "CPS", "CPC", "月结", "其他");
     private static final BigDecimal ZERO = BigDecimal.ZERO;
@@ -56,9 +56,9 @@ final class FinanceContractApplicationImportSupport {
         }
         String fileType = trimToNull(row.getFileType());
         if (fileType == null || !ALLOWED_FILE_TYPES.contains(fileType)) {
-            return "文件类型必须是 采购合同/销售合同/租赁合同/借款合同";
+            return "文件类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同";
         }
-        boolean sales = SALES_FILE_TYPE.equals(fileType);
+        boolean sales = SALES_LIKE_FILE_TYPES.contains(fileType);
         String productType = trimToNull(row.getProductType());
         if (sales && productType == null) {
             return "产品类型不能为空";

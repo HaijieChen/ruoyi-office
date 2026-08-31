@@ -208,7 +208,7 @@ class FinanceContractApplicationImportTest {
 
         FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
 
-        assertEquals("文件类型必须是 采购合同/销售合同/租赁合同/借款合同",
+        assertEquals("文件类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同",
                 resp.getFailureRows().get(2));
         verify(mapper, never()).insert(any(FinanceContractApplicationDO.class));
     }
