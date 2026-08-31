@@ -1,6 +1,8 @@
 package cn.iocoder.yudao.module.bpm.service.notification;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.bpm.api.event.BpmEventTypeEnum;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceStatusMessage;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceInfo;
@@ -125,23 +127,46 @@ public class BpmNotificationManager {
             return;
         }
 
-        // 发送通知
+        // 发送通知。ForkJoinPool 不会继承请求线程租户，写台账前必须显式带上。
+        Long tenantId = resolveNotificationTenantId(message);
         if (Boolean.TRUE.equals(asyncProcess)) {
-            // 异步处理
-            CompletableFuture.runAsync(() -> {
-                try {
-                    handler.handleNotification(message);
-                } catch (Exception e) {
-                    log.error("[sendNotification] 异步通知处理失败", e);
-                }
-            });
+            CompletableFuture.runAsync(() -> runNotification(handler, message, tenantId));
         } else {
-            // 同步处理
-            try {
+            runNotification(handler, message, tenantId);
+        }
+    }
+
+    private void runNotification(BpmNotificationHandler handler,
+                                 BpmProcessInstanceStatusMessage message,
+                                 Long tenantId) {
+        try {
+            if (tenantId != null && tenantId > 0L) {
+                TenantUtils.execute(tenantId, () -> handler.handleNotification(message));
+            } else {
                 handler.handleNotification(message);
-            } catch (Exception e) {
-                log.error("[sendNotification] 同步通知处理失败", e);
             }
+        } catch (Exception e) {
+            log.error("[sendNotification] 通知处理失败 tenantId={}", tenantId, e);
+        }
+    }
+
+    static Long resolveNotificationTenantId(BpmProcessInstanceStatusMessage message) {
+        Long current = TenantContextHolder.getTenantId();
+        if (current != null && current > 0L) {
+            return current;
+        }
+        if (message == null || message.getProcessInstanceInfo() == null) {
+            return null;
+        }
+        String raw = message.getProcessInstanceInfo().getTenantId();
+        if (StrUtil.isBlank(raw)) {
+            return null;
+        }
+        try {
+            Long parsed = Long.parseLong(raw.trim());
+            return parsed > 0L ? parsed : null;
+        } catch (NumberFormatException ex) {
+            return null;
         }
     }
 
