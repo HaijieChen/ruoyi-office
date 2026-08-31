@@ -25,6 +25,7 @@ import {
 import { listSelectableContractsForBo } from '#/api/finance/contract-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { $t } from '#/locales';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
 
 import {
@@ -234,7 +235,7 @@ async function loadContractOptions() {
         }
         const no = c.applicationNo || String(c.id);
         const party = c.counterpartyName ? String(c.counterpartyName).trim() : '-';
-        const product = c.productType ? String(c.productType).trim() : '-';
+        const product = financeProductLabel(c.productType);
         // 合同单号｜对方｜产品
         return {
           value: id,
@@ -451,7 +452,7 @@ function onContractChange(id: unknown) {
       </Form.Item>
       <Form.Item label="产品/服务">
         <Input
-          :value="formData.productType"
+          :value="financeProductLabel(formData.productType)"
           disabled
           placeholder="选择合同后自动带出，不可改"
         />

@@ -32,6 +32,7 @@ import {
   resubmitInvoiceApplication,
 } from '#/api/finance/invoice-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
 
 defineOptions({ name: 'FinanceInvoiceApplicationFormBody' });
@@ -513,7 +514,9 @@ async function onBoChange(index: number, boId?: number) {
     opt.productType &&
     opt.productType !== formData.value.productType
   ) {
-    message.warning(`请选择产品类型为「${formData.value.productType}」的商务单`);
+    message.warning(
+      `请选择产品类型为「${financeProductLabel(formData.value.productType)}」的商务单`,
+    );
     line.businessOrderId = undefined;
     return;
   }

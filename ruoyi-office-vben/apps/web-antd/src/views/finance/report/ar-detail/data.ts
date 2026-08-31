@@ -1,6 +1,8 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
+
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -25,7 +27,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { field: 'orderNo', title: '商务单号', minWidth: 140 },
     { field: 'entityCompanyName', title: '主体公司', minWidth: 140 },
-    { field: 'productType', title: '产品类型', minWidth: 120 },
+    {
+      field: 'productType',
+      title: '产品类型',
+      minWidth: 120,
+      formatter: ({ cellValue }: { cellValue?: string }) => financeProductLabel(cellValue),
+    },
     { field: 'settlementAmount', title: '结算金额', minWidth: 110 },
     { field: 'invoicedOccupiedAmount', title: '已开票', minWidth: 100 },
     { field: 'confirmedClaimedAmount', title: '已认款', minWidth: 100 },

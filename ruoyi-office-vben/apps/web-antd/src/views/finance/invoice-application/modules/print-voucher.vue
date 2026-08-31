@@ -3,6 +3,7 @@ import { computed } from 'vue';
 
 import PrintSlip from '#/components/print/print-slip.vue';
 import { displayDateTime } from '#/utils/display-time';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 
 defineOptions({ name: 'InvoicePrintVoucher' });
 
@@ -23,7 +24,7 @@ const fields = computed(() => [
   { label: '开户行账号', value: props.detail?.buyerBankAccount, span: 2 as const },
   { label: '主体公司', value: props.detail?.invoiceCompany },
   { label: '发票类型', value: props.detail?.invoiceType },
-  { label: '产品类型', value: props.detail?.taxContent },
+  { label: '产品类型', value: financeProductLabel(props.detail?.taxContent) },
   { label: '创建时间', value: displayDateTime(props.detail?.createTime) },
   {
     label: '特别开票要求',
@@ -41,7 +42,7 @@ const lineRows = computed(() =>
       || (line.sourceContractApplicationId != null
         ? `#${line.sourceContractApplicationId}`
         : '-'),
-    line.productType || line.currentProductType || '-',
+    financeProductLabel(line.productType || line.currentProductType),
     line.amount != null ? `¥${Number(line.amount).toFixed(2)}` : '-',
     line.billingPeriod || '-',
     line.remark || '-',

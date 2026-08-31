@@ -10,6 +10,7 @@ import {
   exportGrossMarginExcel,
   getGrossMarginPage,
 } from '#/api/finance/report/gross-margin';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 
 defineOptions({ name: 'FinanceGrossMarginReport' });
 
@@ -28,7 +29,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: [
       { field: 'yearMonth', title: '月份', width: 100 },
       { field: 'deptName', title: '部门', minWidth: 120 },
-      { field: 'productType', title: '产品类型', minWidth: 120 },
+      {
+        field: 'productType',
+        title: '产品类型',
+        minWidth: 120,
+        formatter: ({ cellValue }: { cellValue?: string }) => financeProductLabel(cellValue),
+      },
       { field: 'incomeAmount', title: '收入', minWidth: 110 },
       { field: 'costAmount', title: '支出', minWidth: 110 },
       { field: 'marginAmount', title: '毛利', minWidth: 110 },

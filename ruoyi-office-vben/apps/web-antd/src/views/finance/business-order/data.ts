@@ -2,6 +2,7 @@ import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { getSimpleCompanyList } from '#/api/system/dept';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 
 /** 列表搜索表单（对应工作簿字段） */
 export function useGridFormSchema(): VbenFormSchema[] {
@@ -67,7 +68,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 150,
       // EXP-70：优先规范 productType，回退 legacy productName
       formatter: ({ row }: { row: { productName?: string; productType?: string } }) =>
-        row.productType || row.productName || '-',
+        financeProductLabel(row.productType || row.productName),
     },
     { field: 'contactPerson', title: '联系人', width: 100 },
     { field: 'executionStartDate', title: '执行开始', width: 120, formatter: 'formatDate' },

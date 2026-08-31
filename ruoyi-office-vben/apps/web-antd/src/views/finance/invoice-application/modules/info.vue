@@ -20,6 +20,7 @@ import {
 
 import { getInvoiceApplication } from '#/api/finance/invoice-application';
 import { displayDateTime } from '#/utils/display-time';
+import { financeProductLabel } from '#/views/finance/shared/display-labels';
 import PrintVoucher from './print-voucher.vue';
 import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
@@ -125,7 +126,7 @@ const lineColumns = [
       if (record.historyProductUnproven || !record.productType) {
         return '历史未证实';
       }
-      return record.productType;
+      return financeProductLabel(record.productType);
     },
   },
   {
@@ -133,7 +134,7 @@ const lineColumns = [
     dataIndex: 'currentProductType',
     key: 'currentProductType',
     width: 100,
-    customRender: ({ text }: { text?: string }) => text || '-',
+    customRender: ({ text }: { text?: string }) => financeProductLabel(text),
   },
   {
     title: '开票金额',
@@ -259,7 +260,7 @@ const [Modal, modalApi] = useVbenModal({
             {{ detail.invoiceType || '-' }}
           </DescriptionsItem>
           <DescriptionsItem label="产品类型">
-            {{ detail.taxContent || '-' }}
+            {{ financeProductLabel(detail.taxContent) }}
           </DescriptionsItem>
           <DescriptionsItem label="特别开票要求" :span="2">
             {{ detail.specialInvoiceRequirement || '-' }}
