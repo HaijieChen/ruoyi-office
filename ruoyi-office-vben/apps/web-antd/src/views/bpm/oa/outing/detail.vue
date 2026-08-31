@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { BpmOAOutingApi } from '#/api/bpm/oa/outing';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { ContentWrap } from '@vben/common-ui';
@@ -46,6 +46,15 @@ async function getDetailData() {
 onMounted(() => {
   getDetailData();
 });
+
+watch(
+  () => props.id,
+  () => {
+    if (props.embedded) {
+      void getDetailData();
+    }
+  },
+);
 </script>
 
 <template>

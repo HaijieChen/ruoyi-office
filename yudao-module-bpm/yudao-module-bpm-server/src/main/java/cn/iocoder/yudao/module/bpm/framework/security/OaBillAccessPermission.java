@@ -54,6 +54,9 @@ public class OaBillAccessPermission {
     }
 
     public boolean canReadViaAttachingBill(Long userId, String processInstanceId) {
+        if (financeAttachAccessProvider == null) {
+            return false;
+        }
         BpmFinanceAttachAccess access = financeAttachAccessProvider.getIfAvailable();
         return access != null && access.canReadProcessInstanceViaBill(userId, processInstanceId);
     }

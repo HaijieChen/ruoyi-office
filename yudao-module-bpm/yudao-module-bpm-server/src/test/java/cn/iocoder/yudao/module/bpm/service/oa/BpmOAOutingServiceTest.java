@@ -6,6 +6,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceInfo;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceStatusEvent;
+import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.controller.admin.oa.vo.BpmOAOutingCreateReqVO;
@@ -53,6 +54,7 @@ class BpmOAOutingServiceTest {
     private SecurityFrameworkService securityFrameworkService;
     private ObjectProvider<TaskService> taskServiceProvider;
     private OaBillAccessPermission oaBillAccessPermission;
+    private BpmFinanceAttachAccess financeAttachAccess;
     private BpmOAOutingServiceImpl service;
 
     @BeforeEach
@@ -65,6 +67,10 @@ class BpmOAOutingServiceTest {
 
         oaBillAccessPermission = new OaBillAccessPermission();
         ReflectionTestUtils.setField(oaBillAccessPermission, "taskServiceProvider", taskServiceProvider);
+        financeAttachAccess = mock(BpmFinanceAttachAccess.class);
+        ObjectProvider<BpmFinanceAttachAccess> attachProvider = mock(ObjectProvider.class);
+        when(attachProvider.getIfAvailable()).thenReturn(financeAttachAccess);
+        ReflectionTestUtils.setField(oaBillAccessPermission, "financeAttachAccessProvider", attachProvider);
 
         service = new BpmOAOutingServiceImpl();
         ReflectionTestUtils.setField(service, "outingMapper", outingMapper);
@@ -255,6 +261,16 @@ class BpmOAOutingServiceTest {
         stubActiveAssignee("proc-1", 8L, 1L);
 
         BpmOAOutingDO outing = service.getOuting(10L, 8L);
+        assertEquals(10L, outing.getId());
+    }
+
+    @Test
+    void attachingBillViewerGetWithoutNativeAclSucceeds() {
+        when(outingMapper.selectById(10L)).thenReturn(ownedOuting(10L, 1L, "proc-1"));
+        when(securityFrameworkService.hasPermission(QUERY_PERMISSION)).thenReturn(false);
+        when(financeAttachAccess.canReadProcessInstanceViaBill(9L, "proc-1")).thenReturn(true);
+
+        BpmOAOutingDO outing = service.getOuting(10L, 9L);
         assertEquals(10L, outing.getId());
     }
 

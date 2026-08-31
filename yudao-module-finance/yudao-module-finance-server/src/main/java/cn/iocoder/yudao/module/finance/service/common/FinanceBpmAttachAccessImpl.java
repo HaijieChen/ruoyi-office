@@ -101,7 +101,7 @@ public class FinanceBpmAttachAccessImpl implements BpmFinanceAttachAccess {
         if (payment == null) {
             return false;
         }
-        if (securityFrameworkService.hasPermission("finance:payment-application:query")) {
+        if (securityFrameworkService.hasPermission("finance:payment-application:update")) {
             return true;
         }
         return paymentApplicationService.canAccessDetail(payment.getId(), userId)

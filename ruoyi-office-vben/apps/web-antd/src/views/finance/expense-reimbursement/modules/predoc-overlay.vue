@@ -25,10 +25,10 @@ const id = computed(() =>
 </script>
 
 <template>
-  <Modal v-model:open="open" :title="title" width="800px" :footer="null">
+  <Modal v-model:open="open" :title="title" width="800px" :footer="null" destroy-on-close>
     <div v-if="!id">无法加载前置单据</div>
-    <TripDetail v-else-if="predocType === 'TRIP'" :id="id" embedded />
-    <OutingDetail v-else-if="predocType === 'OUTING'" :id="id" embedded />
+    <TripDetail v-else-if="predocType === 'TRIP'" :id="id" :key="id" embedded />
+    <OutingDetail v-else-if="predocType === 'OUTING'" :id="id" :key="id" embedded />
     <div v-else>无法加载前置单据</div>
   </Modal>
 </template>

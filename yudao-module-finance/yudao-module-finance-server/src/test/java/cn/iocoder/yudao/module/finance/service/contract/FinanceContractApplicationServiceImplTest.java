@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.finance.service.contract;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -443,6 +445,24 @@ class FinanceContractApplicationServiceImplTest {
         when(taskQuery.processInstanceId("proc-1")).thenReturn(taskQuery);
         when(taskQuery.taskCandidateOrAssigned("999")).thenReturn(taskQuery);
         when(taskQuery.count()).thenReturn(1L);
+        assertTrue(service.canAccessDetail(100L, 999L));
+    }
+
+    @Test
+    void getApplicationShouldAllowAttachingPaymentViewer() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .processInstanceId("proc-1")
+                .build());
+        BpmFinanceAttachAccess attach = mock(BpmFinanceAttachAccess.class);
+        ObjectProvider<BpmFinanceAttachAccess> attachProvider = mock(ObjectProvider.class);
+        when(attachProvider.getIfAvailable()).thenReturn(attach);
+        when(attach.canReadContractViaBill(999L, 100L)).thenReturn(true);
+        ReflectionTestUtils.setField(service, "financeAttachAccessProvider", attachProvider);
+
+        FinanceContractApplicationDO app = service.getApplication(100L, 999L, false);
+        assertEquals(100L, app.getId());
         assertTrue(service.canAccessDetail(100L, 999L));
     }
 

@@ -7,7 +7,7 @@ import { BpmModelFormType } from '@vben/constants';
 import { Descriptions, Modal, Spin } from 'ant-design-vue';
 
 import { getProcessInstance } from '#/api/bpm/processInstance';
-import { setConfAndFields2 } from '#/components/form-create';
+import { hydrateRemoteDataSourceRules, setConfAndFields2 } from '#/components/form-create';
 import { registerComponent } from '#/utils';
 import ContractInfo from '#/views/finance/contract-application/modules/info.vue';
 
@@ -103,6 +103,7 @@ watch(
           def.formFields,
           inst.formVariables,
         );
+        hydrateRemoteDataSourceRules(detailForm.value.rule, undefined);
         await nextTick();
         fApi.value?.btn?.show(false);
         fApi.value?.resetBtn?.show(false);

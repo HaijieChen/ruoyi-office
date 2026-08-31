@@ -75,4 +75,34 @@ class FinanceBpmAttachAccessImplTest {
         assertTrue(access.canReadContractViaBill(9L, 55L));
         assertFalse(access.canReadContractViaBill(9L, 99L));
     }
+
+    @Test
+    void paymentQueryPermissionAloneCannotReadAttachedPredecessor() {
+        FinancePaymentApplicationDO payment = new FinancePaymentApplicationDO();
+        payment.setId(7L);
+        payment.setPurchaseProcessInstanceId("purchase-pi");
+        payment.setLeaseContractApplicationId(55L);
+        payment.setProcessInstanceId("pay-pi");
+        when(lineMapper.selectList(any())).thenReturn(List.of());
+        when(paymentMapper.selectList(any())).thenReturn(List.of(payment));
+        when(security.hasPermission("finance:payment-application:query")).thenReturn(true);
+        when(paymentService.canAccessDetail(7L, 9L)).thenReturn(false);
+        when(predoc.isProcessAssignee("pay-pi", 9L)).thenReturn(false);
+
+        assertFalse(access.canReadProcessInstanceViaBill(9L, "purchase-pi"));
+        assertFalse(access.canReadContractViaBill(9L, 55L));
+    }
+
+    @Test
+    void paymentOwnerCanReadAttachedPurchasePi() {
+        FinancePaymentApplicationDO payment = new FinancePaymentApplicationDO();
+        payment.setId(7L);
+        payment.setPurchaseProcessInstanceId("purchase-pi");
+        payment.setProcessInstanceId("pay-pi");
+        when(lineMapper.selectList(any())).thenReturn(List.of());
+        when(paymentMapper.selectList(any())).thenReturn(List.of(payment));
+        when(paymentService.canAccessDetail(7L, 9L)).thenReturn(true);
+
+        assertTrue(access.canReadProcessInstanceViaBill(9L, "purchase-pi"));
+    }
 }
