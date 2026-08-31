@@ -60,8 +60,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private static final Set<String> SEAL_OR_LATER_TASK_KEYS = Set.of(TASK_SEAL, TASK_ARCHIVE, TASK_MAIL);
 
     private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
-            "采购合同", "销售合同", "租赁合同", "借款合同", "推广充值业务合同");
+            "采购合同", "销售合同", "租赁合同", "借款合同");
 
+    private static final String SALES_FILE_TYPE = "销售合同";
     private static final Set<String> PRE_PROCESS_REQUIRED_TYPES = Set.of("采购合同", "租赁合同");
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
@@ -560,11 +561,14 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         if (!ALLOWED_FILE_TYPES.contains(reqVO.getFileType())) {
             throw exception(CONTRACT_APPLICATION_FILE_TYPE_INVALID);
         }
-        // EXP-70 #9：新合同产品必填且字典合法
-        if (StrUtil.isBlank(reqVO.getProductType())) {
-            throw exception(CONTRACT_APPLICATION_FIELD_REQUIRED);
+        if (SALES_FILE_TYPE.equals(reqVO.getFileType())) {
+            if (StrUtil.isBlank(reqVO.getProductType())
+                    || StrUtil.isBlank(reqVO.getRebateRatio())
+                    || StrUtil.isBlank(reqVO.getSettlementMethod())) {
+                throw exception(CONTRACT_APPLICATION_FIELD_REQUIRED);
+            }
+            validateProductType(reqVO.getProductType().trim());
         }
-        validateProductType(reqVO.getProductType().trim());
         if (PRE_PROCESS_REQUIRED_TYPES.contains(reqVO.getFileType()) && StrUtil.isBlank(reqVO.getPreProcessRef())) {
             throw exception(CONTRACT_APPLICATION_PRE_PROCESS_REQUIRED);
         }
@@ -622,9 +626,9 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 .signCompany(entity.name())
                 .fileName(reqVO.getFileName())
                 .fileType(reqVO.getFileType())
-                .productType(reqVO.getProductType())
-                .rebateRatio(reqVO.getRebateRatio())
-                .settlementMethod(reqVO.getSettlementMethod())
+                .productType(SALES_FILE_TYPE.equals(reqVO.getFileType()) ? reqVO.getProductType() : null)
+                .rebateRatio(SALES_FILE_TYPE.equals(reqVO.getFileType()) ? reqVO.getRebateRatio() : null)
+                .settlementMethod(SALES_FILE_TYPE.equals(reqVO.getFileType()) ? reqVO.getSettlementMethod() : null)
                 .copyCount(reqVO.getCopyCount())
                 .sealTypes(reqVO.getSealTypes())
                 .needMail(Boolean.TRUE.equals(reqVO.getNeedMail()))

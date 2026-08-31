@@ -208,7 +208,7 @@ class FinanceContractApplicationImportTest {
 
         FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
 
-        assertEquals("文件类型必须是 采购合同/销售合同/租赁合同/借款合同/推广充值业务合同",
+        assertEquals("文件类型必须是 采购合同/销售合同/租赁合同/借款合同",
                 resp.getFailureRows().get(2));
         verify(mapper, never()).insert(any(FinanceContractApplicationDO.class));
     }
@@ -240,5 +240,22 @@ class FinanceContractApplicationImportTest {
                 .startDate(LocalDate.of(2026, 1, 1))
                 .endDate(LocalDate.of(2026, 12, 31))
                 .build();
+    }
+
+    @Test
+    void purchaseWithoutSalesFieldsShouldImport() {
+        FinanceContractApplicationImportExcelVO row = validRow();
+        row.setFileType("采购合同");
+        row.setProductType(null);
+        row.setRebateRatio(null);
+        row.setSettlementMethod(null);
+
+        FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
+
+        assertEquals(List.of("HT-HIST-001"), resp.getCreatedNos());
+        assertTrue(resp.getFailureRows().isEmpty());
+        verify(mapper).insert(argThat((FinanceContractApplicationDO app) ->
+                "采购合同".equals(app.getFileType()) && app.getProductType() == null));
+        verify(dictDataApi, never()).validateDictDataList(anyString(), anyCollection());
     }
 }

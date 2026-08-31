@@ -123,13 +123,39 @@ class FinanceContractApplicationServiceImplTest {
 
     @Test
     void createAndStartShouldRejectBlankProductType() {
-        // EXP-70 #9：新合同产品必填
         FinanceContractApplicationCreateAndStartReqVO req = validReq();
         req.setProductType(null);
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.createAndStart(req, 200L));
         assertEquals(CONTRACT_APPLICATION_FIELD_REQUIRED.getCode(), ex.getCode());
         verify(applicationMapper, never()).insert(any(FinanceContractApplicationDO.class));
+    }
+
+    @Test
+    void createAndStartShouldAllowPurchaseWithoutSalesFields() {
+        mockProcessCreate();
+        FinanceContractApplicationCreateAndStartReqVO req = validReq();
+        req.setFileType("采购合同");
+        req.setPreProcessRef("PO-1");
+        req.setProductType(null);
+        req.setRebateRatio(null);
+        req.setSettlementMethod(null);
+        assertDoesNotThrow(() -> service.createAndStart(req, 200L));
+        verify(applicationMapper).insert(argThat((FinanceContractApplicationDO app) ->
+                "采购合同".equals(app.getFileType())
+                        && app.getProductType() == null
+                        && app.getRebateRatio() == null
+                        && app.getSettlementMethod() == null));
+        verify(dictDataApi, never()).validateDictDataList(anyString(), anyCollection());
+    }
+
+    @Test
+    void createAndStartShouldRejectPromoRechargeFileType() {
+        FinanceContractApplicationCreateAndStartReqVO req = validReq();
+        req.setFileType("推广充值业务合同");
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(req, 200L));
+        assertEquals(CONTRACT_APPLICATION_FILE_TYPE_INVALID.getCode(), ex.getCode());
     }
 
     @Test

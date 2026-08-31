@@ -116,12 +116,14 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
                 resp.getFailureRows().put(rowNumber, "对方客商名称匹配到多家，请先改成唯一名称");
                 continue;
             }
-            try {
-                dictDataApi.validateDictDataList(DICT_PRODUCT_TYPE, Collections.singletonList(row.productType()))
-                        .checkError();
-            } catch (Exception ex) {
-                resp.getFailureRows().put(rowNumber, "产品类型不在启用字典中");
-                continue;
+            if (row.productType() != null) {
+                try {
+                    dictDataApi.validateDictDataList(DICT_PRODUCT_TYPE, Collections.singletonList(row.productType()))
+                            .checkError();
+                } catch (Exception ex) {
+                    resp.getFailureRows().put(rowNumber, "产品类型不在启用字典中");
+                    continue;
+                }
             }
             FinanceCustomerCompanyDO matchedCustomer = hits.get(0);
             FinanceEntityCompanyResolver.ResolvedCompany company = companyOut[0];

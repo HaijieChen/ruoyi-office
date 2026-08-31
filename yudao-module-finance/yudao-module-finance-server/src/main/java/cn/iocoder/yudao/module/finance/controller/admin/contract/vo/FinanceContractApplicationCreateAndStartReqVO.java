@@ -42,16 +42,13 @@ public class FinanceContractApplicationCreateAndStartReqVO {
     @NotBlank(message = "文件类型不能为空")
     private String fileType;
 
-    @Schema(description = "产品类型（EXP-70 必填，字典 finance_product_type）", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "产品类型不能为空")
+    @Schema(description = "产品类型（仅销售合同必填，字典 finance_product_type）")
     private String productType;
 
-    @Schema(description = "返点比例", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "返点比例不能为空")
+    @Schema(description = "返点比例（仅销售合同必填）")
     private String rebateRatio;
 
-    @Schema(description = "结算方式", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "结算方式不能为空")
+    @Schema(description = "结算方式（仅销售合同必填）")
     private String settlementMethod;
 
     @Schema(description = "文件份数", requiredMode = Schema.RequiredMode.REQUIRED)

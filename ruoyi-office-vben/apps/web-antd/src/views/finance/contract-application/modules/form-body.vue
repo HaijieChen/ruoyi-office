@@ -43,7 +43,6 @@ const FILE_TYPE_OPTIONS = [
   { label: '销售合同', value: '销售合同' },
   { label: '租赁合同', value: '租赁合同' },
   { label: '借款合同', value: '借款合同' },
-  { label: '推广充值业务合同', value: '推广充值业务合同' },
 ];
 
 const SETTLEMENT_OPTIONS = [
@@ -106,6 +105,7 @@ const submitting = ref(false);
 const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
 
 const isResubmit = computed(() => formData.value.mode === 'resubmit');
+const isSalesContract = computed(() => formData.value.fileType === '销售合同');
 const needPreProcess = computed(
   () =>
     formData.value.fileType === '采购合同' ||
@@ -135,13 +135,15 @@ const rules = computed<Record<string, Rule[]>>(() => ({
     { required: true, message: '请先上传电子版文件', trigger: 'change' },
   ],
   fileType: [{ required: true, message: '请选择文件类型', trigger: 'change' }],
-  productType: [
-    { required: true, message: '请选择产品类型', trigger: 'change' },
-  ],
-  rebateRatio: [{ required: true, message: '请输入返点比例', trigger: 'blur' }],
-  settlementMethod: [
-    { required: true, message: '请选择结算方式', trigger: 'change' },
-  ],
+  productType: isSalesContract.value
+    ? [{ required: true, message: '请选择产品类型', trigger: 'change' }]
+    : [],
+  rebateRatio: isSalesContract.value
+    ? [{ required: true, message: '请输入返点比例', trigger: 'blur' }]
+    : [],
+  settlementMethod: isSalesContract.value
+    ? [{ required: true, message: '请选择结算方式', trigger: 'change' }]
+    : [],
   copyCount: [{ required: true, message: '请输入文件份数', trigger: 'change' }],
   sealTypes: [{ required: true, message: '请输入印章类型', trigger: 'blur' }],
   draftFileUrl: [
@@ -261,9 +263,11 @@ function buildPayload(): FinanceContractApplicationApi.CreateAndStartRequest {
     entityCompanyDeptId: formData.value.entityCompanyDeptId!,
     fileName: formData.value.fileName!,
     fileType: formData.value.fileType!,
-    productType: formData.value.productType!,
-    rebateRatio: formData.value.rebateRatio!,
-    settlementMethod: formData.value.settlementMethod!,
+    productType: isSalesContract.value ? formData.value.productType : undefined,
+    rebateRatio: isSalesContract.value ? formData.value.rebateRatio : undefined,
+    settlementMethod: isSalesContract.value
+      ? formData.value.settlementMethod
+      : undefined,
     copyCount: formData.value.copyCount!,
     sealTypes: formData.value.sealTypes!,
     needMail: !!formData.value.needMail,
@@ -275,6 +279,15 @@ function buildPayload(): FinanceContractApplicationApi.CreateAndStartRequest {
     remark: formData.value.remark,
     businessStaffUserId: formData.value.businessStaffUserId,
   };
+}
+
+function onFileTypeChange() {
+  if (!isSalesContract.value) {
+    formData.value.productType = undefined;
+    formData.value.rebateRatio = undefined;
+    formData.value.settlementMethod = undefined;
+  }
+  emit('predictChange', getPredictVariables());
 }
 
 function getPredictVariables(): Record<string, unknown> {
@@ -420,6 +433,13 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         @change="emit(predictChange, getPredictVariables())"
       />
     </Form.Item>
+    <Form.Item label="起始日期" name="startDate">
+      <DatePicker
+        v-model:value="formData.startDate"
+        value-format="YYYY-MM-DD"
+        class="w-full"
+      />
+    </Form.Item>
     <Form.Item v-if="!formData.amountNa" label="币种" name="currency">
       <Select
         v-model:value="formData.currency"
@@ -438,7 +458,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         class="w-full"
         :options="FILE_TYPE_OPTIONS"
         placeholder="请选择"
-        @change="emit(predictChange, getPredictVariables())"
+        @change="onFileTypeChange"
       />
     </Form.Item>
     <Form.Item v-if="needPreProcess" label="前置流程" name="preProcessRef">
@@ -447,7 +467,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         placeholder="采购/租赁须关联前置流程"
       />
     </Form.Item>
-    <Form.Item label="产品类型" name="productType" required>
+    <Form.Item v-if="isSalesContract" label="产品类型" name="productType" required>
       <Select
         v-model:value="formData.productType"
         class="w-full"
@@ -455,10 +475,10 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         placeholder="请选择产品类型"
       />
     </Form.Item>
-    <Form.Item label="返点比例" name="rebateRatio">
+    <Form.Item v-if="isSalesContract" label="返点比例" name="rebateRatio">
       <Input v-model:value="formData.rebateRatio" placeholder="文本" />
     </Form.Item>
-    <Form.Item label="结算方式" name="settlementMethod">
+    <Form.Item v-if="isSalesContract" label="结算方式" name="settlementMethod">
       <Select
         v-model:value="formData.settlementMethod"
         class="w-full"
@@ -480,13 +500,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     </Form.Item>
     <Form.Item v-if="formData.needMail" label="邮寄地址" name="mailAddress">
       <Input v-model:value="formData.mailAddress" placeholder="邮寄地址" />
-    </Form.Item>
-    <Form.Item label="起始日期" name="startDate">
-      <DatePicker
-        v-model:value="formData.startDate"
-        value-format="YYYY-MM-DD"
-        class="w-full"
-      />
     </Form.Item>
     <Form.Item label="结束日期" name="endDate">
       <DatePicker
@@ -517,11 +530,5 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
     <Form.Item label="备注" name="remark">
       <Textarea v-model:value="formData.remark" :rows="2" />
     </Form.Item>
-    <div
-      v-if="formData.fileType === '推广充值业务合同'"
-      class="mb-2 pl-[29%] text-sm text-amber-600"
-    >
-      提示：本流程不管理充值框架余额/返点引擎，仅作签约台账。
-    </div>
   </Form>
 </template>
