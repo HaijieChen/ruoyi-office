@@ -109,17 +109,21 @@ async function recognize(url: string, file?: File): Promise<DraftInvoice> {
     name: base || 'invoice',
   };
   try {
-    const ocr = await ocrInvoiceApplication(url, file);
+    const raw = await ocrInvoiceApplication(url, file);
+    const ocr =
+      raw && typeof raw === 'object' && (raw as any).amount == null && (raw as any).data
+        ? (raw as any).data
+        : raw;
     if (ocr?.amount != null) draft.amount = Number(ocr.amount);
     if (ocr?.invoiceNo) draft.invoiceNo = String(ocr.invoiceNo);
     if (ocr?.feeDate) draft.invoiceDate = String(ocr.feeDate).slice(0, 10);
     if (ocr?.invoiceNo || ocr?.feeDate || ocr?.amount != null) {
       message.success('已识别发票信息，请核对');
     } else {
-      message.warning('未识别到金额，请手填');
+      message.warning('未识别到金额/发票号，请手填');
     }
   } catch {
-    message.warning('识别失败，请手填金额');
+    message.warning('识别失败，请手填金额和发票号');
   }
   return draft;
 }

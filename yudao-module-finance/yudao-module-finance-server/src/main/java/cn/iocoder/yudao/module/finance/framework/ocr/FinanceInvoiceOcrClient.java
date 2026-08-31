@@ -63,6 +63,10 @@ public class FinanceInvoiceOcrClient {
             if (StrUtil.isBlank(invoiceNo)) {
                 invoiceNo = parseInvoiceNo(rawText);
             }
+            BigDecimal amount = json.getBigDecimal("amount");
+            if (amount == null) {
+                amount = parseAmount(rawText);
+            }
             BigDecimal taxAmount = json.getBigDecimal("taxAmount");
             if (taxAmount == null) {
                 taxAmount = parseTaxAmount(rawText);
@@ -75,8 +79,11 @@ public class FinanceInvoiceOcrClient {
             if (StrUtil.isBlank(buyerName)) {
                 buyerName = parseBuyerName(rawText);
             }
-            return new Result(parseDate(json.getStr("feeDate")), json.getBigDecimal("amount"),
-                    rawText, invoiceNo, taxAmount, invoiceType, buyerName, false);
+            LocalDate feeDate = parseDate(json.getStr("feeDate"));
+            if (feeDate == null) {
+                feeDate = parseDate(parseFeeDate(rawText));
+            }
+            return new Result(feeDate, amount, rawText, invoiceNo, taxAmount, invoiceType, buyerName, false);
         } catch (Exception ex) {
             log.warn("[ocr] failed: {}", ex.toString());
             return Result.empty();
@@ -149,7 +156,7 @@ public class FinanceInvoiceOcrClient {
         }
         String compact = raw.replaceAll("[\\s　]", "");
         java.util.regex.Matcher labeled = java.util.regex.Pattern
-                .compile("发票号码[:：]?([0-9]{8,20})")
+                .compile("发票号码[:：]?[^0-9]{0,8}([0-9]{8,20})")
                 .matcher(compact);
         if (labeled.find()) {
             return labeled.group(1);
@@ -165,6 +172,43 @@ public class FinanceInvoiceOcrClient {
                 .matcher(compact);
         if (number.find()) {
             return number.group(1);
+        }
+        return null;
+    }
+
+    static String parseFeeDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?:开票日期|日期)[:：]?\\s*(20\\d{2}[-./年]\\d{1,2}[-./月]\\d{1,2})")
+                .matcher(raw);
+        if (m.find()) {
+            return m.group(1);
+        }
+        m = java.util.regex.Pattern.compile("(20\\d{2}[-./年]\\d{1,2}[-./月]\\d{1,2})").matcher(raw);
+        return m.find() ? m.group(1) : null;
+    }
+
+    static BigDecimal parseAmount(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String compact = raw.replaceAll("[\\s　]", "");
+        String[] patterns = {
+                "价税合计(?:\\(大写\\)|（大写）)?[^0-9¥￥]{0,80}(?:\\(小写\\)|（小写）)?[¥￥]?((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+                "(?:\\(小写\\)|（小写）)[¥￥]?((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+                "[¥￥]((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+        };
+        for (String pattern : patterns) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(pattern).matcher(compact);
+            String last = null;
+            while (m.find()) {
+                last = m.group(1);
+            }
+            if (last != null) {
+                return new BigDecimal(last.replace(",", ""));
+            }
         }
         return null;
     }

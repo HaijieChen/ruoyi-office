@@ -47,7 +47,7 @@ def parse_tax_amount(joined):
 
 def parse_invoice_no(joined):
     compact = re.sub(r"[\s　]", "", joined)
-    nos = re.findall(r"发票号码[:：]?([0-9]{8,20})", compact)
+    nos = re.findall(r"发票号码[:：]?[^0-9]{0,8}([0-9]{8,20})", compact)
     if nos:
         return nos[0]
     nos = re.findall(r"(?<!\d)(20\d{18})(?!\d)", compact)
@@ -55,6 +55,20 @@ def parse_invoice_no(joined):
         return nos[0]
     nos = re.findall(r"号码[:：]([0-9]{8,20})", compact)
     return nos[0] if nos else None
+
+
+def parse_amount(joined):
+    compact = re.sub(r"[\s　]", "", joined)
+    patterns = [
+        r"价税合计(?:\(大写\)|（大写）)?[^0-9¥￥]{0,80}(?:\(小写\)|（小写）)?[¥￥]?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+        r"(?:\(小写\)|（小写）)[¥￥]?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+        r"[¥￥]((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+    ]
+    for pattern in patterns:
+        amounts = re.findall(pattern, compact)
+        if amounts:
+            return amounts[-1].replace(",", "")
+    return None
 
 
 def parse_buyer_name(joined):
@@ -74,16 +88,13 @@ def parse_buyer_name(joined):
 
 
 def parse_text(joined):
-    dates = re.findall(r"20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}", joined)
-    amounts = re.findall(r"(?:价税合计[^¥]{0,40}[¥￥]?|（小写）\s*[¥￥]?)(\d+\.\d{2})", joined)
-    if not amounts:
-        amounts = re.findall(r"[¥￥](\d+\.\d{2})", joined)
-    if not amounts:
-        amounts = re.findall(r"(\d{1,7}\.\d{2})", joined)
+    dates = re.findall(r"(?:开票日期|日期)[:：]?\s*(20\d{2}[-./年]\d{1,2}[-./月]\d{1,2})", joined)
+    if not dates:
+        dates = re.findall(r"20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}", joined)
     fee = None
     if dates:
         fee = dates[0].replace("年", "-").replace("月", "-").replace(".", "-").replace("/", "-")[:10]
-    amt = amounts[-1] if amounts else None
+    amt = parse_amount(joined)
     no = parse_invoice_no(joined)
     return fee, amt, no, parse_tax_amount(joined), parse_invoice_type(joined), parse_buyer_name(joined), joined[:2000]
 

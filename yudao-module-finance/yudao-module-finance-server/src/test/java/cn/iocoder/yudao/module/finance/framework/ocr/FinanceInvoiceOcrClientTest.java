@@ -32,7 +32,18 @@ class FinanceInvoiceOcrClientTest {
                 FinanceInvoiceOcrClient.parseInvoiceNo("电子发票 发票号码：26317000002934677164 开票日期"));
         assertEquals("25317000000178817093",
                 FinanceInvoiceOcrClient.parseInvoiceNo("发票号码\n25317000000178817093 开票日期"));
+        assertEquals("25317000000178817093",
+                FinanceInvoiceOcrClient.parseInvoiceNo("发票号码 No. 25317000000178817093"));
         assertNull(FinanceInvoiceOcrClient.parseInvoiceNo("无号码"));
+    }
+
+    @Test
+    void parseAmountFromTotal() {
+        assertEquals(new java.math.BigDecimal("1234.56"),
+                FinanceInvoiceOcrClient.parseAmount("价税合计（大写）壹仟圆整（小写）¥1,234.56"));
+        assertEquals(new java.math.BigDecimal("99.00"),
+                FinanceInvoiceOcrClient.parseAmount("（小写）￥99.00"));
+        assertNull(FinanceInvoiceOcrClient.parseAmount("无金额"));
     }
 
     @Test
