@@ -130,6 +130,8 @@ public class FinanceInvoiceApplicationRespVO {
         private String invoiceType;
         @Schema(description = "业务账期")
         private String billingPeriod;
+        @Schema(description = "明细备注")
+        private String remark;
         @Schema(description = "行办票状态")
         private Integer issueStatus;
         @Schema(description = "发票号")

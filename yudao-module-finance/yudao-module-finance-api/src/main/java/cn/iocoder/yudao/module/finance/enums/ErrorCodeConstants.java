@@ -116,6 +116,14 @@ public interface ErrorCodeConstants {
     /** 商务单产品未固化（快照与 legacy 名称均为空） */
     ErrorCode INVOICE_APPLICATION_BUSINESS_ORDER_PRODUCT_MISSING = new ErrorCode(1_040_003_018,
             "商务单产品类型未固化，无法开票");
+    ErrorCode INVOICE_APPLICATION_CONTRACT_REQUIRED = new ErrorCode(1_040_003_019,
+            "非品牌商务开票须选择前置销售合同");
+    ErrorCode INVOICE_APPLICATION_CONTRACT_INVALID = new ErrorCode(1_040_003_020,
+            "前置合同须为已通过的销售合同，且产品类型一致");
+    ErrorCode INVOICE_APPLICATION_PRODUCT_REQUIRED = new ErrorCode(1_040_003_021,
+            "请先选择产品类型");
+    ErrorCode INVOICE_APPLICATION_INVOICE_TYPE_INVALID = new ErrorCode(1_040_003_022,
+            "发票类型仅支持专票或普票");
 
     // ========== 客户公司 / 客商 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");

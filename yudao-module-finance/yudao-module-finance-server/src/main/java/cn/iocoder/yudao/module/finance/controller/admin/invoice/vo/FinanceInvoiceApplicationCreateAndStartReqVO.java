@@ -52,7 +52,8 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Schema(description = "特殊开票要求")
     private String specialInvoiceRequirement;
 
-    @Schema(description = "产品类型/开票内容（提交快照，可选）")
+    @Schema(description = "产品类型（字典 finance_product_type；品牌商务=ppsw）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotEmpty(message = "请先选择产品类型")
     private String taxContent;
 
     @Schema(description = "税率（提交快照）")
@@ -90,9 +91,11 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Data
     public static class Line {
 
-        @Schema(description = "商务单编号", requiredMode = Schema.RequiredMode.REQUIRED)
-        @NotNull(message = "商务单编号不能为空")
+        @Schema(description = "商务单编号（品牌商务 ppsw 必填）")
         private Long businessOrderId;
+
+        @Schema(description = "前置销售合同编号（非品牌商务必填）")
+        private Long sourceContractApplicationId;
 
         @Schema(description = "本行开票金额", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "开票金额不能为空")
@@ -105,8 +108,11 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
         @Schema(description = "发票类型（行快照）")
         private String invoiceType;
 
-        @Schema(description = "业务账期 YYYY-MM")
+        @Schema(description = "业务账期（日期 YYYY-MM-DD）")
         private String billingPeriod;
+
+        @Schema(description = "明细备注")
+        private String remark;
 
         @Schema(description = "行序")
         private Integer sort;

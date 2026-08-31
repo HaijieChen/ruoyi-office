@@ -10,6 +10,7 @@ import { getDictOptions } from '@vben/hooks';
 
 import {
   Button,
+  DatePicker,
   Form,
   Input,
   InputNumber,
@@ -18,12 +19,12 @@ import {
   Space,
   Textarea,
 } from 'ant-design-vue';
-// EXP-70：产品类型只读，由首行商务单带出
 
 import {
   getBusinessOrder,
   getBusinessOrderPage,
 } from '#/api/finance/business-order';
+import { getContractApplicationPage } from '#/api/finance/contract-application';
 import { getCustomerCompanySimpleList } from '#/api/finance/customer-company';
 import {
   createAndStartInvoiceApplication,
@@ -43,8 +44,10 @@ const submitting = ref(false);
 
 interface LineItem {
   businessOrderId?: number;
+  sourceContractApplicationId?: number;
   amount?: number;
   billingPeriod?: string;
+  remark?: string;
 }
 
 interface FormData {
@@ -61,9 +64,7 @@ interface FormData {
   /** 公司名称快照 */
   invoiceCompany?: string;
   invoiceType?: string;
-  /**
-   * 产品类型只读展示（首行商务单带出；不提交，服务端派生 taxContent）
-   */
+  /** 产品类型（字典；品牌商务 = ppsw） */
   productType?: string;
   /** 特别开票要求（单据级，不进客户档案） */
   specialInvoiceRequirement?: string;
@@ -98,12 +99,22 @@ interface BoOption {
   contractApplicationId?: number;
 }
 
+interface ContractOption {
+  label: string;
+  value: number;
+  applicationNo?: string;
+  productType?: string;
+  counterpartyName?: string;
+}
+
 const formRef = ref();
 const formData = ref<FormData>({ lines: [{}] });
 const boOptions = ref<BoOption[]>([]);
+const contractOptions = ref<ContractOption[]>([]);
 const companyOptions = ref<CompanyOption[]>([]);
 const customerCompanyOptions = ref<CustomerCompanyOption[]>([]);
 const loadingBo = ref(false);
+const loadingContract = ref(false);
 const loadingCompany = ref(false);
 const loadingCustomerCompany = ref(false);
 const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
@@ -111,14 +122,27 @@ const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
 const priorBuyerSnapshotHint = ref<string | undefined>();
 /** orderNo 远程搜索防抖 */
 let boSearchTimer: ReturnType<typeof setTimeout> | undefined;
+let contractSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
 const isResubmit = computed(() => formData.value.mode === 'resubmit');
 
+const PRODUCT_BRAND_COMMERCE = 'ppsw';
 const invoiceTypeOptions = computed(() =>
-  getDictOptions(DICT_TYPE.FINANCE_INVOICE_TYPE).map((d) => ({
+  getDictOptions(DICT_TYPE.FINANCE_INVOICE_TYPE)
+    .filter((d) => d.value === '专票' || d.value === '普票' || d.label === '专票' || d.label === '普票')
+    .map((d) => ({
+      label: d.label,
+      value: d.value as number | string,
+    })),
+);
+const productTypeOptions = computed(() =>
+  getDictOptions(DICT_TYPE.FINANCE_PRODUCT_TYPE).map((d) => ({
     label: d.label,
     value: d.value as number | string,
   })),
+);
+const isBrandCommerce = computed(
+  () => formData.value.productType === PRODUCT_BRAND_COMMERCE,
 );
 
 function openableOf(bo: {
@@ -194,22 +218,31 @@ const rules: Record<string, Rule[]> = {
   invoiceType: [
     { required: true, message: '请选择发票类型', trigger: 'change' },
   ],
+  productType: [
+    { required: true, message: '请先选择产品类型', trigger: 'change' },
+  ],
   lines: [
     {
       validator: async () => {
+        if (!formData.value.productType) {
+          throw new Error('请先选择产品类型');
+        }
         const lines = formData.value.lines || [];
         if (lines.length === 0) throw new Error('请至少添加一行明细');
-        // 同商务单多行合计不得超可开
+        const brand = isBrandCommerce.value;
         const sumByBo = new Map<number, number>();
         for (const [idx, line] of lines.entries()) {
-          if (!line.businessOrderId) {
+          if (brand && !line.businessOrderId) {
             throw new Error(`第 ${idx + 1} 行：请选择商务单`);
+          }
+          if (!brand && !line.sourceContractApplicationId) {
+            throw new Error(`第 ${idx + 1} 行：请选择前置销售合同`);
           }
           if (!line.amount || line.amount <= 0) {
             throw new Error(`第 ${idx + 1} 行：金额须大于 0`);
           }
+          if (!brand) continue;
           const openable = lineOpenableAmount(line);
-          // 明确可开为 0 才拦；未知（undefined）不在此当成 0 误杀（重提兜底项无 openable 时）
           if (openable !== null && openable !== undefined && openable <= 0) {
             throw new Error(`第 ${idx + 1} 行：该商务单无可开余额，请更换`);
           }
@@ -222,8 +255,8 @@ const rules: Record<string, Rule[]> = {
               `第 ${idx + 1} 行：开票金额不可超过可开余额 ¥${openable.toFixed(2)}`,
             );
           }
-          const prev = sumByBo.get(line.businessOrderId) || 0;
-          sumByBo.set(line.businessOrderId, prev + Number(line.amount));
+          const prev = sumByBo.get(line.businessOrderId as number) || 0;
+          sumByBo.set(line.businessOrderId as number, prev + Number(line.amount));
         }
         for (const [boId, total] of sumByBo.entries()) {
           const opt = boOptions.value.find((o) => o.value === boId);
@@ -310,45 +343,8 @@ function mapBoOption(bo: any): BoOption {
   };
 }
 
-/** 首行商务单决定的产品（表头只读 + 后续行过滤） */
-function firstLineProductType(): string | undefined {
-  const first = formData.value.lines?.[0];
-  if (!first?.businessOrderId) return undefined;
-  const opt = boOptions.value.find((o) => o.value === first.businessOrderId);
-  return opt?.productType || undefined;
-}
-
-/** 按行过滤商务单选项：第 0 行全量；后续行同产品 */
-function boOptionsForLine(index: number): BoOption[] {
-  if (index <= 0) {
-    return boOptions.value;
-  }
-  const locked = firstLineProductType();
-  if (!locked) {
-    return boOptions.value;
-  }
-  const selectedId = formData.value.lines?.[index]?.businessOrderId;
-  return boOptions.value.filter(
-    (o) => o.productType === locked || o.value === selectedId,
-  );
-}
-
-function syncHeaderProductFromFirstLine() {
-  formData.value.productType = firstLineProductType();
-}
-
-/** 首行产品变化时，清空后续行中产品不一致的选择 */
-function clearIncompatibleSubsequentLines(lockedProduct?: string) {
-  if (!lockedProduct) return;
-  const lines = formData.value.lines || [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line?.businessOrderId) continue;
-    const opt = boOptions.value.find((o) => o.value === line.businessOrderId);
-    if (opt && opt.productType && opt.productType !== lockedProduct) {
-      line.businessOrderId = undefined;
-    }
-  }
+function boOptionsForLine(): BoOption[] {
+  return boOptions.value;
 }
 
 function upsertBoOption(opt: BoOption) {
@@ -369,7 +365,11 @@ async function loadBusinessOrderOptions(keyword?: string) {
     // 复审 #7：前端再过滤一次，避免 legacy productName-only BO 进入候选
     const mapped = (page?.list || [])
       .filter((bo: any) => isInvoiceSelectableBo(bo))
-      .map((bo: any) => mapBoOption(bo));
+      .map((bo: any) => mapBoOption(bo))
+      .filter(
+        (o) =>
+          !formData.value.productType || o.productType === formData.value.productType,
+      );
     // 保留已选但不在当前页的选项，避免重提/筛选后丢 label
     const selectedIds = new Set(
       (formData.value.lines || [])
@@ -393,15 +393,78 @@ function onBoSearch(keyword: string) {
   }, 300);
 }
 
+function mapContractOption(row: {
+  id: number;
+  applicationNo?: string;
+  productType?: string;
+  counterpartyName?: string;
+}): ContractOption {
+  const no = row.applicationNo || `#${row.id}`;
+  const party = row.counterpartyName ? ` / ${row.counterpartyName}` : '';
+  return {
+    label: `${no}${party}`,
+    value: row.id,
+    applicationNo: row.applicationNo,
+    productType: row.productType,
+    counterpartyName: row.counterpartyName,
+  };
+}
+
+async function loadContractOptions(keyword?: string) {
+  const productType = formData.value.productType;
+  if (!productType || productType === PRODUCT_BRAND_COMMERCE) {
+    contractOptions.value = [];
+    return;
+  }
+  loadingContract.value = true;
+  try {
+    const page = await getContractApplicationPage({
+      pageNo: 1,
+      pageSize: 50,
+      applicationNo: keyword?.trim() || undefined,
+      approvalStatus: 'APPROVED',
+      fileType: '销售合同',
+      productType,
+    });
+    const mapped = (page?.list || []).map((row) => mapContractOption(row));
+    const selectedIds = new Set(
+      (formData.value.lines || [])
+        .map((l) => l.sourceContractApplicationId)
+        .filter((id): id is number => !!id),
+    );
+    const keep = contractOptions.value.filter(
+      (o) =>
+        selectedIds.has(o.value) && !mapped.some((m) => m.value === o.value),
+    );
+    contractOptions.value = [...mapped, ...keep];
+  } finally {
+    loadingContract.value = false;
+  }
+}
+
+function onContractSearch(keyword: string) {
+  if (contractSearchTimer) clearTimeout(contractSearchTimer);
+  contractSearchTimer = setTimeout(() => {
+    void loadContractOptions(keyword);
+  }, 300);
+}
+
+function onProductTypeChange() {
+  formData.value.lines = [{}];
+  boOptions.value = [];
+  contractOptions.value = [];
+  if (isBrandCommerce.value) {
+    void loadBusinessOrderOptions();
+  } else if (formData.value.productType) {
+    void loadContractOptions();
+  }
+}
+
 /** 选中商务单：回填建议金额 = 可开余额；首行同步产品 */
 async function onBoChange(index: number, boId?: number) {
   const line = formData.value.lines[index];
   if (!line) return;
   if (!boId) {
-    if (index === 0) {
-      syncHeaderProductFromFirstLine();
-      clearIncompatibleSubsequentLines(undefined);
-    }
     return;
   }
   let opt = boOptions.value.find((o) => o.value === boId);
@@ -424,24 +487,20 @@ async function onBoChange(index: number, boId?: number) {
     line.businessOrderId = undefined;
     return;
   }
-  // 后续行：若与首行产品不一致则拒绝（服务端仍会兜底）
-  if (index > 0) {
-    const locked = firstLineProductType();
-    if (locked && opt.productType && opt.productType !== locked) {
-      message.warning(`请选择与首行相同产品类型（${locked}）的商务单`);
-      line.businessOrderId = undefined;
-      return;
-    }
+  if (
+    formData.value.productType &&
+    opt.productType &&
+    opt.productType !== formData.value.productType
+  ) {
+    message.warning(`请选择产品类型为「${formData.value.productType}」的商务单`);
+    line.businessOrderId = undefined;
+    return;
   }
   if (line.amount === null || line.amount === undefined || line.amount <= 0) {
     const suggest = Number(opt.invoiceOpenableAmount) || 0;
     if (suggest > 0) {
       line.amount = Number(suggest.toFixed(2));
     }
-  }
-  if (index === 0) {
-    syncHeaderProductFromFirstLine();
-    clearIncompatibleSubsequentLines(opt.productType);
   }
 }
 
@@ -480,9 +539,6 @@ function removeLine(index: number) {
     return;
   }
   formData.value.lines.splice(index, 1);
-  // EXP-70 #7：删除首行后同步只读产品，并清理不兼容后续行
-  syncHeaderProductFromFirstLine();
-  clearIncompatibleSubsequentLines(firstLineProductType());
 }
 
 async function loadCompanyOptions() {
@@ -565,11 +621,7 @@ function getPredictVariables(): Record<string, unknown> {
 
 async function reset(opts?: { id?: number; mode?: string }) {
   const defaultStaff = await loadBusinessStaff();
-  await Promise.all([
-    loadBusinessOrderOptions(),
-    loadCompanyOptions(),
-    loadCustomerCompanyOptions(),
-  ]);
+  await Promise.all([loadCompanyOptions(), loadCustomerCompanyOptions()]);
   if (opts?.id && opts?.mode === 'resubmit') {
     const detail = await getInvoiceApplication(opts.id);
     formData.value = {
@@ -590,8 +642,10 @@ async function reset(opts?: { id?: number; mode?: string }) {
       businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
       lines: (detail.lines || []).map((l) => ({
         businessOrderId: l.businessOrderId,
+        sourceContractApplicationId: l.sourceContractApplicationId,
         amount: Number(l.amount),
         billingPeriod: l.billingPeriod,
+        remark: l.remark,
       })),
     };
     priorBuyerSnapshotHint.value = undefined;
@@ -642,11 +696,13 @@ async function reset(opts?: { id?: number; mode?: string }) {
     if (formData.value.lines.length === 0) {
       formData.value.lines = [{}];
     }
-    await ensureSelectedBoOptions(formData.value.lines);
-    // 用首行商务单规范产品覆盖表头展示
-    syncHeaderProductFromFirstLine();
     if (!formData.value.productType && detail.taxContent) {
       formData.value.productType = detail.taxContent;
+    }
+    if (formData.value.productType === PRODUCT_BRAND_COMMERCE) {
+      await ensureSelectedBoOptions(formData.value.lines);
+    } else if (formData.value.productType) {
+      await loadContractOptions();
     }
   } else {
     priorBuyerSnapshotHint.value = undefined;
@@ -683,7 +739,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
   onCustomerCompanyChange(formData.value.customerCompanyId);
   submitting.value = true;
   try {
-    // EXP-70：不提交 taxContent；服务端从商务单产品快照派生
+    const brand = isBrandCommerce.value;
     const payload = {
       customerCompanyId: formData.value.customerCompanyId as number,
       buyerName: formData.value.buyerName,
@@ -694,12 +750,17 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       currency: (formData.value.currency || 'CNY').toUpperCase(),
       invoiceCompany: formData.value.invoiceCompany,
       invoiceType: formData.value.invoiceType,
+      taxContent: formData.value.productType as string,
       specialInvoiceRequirement: formData.value.specialInvoiceRequirement,
       remark: formData.value.remark,
       lines: formData.value.lines.map((l) => ({
-        businessOrderId: l.businessOrderId as number,
+        businessOrderId: brand ? l.businessOrderId : undefined,
+        sourceContractApplicationId: brand
+          ? undefined
+          : l.sourceContractApplicationId,
         amount: l.amount as number,
         billingPeriod: l.billingPeriod,
+        remark: l.remark,
         invoiceCompany: formData.value.invoiceCompany,
         invoiceType: formData.value.invoiceType,
       })),
@@ -730,8 +791,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
 <template>
   <div>
     <div class="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-800">
-      仅支持「提交即启流」。无草稿。购方须从客户公司档案选择，税项只读（服务端以档案快照为准）。产品类型由商务单（合同）带出只读；同一申请须同产品。商务单仅可开余额
-      &gt; 0。
+      仅支持「提交即启流」。无草稿。请先选择产品类型：品牌商务填商务单，其他产品填已通过的销售合同。发票类型仅专票/普票。
     </div>
     <div
       v-if="priorBuyerSnapshotHint"
@@ -826,6 +886,16 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           ]"
         />
       </Form.Item>
+      <Form.Item label="产品类型" name="productType" required>
+        <Select
+          v-model:value="formData.productType"
+          class="w-full"
+          allow-clear
+          :options="productTypeOptions"
+          placeholder="请先选择产品类型"
+          @change="onProductTypeChange"
+        />
+      </Form.Item>
       <Form.Item label="发票类型" name="invoiceType" required>
         <Select
           v-model:value="formData.invoiceType"
@@ -833,13 +903,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
           :options="invoiceTypeOptions"
           placeholder="请选择发票类型"
-        />
-      </Form.Item>
-      <Form.Item label="产品类型">
-        <Input
-          :value="formData.productType"
-          disabled
-          placeholder="选择首行商务单后自动带出，不可改"
         />
       </Form.Item>
       <Form.Item label="备注" name="remark">
@@ -863,22 +926,19 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
                 删除
               </Button>
             </div>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <div class="sm:col-span-1">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div v-if="isBrandCommerce">
                 <div class="mb-1 text-xs text-gray-500">商务单</div>
                 <Select
                   v-model:value="line.businessOrderId"
                   class="w-full"
                   show-search
                   allow-clear
+                  :disabled="!formData.productType"
                   :loading="loadingBo"
-                  :options="boOptionsForLine(index)"
+                  :options="boOptionsForLine()"
                   option-filter-prop="label"
-                  :placeholder="
-                    index > 0 && formData.productType
-                      ? `同产品「${formData.productType}」且可开&gt;0`
-                      : '搜索单号（仅可开&gt;0）'
-                  "
+                  placeholder="搜索单号（仅可开&gt;0）"
                   :filter-option="false"
                   @search="onBoSearch"
                   @change="(v: any) => onBoChange(index, v)"
@@ -890,28 +950,57 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
                   "
                 />
               </div>
+              <div v-else>
+                <div class="mb-1 text-xs text-gray-500">前置合同</div>
+                <Select
+                  v-model:value="line.sourceContractApplicationId"
+                  class="w-full"
+                  show-search
+                  allow-clear
+                  :disabled="!formData.productType"
+                  :loading="loadingContract"
+                  :options="contractOptions"
+                  option-filter-prop="label"
+                  placeholder="已通过销售合同（同产品）"
+                  :filter-option="false"
+                  @search="onContractSearch"
+                  @dropdown-visible-change="
+                    (open: boolean) => {
+                      if (open && contractOptions.length === 0)
+                        loadContractOptions();
+                    }
+                  "
+                />
+              </div>
               <div>
                 <div class="mb-1 text-xs text-gray-500">开票金额</div>
                 <InputNumber
                   v-model:value="line.amount"
                   class="w-full"
-                  placeholder="不超过可开"
+                  :placeholder="isBrandCommerce ? '不超过可开' : '开票金额'"
                   :min="0.01"
-                  :max="lineAmountMax(line)"
+                  :max="isBrandCommerce ? lineAmountMax(line) : undefined"
                   :precision="2"
                 />
               </div>
               <div>
                 <div class="mb-1 text-xs text-gray-500">账期</div>
-                <Input
+                <DatePicker
                   v-model:value="line.billingPeriod"
-                  placeholder="账期 YYYY-MM"
+                  value-format="YYYY-MM-DD"
+                  class="w-full"
                 />
+              </div>
+              <div>
+                <div class="mb-1 text-xs text-gray-500">备注</div>
+                <Input v-model:value="line.remark" placeholder="明细备注" />
               </div>
             </div>
           </div>
           <Space>
-            <Button type="dashed" @click="addLine">添加行</Button>
+            <Button type="dashed" :disabled="!formData.productType" @click="addLine">
+              添加行
+            </Button>
           </Space>
         </div>
       </Form.Item>

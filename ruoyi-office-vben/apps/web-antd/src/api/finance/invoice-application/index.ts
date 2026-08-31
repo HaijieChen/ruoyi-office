@@ -11,7 +11,7 @@ export namespace FinanceInvoiceApplicationApi {
 
   export interface Line {
     id?: number;
-    businessOrderId: number;
+    businessOrderId?: number;
     /** 商务单号（标识） */
     businessOrderNo?: string;
     /** 来源合同签约申请 id（行级历史快照，空=未证实） */
@@ -30,6 +30,7 @@ export namespace FinanceInvoiceApplicationApi {
     invoiceCompany?: string;
     invoiceType?: string;
     billingPeriod?: string;
+    remark?: string;
     sort?: number;
     issueStatus?: number;
     invoiceNo?: string;
@@ -85,11 +86,8 @@ export namespace FinanceInvoiceApplicationApi {
     buyerBankAccount?: string;
     /** 特别开票要求（单据级） */
     specialInvoiceRequirement?: string;
-    /**
-     * 产品类型（兼容期可选；EXP-70 服务端忽略并从商务单派生）
-     * @deprecated 前端勿再作为用户输入提交
-     */
-    taxContent?: string;
+    /** 产品类型（字典 finance_product_type；品牌商务 = ppsw） */
+    taxContent: string;
     taxRate?: number;
     amountExcludingTax?: number;
     taxAmount?: number;
@@ -97,11 +95,13 @@ export namespace FinanceInvoiceApplicationApi {
     remark?: string;
     businessStaffUserId?: number;
     lines: Array<{
-      businessOrderId: number;
+      businessOrderId?: number;
+      sourceContractApplicationId?: number;
       amount: number;
       invoiceCompany?: string;
       invoiceType?: string;
       billingPeriod?: string;
+      remark?: string;
       sort?: number;
     }>;
     /** 发起人自选节点审批人 activityId -> userIds */

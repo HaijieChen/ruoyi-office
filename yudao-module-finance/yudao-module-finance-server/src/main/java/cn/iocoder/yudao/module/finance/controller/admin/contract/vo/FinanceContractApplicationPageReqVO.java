@@ -33,6 +33,9 @@ public class FinanceContractApplicationPageReqVO extends PageParam {
     @Schema(description = "文件类型")
     private String fileType;
 
+    @Schema(description = "产品类型")
+    private String productType;
+
     @Schema(description = "对方名称")
     private String counterpartyName;
 }

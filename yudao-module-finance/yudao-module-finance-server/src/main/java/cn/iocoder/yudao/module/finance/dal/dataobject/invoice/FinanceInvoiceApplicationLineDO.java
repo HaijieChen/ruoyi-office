@@ -25,6 +25,7 @@ public class FinanceInvoiceApplicationLineDO extends BaseDO {
     @TableId
     private Long id;
     private Long applicationId;
+    /** 商务单编号（品牌商务 ppsw 必填；其他产品可空） */
     private Long businessOrderId;
     /**
      * 来源合同签约申请 id（提交时从商务单复制）
@@ -38,9 +39,10 @@ public class FinanceInvoiceApplicationLineDO extends BaseDO {
     private String invoiceCompany;
     private String invoiceType;
     /**
-     * 业务账期 YYYY-MM
+     * 业务账期（日期 YYYY-MM-DD）
      */
     private String billingPeriod;
+    private String remark;
     /**
      * 行办票状态：0 未开 / 1 已开
      */

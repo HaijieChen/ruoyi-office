@@ -35,10 +35,16 @@ const fields = computed(() => [
 
 const lineRows = computed(() =>
   (props.detail?.lines || []).map((line: any) => [
-    line.businessOrderNo || (line.businessOrderId != null ? `#${line.businessOrderId}` : '-'),
+    line.businessOrderNo
+      || (line.businessOrderId != null ? `#${line.businessOrderId}` : '')
+      || line.contractApplicationNo
+      || (line.sourceContractApplicationId != null
+        ? `#${line.sourceContractApplicationId}`
+        : '-'),
     line.productType || line.currentProductType || '-',
     line.amount != null ? `¥${Number(line.amount).toFixed(2)}` : '-',
     line.billingPeriod || '-',
+    line.remark || '-',
     line.invoiceNo || '-',
   ]),
 );
@@ -49,7 +55,7 @@ const lineRows = computed(() =>
     slip-id="invoicePrintVoucher"
     title="开票申请单"
     :fields="fields"
-    :line-columns="['商务单号', '产品', '开票金额', '账期', '票号']"
+    :line-columns="['来源单号', '产品', '开票金额', '账期', '备注', '票号']"
     :line-rows="lineRows"
     :footer="
       detail?.totalAmount != null

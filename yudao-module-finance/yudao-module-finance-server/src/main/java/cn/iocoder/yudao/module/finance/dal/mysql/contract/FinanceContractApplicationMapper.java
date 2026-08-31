@@ -19,6 +19,7 @@ public interface FinanceContractApplicationMapper extends BaseMapperX<FinanceCon
                 .eqIfPresent(FinanceContractApplicationDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
                 .eqIfPresent(FinanceContractApplicationDO::getCurrency, reqVO.getCurrency())
                 .eqIfPresent(FinanceContractApplicationDO::getFileType, reqVO.getFileType())
+                .eqIfPresent(FinanceContractApplicationDO::getProductType, reqVO.getProductType())
                 .likeIfPresent(FinanceContractApplicationDO::getCounterpartyName, reqVO.getCounterpartyName())
                 .orderByDesc(FinanceContractApplicationDO::getId));
     }

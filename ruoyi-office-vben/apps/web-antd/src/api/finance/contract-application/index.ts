@@ -85,6 +85,7 @@ export namespace FinanceContractApplicationApi {
     applicantUserId?: number;
     signCompany?: string;
     fileType?: string;
+    productType?: string;
     counterpartyName?: string;
   }
 }

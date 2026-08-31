@@ -8,10 +8,12 @@ import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationFileMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationMapper;
@@ -23,6 +25,7 @@ import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -30,6 +33,8 @@ import java.util.List;
 
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_BUSINESS_ORDER_PRODUCT_MISSING;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CONTRACT_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CONTRACT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_CUSTOMER_COMPANY_DISABLED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_OCCUPY_CONCURRENT;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_OCCUPY_EXCEED;
@@ -49,6 +54,7 @@ class FinanceInvoiceApplicationServiceImplTest {
     private FinanceInvoiceApplicationLineMapper lineMapper;
     private FinanceInvoiceApplicationFileMapper fileMapper;
     private FinanceBusinessOrderMapper businessOrderMapper;
+    private FinanceContractApplicationMapper contractApplicationMapper;
     private FinanceInvoiceApplicationNoRedisDAO applicationNoRedisDAO;
     private FinanceBpmProcessInstanceApi processInstanceApi;
     private FinanceCustomerCompanyService customerCompanyService;
@@ -61,6 +67,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         lineMapper = mock(FinanceInvoiceApplicationLineMapper.class);
         fileMapper = mock(FinanceInvoiceApplicationFileMapper.class);
         businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
+        contractApplicationMapper = mock(FinanceContractApplicationMapper.class);
         applicationNoRedisDAO = mock(FinanceInvoiceApplicationNoRedisDAO.class);
         processInstanceApi = mock(FinanceBpmProcessInstanceApi.class);
         customerCompanyService = mock(FinanceCustomerCompanyService.class);
@@ -73,6 +80,14 @@ class FinanceInvoiceApplicationServiceImplTest {
         when(dictDataApi.validateDictDataList(anyString(), anyCollection())).thenReturn(CommonResult.success(true));
         service = new FinanceInvoiceApplicationServiceImpl(applicationMapper, lineMapper, fileMapper, businessOrderMapper,
                 applicationNoRedisDAO, processInstanceApi, customerCompanyService, entityCompanyResolver, dictDataApi);
+        cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport businessStaffSupport =
+                mock(cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport.class);
+        when(businessStaffSupport.resolve(any(), any())).thenAnswer(invocation -> {
+            Long requested = invocation.getArgument(1);
+            return requested != null ? requested : invocation.getArgument(0);
+        });
+        ReflectionTestUtils.setField(service, "businessStaffSupport", businessStaffSupport);
+        ReflectionTestUtils.setField(service, "contractApplicationMapper", contractApplicationMapper);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("INV-20260729-1");
         when(customerCompanyService.getEnabledCustomerCompany(anyLong())).thenReturn(
@@ -114,27 +129,25 @@ class FinanceInvoiceApplicationServiceImplTest {
     }
 
     @Test
-    void createAndStartShouldIgnoreClientTaxContentAndDeriveFromBusinessOrder() {
+    void createAndStartShouldKeepHeaderProductAndOccupyBusinessOrderForPpsw() {
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
-                order(10L, "100.00", "0.00", 50L, "软件")));
-        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("10.00")), any(), eq("软件"))).thenReturn(1);
+                order(10L, "100.00", "0.00", 50L, "ppsw")));
+        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("10.00")), any(), eq("ppsw"))).thenReturn(1);
         when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn(CommonResult.success("proc-1"));
 
-        FinanceInvoiceApplicationCreateAndStartReqVO req = req(line(10L, "10.00"));
-        req.setTaxContent("客户端篡改产品");
-
-        service.createAndStart(req, 200L);
+        service.createAndStart(req(line(10L, "10.00")), 200L);
 
         ArgumentCaptor<FinanceInvoiceApplicationDO> appCaptor = ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
         verify(applicationMapper).insert(appCaptor.capture());
-        assertEquals("软件", appCaptor.getValue().getTaxContent());
+        assertEquals("ppsw", appCaptor.getValue().getTaxContent());
 
         ArgumentCaptor<FinanceInvoiceApplicationLineDO> lineCaptor =
                 ArgumentCaptor.forClass(FinanceInvoiceApplicationLineDO.class);
         verify(lineMapper).insert(lineCaptor.capture());
-        assertEquals("软件", lineCaptor.getValue().getProductTypeSnapshot());
+        assertEquals("ppsw", lineCaptor.getValue().getProductTypeSnapshot());
         assertEquals(50L, lineCaptor.getValue().getSourceContractApplicationId());
+        assertEquals(10L, lineCaptor.getValue().getBusinessOrderId());
     }
 
     @Test
@@ -176,8 +189,8 @@ class FinanceInvoiceApplicationServiceImplTest {
                 .settlementAmount(new BigDecimal("100.00"))
                 .invoicedOccupiedAmount(BigDecimal.ZERO)
                 .contractApplicationId(null)
-                .productTypeSnapshot("软件")
-                .productName("软件")
+                .productTypeSnapshot("ppsw")
+                .productName("ppsw")
                 .build();
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(noContract));
 
@@ -187,9 +200,49 @@ class FinanceInvoiceApplicationServiceImplTest {
     }
 
     @Test
+    void createAndStartShouldRequireSalesContractForNonBrandProduct() {
+        FinanceInvoiceApplicationCreateAndStartReqVO reqVO = req();
+        reqVO.setTaxContent("软件");
+        FinanceInvoiceApplicationCreateAndStartReqVO.Line line =
+                new FinanceInvoiceApplicationCreateAndStartReqVO.Line();
+        line.setAmount(new BigDecimal("10.00"));
+        reqVO.setLines(List.of(line));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(reqVO, 200L));
+        assertEquals(INVOICE_APPLICATION_CONTRACT_REQUIRED.getCode(), ex.getCode());
+        verify(applicationMapper, never()).insert(any(FinanceInvoiceApplicationDO.class));
+        verify(businessOrderMapper, never()).increaseInvoicedOccupiedAmount(anyLong(), any(), any(), anyString());
+    }
+
+    @Test
+    void createAndStartShouldRejectNonSalesOrUnapprovedContract() {
+        FinanceInvoiceApplicationCreateAndStartReqVO reqVO = req();
+        reqVO.setTaxContent("软件");
+        FinanceInvoiceApplicationCreateAndStartReqVO.Line line =
+                new FinanceInvoiceApplicationCreateAndStartReqVO.Line();
+        line.setAmount(new BigDecimal("10.00"));
+        line.setSourceContractApplicationId(88L);
+        reqVO.setLines(List.of(line));
+        when(contractApplicationMapper.selectBatchIds(any())).thenReturn(List.of(
+                FinanceContractApplicationDO.builder()
+                        .id(88L)
+                        .fileType("采购合同")
+                        .productType("软件")
+                        .approvalStatus("APPROVED")
+                        .voided(Boolean.FALSE)
+                        .build()));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createAndStart(reqVO, 200L));
+        assertEquals(INVOICE_APPLICATION_CONTRACT_INVALID.getCode(), ex.getCode());
+        verify(applicationMapper, never()).insert(any(FinanceInvoiceApplicationDO.class));
+    }
+
+    @Test
     void createAndStartShouldRejectMixedProductsAcrossBusinessOrders() {
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
-                order(10L, "200.00", "0.00", 50L, "软件"),
+                order(10L, "200.00", "0.00", 50L, "ppsw"),
                 order(11L, "100.00", "0.00", 51L, "硬件")));
 
         ServiceException ex = assertThrows(ServiceException.class,
@@ -203,10 +256,10 @@ class FinanceInvoiceApplicationServiceImplTest {
     @Test
     void createAndStartShouldOccupyAndWriteProcessInstanceId() {
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
-                order(10L, "200.00", "20.00", 50L, "软件"),
-                order(11L, "100.00", "0.00", 50L, "软件")));
-        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("80.00")), any(), eq("软件"))).thenReturn(1);
-        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(11L), eq(new BigDecimal("30.00")), any(), eq("软件"))).thenReturn(1);
+                order(10L, "200.00", "20.00", 50L, "ppsw"),
+                order(11L, "100.00", "0.00", 50L, "ppsw")));
+        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("80.00")), any(), eq("ppsw"))).thenReturn(1);
+        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(11L), eq(new BigDecimal("30.00")), any(), eq("ppsw"))).thenReturn(1);
         when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn(CommonResult.success("proc-xyz"));
 
@@ -233,12 +286,12 @@ class FinanceInvoiceApplicationServiceImplTest {
         assertEquals(50L, inserted.getCustomerCompanyId());
         assertEquals("北京市朝阳区 010-12345678", inserted.getBuyerAddressPhone());
         assertEquals("开户行 622200001111", inserted.getBuyerBankAccount());
-        assertEquals("软件", inserted.getTaxContent());
+        assertEquals("ppsw", inserted.getTaxContent());
 
         verify(lineMapper, times(3)).insert(any(FinanceInvoiceApplicationLineDO.class));
         // 同 BO 明细汇总后一次占用
-        verify(businessOrderMapper).increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("80.00")), any(), eq("软件"));
-        verify(businessOrderMapper).increaseInvoicedOccupiedAmount(eq(11L), eq(new BigDecimal("30.00")), any(), eq("软件"));
+        verify(businessOrderMapper).increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("80.00")), any(), eq("ppsw"));
+        verify(businessOrderMapper).increaseInvoicedOccupiedAmount(eq(11L), eq(new BigDecimal("30.00")), any(), eq("ppsw"));
 
         ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCaptor =
                 ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
@@ -250,7 +303,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         assertEquals("购方A", bpmReq.getVariables().get("buyerName"));
         assertEquals(200L, bpmReq.getVariables().get("applicantUserId"));
         assertEquals("INV-20260729-1", bpmReq.getVariables().get("applicationNo"));
-        assertEquals("软件", bpmReq.getVariables().get("taxContent"));
+        assertEquals("ppsw", bpmReq.getVariables().get("taxContent"));
 
         ArgumentCaptor<FinanceInvoiceApplicationDO> updateCaptor =
                 ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
@@ -264,7 +317,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
                 order(10L, "100.00", "0.00")));
         // 预检通过，CAS 返回 0（并发第二单 / 合同产品被换）
-        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("60.00")), any(), eq("软件"))).thenReturn(0);
+        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("60.00")), any(), eq("ppsw"))).thenReturn(0);
 
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.createAndStart(req(line(10L, "60.00")), 200L));
@@ -272,7 +325,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         assertEquals(INVOICE_APPLICATION_OCCUPY_CONCURRENT.getCode(), ex.getCode());
         verify(applicationMapper).insert(any(FinanceInvoiceApplicationDO.class));
         verify(lineMapper).insert(any(FinanceInvoiceApplicationLineDO.class));
-        verify(businessOrderMapper).increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("60.00")), any(), eq("软件"));
+        verify(businessOrderMapper).increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("60.00")), any(), eq("ppsw"));
         verifyNoInteractions(processInstanceApi);
         verify(applicationMapper, never()).updateById(any(FinanceInvoiceApplicationDO.class));
     }
@@ -288,7 +341,7 @@ class FinanceInvoiceApplicationServiceImplTest {
                         .id(1L).applicationId(100L).businessOrderId(10L)
                         .amount(new BigDecimal("10.00")).build()));
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
-                order(10L, "100.00", "0.00", 50L, "软件")));
+                order(10L, "100.00", "0.00", 50L, "ppsw")));
         when(businessOrderMapper.selectById(10L)).thenReturn(null);
 
         FinanceInvoiceApplicationResubmitReqVO resubmitReq = new FinanceInvoiceApplicationResubmitReqVO();
@@ -296,7 +349,8 @@ class FinanceInvoiceApplicationServiceImplTest {
         resubmitReq.setCustomerCompanyId(50L);
         resubmitReq.setInvoiceCompanyDeptId(20L);
         resubmitReq.setCurrency("CNY");
-        resubmitReq.setTaxContent("软件");
+        resubmitReq.setInvoiceType("专票");
+        resubmitReq.setTaxContent("ppsw");
         resubmitReq.setLines(List.of(line(10L, "10.00")));
 
         ServiceException ex = assertThrows(ServiceException.class,
@@ -309,16 +363,16 @@ class FinanceInvoiceApplicationServiceImplTest {
     void createAndStartOccupyCasMustPassExpectedContractAndProduct() {
         // #1：占用 CAS 必须携带读快照时的合同+产品期望值
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(
-                order(10L, "100.00", "0.00", 77L, "软件")));
+                order(10L, "100.00", "0.00", 77L, "ppsw")));
         when(businessOrderMapper.increaseInvoicedOccupiedAmount(
-                eq(10L), eq(new BigDecimal("10.00")), eq(77L), eq("软件"))).thenReturn(1);
+                eq(10L), eq(new BigDecimal("10.00")), eq(77L), eq("ppsw"))).thenReturn(1);
         when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn(CommonResult.success("proc-cas"));
 
         service.createAndStart(req(line(10L, "10.00")), 200L);
 
         verify(businessOrderMapper).increaseInvoicedOccupiedAmount(
-                eq(10L), eq(new BigDecimal("10.00")), eq(77L), eq("软件"));
+                eq(10L), eq(new BigDecimal("10.00")), eq(77L), eq("ppsw"));
     }
 
     @Test
@@ -356,7 +410,7 @@ class FinanceInvoiceApplicationServiceImplTest {
                         .amount(new BigDecimal("30.00")).build()));
         when(businessOrderMapper.selectById(10L)).thenReturn(order(10L, "200.00", "0.00"));
         when(businessOrderMapper.selectListByIds(any())).thenReturn(List.of(order(10L, "200.00", "0.00")));
-        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("30.00")), any(), eq("软件"))).thenReturn(1);
+        when(businessOrderMapper.increaseInvoicedOccupiedAmount(eq(10L), eq(new BigDecimal("30.00")), any(), eq("ppsw"))).thenReturn(1);
         when(processInstanceApi.createProcessInstance(eq(200L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn(CommonResult.success("proc-resubmit"));
 
@@ -382,7 +436,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         resubmitReq.setInvoiceCompany("开票公司");
         resubmitReq.setCurrency("CNY");
         resubmitReq.setInvoiceType("普票");
-        resubmitReq.setTaxContent("软件");
+        resubmitReq.setTaxContent("ppsw");
         resubmitReq.setLines(List.of(line(10L, "30.00")));
 
         service.resubmit(100L, resubmitReq, 200L);
@@ -408,7 +462,8 @@ class FinanceInvoiceApplicationServiceImplTest {
         resubmitReq.setCustomerCompanyId(88L);
         resubmitReq.setInvoiceCompanyDeptId(20L);
         resubmitReq.setCurrency("CNY");
-        resubmitReq.setTaxContent("软件");
+        resubmitReq.setInvoiceType("专票");
+        resubmitReq.setTaxContent("ppsw");
         resubmitReq.setLines(List.of(line(10L, "10.00")));
 
         ServiceException ex = assertThrows(ServiceException.class,
@@ -428,7 +483,7 @@ class FinanceInvoiceApplicationServiceImplTest {
         reqVO.setInvoiceCompany("开票公司");
         reqVO.setCurrency("CNY");
         reqVO.setInvoiceType("专票");
-        reqVO.setTaxContent("软件");
+        reqVO.setTaxContent("ppsw");
         reqVO.setLines(List.of(lines));
         return reqVO;
     }
@@ -442,7 +497,7 @@ class FinanceInvoiceApplicationServiceImplTest {
     }
 
     private static FinanceBusinessOrderDO order(Long id, String settlement, String occupied) {
-        return order(id, settlement, occupied, 50L, "软件");
+        return order(id, settlement, occupied, 50L, "ppsw");
     }
 
     private static FinanceBusinessOrderDO order(Long id, String settlement, String occupied,

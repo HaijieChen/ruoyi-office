@@ -12,11 +12,13 @@ import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoic
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationUpdateIssueProgressReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationFileMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationMapper;
@@ -36,12 +38,13 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -66,6 +69,10 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
      * 明细行「已开票」状态值（一期一行一票；与表头 PARTIAL=1 数值相同，语义不同）
      */
     public static final int LINE_ISSUE_STATUS_ISSUED = 1;
+    public static final String PRODUCT_BRAND_COMMERCE = "ppsw";
+    private static final String SALES_FILE_TYPE = "销售合同";
+    private static final String DICT_PRODUCT_TYPE = "finance_product_type";
+    private static final Set<String> ALLOWED_INVOICE_TYPES = Set.of("专票", "普票");
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
 
@@ -80,6 +87,8 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     private final DictDataApi dictDataApi;
     @Resource
     private FinanceBusinessStaffSupport businessStaffSupport;
+    @Resource
+    private FinanceContractApplicationMapper contractApplicationMapper;
 
     public FinanceInvoiceApplicationServiceImpl(FinanceInvoiceApplicationMapper applicationMapper,
                                                 FinanceInvoiceApplicationLineMapper lineMapper,
@@ -105,44 +114,55 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createAndStart(FinanceInvoiceApplicationCreateAndStartReqVO reqVO, Long applicantUserId) {
-        // EXP-70：忽略客户端 taxContent，由商务单产品快照派生
         List<FinanceInvoiceApplicationCreateAndStartReqVO.Line> lines = reqVO.getLines();
         if (CollUtil.isEmpty(lines)) {
             throw exception(INVOICE_APPLICATION_LINES_EMPTY);
         }
+        String productType = requireProductType(reqVO.getTaxContent());
+        requireInvoiceType(reqVO.getInvoiceType());
+        boolean brandCommerce = isBrandCommerce(productType);
 
-        // 1. 校验明细金额 + 汇总占用 + 校验商务单存在
         Map<Long, BigDecimal> occupyByBo = new LinkedHashMap<>();
         BigDecimal totalAmount = ZERO;
         for (FinanceInvoiceApplicationCreateAndStartReqVO.Line line : lines) {
             if (line.getAmount() == null || line.getAmount().compareTo(ZERO) <= 0) {
                 throw exception(INVOICE_APPLICATION_AMOUNT_INVALID);
             }
-            if (line.getBusinessOrderId() == null) {
-                throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
-            }
             totalAmount = totalAmount.add(line.getAmount());
-            occupyByBo.merge(line.getBusinessOrderId(), line.getAmount(), BigDecimal::add);
+            if (brandCommerce) {
+                if (line.getBusinessOrderId() == null) {
+                    throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
+                }
+                occupyByBo.merge(line.getBusinessOrderId(), line.getAmount(), BigDecimal::add);
+            } else if (line.getSourceContractApplicationId() == null) {
+                throw exception(INVOICE_APPLICATION_CONTRACT_REQUIRED);
+            }
         }
 
         String currency = FinanceCurrencySupport.requireSupported(reqVO.getCurrency());
-        Map<Long, FinanceBusinessOrderDO> orderMap = loadBusinessOrders(occupyByBo.keySet());
-        for (Map.Entry<Long, BigDecimal> entry : occupyByBo.entrySet()) {
-            FinanceBusinessOrderDO order = orderMap.get(entry.getKey());
-            if (order == null) {
-                throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
+        Map<Long, FinanceBusinessOrderDO> orderMap = Map.of();
+        if (brandCommerce) {
+            orderMap = loadBusinessOrders(occupyByBo.keySet());
+            for (Map.Entry<Long, BigDecimal> entry : occupyByBo.entrySet()) {
+                FinanceBusinessOrderDO order = orderMap.get(entry.getKey());
+                if (order == null) {
+                    throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
+                }
+                BigDecimal occupied = defaultZero(order.getInvoicedOccupiedAmount());
+                BigDecimal settlement = defaultZero(order.getSettlementAmount());
+                if (settlement.subtract(occupied).compareTo(entry.getValue()) < 0) {
+                    throw exception(INVOICE_APPLICATION_OCCUPY_EXCEED);
+                }
+                FinanceCurrencySupport.assertSameIfBothPresent(order.getCurrency(), currency);
+                String boProduct = resolveBusinessOrderProductType(order);
+                if (!productType.equals(boProduct)) {
+                    throw exception(INVOICE_APPLICATION_PRODUCT_MIXED);
+                }
             }
-            BigDecimal occupied = defaultZero(order.getInvoicedOccupiedAmount());
-            BigDecimal settlement = defaultZero(order.getSettlementAmount());
-            if (settlement.subtract(occupied).compareTo(entry.getValue()) < 0) {
-                throw exception(INVOICE_APPLICATION_OCCUPY_EXCEED);
-            }
-            // EXP-73 P2：与商务单同币种
-            FinanceCurrencySupport.assertSameIfBothPresent(order.getCurrency(), currency);
+        } else {
+            requireSalesContracts(lines, productType);
         }
-
-        // 1a. 产品一致性：全部商务单同一产品；表头 taxContent 服务端汇总
-        String commonProductType = resolveCommonProductType(orderMap.values());
+        String commonProductType = productType;
 
         // 1b. 客户公司：服务端权威快照
         BuyerSnapshot buyerSnapshot = resolveBuyerSnapshot(reqVO.getCustomerCompanyId());
@@ -182,21 +202,28 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .build();
         applicationMapper.insert(application);
 
-        // 3. 写明细（提交快照：合同 + 产品）
         int sort = 0;
         for (FinanceInvoiceApplicationCreateAndStartReqVO.Line line : lines) {
             int lineSort = line.getSort() != null ? line.getSort() : sort;
-            FinanceBusinessOrderDO order = orderMap.get(line.getBusinessOrderId());
-            String lineProduct = resolveBusinessOrderProductType(order);
+            Long sourceContractId;
+            Long businessOrderId = null;
+            if (brandCommerce) {
+                FinanceBusinessOrderDO order = orderMap.get(line.getBusinessOrderId());
+                businessOrderId = line.getBusinessOrderId();
+                sourceContractId = order.getContractApplicationId();
+            } else {
+                sourceContractId = line.getSourceContractApplicationId();
+            }
             FinanceInvoiceApplicationLineDO lineDO = FinanceInvoiceApplicationLineDO.builder()
                     .applicationId(application.getId())
-                    .businessOrderId(line.getBusinessOrderId())
-                    .sourceContractApplicationId(order.getContractApplicationId())
-                    .productTypeSnapshot(lineProduct)
+                    .businessOrderId(businessOrderId)
+                    .sourceContractApplicationId(sourceContractId)
+                    .productTypeSnapshot(commonProductType)
                     .amount(line.getAmount())
                     .invoiceCompany(invoiceCo.name())
                     .invoiceType(line.getInvoiceType() != null ? line.getInvoiceType() : reqVO.getInvoiceType())
                     .billingPeriod(line.getBillingPeriod())
+                    .remark(line.getRemark())
                     .issueStatus(FinanceInvoiceIssueStatusEnum.NONE.getStatus())
                     .sort(lineSort)
                     .build();
@@ -204,8 +231,9 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             sort++;
         }
 
-        // 4. 按 BO 汇总 CAS 占用（带期望合同+产品，防换合同 TOCTOU）
-        increaseOccupy(occupyByBo, orderMap);
+        if (brandCommerce) {
+            increaseOccupy(occupyByBo, orderMap);
+        }
 
         // 5. 启动 BPM；失败则整单回滚（含占用）
         Map<String, Object> variables = buildProcessVariables(application);
@@ -296,12 +324,13 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 || Boolean.TRUE.equals(application.getVoided())) {
             throw exception(INVOICE_APPLICATION_STATUS_INVALID);
         }
-        // EXP-70：忽略客户端 taxContent
-
         List<FinanceInvoiceApplicationResubmitReqVO.Line> lines = reqVO.getLines();
         if (CollUtil.isEmpty(lines)) {
             throw exception(INVOICE_APPLICATION_LINES_EMPTY);
         }
+        String productType = requireProductType(reqVO.getTaxContent());
+        requireInvoiceType(reqVO.getInvoiceType());
+        boolean brandCommerce = isBrandCommerce(productType);
 
         Map<Long, BigDecimal> newOccupyByBo = new LinkedHashMap<>();
         BigDecimal totalAmount = ZERO;
@@ -309,39 +338,49 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             if (line.getAmount() == null || line.getAmount().compareTo(ZERO) <= 0) {
                 throw exception(INVOICE_APPLICATION_AMOUNT_INVALID);
             }
-            if (line.getBusinessOrderId() == null) {
-                throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
-            }
             totalAmount = totalAmount.add(line.getAmount());
-            newOccupyByBo.merge(line.getBusinessOrderId(), line.getAmount(), BigDecimal::add);
+            if (brandCommerce) {
+                if (line.getBusinessOrderId() == null) {
+                    throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
+                }
+                newOccupyByBo.merge(line.getBusinessOrderId(), line.getAmount(), BigDecimal::add);
+            } else if (line.getSourceContractApplicationId() == null) {
+                throw exception(INVOICE_APPLICATION_CONTRACT_REQUIRED);
+            }
         }
 
         // 1. 释放当前明细占用（驳回时 onApprovalOutcome 已释占；此处再调用对 0 占用幂等安全：按当前 lines 汇总 CAS）
         // 驳回后占用应为 0；为防漏回调，按现有 lines 再尝试释占（若已 0 则 CAS 失败需区分）
         releaseAllOccupyForApplicationIfAny(appId);
 
-        // 2. 校验新占用 + 产品一致性 + 币种
         String currency = FinanceCurrencySupport.requireSupported(reqVO.getCurrency());
-        Map<Long, FinanceBusinessOrderDO> orderMap = loadBusinessOrders(newOccupyByBo.keySet());
-        for (Map.Entry<Long, BigDecimal> entry : newOccupyByBo.entrySet()) {
-            FinanceBusinessOrderDO order = orderMap.get(entry.getKey());
-            if (order == null) {
-                throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
+        Map<Long, FinanceBusinessOrderDO> orderMap = Map.of();
+        if (brandCommerce) {
+            orderMap = loadBusinessOrders(newOccupyByBo.keySet());
+            for (Map.Entry<Long, BigDecimal> entry : newOccupyByBo.entrySet()) {
+                FinanceBusinessOrderDO order = orderMap.get(entry.getKey());
+                if (order == null) {
+                    throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
+                }
+                order = businessOrderMapper.selectById(entry.getKey());
+                if (order == null) {
+                    throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
+                }
+                orderMap.put(entry.getKey(), order);
+                BigDecimal occupied = defaultZero(order.getInvoicedOccupiedAmount());
+                BigDecimal settlement = defaultZero(order.getSettlementAmount());
+                if (settlement.subtract(occupied).compareTo(entry.getValue()) < 0) {
+                    throw exception(INVOICE_APPLICATION_OCCUPY_EXCEED);
+                }
+                FinanceCurrencySupport.assertSameIfBothPresent(order.getCurrency(), currency);
+                if (!productType.equals(resolveBusinessOrderProductType(order))) {
+                    throw exception(INVOICE_APPLICATION_PRODUCT_MIXED);
+                }
             }
-            // 重新读占用（可能刚释放）；P2 #4：二次读取必须判空，避免 NPE/500
-            order = businessOrderMapper.selectById(entry.getKey());
-            if (order == null) {
-                throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
-            }
-            orderMap.put(entry.getKey(), order);
-            BigDecimal occupied = defaultZero(order.getInvoicedOccupiedAmount());
-            BigDecimal settlement = defaultZero(order.getSettlementAmount());
-            if (settlement.subtract(occupied).compareTo(entry.getValue()) < 0) {
-                throw exception(INVOICE_APPLICATION_OCCUPY_EXCEED);
-            }
-            FinanceCurrencySupport.assertSameIfBothPresent(order.getCurrency(), currency);
+        } else {
+            requireSalesContracts(lines, productType);
         }
-        String commonProductType = resolveCommonProductType(orderMap.values());
+        String commonProductType = productType;
 
         FinanceEntityCompanyResolver.ResolvedCompany invoiceCo =
                 entityCompanyResolver.requireByDeptId(reqVO.getInvoiceCompanyDeptId());
@@ -351,17 +390,25 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         int sort = 0;
         for (FinanceInvoiceApplicationResubmitReqVO.Line line : lines) {
             int lineSort = line.getSort() != null ? line.getSort() : sort;
-            FinanceBusinessOrderDO order = orderMap.get(line.getBusinessOrderId());
-            String lineProduct = resolveBusinessOrderProductType(order);
+            Long sourceContractId;
+            Long businessOrderId = null;
+            if (brandCommerce) {
+                FinanceBusinessOrderDO order = orderMap.get(line.getBusinessOrderId());
+                businessOrderId = line.getBusinessOrderId();
+                sourceContractId = order.getContractApplicationId();
+            } else {
+                sourceContractId = line.getSourceContractApplicationId();
+            }
             FinanceInvoiceApplicationLineDO lineDO = FinanceInvoiceApplicationLineDO.builder()
                     .applicationId(appId)
-                    .businessOrderId(line.getBusinessOrderId())
-                    .sourceContractApplicationId(order.getContractApplicationId())
-                    .productTypeSnapshot(lineProduct)
+                    .businessOrderId(businessOrderId)
+                    .sourceContractApplicationId(sourceContractId)
+                    .productTypeSnapshot(commonProductType)
                     .amount(line.getAmount())
                     .invoiceCompany(invoiceCo.name())
                     .invoiceType(line.getInvoiceType() != null ? line.getInvoiceType() : reqVO.getInvoiceType())
                     .billingPeriod(line.getBillingPeriod())
+                    .remark(line.getRemark())
                     .issueStatus(FinanceInvoiceIssueStatusEnum.NONE.getStatus())
                     .sort(lineSort)
                     .build();
@@ -395,8 +442,9 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .set("remark", reqVO.getRemark())
                 .set("voided", Boolean.FALSE));
 
-        // 5. 再占（带期望合同+产品）
-        increaseOccupy(newOccupyByBo, orderMap);
+        if (brandCommerce) {
+            increaseOccupy(newOccupyByBo, orderMap);
+        }
 
         // 6. 新流程实例（保留旧 processInstanceId 历史审计于 BPM；仅覆盖最新 id）
         FinanceInvoiceApplicationDO refreshed = getApplication(appId);
@@ -672,27 +720,57 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         return order.getProductTypeSnapshot().trim();
     }
 
-    /**
-     * 校验全部商务单产品一致并返回共同产品；客户端 taxContent 不参与决策。
-     */
-    private String resolveCommonProductType(java.util.Collection<FinanceBusinessOrderDO> orders) {
-        if (CollUtil.isEmpty(orders)) {
-            throw exception(INVOICE_APPLICATION_BUSINESS_ORDER_NOT_EXISTS);
-        }
-        String common = null;
-        for (FinanceBusinessOrderDO order : orders) {
-            String product = resolveBusinessOrderProductType(order);
-            if (common == null) {
-                common = product;
-            } else if (!common.equals(product)) {
-                throw exception(INVOICE_APPLICATION_PRODUCT_MIXED);
-            }
-        }
-        return common;
-    }
-
     private static BigDecimal defaultZero(BigDecimal value) {
         return value == null ? ZERO : value;
+    }
+
+    private static boolean isBrandCommerce(String productType) {
+        return PRODUCT_BRAND_COMMERCE.equals(productType);
+    }
+
+    private String requireProductType(String productType) {
+        if (StrUtil.isBlank(productType)) {
+            throw exception(INVOICE_APPLICATION_PRODUCT_REQUIRED);
+        }
+        String trimmed = productType.trim();
+        try {
+            dictDataApi.validateDictDataList(DICT_PRODUCT_TYPE, List.of(trimmed)).checkError();
+        } catch (Exception ex) {
+            throw exception(INVOICE_APPLICATION_PRODUCT_TYPE_INVALID);
+        }
+        return trimmed;
+    }
+
+    private static void requireInvoiceType(String invoiceType) {
+        if (StrUtil.isBlank(invoiceType) || !ALLOWED_INVOICE_TYPES.contains(invoiceType.trim())) {
+            throw exception(INVOICE_APPLICATION_INVOICE_TYPE_INVALID);
+        }
+    }
+
+    private void requireSalesContracts(List<? extends FinanceInvoiceApplicationCreateAndStartReqVO.Line> lines,
+                                       String productType) {
+        List<Long> ids = new ArrayList<>();
+        for (FinanceInvoiceApplicationCreateAndStartReqVO.Line line : lines) {
+            if (line.getSourceContractApplicationId() != null) {
+                ids.add(line.getSourceContractApplicationId());
+            }
+        }
+        if (ids.isEmpty()) {
+            throw exception(INVOICE_APPLICATION_CONTRACT_REQUIRED);
+        }
+        Map<Long, FinanceContractApplicationDO> byId = contractApplicationMapper.selectBatchIds(ids).stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(FinanceContractApplicationDO::getId, Function.identity(), (a, b) -> a));
+        for (FinanceInvoiceApplicationCreateAndStartReqVO.Line line : lines) {
+            FinanceContractApplicationDO contract = byId.get(line.getSourceContractApplicationId());
+            if (contract == null
+                    || Boolean.TRUE.equals(contract.getVoided())
+                    || !"APPROVED".equals(contract.getApprovalStatus())
+                    || !SALES_FILE_TYPE.equals(contract.getFileType())
+                    || !productType.equals(StrUtil.trim(contract.getProductType()))) {
+                throw exception(INVOICE_APPLICATION_CONTRACT_INVALID);
+            }
+        }
     }
 
 }

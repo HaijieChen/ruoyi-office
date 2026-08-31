@@ -130,6 +130,13 @@ const lineColumns = [
     width: 120,
   },
   {
+    title: '备注',
+    dataIndex: 'remark',
+    key: 'remark',
+    ellipsis: true,
+    customRender: ({ text }: { text?: string }) => text || '-',
+  },
+  {
     title: '主体公司',
     dataIndex: 'invoiceCompany',
     key: 'invoiceCompany',
