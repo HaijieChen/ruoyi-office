@@ -29,6 +29,8 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
     import('#/views/finance/expense-reimbursement/modules/form-body.vue'),
   oa_expense_no_invoice: () =>
     import('#/views/finance/expense-reimbursement/modules/no-invoice-form-body.vue'),
+  oa_seal_apply_bill: () =>
+    import('#/views/oa/seal/sealapply/modules/form-body.vue'),
 };
 
 /**
@@ -36,9 +38,7 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
  * path 与后端 BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath 对齐。
  * openCreate=1 打开创建表单（各业务页须支持）。
  */
-export const CREATE_SHELL_REDIRECT_REGISTRY: Record<string, string> = {
-  oa_seal_apply_bill: '/oa/seal/seal-apply-info',
-};
+export const CREATE_SHELL_REDIRECT_REGISTRY: Record<string, string> = {};
 
 export function resolveCreateShellEmbedLoader(key?: null | string) {
   if (!key) return undefined;

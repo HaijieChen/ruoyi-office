@@ -3,7 +3,7 @@ import type { VbenFormSchema } from '#/adapter/form';
 import type { SealApplyBillApi } from '#/api/oa/seal/sealapply';
 
 import { nextTick, onMounted, ref, shallowRef } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { Loading } from '@vben/common-ui';
 import {
@@ -42,7 +42,6 @@ const props = defineProps<{
 }>();
 
 const route = useRoute();
-const router = useRouter();
 const userStore = useUserStore();
 const canReturnEdit = ref(false);
 
@@ -290,12 +289,7 @@ defineExpose({
   handleSaveAndSubmit,
 });
 
-onMounted(async () => {
-  if (route.query.openCreate != null) {
-    const nextQuery = { ...route.query };
-    delete nextQuery.openCreate;
-    await router.replace({ path: route.path, query: nextQuery });
-  }
+onMounted(() => {
   initFormSchema();
   loadData();
 });

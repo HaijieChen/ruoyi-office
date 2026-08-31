@@ -110,8 +110,7 @@ class BpmProcessStartEligibilityServiceTest {
         assertNull(BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("finance_salary_payment_apply"));
         assertNull(BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("finance_tax_payment_apply"));
         assertNull(BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("finance_payment_apply"));
-        assertEquals("/oa/seal/seal-apply-info",
-                BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("oa_seal_apply_bill"));
+        assertNull(BpmEmbedProcessStartPermissionRegistry.catalogRedirectPath("oa_seal_apply_bill"));
         assertTrue(BpmEmbedProcessStartPermissionRegistry.isCreateShellEmbedAllowed("finance_salary_payment_apply"));
         assertTrue(BpmEmbedProcessStartPermissionRegistry.isCreateShellEmbedAllowed("finance_tax_payment_apply"));
     }
