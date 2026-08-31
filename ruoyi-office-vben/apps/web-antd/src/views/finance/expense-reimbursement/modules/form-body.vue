@@ -564,12 +564,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
         />
         <Select
-          v-model:value="line.invoiceType"
-          class="w-28"
-          :options="invoiceTypeOptions"
-          placeholder="发票类型"
-        />
-        <Select
           v-if="needsPredoc(line)"
           :value="line.predocProcessInstanceId"
           class="w-56"
@@ -581,6 +575,22 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           @change="(v) => onPredocChange(index, v as string)"
         />
         <template v-if="lineDetailsEnabled(line)">
+          <FileUpload
+            class="w-48"
+            :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
+            :max-number="1"
+            :max-size="20"
+            :accept="['pdf', 'jpg', 'jpeg', 'png']"
+            help-text="先上传发票，自动识别类型"
+            :api="(file, progress) => uploadInvoice(index, file as File, progress)"
+            @update:value="(v) => onInvoiceUpload(index, v)"
+          />
+          <Select
+            v-model:value="line.invoiceType"
+            class="w-28"
+            :options="invoiceTypeOptions"
+            placeholder="发票类型"
+          />
           <DatePicker
             :value="line.feeDate ? dayjs(line.feeDate) : undefined"
             class="w-36"
@@ -598,16 +608,6 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             v-model:value="line.overLimitReason"
             class="w-48"
             placeholder="超标原因"
-          />
-          <FileUpload
-            class="w-48"
-            :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
-            :max-number="1"
-            :max-size="20"
-            :accept="['pdf', 'jpg', 'jpeg', 'png']"
-            help-text="发票"
-            :api="(file, progress) => uploadInvoice(index, file as File, progress)"
-            @update:value="(v) => onInvoiceUpload(index, v)"
           />
           <Input
             v-model:value="line.invoiceNo"
