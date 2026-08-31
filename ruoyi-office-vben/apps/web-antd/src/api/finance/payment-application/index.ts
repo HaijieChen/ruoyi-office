@@ -40,7 +40,7 @@ export namespace FinancePaymentApplicationApi {
     currency?: string;
     businessSettlementTerm: string;
     contractSettlementMethod?: string;
-    payMethod: string;
+    payMethod?: string;
     costProject: string;
     accountingSubject?: string;
     evidenceFileUrls?: string;
@@ -68,7 +68,7 @@ export namespace FinancePaymentApplicationApi {
     /** 交易币种 CNY/USD/HKD */
     currency: string;
     businessSettlementTerm: string;
-    payMethod: string;
+    payMethod?: string;
     costProject: string;
     evidenceFileUrls: string[];
     specialNote?: string;

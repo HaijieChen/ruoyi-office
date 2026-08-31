@@ -476,6 +476,23 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 .orderByDesc(FinanceContractApplicationDO::getId));
     }
 
+    @Override
+    public List<FinanceContractApplicationDO> listSelectableForBusinessPayment(Long applicantUserId) {
+        Set<String> sharedIds = processInstanceApi.listSharedInstanceIds(applicantUserId).getCheckedData();
+        return applicationMapper.selectList(new LambdaQueryWrapperX<FinanceContractApplicationDO>()
+                .eq(FinanceContractApplicationDO::getApprovalStatus,
+                        FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .eq(FinanceContractApplicationDO::getFileType, "付款业务合同")
+                .and(w -> {
+                    w.eq(FinanceContractApplicationDO::getApplicantUserId, applicantUserId);
+                    if (sharedIds != null && !sharedIds.isEmpty()) {
+                        w.or().in(FinanceContractApplicationDO::getProcessInstanceId, sharedIds);
+                    }
+                })
+                .eq(FinanceContractApplicationDO::getVoided, Boolean.FALSE)
+                .orderByDesc(FinanceContractApplicationDO::getId));
+    }
+
     private void assertApprovedEvidence(FinanceContractApplicationDO application) {
         if (StrUtil.isBlank(application.getSealFileUrl()) || application.getArchivedAt() == null) {
             throw exception(CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE);

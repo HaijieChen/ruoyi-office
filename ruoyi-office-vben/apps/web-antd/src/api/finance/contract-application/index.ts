@@ -140,6 +140,13 @@ export function listSelectableContractsForBo() {
   );
 }
 
+/** 业务付款可选付款业务合同 */
+export function listSelectableContractsForBusinessPayment() {
+  return requestClient.get<FinanceContractApplicationApi.Application[]>(
+    '/finance/contract-application/list-selectable-for-business-payment',
+  );
+}
+
 /** 用印登记并 complete 任务（CS-F2：须传 taskId） */
 export function recordContractSeal(id: number, taskId: string, sealFileUrl: string) {
   return requestClient.post<boolean>(

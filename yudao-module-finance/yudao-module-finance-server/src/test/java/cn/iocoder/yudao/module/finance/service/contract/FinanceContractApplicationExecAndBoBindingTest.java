@@ -133,6 +133,14 @@ class FinanceContractApplicationExecAndBoBindingTest {
     }
 
     @Test
+    void listSelectableForBusinessPaymentShouldQueryApprovedSelf() {
+        when(contractMapper.selectList(any())).thenReturn(List.of(approved(5L, USER)));
+        List<FinanceContractApplicationDO> list = contractService.listSelectableForBusinessPayment(USER);
+        assertEquals(1, list.size());
+        verify(contractMapper).selectList(any());
+    }
+
+    @Test
     void createBoShouldRequireContract() {
         FinanceBusinessOrderSaveReqVO req = validBo();
         req.setContractApplicationId(null);

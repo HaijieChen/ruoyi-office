@@ -28,7 +28,7 @@ const fields = computed(() => [
   },
   { label: '事由', value: financeReasonLabel(props.detail?.paymentReason), span: 2 as const },
   { label: '时效', value: financeTimingLabel(props.detail?.paymentTiming) },
-  { label: '产品名称', value: financeProductLabel(props.detail?.costProject) },
+  { label: '产品类型', value: financeProductLabel(props.detail?.costProject) },
   { label: '支付日', value: displayDate(props.detail?.actualPayDate) },
   {
     label: '资料',

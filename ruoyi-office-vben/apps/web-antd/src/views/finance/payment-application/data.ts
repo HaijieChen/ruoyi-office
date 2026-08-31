@@ -73,7 +73,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       field: 'costProject',
-      title: '产品名称',
+      title: '产品类型',
       minWidth: 120,
       formatter: ({ cellValue }) =>
         getDictLabel(DICT_TYPE.FINANCE_PRODUCT_TYPE, cellValue) ||
