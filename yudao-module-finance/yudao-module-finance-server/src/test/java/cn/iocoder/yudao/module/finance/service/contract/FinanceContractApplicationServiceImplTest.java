@@ -344,11 +344,38 @@ class FinanceContractApplicationServiceImplTest {
                 .voided(false)
                 .needMail(false)
                 .sealFileUrl("https://x/seal.pdf")
-                .archivedAt(LocalDateTime.now())
                 .build());
         when(applicationMapper.update(isNull(), any())).thenReturn(1);
         assertDoesNotThrow(() -> service.onApprovalOutcome(100L, "APPROVED", "proc-1"));
         verify(applicationMapper).update(isNull(), any());
+    }
+
+    @Test
+    void recordArchiveWritesTimestampWithoutTask() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .archivedAt(null)
+                .build());
+        when(applicationMapper.update(isNull(), any())).thenReturn(1);
+        service.recordArchive(100L, 200L);
+        verify(applicationMapper).update(isNull(), argThat(uw -> uw.getSqlSet() != null
+                && uw.getSqlSet().contains("archived_at")));
+        verify(taskServiceProvider, never()).getIfAvailable();
+    }
+
+    @Test
+    void recordArchiveRejectsPending() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordArchive(100L, 200L));
+        assertEquals(CONTRACT_APPLICATION_EXEC_NOT_ALLOWED.getCode(), ex.getCode());
     }
 
     @Test

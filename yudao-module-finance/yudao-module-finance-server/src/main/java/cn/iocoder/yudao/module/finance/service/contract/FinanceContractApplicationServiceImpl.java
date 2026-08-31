@@ -410,20 +410,21 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void recordArchive(Long id, String taskId, Long userId) {
-        FinanceContractApplicationDO application = getApplication(id);
-        requirePending(application);
-        if (StrUtil.isBlank(application.getSealFileUrl())) {
-            throw exception(CONTRACT_APPLICATION_SEAL_FILE_REQUIRED);
+    public void recordArchive(Long id, Long userId) {
+        FinanceContractApplicationDO application = getApplication(id, userId, true);
+        if (Boolean.TRUE.equals(application.getVoided())) {
+            throw exception(CONTRACT_APPLICATION_STATUS_INVALID);
         }
-        Task task = requireTask(taskId, application, TASK_ARCHIVE, userId);
+        if (!FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(application.getApprovalStatus())) {
+            throw exception(CONTRACT_APPLICATION_EXEC_NOT_ALLOWED);
+        }
+        if (application.getArchivedAt() != null) {
+            return;
+        }
         applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
                 .eq("id", id)
+                .isNull("archived_at")
                 .set("archived_at", LocalDateTime.now()));
-        // 权威回写 needMail，防止后续网关被篡改变量误导
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("needMail", Boolean.TRUE.equals(application.getNeedMail()));
-        completeTask(task.getId(), vars);
     }
 
     @Override
@@ -511,7 +512,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     }
 
     private void assertApprovedEvidence(FinanceContractApplicationDO application) {
-        if (StrUtil.isBlank(application.getSealFileUrl()) || application.getArchivedAt() == null) {
+        if (StrUtil.isBlank(application.getSealFileUrl())) {
             throw exception(CONTRACT_APPLICATION_APPROVED_EVIDENCE_INCOMPLETE);
         }
         if (Boolean.TRUE.equals(application.getNeedMail()) && StrUtil.isBlank(application.getMailTrackingNo())) {

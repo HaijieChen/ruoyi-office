@@ -11,6 +11,7 @@ import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   cancelContractApplication,
   getContractApplicationPage,
+  recordContractArchive,
 } from '#/api/finance/contract-application';
 import { message, Modal } from 'ant-design-vue';
 
@@ -122,6 +123,22 @@ function handleDetail(row: FinanceContractApplicationApi.Application) {
   detailModalApi.open();
 }
 
+function handleArchive(row: FinanceContractApplicationApi.Application) {
+  if (row.approvalStatus !== 'APPROVED' || row.voided || row.archivedAt) {
+    message.warning('仅已通过且未归档的合同可归档');
+    return;
+  }
+  Modal.confirm({
+    title: '确认归档？',
+    content: '归档后记录归档时间，不进入流程节点。',
+    onOk: async () => {
+      await recordContractArchive(row.id);
+      message.success('已归档');
+      handleRefresh();
+    },
+  });
+}
+
 function handleCancel(row: FinanceContractApplicationApi.Application) {
   if (row.approvalStatus !== 'PENDING') {
     message.warning('仅审批中可撤回');
@@ -148,7 +165,7 @@ function displayStatus(row: FinanceContractApplicationApi.Application) {
   }
   if (a === 'REJECTED') return '已驳回';
   if (a === 'CANCELLED') return '已取消';
-  if (a === 'APPROVED') return '已通过';
+  if (a === 'APPROVED') return row.archivedAt ? '已通过 · 已归档' : '已通过';
   return a || '-';
 }
 
@@ -307,6 +324,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['finance:contract-application:resubmit'],
               ifShow: row.approvalStatus === 'REJECTED' && !row.voided,
               onClick: () => handleResubmit(row),
+            },
+            {
+              label: '归档',
+              auth: ['finance:contract-application:record-seal'],
+              ifShow:
+                row.approvalStatus === 'APPROVED' &&
+                !row.voided &&
+                !row.archivedAt,
+              onClick: () => handleArchive(row),
             },
             {
               label: '撤回',

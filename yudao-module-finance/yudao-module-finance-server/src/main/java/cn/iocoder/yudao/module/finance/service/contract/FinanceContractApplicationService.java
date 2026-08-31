@@ -54,8 +54,8 @@ public interface FinanceContractApplicationService {
      */
     void recordSeal(Long id, String taskId, String sealFileUrl, Long userId);
 
-    /** 归档：写台账 + complete */
-    void recordArchive(Long id, String taskId, Long userId);
+    /** 归档：列表操作，只写 archived_at，不 complete BPM 任务 */
+    void recordArchive(Long id, Long userId);
 
     /** 邮寄：写台账 + complete */
     void recordMail(Long id, String taskId, String mailTrackingNo, Long userId);

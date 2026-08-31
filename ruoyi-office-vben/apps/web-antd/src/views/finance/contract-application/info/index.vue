@@ -3,7 +3,7 @@
  * 合同签约 · BPM 自定义表单「查看」组件。
  * 由 processInstance/detail 经 formCustomViewPath 动态加载，
  * props.id = processInstance.businessKey（合同申请主键）。
- * 审批节点只读；用印/归档/邮寄节点展示 record* 执行面板（CS-R2）。
+ * 审批节点只读；用印/邮寄节点展示 record* 执行面板。归档改到合同列表操作。
  */
 import type { FinanceContractApplicationApi } from '#/api/finance/contract-application';
 
@@ -29,7 +29,6 @@ import {
 
 import {
   getContractApplication,
-  recordContractArchive,
   recordContractMail,
   recordContractSeal,
 } from '#/api/finance/contract-application';
@@ -51,9 +50,8 @@ const props = defineProps<{
   taskId?: string;
 }>();
 const EXEC_SEAL = 'taskSeal';
-const EXEC_ARCHIVE = 'taskArchive';
 const EXEC_MAIL = 'taskMail';
-const EXEC_KEYS = new Set([EXEC_ARCHIVE, EXEC_MAIL, EXEC_SEAL]);
+const EXEC_KEYS = new Set([EXEC_MAIL, EXEC_SEAL]);
 
 const route = useRoute();
 const router = useRouter();
@@ -103,7 +101,6 @@ const resolvedNodeKey = computed(() => resolveNodeKey());
 const resolvedTaskId = computed(() => resolveTaskId());
 const isExecNode = computed(() => EXEC_KEYS.has(resolvedNodeKey.value));
 const isSealNode = computed(() => resolvedNodeKey.value === EXEC_SEAL);
-const isArchiveNode = computed(() => resolvedNodeKey.value === EXEC_ARCHIVE);
 const isMailNode = computed(() => resolvedNodeKey.value === EXEC_MAIL);
 
 /** 已驳回且当前用户为发起人：展示「修改并重提」（C16；流程详情/我的流程入口） */
@@ -228,25 +225,6 @@ async function handleRecordSeal() {
   }
 }
 
-async function handleRecordArchive() {
-  const id = resolveId();
-  const tid = resolvedTaskId.value;
-  if (id === undefined || !tid) {
-    message.error('缺少申请或任务编号，请从待办进入');
-    return;
-  }
-  submitting.value = true;
-  try {
-    await recordContractArchive(id, tid);
-    await afterExecSuccess('归档确认成功，任务已推进');
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : '归档失败';
-    message.error(msg);
-  } finally {
-    submitting.value = false;
-  }
-}
-
 async function handleRecordMail() {
   const id = resolveId();
   const tid = resolvedTaskId.value;
@@ -357,37 +335,6 @@ watch(
           </Space>
         </Card>
 
-        <Card
-          v-if="isArchiveNode && isApproval !== false"
-          class="mb-4"
-          size="small"
-          title="归档确认"
-        >
-          <Alert
-            class="mb-3"
-            type="info"
-            show-icon
-            message="确认纸质/电子件已归档后提交。请勿使用底部通用「通过」。"
-          />
-          <Descriptions bordered size="small" :column="1" class="mb-3">
-            <DescriptionsItem label="用印扫描件">
-              <FilePreviewList :value="detail.sealFileUrl" />
-            </DescriptionsItem>
-          </Descriptions>
-          <Space>
-            <Button
-              type="primary"
-              :loading="submitting"
-              :disabled="!resolvedTaskId"
-              @click="handleRecordArchive"
-            >
-              确认归档
-            </Button>
-            <span v-if="!resolvedTaskId" class="text-sm text-red-500">
-              未拿到 taskId，请从「我的待办」进入
-            </span>
-          </Space>
-        </Card>
 
         <Card
           v-if="isMailNode && isApproval !== false"

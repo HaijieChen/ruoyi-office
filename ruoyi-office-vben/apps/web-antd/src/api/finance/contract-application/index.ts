@@ -158,11 +158,11 @@ export function recordContractSeal(id: number, taskId: string, sealFileUrl: stri
   );
 }
 
-export function recordContractArchive(id: number, taskId: string) {
+export function recordContractArchive(id: number) {
   return requestClient.post<boolean>(
     '/finance/contract-application/record-archive',
     null,
-    { params: { id, taskId } },
+    { params: { id } },
   );
 }
 
