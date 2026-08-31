@@ -57,6 +57,12 @@ class DeptControllerTest {
         Method importMethod = DeptController.class.getMethod("importDept", MultipartFile.class, String.class);
         assertArrayEquals(new String[]{"/import"}, importMethod.getAnnotation(PostMapping.class).value());
 
+        Method export = DeptController.class.getMethod("exportDept",
+                jakarta.servlet.http.HttpServletResponse.class, DeptListReqVO.class);
+        assertArrayEquals(new String[]{"/export-excel"}, export.getAnnotation(GetMapping.class).value());
+        assertTrue(export.getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class)
+                .value().contains("system:dept:export"));
+
         DeptImportService importService = mock(DeptImportService.class);
         when(importService.validateImport(any())).thenReturn(DeptImportRespVO.builder()
                 .fileDigest("abc").totalRows(1).createCount(1).skipCount(0).canCommit(true).build());

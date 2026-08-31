@@ -6,6 +6,7 @@ import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportEr
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptImportExcelVO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
+import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.enums.OrgTypeEnum;
 
 import java.nio.charset.StandardCharsets;
@@ -13,6 +14,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -193,6 +195,77 @@ public final class DeptImportSupport {
             return OrgTypeEnum.DEPARTMENT.getValue();
         }
         return null;
+    }
+
+    public static String orgTypeLabel(String orgType) {
+        if (OrgTypeEnum.COMPANY.getValue().equals(orgType)) {
+            return "公司";
+        }
+        if (OrgTypeEnum.DEPARTMENT.getValue().equals(orgType)) {
+            return "部门";
+        }
+        return orgType;
+    }
+
+    public static String statusLabel(Integer status) {
+        if (CommonStatusEnum.ENABLE.getStatus().equals(status)) {
+            return "启用";
+        }
+        if (CommonStatusEnum.DISABLE.getStatus().equals(status)) {
+            return "停用";
+        }
+        return status == null ? "" : String.valueOf(status);
+    }
+
+    /**
+     * 导出为导入模板同列；按路径深度排序，父在子前，便于再导入。
+     */
+    public static List<DeptImportExcelVO> toExportRows(List<DeptDO> depts, Map<Long, AdminUserDO> users) {
+        if (depts == null || depts.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, DeptDO> byId = new LinkedHashMap<>();
+        for (DeptDO dept : depts) {
+            if (dept != null && dept.getId() != null) {
+                byId.put(dept.getId(), dept);
+            }
+        }
+        List<DeptDO> sorted = new ArrayList<>(depts);
+        sorted.sort(Comparator
+                .comparingInt((DeptDO d) -> {
+                    String path = resolveExistingPath(d, byId);
+                    return path == null ? Integer.MAX_VALUE : pathDepth(path);
+                })
+                .thenComparing(d -> StrUtil.blankToDefault(resolveExistingPath(d, byId), ""), String::compareTo)
+                .thenComparing(d -> d.getSort() == null ? 0 : d.getSort())
+                .thenComparing(DeptDO::getId, Comparator.nullsLast(Long::compareTo)));
+        List<DeptImportExcelVO> rows = new ArrayList<>(sorted.size());
+        for (DeptDO dept : sorted) {
+            String path = resolveExistingPath(dept, byId);
+            String parentPath = "";
+            if (StrUtil.isNotBlank(path) && path.contains(PATH_SEPARATOR)) {
+                parentPath = path.substring(0, path.lastIndexOf(PATH_SEPARATOR));
+            }
+            String leader = "";
+            if (dept.getLeaderUserId() != null && users != null) {
+                AdminUserDO user = users.get(dept.getLeaderUserId());
+                if (user != null) {
+                    leader = user.getUsername();
+                }
+            }
+            rows.add(DeptImportExcelVO.builder()
+                    .name(dept.getName())
+                    .parentPath(parentPath)
+                    .orgTypeLabel(orgTypeLabel(dept.getOrgType()))
+                    .sortText(dept.getSort() == null ? "" : String.valueOf(dept.getSort()))
+                    .statusLabel(statusLabel(dept.getStatus()))
+                    .functionalCurrency(dept.getFunctionalCurrency())
+                    .leaderUsername(leader)
+                    .phone(dept.getPhone())
+                    .email(dept.getEmail())
+                    .build());
+        }
+        return rows;
     }
 
     public static Integer statusFromLabel(String label) {
