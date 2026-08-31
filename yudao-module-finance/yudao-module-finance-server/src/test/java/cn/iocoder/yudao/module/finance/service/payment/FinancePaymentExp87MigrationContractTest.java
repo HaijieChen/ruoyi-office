@@ -133,6 +133,29 @@ class FinancePaymentExp87MigrationContractTest {
         assertTrue(text.contains("mysqldump") || text.contains("备份"));
     }
 
+    @Test
+    void paymentBpmnNodesHangFinanceAndCashierVuePaths() throws Exception {
+        record Case(String file, String financePath, String cashierPath) {}
+        Case[] cases = {
+                new Case("sql/mysql/bpmn/finance_payment_apply.bpmn20.xml",
+                        "/finance/payment-application/detail/finance",
+                        "/finance/payment-application/detail/cashier"),
+                new Case("sql/mysql/bpmn/finance_salary_payment_apply.bpmn20.xml",
+                        "/finance/salary-payment/detail/finance",
+                        "/finance/salary-payment/detail/cashier"),
+                new Case("sql/mysql/bpmn/finance_tax_payment_apply.bpmn20.xml",
+                        "/finance/tax-payment/detail/finance",
+                        "/finance/tax-payment/detail/cashier"),
+        };
+        for (Case c : cases) {
+            String xml = Files.readString(findRoot().resolve(c.file));
+            assertTrue(xml.contains("id=\"taskFinance\"") && xml.contains(c.financePath), c.file);
+            assertTrue(xml.contains("id=\"taskCashier\"") && xml.contains(c.cashierPath), c.file);
+            assertFalse(xml.contains("id=\"taskDeptHead\"") && xml.substring(xml.indexOf("id=\"taskDeptHead\""),
+                    xml.indexOf("id=\"taskFinance\"")).contains("formCustomViewPath"), c.file);
+        }
+    }
+
     private static Path findRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null && !Files.isDirectory(current.resolve("sql/mysql"))) {

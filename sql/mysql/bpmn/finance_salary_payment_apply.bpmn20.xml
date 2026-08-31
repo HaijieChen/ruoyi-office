@@ -47,6 +47,7 @@
         <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
         <!-- F4：complete 前会计科目必填 -->
         <flowable:taskListener event="complete" delegateExpression="${financePaymentFinanceCompleteGuardListener}"/>
+        <flowable:formCustomViewPath>/finance/salary-payment/detail/finance</flowable:formCustomViewPath>
       </extensionElements>
     </userTask>
 
@@ -58,6 +59,7 @@
         <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
         <!-- F1：complete 前台账须有支付日+凭证；否则拒绝通用 BPM 通过 -->
         <flowable:taskListener event="complete" delegateExpression="${financePaymentCashierCompleteGuardListener}"/>
+        <flowable:formCustomViewPath>/finance/salary-payment/detail/cashier</flowable:formCustomViewPath>
       </extensionElements>
     </userTask>
 
