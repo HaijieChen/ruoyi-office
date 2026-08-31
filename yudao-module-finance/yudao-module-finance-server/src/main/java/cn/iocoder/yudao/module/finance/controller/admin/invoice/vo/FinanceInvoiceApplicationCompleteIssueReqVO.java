@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Schema(description = "管理后台 - 开票申请整单办票 complete-issue Request VO")
@@ -16,10 +18,7 @@ public class FinanceInvoiceApplicationCompleteIssueReqVO {
     @NotNull(message = "开票申请编号不能为空")
     private Long applicationId;
 
-    @Schema(description = "发票号备注列表（不绑明细行，可选）")
-    private List<String> invoiceNos;
-
-    @Schema(description = "附件列表（默认整单 replace）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "本次办票发票（追加，不覆盖历史）", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotEmpty(message = "至少上传一个发票附件")
     @Valid
     private List<FileItem> files;
@@ -33,6 +32,15 @@ public class FinanceInvoiceApplicationCompleteIssueReqVO {
 
         @Schema(description = "文件名")
         private String name;
+
+        @Schema(description = "发票金额（开票办票必填；红冲可不填）")
+        private BigDecimal amount;
+
+        @Schema(description = "发票号")
+        private String invoiceNo;
+
+        @Schema(description = "开票日期")
+        private LocalDate invoiceDate;
 
     }
 

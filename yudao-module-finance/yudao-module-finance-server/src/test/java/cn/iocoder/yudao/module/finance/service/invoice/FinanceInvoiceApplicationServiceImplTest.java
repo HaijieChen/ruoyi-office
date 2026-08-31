@@ -570,49 +570,67 @@ class FinanceInvoiceApplicationServiceImplTest {
     }
 
     @Test
-    void completeIssueShouldWriteFullAndReplaceFiles() {
+    void completeIssueShouldAppendAndMarkPartialWhenBelowApplyAmount() {
         FinanceInvoiceApplicationDO app = pendingApp(100L);
         app.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
+        app.setTotalAmount(new BigDecimal("50.00"));
         when(applicationMapper.selectById(100L)).thenReturn(app);
-        when(fileMapper.deleteByApplicationId(100L)).thenReturn(0);
-        when(lineMapper.selectListByApplicationId(100L)).thenReturn(List.of(
-                FinanceInvoiceApplicationLineDO.builder().id(1L).applicationId(100L).build()));
+        when(fileMapper.selectListByApplicationId(100L)).thenReturn(List.of());
 
         cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO req =
-                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO();
-        req.setApplicationId(100L);
-        req.setInvoiceNos(List.of("INV-A", "INV-B"));
-        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem f1 =
-                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem();
-        f1.setUrl("https://cdn.example/a.pdf");
-        f1.setName("a.pdf");
-        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem f2 =
-                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem();
-        f2.setUrl("https://cdn.example/b.pdf");
-        f2.setName("b.pdf");
-        req.setFiles(List.of(f1, f2));
+                issueReq(100L, "https://cdn.example/a.pdf", "20.00", "INV-A");
 
         service.completeIssue(req);
 
-        verify(fileMapper).deleteByApplicationId(100L);
-        verify(fileMapper, times(2)).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO.class));
+        verify(fileMapper, never()).deleteByApplicationId(any());
+        verify(fileMapper).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO.class));
+        ArgumentCaptor<FinanceInvoiceApplicationDO> appCaptor =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
+        verify(applicationMapper).updateById(appCaptor.capture());
+        assertEquals(FinanceInvoiceIssueStatusEnum.PARTIAL.getStatus(), appCaptor.getValue().getIssueStatus());
+    }
+
+    @Test
+    void completeIssueShouldMarkFullWhenAccumulatedEqualsApplyAmount() {
+        FinanceInvoiceApplicationDO app = pendingApp(100L);
+        app.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
+        app.setTotalAmount(new BigDecimal("50.00"));
+        when(applicationMapper.selectById(100L)).thenReturn(app);
+        when(fileMapper.selectListByApplicationId(100L)).thenReturn(List.of(
+                cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO.builder()
+                        .id(1L).applicationId(100L).amount(new BigDecimal("20.00")).sort(0).build()));
+
+        service.completeIssue(issueReq(100L, "https://cdn.example/b.pdf", "30.00", "INV-B"));
+
         ArgumentCaptor<FinanceInvoiceApplicationDO> appCaptor =
                 ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
         verify(applicationMapper).updateById(appCaptor.capture());
         assertEquals(FinanceInvoiceIssueStatusEnum.FULL.getStatus(), appCaptor.getValue().getIssueStatus());
+        verify(fileMapper, never()).deleteByApplicationId(any());
+    }
+
+    @Test
+    void completeIssueShouldRejectWhenAccumulatedExceedsApplyAmount() {
+        FinanceInvoiceApplicationDO app = pendingApp(100L);
+        app.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
+        app.setTotalAmount(new BigDecimal("50.00"));
+        when(applicationMapper.selectById(100L)).thenReturn(app);
+        when(fileMapper.selectListByApplicationId(100L)).thenReturn(List.of(
+                cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO.builder()
+                        .id(1L).applicationId(100L).amount(new BigDecimal("40.00")).sort(0).build()));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.completeIssue(issueReq(100L, "https://cdn.example/c.pdf", "20.00", "INV-C")));
+        assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_ISSUE_AMOUNT_EXCEED.getCode(),
+                ex.getCode());
+        verify(fileMapper, never()).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationFileDO.class));
     }
 
     @Test
     void completeIssueShouldRejectWhenNotApproved() {
         when(applicationMapper.selectById(100L)).thenReturn(pendingApp(100L));
-        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO req =
-                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO();
-        req.setApplicationId(100L);
-        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem f =
-                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem();
-        f.setUrl("https://cdn.example/a.pdf");
-        req.setFiles(List.of(f));
-        ServiceException ex = assertThrows(ServiceException.class, () -> service.completeIssue(req));
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.completeIssue(issueReq(100L, "https://cdn.example/a.pdf", "10.00", "INV-A")));
         assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.INVOICE_APPLICATION_ISSUE_NOT_ALLOWED.getCode(),
                 ex.getCode());
     }
@@ -632,5 +650,21 @@ class FinanceInvoiceApplicationServiceImplTest {
     }
 
     private static final BigDecimal ZERO = new BigDecimal("0.00");
+
+    private static cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO issueReq(
+            Long appId, String url, String amount, String invoiceNo) {
+        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO req =
+                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO();
+        req.setApplicationId(appId);
+        cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem f =
+                new cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO.FileItem();
+        f.setUrl(url);
+        f.setName("a.pdf");
+        f.setAmount(new BigDecimal(amount));
+        f.setInvoiceNo(invoiceNo);
+        f.setInvoiceDate(java.time.LocalDate.of(2026, 8, 1));
+        req.setFiles(List.of(f));
+        return req;
+    }
 
 }

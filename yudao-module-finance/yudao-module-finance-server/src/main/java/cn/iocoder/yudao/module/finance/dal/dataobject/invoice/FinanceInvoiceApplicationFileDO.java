@@ -6,6 +6,9 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
 /**
  * 开票申请办票附件 DO（整单多附件，I2）
  */
@@ -24,6 +27,9 @@ public class FinanceInvoiceApplicationFileDO extends BaseDO {
     private Long applicationId;
     private String fileUrl;
     private String fileName;
+    private BigDecimal amount;
+    private String invoiceNo;
+    private LocalDate invoiceDate;
     private Integer sort;
 
 }

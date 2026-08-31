@@ -124,6 +124,10 @@ public interface ErrorCodeConstants {
             "请先选择产品类型");
     ErrorCode INVOICE_APPLICATION_INVOICE_TYPE_INVALID = new ErrorCode(1_040_003_022,
             "发票类型仅支持专票或普票");
+    ErrorCode INVOICE_APPLICATION_ISSUE_AMOUNT_REQUIRED = new ErrorCode(1_040_003_023,
+            "办票金额必须大于 0");
+    ErrorCode INVOICE_APPLICATION_ISSUE_AMOUNT_EXCEED = new ErrorCode(1_040_003_024,
+            "办票累计金额不能超过开票申请金额");
 
     // ========== 客户公司 / 客商 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");

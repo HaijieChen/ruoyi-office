@@ -125,13 +125,22 @@ export namespace FinanceInvoiceApplicationApi {
     applicationId?: number;
     fileUrl?: string;
     fileName?: string;
+    amount?: number;
+    invoiceNo?: string;
+    invoiceDate?: string;
     sort?: number;
+    createTime?: string;
   }
 
   export interface CompleteIssueRequest {
     applicationId: number;
-    invoiceNos?: string[];
-    files: Array<{ url: string; name?: string }>;
+    files: Array<{
+      url: string;
+      name?: string;
+      amount: number;
+      invoiceNo?: string;
+      invoiceDate?: string;
+    }>;
   }
 
   export interface PageQuery extends PageParam {
@@ -172,7 +181,7 @@ export function updateInvoiceIssueProgress(
   );
 }
 
-/** 整单办票（多附件 replace） */
+/** 追加办票（OCR 金额累计） */
 export function completeInvoiceIssue(
   data: FinanceInvoiceApplicationApi.CompleteIssueRequest,
 ) {
@@ -180,6 +189,25 @@ export function completeInvoiceIssue(
     '/finance/invoice-application/complete-issue',
     data,
   );
+}
+
+export function ocrInvoiceApplication(fileUrl: string, file?: File) {
+  const raw =
+    file && (file as any).originFileObj instanceof Blob
+      ? (file as any).originFileObj
+      : file;
+  if (raw instanceof Blob) {
+    return requestClient.upload<{
+      feeDate?: string;
+      amount?: number;
+      invoiceNo?: string;
+    }>('/finance/invoice-application/ocr-invoice', { file: raw });
+  }
+  return requestClient.post<{
+    feeDate?: string;
+    amount?: number;
+    invoiceNo?: string;
+  }>('/finance/invoice-application/ocr-invoice', null, { params: { fileUrl } });
 }
 
 export function getInvoiceApplication(id: number) {

@@ -12,6 +12,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceAppl
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
+import cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient;
 import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationImportService;
 import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -52,6 +53,8 @@ public class FinanceInvoiceApplicationController {
     private FinanceBusinessOrderMapper businessOrderMapper;
     @Resource
     private FinanceContractApplicationMapper contractApplicationMapper;
+    @Resource
+    private FinanceInvoiceOcrClient invoiceOcrClient;
 
     @GetMapping("/get-import-template")
     @Operation(summary = "获得开票申请历史导入模板")
@@ -109,8 +112,20 @@ public class FinanceInvoiceApplicationController {
         return success(true);
     }
 
+    @PostMapping("/ocr-invoice")
+    @Operation(summary = "识别发票金额、发票号、开票日期（失败返回空字段）")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:issue')")
+    public CommonResult<FinanceInvoiceOcrClient.Result> ocrInvoice(
+            @RequestParam(value = "fileUrl", required = false) String fileUrl,
+            @RequestParam(value = "file", required = false) MultipartFile file) throws IOException {
+        FinanceInvoiceOcrClient.Result result = file != null && !file.isEmpty()
+                ? invoiceOcrClient.recognizeBytes(file.getBytes())
+                : invoiceOcrClient.recognize(fileUrl);
+        return success(result);
+    }
+
     @PutMapping("/complete-issue")
-    @Operation(summary = "整单办票（多附件 replace，issue_status=FULL）")
+    @Operation(summary = "追加办票（OCR 金额累计：小于申请金额部分办票，等于全部办票，大于拦截）")
     @PreAuthorize("@ss.hasPermission('finance:invoice-application:issue')")
     public CommonResult<Boolean> completeIssue(
             @Valid @RequestBody FinanceInvoiceApplicationCompleteIssueReqVO reqVO) {

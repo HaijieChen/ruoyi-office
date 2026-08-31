@@ -89,8 +89,16 @@ public class FinanceInvoiceApplicationRespVO {
         private String fileUrl;
         @Schema(description = "文件名")
         private String fileName;
+        @Schema(description = "发票金额")
+        private BigDecimal amount;
+        @Schema(description = "发票号")
+        private String invoiceNo;
+        @Schema(description = "开票日期")
+        private LocalDate invoiceDate;
         @Schema(description = "排序")
         private Integer sort;
+        @Schema(description = "上传时间")
+        private LocalDateTime createTime;
     }
 
     @Data

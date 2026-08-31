@@ -475,47 +475,61 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         if (CollUtil.isEmpty(files)) {
             throw exception(INVOICE_APPLICATION_COMPLETE_ISSUE_FILES_EMPTY);
         }
+        BigDecimal batchAmount = ZERO;
         for (FinanceInvoiceApplicationCompleteIssueReqVO.FileItem file : files) {
             if (file == null || StrUtil.isBlank(file.getUrl())) {
                 throw exception(INVOICE_APPLICATION_COMPLETE_ISSUE_FILES_EMPTY);
             }
+            if (file.getAmount() == null || file.getAmount().compareTo(ZERO) <= 0) {
+                throw exception(INVOICE_APPLICATION_ISSUE_AMOUNT_REQUIRED);
+            }
+            batchAmount = batchAmount.add(file.getAmount());
         }
 
-        // 默认 replace：先软删旧附件再插入
-        fileMapper.deleteByApplicationId(reqVO.getApplicationId());
+        List<FinanceInvoiceApplicationFileDO> existing =
+                fileMapper.selectListByApplicationId(reqVO.getApplicationId());
+        BigDecimal issuedAmount = ZERO;
         int sort = 0;
+        boolean anyAmount = false;
+        if (CollUtil.isNotEmpty(existing)) {
+            for (FinanceInvoiceApplicationFileDO row : existing) {
+                if (row.getAmount() != null) {
+                    anyAmount = true;
+                }
+                issuedAmount = issuedAmount.add(defaultZero(row.getAmount()));
+                if (row.getSort() != null && row.getSort() >= sort) {
+                    sort = row.getSort() + 1;
+                }
+            }
+        }
+        BigDecimal applyAmount = defaultZero(application.getTotalAmount());
+        if (!anyAmount && FinanceInvoiceIssueStatusEnum.FULL.getStatus().equals(application.getIssueStatus())) {
+            issuedAmount = applyAmount;
+        }
+        BigDecimal totalIssued = issuedAmount.add(batchAmount);
+        if (totalIssued.compareTo(applyAmount) > 0) {
+            throw exception(INVOICE_APPLICATION_ISSUE_AMOUNT_EXCEED);
+        }
+
         for (FinanceInvoiceApplicationCompleteIssueReqVO.FileItem file : files) {
             FinanceInvoiceApplicationFileDO row = FinanceInvoiceApplicationFileDO.builder()
                     .applicationId(reqVO.getApplicationId())
                     .fileUrl(file.getUrl().trim())
                     .fileName(StrUtil.blankToDefault(file.getName(), null))
+                    .amount(file.getAmount())
+                    .invoiceNo(StrUtil.blankToDefault(file.getInvoiceNo(), null))
+                    .invoiceDate(file.getInvoiceDate())
                     .sort(sort++)
                     .build();
             fileMapper.insert(row);
         }
 
-        // I2：整单 FULL=2；再次办票仍保持 FULL，不降级
+        int issueStatus = totalIssued.compareTo(applyAmount) == 0
+                ? FinanceInvoiceIssueStatusEnum.FULL.getStatus()
+                : FinanceInvoiceIssueStatusEnum.PARTIAL.getStatus();
         FinanceInvoiceApplicationDO appUpdate = new FinanceInvoiceApplicationDO();
         appUpdate.setId(reqVO.getApplicationId());
-        appUpdate.setIssueStatus(FinanceInvoiceIssueStatusEnum.FULL.getStatus());
-        // invoiceNos 仅备注：若有值则写入首行 invoice_no 兼容展示（不强制 lineId）
-        if (CollUtil.isNotEmpty(reqVO.getInvoiceNos())) {
-            String joined = reqVO.getInvoiceNos().stream()
-                    .filter(StrUtil::isNotBlank)
-                    .map(String::trim)
-                    .collect(Collectors.joining(","));
-            if (StrUtil.isNotBlank(joined)) {
-                List<FinanceInvoiceApplicationLineDO> lines =
-                        lineMapper.selectListByApplicationId(reqVO.getApplicationId());
-                if (CollUtil.isNotEmpty(lines)) {
-                    FinanceInvoiceApplicationLineDO first = lines.get(0);
-                    FinanceInvoiceApplicationLineDO lineUpdate = new FinanceInvoiceApplicationLineDO();
-                    lineUpdate.setId(first.getId());
-                    lineUpdate.setInvoiceNo(joined);
-                    lineMapper.updateById(lineUpdate);
-                }
-            }
-        }
+        appUpdate.setIssueStatus(issueStatus);
         applicationMapper.updateById(appUpdate);
     }
 

@@ -234,7 +234,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '办票',
               auth: ['finance:invoice-application:issue'],
-              ifShow: row.approvalStatus === 'APPROVED' && !row.voided,
+              ifShow: row.approvalStatus === 'APPROVED' && !row.voided && row.issueStatus !== 2,
               onClick: () => handleIssue(row),
             },
           ]"
