@@ -45,6 +45,28 @@ def parse_tax_amount(joined):
     return None
 
 
+def parse_invoice_no(joined):
+    compact = re.sub(r"[\s　]", "", joined)
+    nos = re.findall(r"发票号码[:：]?([0-9]{8,20})", compact)
+    if nos:
+        return nos[0]
+    nos = re.findall(r"(?<!\d)(20\d{18})(?!\d)", compact)
+    if nos:
+        return nos[0]
+    nos = re.findall(r"号码[:：]([0-9]{8,20})", compact)
+    return nos[0] if nos else None
+
+
+def parse_buyer_name(joined):
+    m = re.search(r"购买方名称[:：]?\s*([^\s销税]{2,80})", joined)
+    if not m:
+        m = re.search(r"购买方[^销]{0,80}名称[:：]\s*([^\s销税]{2,80})", joined)
+    if not m:
+        return None
+    name = re.split(r"[，,。；;]|纳税人识别号|统一社会信用代码|销售方", m.group(1))[0].strip()
+    return name or None
+
+
 def parse_text(joined):
     dates = re.findall(r"20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}", joined)
     amounts = re.findall(r"(?:价税合计[^¥]{0,40}[¥￥]?|（小写）\s*[¥￥]?)(\d+\.\d{2})", joined)
@@ -56,11 +78,8 @@ def parse_text(joined):
     if dates:
         fee = dates[0].replace("年", "-").replace("月", "-").replace(".", "-").replace("/", "-")[:10]
     amt = amounts[-1] if amounts else None
-    nos = re.findall(r"发票号码[:：]?\s*([0-9]{8,20})", joined)
-    if not nos:
-        nos = re.findall(r"号码[:：]\s*([0-9]{10,20})", joined)
-    no = nos[0] if nos else None
-    return fee, amt, no, parse_tax_amount(joined), parse_invoice_type(joined), joined[:2000]
+    no = parse_invoice_no(joined)
+    return fee, amt, no, parse_tax_amount(joined), parse_invoice_type(joined), parse_buyer_name(joined), joined[:2000]
 
 
 def pdf_text(path):
@@ -112,13 +131,13 @@ def invoice(req: Req):
             path = tmp.name
         else:
             return {"feeDate": None, "amount": None, "invoiceNo": None, "taxAmount": None,
-                    "invoiceType": "其他", "rawText": "missing file"}
-        fee, amt, no, tax, kind, joined = recognize_file(path)
+                    "invoiceType": "其他", "buyerName": None, "rawText": "missing file"}
+        fee, amt, no, tax, kind, buyer, joined = recognize_file(path)
         return {"feeDate": fee, "amount": amt, "invoiceNo": no, "taxAmount": tax,
-                "invoiceType": kind, "rawText": joined}
+                "invoiceType": kind, "buyerName": buyer, "rawText": joined}
     except Exception as e:
         return {"feeDate": None, "amount": None, "invoiceNo": None, "taxAmount": None,
-                "invoiceType": "其他", "rawText": str(e)[:500]}
+                "invoiceType": "其他", "buyerName": None, "rawText": str(e)[:500]}
     finally:
         if tmp and os.path.exists(tmp.name):
             os.unlink(tmp.name)

@@ -264,6 +264,20 @@ function predocOptions(category?: string) {
   return [];
 }
 
+function normalizeCompanyName(name?: string) {
+  return String(name || '')
+    .replace(/\s+/g, '')
+    .replace(/[（）()]/g, '')
+    .replace(/有限责任公司|股份有限公司|有限公司/g, '');
+}
+
+function buyerMatchesEntity(buyer?: string, entity?: string) {
+  const a = normalizeCompanyName(buyer);
+  const b = normalizeCompanyName(entity);
+  if (!a || !b) return true;
+  return a.includes(b) || b.includes(a);
+}
+
 async function runInvoiceOcr(index: number, url: string, file?: File) {
   const line = formData.value.lines[index];
   if (!line) return;
@@ -273,6 +287,10 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
     if (ocr?.used || formData.value.lines.some((l, i) => i !== index && l.invoiceNo && l.invoiceNo === ocr?.invoiceNo)) {
       message.error(`发票 ${ocr.invoiceNo || ''} 已被使用`);
       throw new Error('invoice used');
+    }
+    if (!buyerMatchesEntity(ocr?.buyerName, formData.value.entityCompanyName)) {
+      message.error('与报销主体不匹配，请重新上传发票');
+      throw new Error('buyer mismatch');
     }
     if (ocr?.invoiceNo) line.invoiceNo = String(ocr.invoiceNo);
     if (ocr?.feeDate) line.feeDate = String(ocr.feeDate).slice(0, 10);
@@ -285,7 +303,10 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
       message.warning('未识别到票号/日期/金额，请手填');
     }
   } catch (e: any) {
-    if (String(e?.message || '').includes('invoice used')) {
+    if (
+      String(e?.message || '').includes('invoice used') ||
+      String(e?.message || '').includes('buyer mismatch')
+    ) {
       throw e;
     }
     message.warning('识别失败，请手填日期和金额');
@@ -351,8 +372,11 @@ async function uploadInvoice(index: number, file: File, onUploadProgress?: any) 
       const line = formData.value.lines[target];
       if (line) {
         line._uploading = false;
-        if (target !== index && !line.invoiceFileUrl) {
+        line.invoiceFileUrl = undefined;
+        if (target !== index) {
           formData.value.lines.splice(target, 1);
+        } else {
+          line._uploadEpoch = (line._uploadEpoch || 0) + 1;
         }
       }
       throw e;

@@ -71,8 +71,12 @@ public class FinanceInvoiceOcrClient {
             if (StrUtil.isBlank(invoiceType)) {
                 invoiceType = parseInvoiceType(rawText);
             }
+            String buyerName = json.getStr("buyerName");
+            if (StrUtil.isBlank(buyerName)) {
+                buyerName = parseBuyerName(rawText);
+            }
             return new Result(parseDate(json.getStr("feeDate")), json.getBigDecimal("amount"),
-                    rawText, invoiceNo, taxAmount, invoiceType, false);
+                    rawText, invoiceNo, taxAmount, invoiceType, buyerName, false);
         } catch (Exception ex) {
             log.warn("[ocr] failed: {}", ex.toString());
             return Result.empty();
@@ -143,11 +147,56 @@ public class FinanceInvoiceOcrClient {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("发票号码[:：]?\\s*([0-9]{8,20})").matcher(raw);
-        if (m.find()) {
-            return m.group(1);
+        String compact = raw.replaceAll("[\\s　]", "");
+        java.util.regex.Matcher labeled = java.util.regex.Pattern
+                .compile("发票号码[:：]?([0-9]{8,20})")
+                .matcher(compact);
+        if (labeled.find()) {
+            return labeled.group(1);
+        }
+        java.util.regex.Matcher eInvoice = java.util.regex.Pattern
+                .compile("(?<!\\d)(20\\d{18})(?!\\d)")
+                .matcher(compact);
+        if (eInvoice.find()) {
+            return eInvoice.group(1);
+        }
+        java.util.regex.Matcher number = java.util.regex.Pattern
+                .compile("号码[:：]([0-9]{8,20})")
+                .matcher(compact);
+        if (number.find()) {
+            return number.group(1);
         }
         return null;
+    }
+
+    static String parseBuyerName(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher buyerTitle = java.util.regex.Pattern
+                .compile("购买方名称[:：]?\\s*([^\\s销税]{2,80})")
+                .matcher(raw);
+        if (buyerTitle.find()) {
+            return cleanBuyerName(buyerTitle.group(1));
+        }
+        java.util.regex.Matcher buyerBlock = java.util.regex.Pattern
+                .compile("购买方[^销]{0,80}名称[:：]\\s*([^\\s销税]{2,80})")
+                .matcher(raw);
+        if (buyerBlock.find()) {
+            return cleanBuyerName(buyerBlock.group(1));
+        }
+        return null;
+    }
+
+    static String cleanBuyerName(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String n = raw.trim()
+                .replaceAll("[，,。；;].*$", "")
+                .replaceAll("(纳税人识别号|统一社会信用代码|销售方).*$", "")
+                .trim();
+        return n.isEmpty() ? null : n;
     }
 
     static BigDecimal parseTaxAmount(String raw) {
@@ -178,13 +227,13 @@ public class FinanceInvoiceOcrClient {
     }
 
     public record Result(@JsonFormat(pattern = "yyyy-MM-dd") LocalDate feeDate, BigDecimal amount, String rawText,
-                         String invoiceNo, BigDecimal taxAmount, String invoiceType, boolean used) {
+                         String invoiceNo, BigDecimal taxAmount, String invoiceType, String buyerName, boolean used) {
         static Result empty() {
-            return new Result(null, null, null, null, null, "其他", false);
+            return new Result(null, null, null, null, null, "其他", null, false);
         }
 
         public Result withUsed(boolean usedFlag) {
-            return new Result(feeDate, amount, rawText, invoiceNo, taxAmount, invoiceType, usedFlag);
+            return new Result(feeDate, amount, rawText, invoiceNo, taxAmount, invoiceType, buyerName, usedFlag);
         }
     }
 }

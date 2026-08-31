@@ -30,7 +30,16 @@ class FinanceInvoiceOcrClientTest {
     void parseInvoiceNo() {
         assertEquals("26317000002934677164",
                 FinanceInvoiceOcrClient.parseInvoiceNo("电子发票 发票号码：26317000002934677164 开票日期"));
+        assertEquals("25317000000178817093",
+                FinanceInvoiceOcrClient.parseInvoiceNo("发票号码\n25317000000178817093 开票日期"));
         assertNull(FinanceInvoiceOcrClient.parseInvoiceNo("无号码"));
+    }
+
+    @Test
+    void parseBuyerName() {
+        assertEquals("上海文枢科技有限公司",
+                FinanceInvoiceOcrClient.parseBuyerName("购买方名称：上海文枢科技有限公司 纳税人识别号"));
+        assertNull(FinanceInvoiceOcrClient.parseBuyerName("销售方名称：某商户"));
     }
 
     @Test

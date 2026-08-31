@@ -85,6 +85,7 @@ export function ocrExpenseInvoice(fileUrl: string, file?: File) {
       invoiceNo?: string;
       taxAmount?: number;
       invoiceType?: string;
+      buyerName?: string;
       used?: boolean;
     }>(
       '/finance/expense-reimbursement/ocr-invoice',
@@ -97,6 +98,7 @@ export function ocrExpenseInvoice(fileUrl: string, file?: File) {
     invoiceNo?: string;
     taxAmount?: number;
     invoiceType?: string;
+    buyerName?: string;
     used?: boolean;
   }>(
     '/finance/expense-reimbursement/ocr-invoice',
