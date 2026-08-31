@@ -76,7 +76,9 @@ public class SealApplyBillDO extends BaseDO {
     // ========== 用章申请信息 ==========
     /**
      * 用章事由
+     * 库列仍为建表字段 {@code use_purpose}
      */
+    @TableField("use_purpose")
     private String cause;
     /**
      * 用章类型（1合同用章 2证明用章 3公函用章 4其他用章）

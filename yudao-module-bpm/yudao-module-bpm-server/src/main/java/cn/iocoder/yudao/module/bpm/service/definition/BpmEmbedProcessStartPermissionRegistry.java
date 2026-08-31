@@ -49,8 +49,11 @@ public final class BpmEmbedProcessStartPermissionRegistry {
         return isEmbedProcess(processKey);
     }
 
-    /** 统一目录一律壳内发起，不再跳转独立业务页。 */
+    /** 用印没有壳内 form-body：统一发起跳到申请表，不进列表。 */
     public static String catalogRedirectPath(String processKey) {
+        if ("oa_seal_apply_bill".equals(StrUtil.trim(processKey))) {
+            return "/oa/seal/seal-apply-info";
+        }
         return null;
     }
 

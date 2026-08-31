@@ -36,6 +36,7 @@ SET i.`category` = CASE p.`KEY_`
     WHEN 'finance_tax_payment_apply' THEN 'finance'
     WHEN 'finance_salary_payment_apply' THEN 'finance'
     WHEN 'finance_contract_sign' THEN 'legal'
+    WHEN 'oa_seal_apply_bill' THEN 'legal'
     ELSE i.`category`
 END
 WHERE i.`deleted` = b'0';
