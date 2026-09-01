@@ -43,11 +43,11 @@ public class BpmOALeaveController {
     }
 
     @GetMapping("/get")
-    @PreAuthorize("@ss.hasPermission('bpm:oa-leave:query')")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "获得请假申请")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     public CommonResult<BpmOALeaveRespVO> getLeave(@RequestParam("id") Long id) {
-        BpmOALeaveDO leave = leaveService.getLeave(id);
+        BpmOALeaveDO leave = leaveService.getLeave(id, getLoginUserId());
         return success(BeanUtils.toBean(leave, BpmOALeaveRespVO.class));
     }
 

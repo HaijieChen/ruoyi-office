@@ -33,12 +33,13 @@ public interface BpmOALeaveService {
     void updateLeaveStatus(Long id, Integer status);
 
     /**
-     * 获得请假申请
+     * 获得请假申请。本人、当前流程办理人或持有 query 权限可读。
      *
      * @param id 编号
+     * @param userId 当前登录用户
      * @return 请假申请
      */
-    BpmOALeaveDO getLeave(Long id);
+    BpmOALeaveDO getLeave(Long id, Long userId);
 
     /**
      * 获得请假申请分页
