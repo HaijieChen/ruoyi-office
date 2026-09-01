@@ -101,7 +101,7 @@ export namespace FinancePaymentApplicationApi {
 
   export interface RecordPayRequest {
     id: number;
-    taskId: string;
+    taskId?: string;
     /** 公司银行账户 id */
     companyBankAccountId: number;
     /** 本笔金额；缺省按剩余未付 */
@@ -166,6 +166,24 @@ export function listSelectablePurchaseInstances() {
 export function listSelectableLeaseContracts() {
   return requestClient.get(
     '/finance/contract-application/list-selectable-for-lease-payment',
+  );
+}
+
+export function ocrPaymentVoucher(fileUrl: string, file?: File) {
+  const raw =
+    file && (file as any).originFileObj instanceof Blob
+      ? (file as any).originFileObj
+      : file;
+  if (raw instanceof Blob) {
+    return requestClient.upload<{ amount?: number; feeDate?: string }>(
+      '/finance/payment-application/ocr-voucher',
+      { file: raw },
+    );
+  }
+  return requestClient.post<{ amount?: number; feeDate?: string }>(
+    '/finance/payment-application/ocr-voucher',
+    null,
+    { params: { fileUrl } },
   );
 }
 

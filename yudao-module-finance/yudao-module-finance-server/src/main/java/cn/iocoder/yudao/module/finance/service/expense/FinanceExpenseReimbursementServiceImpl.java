@@ -24,7 +24,9 @@ import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,10 +36,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_ACCESS_DENIED;
@@ -78,6 +84,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     @Resource
     private FinanceProcessParticipantSupport processParticipantSupport;
     private final FinanceExpenseReimbursementNoRedisDAO applicationNoRedisDAO;
+    @Resource
+    private ObjectProvider<HistoryService> historyServiceProvider;
 
     public FinanceExpenseReimbursementServiceImpl(FinanceExpenseReimbursementMapper mapper,
                                                   FinanceExpenseReimbursementLineMapper lineMapper,
@@ -247,9 +255,15 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     public PageResult<FinanceExpenseReimbursementRespVO> getPage(FinanceExpenseReimbursementPageReqVO reqVO,
                                                                  Long userId, boolean canQueryAll) {
         PageResult<FinanceExpenseReimbursementDO> page = mapper.selectPage(reqVO, (Long) null);
+        Set<String> ended = listEndedProcessInstanceIds(page.getList().stream()
+                .map(FinanceExpenseReimbursementDO::getProcessInstanceId)
+                .filter(StrUtil::isNotBlank)
+                .collect(java.util.stream.Collectors.toSet()));
         List<FinanceExpenseReimbursementRespVO> list = new ArrayList<>();
         for (FinanceExpenseReimbursementDO header : page.getList()) {
-            list.add(toResp(header, canQueryAll));
+            FinanceExpenseReimbursementRespVO vo = toResp(header, canQueryAll);
+            vo.setProcessEnded(isProcessEnded(header.getProcessInstanceId(), ended));
+            list.add(vo);
         }
         return new PageResult<>(list, page.getTotal());
     }
@@ -270,6 +284,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         vo.setProxyTicket(header.getProxyTicket());
         vo.setStatus(header.getStatus());
         vo.setProcessInstanceId(header.getProcessInstanceId());
+        vo.setProcessEnded(isProcessEnded(header.getProcessInstanceId()));
         vo.setApplicantUserId(header.getApplicantUserId());
         vo.setActualUserId(header.getActualUserId());
         vo.setApplicantDeptId(header.getApplicantDeptId());
@@ -329,6 +344,70 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .count() > 0;
     }
 
+    private boolean isProcessEnded(String processInstanceId) {
+        if (StrUtil.isBlank(processInstanceId)) {
+            return true;
+        }
+        return listEndedProcessInstanceIds(List.of(processInstanceId)).contains(processInstanceId);
+    }
+
+    private boolean isProcessEnded(String processInstanceId, Set<String> ended) {
+        if (StrUtil.isBlank(processInstanceId)) {
+            return true;
+        }
+        return ended.contains(processInstanceId);
+    }
+
+    private Set<String> listEndedProcessInstanceIds(Collection<String> processInstanceIds) {
+        if (processInstanceIds == null || processInstanceIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> ids = new HashSet<>();
+        for (String id : processInstanceIds) {
+            if (StrUtil.isNotBlank(id)) {
+                ids.add(id);
+            }
+        }
+        if (ids.isEmpty()) {
+            return Collections.emptySet();
+        }
+        HistoryService historyService = historyServiceProvider.getIfAvailable();
+        if (historyService == null) {
+            return Collections.emptySet();
+        }
+        List<HistoricProcessInstance> list = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceIds(ids)
+                .finished()
+                .list();
+        if (list == null || list.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> ended = new HashSet<>();
+        for (HistoricProcessInstance hi : list) {
+            if (hi != null && StrUtil.isNotBlank(hi.getId()) && hi.getEndTime() != null) {
+                ended.add(hi.getId());
+            }
+        }
+        return ended;
+    }
+
+    private void completeLeftoverCashierTask(FinanceExpenseReimbursementDO header) {
+        if (StrUtil.isBlank(header.getProcessInstanceId())) {
+            return;
+        }
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            return;
+        }
+        org.flowable.task.api.Task task = taskService.createTaskQuery()
+                .processInstanceId(header.getProcessInstanceId())
+                .taskDefinitionKey("taskCashier")
+                .singleResult();
+        if (task != null) {
+            taskService.complete(task.getId());
+        }
+    }
+
     @Override
     public void approve(FinanceExpenseApproveReqVO reqVO, Long userId) {
         FinanceExpenseReimbursementDO header = mapper.selectById(reqVO.getId());
@@ -356,19 +435,36 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (reqVO.getCompanyBankAccountId() == null) {
             throw exception(EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED);
         }
-        if (reqVO.getActualPayDate() == null || StrUtil.isBlank(reqVO.getPayVoucherUrl())) {
+        if (reqVO.getActualPayDate() == null) {
             throw exception(EXPENSE_REIMBURSEMENT_CASHIER_FIELDS_REQUIRED);
         }
-        String url = reqVO.getPayVoucherUrl().trim();
-        if (!(url.startsWith("http://") || url.startsWith("https://")
-                || url.startsWith("/") || url.contains("/admin-api/infra/file/"))) {
-            throw exception(EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID);
+        List<String> urls = new ArrayList<>();
+        if (reqVO.getPayVoucherUrls() != null) {
+            for (String raw : reqVO.getPayVoucherUrls()) {
+                if (StrUtil.isNotBlank(raw)) {
+                    urls.add(raw.trim());
+                }
+            }
+        }
+        if (urls.isEmpty() && StrUtil.isNotBlank(reqVO.getPayVoucherUrl())) {
+            for (String part : reqVO.getPayVoucherUrl().split(",")) {
+                if (StrUtil.isNotBlank(part)) {
+                    urls.add(part.trim());
+                }
+            }
+        }
+        for (String url : urls) {
+            if (!(url.startsWith("http://") || url.startsWith("https://")
+                    || url.startsWith("/") || url.contains("/admin-api/infra/file/"))) {
+                throw exception(EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID);
+            }
         }
         FinanceExpenseReimbursementDO header = mapper.selectById(reqVO.getId());
         if (header == null) {
             throw exception(EXPENSE_REIMBURSEMENT_NOT_EXISTS);
         }
-        if (!FinanceExpenseReimbursementDO.STATUS_WAIT_PAY.equals(header.getStatus())) {
+        if (!FinanceExpenseReimbursementDO.STATUS_WAIT_PAY.equals(header.getStatus())
+                || !isProcessEnded(header.getProcessInstanceId())) {
             throw exception(EXPENSE_REIMBURSEMENT_STATUS_INVALID);
         }
         companyBankAccountService.get(reqVO.getCompanyBankAccountId());
@@ -376,9 +472,10 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                 .id(header.getId())
                 .companyBankAccountId(reqVO.getCompanyBankAccountId())
                 .actualPayDate(reqVO.getActualPayDate())
-                .payVoucherUrl(url)
+                .payVoucherUrl(urls.isEmpty() ? null : String.join(",", urls))
                 .status(FinanceExpenseReimbursementDO.STATUS_PAID)
                 .build());
+        completeLeftoverCashierTask(header);
     }
 
     private void validateInvoiceAndPredoc(FinanceExpenseReimbursementLineReqVO line,

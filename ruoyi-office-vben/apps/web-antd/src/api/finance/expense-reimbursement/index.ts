@@ -35,6 +35,8 @@ export namespace FinanceExpenseApi {
     proxyTicket: boolean;
     status: string;
     processInstanceId?: string;
+    /** 审批流程已结束（无流程实例视为已结束） */
+    processEnded?: boolean;
     applicantUserId?: number;
     actualUserId?: number;
     entityCompanyName?: string;
@@ -138,7 +140,8 @@ export function recordPayExpenseReimbursement(data: {
   id: number;
   companyBankAccountId: number;
   actualPayDate: string;
-  payVoucherUrl: string;
+  payVoucherUrl?: string;
+  payVoucherUrls?: string[];
   taskId?: string;
 }) {
   return requestClient.put('/finance/expense-reimbursement/record-pay', data);

@@ -635,11 +635,12 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
         String normalized = outcome.trim().toUpperCase();
-        // 合同/BPM 可能传 APPROVED；付款成功结束映射为 PAID
-        if ("APPROVED".equals(normalized)) {
-            normalized = FinancePaymentApplicationStatusEnum.PAID.getStatus();
+        // 合同/BPM 可能传 APPROVED；审批结束落待支付，由列表支付写 PAID
+        if ("APPROVED".equals(normalized)
+                || FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)) {
+            normalized = FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus();
         }
-        if (!FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)
+        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(normalized)
                 && !FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(normalized)
                 && !FinancePaymentApplicationStatusEnum.CANCELLED.getStatus().equals(normalized)) {
             throw exception(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID);
@@ -664,10 +665,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         // 已终态且不同则忽略（防乱序）
         if (isTerminal(current.getStatus()) && !normalized.equals(current.getStatus())) {
             return;
-        }
-        // F1：PAID 必须已有出纳证据，防止无凭证进入累计
-        if (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)) {
-            assertCashierEvidencePresent(current);
         }
         // 锁内再判 pay_line，与 recordPay 串行
         if (FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(normalized)
@@ -752,8 +749,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
         }
 
-        // F2：新支付须校验办理人/候选人
-        Task task = requireCashierTask(reqVO.getTaskId(), application, userId);
+        Task task = resolveCashierTaskForPay(reqVO.getTaskId(), application, userId);
 
         // 账户归属主体：普通付款用单头主体；薪资/税金可用账户所属主体（须在明细主体集合内）
         Long entityForAccount = resolvePayEntityCompanyDeptId(application, reqVO.getCompanyBankAccountId());
@@ -804,6 +800,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                             FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
                             FinancePaymentApplicationStatusEnum.PENDING.getStatus())
                     .eq("process_instance_id", application.getProcessInstanceId())
+                    .set("status", FinancePaymentApplicationStatusEnum.PAID.getStatus())
                     .set("actual_pay_date", reqVO.getActualPayDate())
                     .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
                     .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null))
@@ -812,12 +809,12 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
             }
             boolean complete = reqVO.getCompleteWhenFullyPaid() == null || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
-            if (Boolean.FALSE.equals(reqVO.getMaterialsComplete())) {
+            if (Boolean.FALSE.equals(reqVO.getMaterialsComplete()) && task != null) {
                 complete = false;
                 processInstanceApi.returnCurrentTaskToStartUserTask(
                         userId, task.getId(), "发票/资料不齐，退回发起人补传");
             }
-            if (complete) {
+            if (complete && task != null) {
                 completeCashierTask(task);
             }
         } else if (newSum.compareTo(application.getApplyAmount()) > 0) {
@@ -1136,6 +1133,26 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
     private Task requireCashierTask(String taskId, FinancePaymentApplicationDO application, Long userId) {
         return requireTask(taskId, application, TASK_CASHIER, userId);
+    }
+
+    /**
+     * 列表支付：无出纳任务也可登记。旧流程若仍停在出纳，带 taskId 或按实例查找后 complete。
+     */
+    private Task resolveCashierTaskForPay(String taskId, FinancePaymentApplicationDO application, Long userId) {
+        if (StrUtil.isNotBlank(taskId)) {
+            return requireCashierTask(taskId, application, userId);
+        }
+        if (StrUtil.isBlank(application.getProcessInstanceId())) {
+            return null;
+        }
+        TaskService taskService = taskServiceProvider.getIfAvailable();
+        if (taskService == null) {
+            return null;
+        }
+        return taskService.createTaskQuery()
+                .processInstanceId(application.getProcessInstanceId())
+                .taskDefinitionKey(TASK_CASHIER)
+                .singleResult();
     }
 
     /**

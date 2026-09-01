@@ -18,7 +18,9 @@ import jakarta.validation.constraints.NotNull;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +42,8 @@ public class FinancePaymentApplicationController {
     private FinancePaymentPredocService paymentPredocService;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
+    @Resource
+    private cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient invoiceOcrClient;
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建付款申请并启动审批")
@@ -113,8 +117,21 @@ public class FinancePaymentApplicationController {
         return success(Map.of("paidSum", paid));
     }
 
+    @PostMapping("/ocr-voucher")
+    @Operation(summary = "识别银行回单金额（失败返回空字段）")
+    @PreAuthorize("@ss.hasPermission('finance:payment-application:record-pay')")
+    public CommonResult<cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient.Result> ocrVoucher(
+            @RequestParam(value = "fileUrl", required = false) String fileUrl,
+            @RequestParam(value = "file", required = false) MultipartFile file) throws IOException {
+        cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient.Result result =
+                file != null && !file.isEmpty()
+                        ? invoiceOcrClient.recognizeBytes(file.getBytes())
+                        : invoiceOcrClient.recognize(fileUrl);
+        return success(result);
+    }
+
     @PostMapping("/record-pay")
-    @Operation(summary = "出纳支付登记并 complete 任务（仅 ORDINARY）")
+    @Operation(summary = "列表支付登记（审批结束后；仅 ORDINARY）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:record-pay')")
     public CommonResult<Boolean> recordPay(@Valid @RequestBody FinancePaymentRecordPayReqVO reqVO) {
         // 类型闭合：禁止对薪资/税金单走普通 record-pay

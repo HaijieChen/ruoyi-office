@@ -58,11 +58,11 @@ public class FinancePaymentApprovalOutcomeDelegate implements JavaDelegate, Exec
         if (processStatus == null
                 || BpmProcessInstanceStatusEnum.RUNNING.getStatus().equals(processStatus)) {
             // end 事件常在已通过后触发
-            return FinancePaymentApplicationStatusEnum.PAID.getStatus();
+            return FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus();
         }
         if (BpmProcessInstanceStatusEnum.APPROVE.getStatus().equals(processStatus)
                 || BpmTaskStatusEnum.APPROVE.getStatus().equals(processStatus)) {
-            return FinancePaymentApplicationStatusEnum.PAID.getStatus();
+            return FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus();
         }
         if (BpmProcessInstanceStatusEnum.REJECT.getStatus().equals(processStatus)
                 || BpmTaskStatusEnum.REJECT.getStatus().equals(processStatus)) {

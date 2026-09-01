@@ -422,7 +422,7 @@ watch(
 
         <!-- F1/F6 出纳：账户必选 + 金额/多笔 residual -->
         <Card
-          v-if="isCashierNode && isApproval !== false"
+          v-if="false"
           class="mb-4"
           size="small"
           title="出纳支付办结"

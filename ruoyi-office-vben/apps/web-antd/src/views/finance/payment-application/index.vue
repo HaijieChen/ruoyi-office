@@ -57,18 +57,13 @@ function handleResubmit(row: FinancePaymentApplicationApi.Application) {
   createModalApi.open();
 }
 
-async function handleRecordPay(row: FinancePaymentApplicationApi.Application) {
-  // F3：主路径从 BPM 待办进入（带 taskId）；列表仅兜底，引导带 taskId 或进流程详情
-  if (row.processInstanceId) {
-    await router.push({
-      path: `/bpm/process-instance/detail`,
-      query: { id: row.processInstanceId },
-    });
+function handleRecordPay(row: FinancePaymentApplicationApi.Application) {
+  if (row.status !== 'WAIT_PAY') {
+    message.warning('仅审批结束后可支付');
     return;
   }
   payModalApi.setData({ id: row.id });
   payModalApi.open();
-  message.info('请从「我的待办」进入出纳节点，或在弹窗中填写 taskId');
 }
 
 function shouldOpenCreateFromQuery() {
@@ -182,7 +177,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               onClick: handleResubmit.bind(null, row),
             },
             {
-              label: '出纳办结',
+              label: '支付',
               type: 'link',
               ifShow: row.status === 'WAIT_PAY',
               onClick: handleRecordPay.bind(null, row),

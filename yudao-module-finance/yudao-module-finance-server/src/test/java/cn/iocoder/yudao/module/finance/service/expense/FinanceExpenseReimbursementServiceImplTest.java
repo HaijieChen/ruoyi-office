@@ -17,6 +17,7 @@ import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -31,6 +32,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_ACCESS_DENIED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_LINES_EMPTY;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_STATUS_INVALID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -88,6 +90,19 @@ class FinanceExpenseReimbursementServiceImplTest {
         service = new FinanceExpenseReimbursementServiceImpl(mapper, lineMapper, users, bpm,
                 mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class),
                 predoc, deptApi, taskServiceProvider, noDao);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<org.flowable.engine.HistoryService> historyProvider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(historyProvider.getIfAvailable()).thenReturn(null);
+        ReflectionTestUtils.setField(service, "historyServiceProvider", historyProvider);
+        cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport participant =
+                mock(cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport.class);
+        when(participant.canReadBill(any(), any(), any())).thenAnswer(inv -> {
+            Long userId = inv.getArgument(0);
+            Long applicantId = inv.getArgument(1);
+            return userId != null && userId.equals(applicantId);
+        });
+        ReflectionTestUtils.setField(service, "processParticipantSupport", participant);
     }
 
     @Test
@@ -152,6 +167,34 @@ class FinanceExpenseReimbursementServiceImplTest {
         req.setPayVoucherUrl("https://x/v.pdf");
         ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
         assertEquals(EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void recordPayRejectsWhenProcessStillRunning() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L)
+                .status(FinanceExpenseReimbursementDO.STATUS_WAIT_PAY)
+                .processInstanceId("pi-running")
+                .build());
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<org.flowable.engine.HistoryService> historyProvider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceIds(any())).thenReturn(hq);
+        when(hq.finished()).thenReturn(hq);
+        when(hq.list()).thenReturn(List.of());
+        ReflectionTestUtils.setField(service, "historyServiceProvider", historyProvider);
+
+        FinanceExpenseRecordPayReqVO req = new FinanceExpenseRecordPayReqVO();
+        req.setId(88L);
+        req.setCompanyBankAccountId(1L);
+        req.setActualPayDate(LocalDate.of(2026, 8, 20));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_STATUS_INVALID.getCode(), ex.getCode());
     }
 
     @Test

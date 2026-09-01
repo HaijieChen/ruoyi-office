@@ -70,8 +70,8 @@ public interface FinancePaymentApplicationService {
     void updateCurrentNode(Long appId, String nodeKey, String nodeName);
 
     /**
-     * 流程终态：APPROVED→PAID，REJECTED，CANCELLED（幂等）
-     * <p>PAID 时台账必须已有 actual_pay_date + pay_voucher_url（F1）。
+     * 流程终态：APPROVED→WAIT_PAY（列表支付），REJECTED，CANCELLED（幂等）。
+     * PAID 仅由 recordPay 足额写入，不再由流程结束直接落。
      */
     void onApprovalOutcome(Long appId, String outcome, String processInstanceId);
 

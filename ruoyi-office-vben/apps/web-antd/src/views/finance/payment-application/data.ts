@@ -19,7 +19,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
         allowClear: true,
         options: [
           { label: '审批中', value: 'PENDING' },
-          { label: '待支付', value: 'WAIT_PAY' },
+          { label: '已通过 · 待支付', value: 'WAIT_PAY' },
           { label: '已支付', value: 'PAID' },
           { label: '已驳回', value: 'REJECTED' },
           { label: '已取消', value: 'CANCELLED' },
@@ -45,7 +45,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: '审批中',
-  WAIT_PAY: '待支付',
+  WAIT_PAY: '已通过 · 待支付',
   PAID: '已支付',
   REJECTED: '已驳回',
   CANCELLED: '已取消',

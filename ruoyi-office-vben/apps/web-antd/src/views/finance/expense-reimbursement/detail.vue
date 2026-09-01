@@ -69,7 +69,7 @@ async function load() {
     bill.value = await getExpenseReimbursement(queryId.value);
     approvedAmount.value = Number(bill.value?.applyAmount || 0);
     accountOptions.value = [];
-    if (bill.value?.status === 'WAIT_PAY' && props.isApproval !== false) {
+    if (bill.value?.status === 'WAIT_PAY' && !embedded.value) {
       try {
         const page = await getCompanyBankAccountPage(
           {
@@ -105,23 +105,27 @@ async function onApprove() {
 }
 
 async function onRecordPay() {
-  if (!bill.value?.id || !companyBankAccountId.value || !payDate.value || !payVoucherUrl.value) {
-    message.warning('请填写账户、支付日和凭证');
+  if (!bill.value?.id || !companyBankAccountId.value || !payDate.value) {
+    message.warning('请填写账户和支付日');
     return;
   }
+  const urls = payVoucherUrl.value
+    ? payVoucherUrl.value.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
   await recordPayExpenseReimbursement({
     id: bill.value.id,
     companyBankAccountId: companyBankAccountId.value,
     actualPayDate: payDate.value.format('YYYY-MM-DD'),
-    payVoucherUrl: payVoucherUrl.value,
-    taskId: String(query.taskId || ""),
+    payVoucherUrls: urls,
+    payVoucherUrl: urls.join(','),
   });
-  message.success('已登记支付');
+  message.success('已支付');
   await load();
 }
 
 function onVoucher(v: string | string[]) {
-  payVoucherUrl.value = Array.isArray(v) ? String(v[0] || '') : String(v || '');
+  const arr = Array.isArray(v) ? v : v ? [v] : [];
+  payVoucherUrl.value = arr.filter(Boolean).join(',');
 }
 
 function formatFeeDate(v: unknown) {
@@ -210,12 +214,21 @@ onMounted(load);
           <Input v-model:value="financeComment" placeholder="审核意见" />
           <Button type="primary" @click="onApprove">提交实报金额</Button>
         </div>
-        <div v-if="bill.status === 'WAIT_PAY' && isApproval !== false" class="mt-6 space-y-2">
-          <div class="font-medium">出纳登记</div>
+        <div
+          v-if="bill.status === 'WAIT_PAY' && !embedded && bill.processEnded !== false"
+          class="mt-6 space-y-2"
+        >
+          <div class="font-medium">支付（附件可选）</div>
           <Select v-model:value="companyBankAccountId" class="w-72" :options="accountOptions" placeholder="公司银行账户" />
           <DatePicker v-model:value="payDate" />
-          <FileUpload :value="payVoucherUrl ? [payVoucherUrl] : []" :max-number="1" @update:value="onVoucher" />
-          <Button type="primary" @click="onRecordPay">登记支付</Button>
+          <FileUpload
+            :value="payVoucherUrl ? payVoucherUrl.split(',').filter(Boolean) : []"
+            :max-number="30"
+            :multiple="true"
+            help-text="可选，最多 30 个，不识别金额"
+            @update:value="onVoucher"
+          />
+          <Button type="primary" @click="onRecordPay">支付</Button>
         </div>
       </div>
     </Spin>

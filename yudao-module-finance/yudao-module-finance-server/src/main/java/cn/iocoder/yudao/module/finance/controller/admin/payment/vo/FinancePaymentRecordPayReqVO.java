@@ -15,7 +15,7 @@ public class FinancePaymentRecordPayReqVO {
     @NotNull(message = "申请 id 不能为空")
     private Long id;
 
-    @NotEmpty(message = "任务 id 不能为空")
+    @Schema(description = "出纳任务 id；列表支付可空")
     private String taskId;
 
     @Schema(description = "公司银行账户 id（必选）", requiredMode = Schema.RequiredMode.REQUIRED)

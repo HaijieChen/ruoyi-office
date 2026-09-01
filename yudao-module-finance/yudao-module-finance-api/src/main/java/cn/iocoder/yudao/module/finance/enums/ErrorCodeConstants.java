@@ -293,7 +293,7 @@ public interface ErrorCodeConstants {
     ErrorCode EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED = new ErrorCode(1_040_008_011,
             "出纳支付须选择公司银行账户");
     ErrorCode EXPENSE_REIMBURSEMENT_CASHIER_FIELDS_REQUIRED = new ErrorCode(1_040_008_012,
-            "出纳办结须填写实际支付日期与支付凭证");
+            "列表支付须填写实际支付日期");
     ErrorCode EXPENSE_REIMBURSEMENT_DEPT_REQUIRED = new ErrorCode(1_040_008_013,
             "申请人档案缺少部门，无法发起报销");
     ErrorCode EXPENSE_REIMBURSEMENT_ATTACHMENT_URL_INVALID = new ErrorCode(1_040_008_014,

@@ -16,10 +16,12 @@ import dayjs, { type Dayjs } from 'dayjs';
 
 import {
   getPaymentApplication,
+  ocrPaymentVoucher,
   recordPayPaymentApplication,
 } from '#/api/finance/payment-application';
 import { getCompanyBankAccountSimpleList } from '#/api/finance/company-bank-account';
 import { FileUpload } from '#/components/upload';
+import { useUpload } from '#/components/upload/use-upload';
 
 defineOptions({ name: 'FinancePaymentRecordPay' });
 
@@ -92,6 +94,64 @@ const remaining = computed(() => {
   return Math.max(0, +(apply - paid).toFixed(2));
 });
 
+const { httpRequest } = useUpload();
+
+function unwrapOcr(raw: any) {
+  if (!raw || typeof raw !== 'object') return raw;
+  if (raw.amount != null || raw.feeDate) return raw;
+  if (raw.data && typeof raw.data === 'object') return raw.data;
+  return raw;
+}
+
+function rawUploadFile(file: File) {
+  const inner = (file as any)?.originFileObj;
+  return inner instanceof Blob ? inner : file;
+}
+
+async function uploadVoucherAndOcr(file: File, onUploadProgress?: any) {
+  const raw = rawUploadFile(file);
+  const hide = message.loading({ content: '正在识别回单金额...', duration: 0 });
+  try {
+    let amount: number | undefined;
+    if (raw instanceof Blob) {
+      const ocr = unwrapOcr(await ocrPaymentVoucher('', raw as File));
+      if (ocr?.amount != null && !Number.isNaN(Number(ocr.amount))) {
+        amount = Number(ocr.amount);
+      }
+    }
+    const res = await httpRequest(raw, onUploadProgress);
+    const url =
+      typeof res === 'string'
+        ? res
+        : String((res as any)?.url || (res as any)?.data || '');
+    if (amount == null && url) {
+      const ocr = unwrapOcr(await ocrPaymentVoucher(url));
+      if (ocr?.amount != null && !Number.isNaN(Number(ocr.amount))) {
+        amount = Number(ocr.amount);
+      }
+    }
+    if (amount != null) {
+      if (amount - remaining.value > 1e-9) {
+        message.error(
+          `回单金额 ¥${amount.toFixed(2)} 超过剩余可付 ¥${remaining.value.toFixed(2)}，已拦截`,
+        );
+        throw new Error('OCR amount exceed remaining');
+      }
+      form.value.payAmount = amount;
+      message.success(
+        amount + 1e-9 >= remaining.value
+          ? '已识别为全部付款，请核对'
+          : '已识别为部分付款，请核对',
+      );
+    } else {
+      message.warning('未识别到金额，请手填');
+    }
+    return res;
+  } finally {
+    hide();
+  }
+}
+
 function onVoucherUpload(val: string | string[]) {
   const arr = Array.isArray(val) ? val : val ? [val] : [];
   form.value.payVoucherUrl = arr[0] || '';
@@ -145,8 +205,8 @@ const [Modal, modalApi] = useVbenModal({
     }
   },
   async onConfirm() {
-    if (!form.value.id || !form.value.taskId) {
-      message.error('缺少申请 id 或任务 id（待办入口请带 taskId）');
+    if (!form.value.id) {
+      message.error('缺少申请 id');
       return;
     }
     if (!form.value.companyBankAccountId) {
@@ -154,14 +214,25 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     if (!form.value.actualPayDate || !form.value.payVoucherUrl) {
-      message.error('支付日与支付凭证必填');
+      message.error('支付日与银行回单必填');
+      return;
+    }
+    const amount = Number(form.value.payAmount || 0);
+    if (!amount || amount <= 0) {
+      message.error('请填写支付金额');
+      return;
+    }
+    if (amount - remaining.value > 1e-9) {
+      message.error(
+        `支付金额 ¥${amount.toFixed(2)} 超过剩余可付 ¥${remaining.value.toFixed(2)}，已拦截`,
+      );
       return;
     }
     modalApi.lock();
     try {
       await recordPayPaymentApplication({
         id: form.value.id,
-        taskId: form.value.taskId,
+        taskId: form.value.taskId || undefined,
         companyBankAccountId: form.value.companyBankAccountId,
         payAmount: form.value.payAmount,
         actualPayDate: form.value.actualPayDate.format('YYYY-MM-DD'),
@@ -170,7 +241,9 @@ const [Modal, modalApi] = useVbenModal({
         idempotencyKey: form.value.idempotencyKey!,
         materialsComplete: form.value.materialsComplete !== false,
       });
-      message.success('出纳支付已登记');
+      message.success(
+        amount + 1e-9 >= remaining.value ? '已全部付款' : '已登记部分付款',
+      );
       emit('success');
       modalApi.close();
     } finally {
@@ -186,11 +259,8 @@ watch(
 </script>
 
 <template>
-  <Modal title="出纳支付办结" class="w-[560px]">
+  <Modal title="支付" class="w-[560px]">
     <Form :label-col="{ span: 7 }" :wrapper-col="{ span: 15 }">
-      <Form.Item label="任务 ID" required>
-        <Input v-model:value="form.taskId" placeholder="BPM 待办 taskId" />
-      </Form.Item>
       <Form.Item v-if="multiEntity" label="付款主体" required>
         <Select
           v-model:value="form.entityCompanyDeptId"
@@ -222,13 +292,15 @@ watch(
       <Form.Item label="实际支付日期" required>
         <DatePicker v-model:value="form.actualPayDate" class="w-full" />
       </Form.Item>
-      <Form.Item label="支付凭证" required>
+      <Form.Item label="银行回单" required>
         <FileUpload
           :value="form.payVoucherUrl ? [form.payVoucherUrl] : []"
           :max-number="1"
           :max-size="20"
           :multiple="false"
-          help-text="上传回单/截图"
+          :accept="['pdf', 'jpg', 'jpeg', 'png']"
+          help-text="必传；上传后识别金额，小于剩余为部分付款，等于全部，大于拦截"
+          :api="(file, progress) => uploadVoucherAndOcr(file as File, progress)"
           @update:value="onVoucherUpload"
         />
       </Form.Item>

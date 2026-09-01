@@ -107,6 +107,14 @@ class FinancePaymentApplicationServiceImplTest {
                 deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
                 salaryLineMapper, taxLineMapper);
         injectBusinessStaffSupport();
+        cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport participant =
+                mock(cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport.class);
+        when(participant.canReadBill(any(), any(), any())).thenAnswer(inv -> {
+            Long userId = inv.getArgument(0);
+            Long applicantId = inv.getArgument(1);
+            return userId != null && userId.equals(applicantId);
+        });
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "processParticipantSupport", participant);
         when(noRedisDAO.generate(any(LocalDate.class))).thenReturn("PAY-20260806-1");
         doAnswer(inv -> {
             FinancePaymentApplicationDO a = inv.getArgument(0);
@@ -138,6 +146,14 @@ class FinancePaymentApplicationServiceImplTest {
                 mock(cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport.class);
         when(staffSupport.resolve(anyLong(), any())).thenAnswer(inv -> inv.getArgument(0));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "businessStaffSupport", staffSupport);
+        cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport participant =
+                mock(cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport.class);
+        when(participant.canReadBill(any(), any(), any())).thenAnswer(inv -> {
+            Long userId = inv.getArgument(0);
+            Long applicantId = inv.getArgument(1);
+            return userId != null && userId.equals(applicantId);
+        });
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "processParticipantSupport", participant);
     }
 
     private FinancePaymentApplicationCreateAndStartReqVO baseReq() {
@@ -256,21 +272,21 @@ class FinancePaymentApplicationServiceImplTest {
     }
 
     @Test
-    void onApprovalOutcomePaidIdempotent() {
-        when(mapper.selectById(1L)).thenReturn(FinancePaymentApplicationDO.builder()
-                .id(1L).status(FinancePaymentApplicationStatusEnum.PAID.getStatus())
-                .actualPayDate(LocalDate.now()).payVoucherUrl("http://v").build());
-        service.onApprovalOutcome(1L, "PAID", "p1");
-        verify(mapper, never()).update(isNull(), any());
+    void onApprovalOutcomeApprovedMapsToWaitPay() {
+        when(mapper.selectByIdForUpdate(2L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(2L).status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("p2").build());
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        service.onApprovalOutcome(2L, "APPROVED", "p2");
+        verify(mapper).update(isNull(), any());
     }
 
     @Test
-    void onApprovalOutcomePaidRequiresEvidence() {
-        when(mapper.selectById(2L)).thenReturn(FinancePaymentApplicationDO.builder()
-                .id(2L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus()).build());
-        ServiceException ex = assertThrows(ServiceException.class,
-                () -> service.onApprovalOutcome(2L, "PAID", "p2"));
-        assertEquals(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED.getCode(), ex.getCode());
+    void onApprovalOutcomeWaitPayIdempotent() {
+        when(mapper.selectByIdForUpdate(1L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(1L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("p1").build());
+        service.onApprovalOutcome(1L, "WAIT_PAY", "p1");
         verify(mapper, never()).update(isNull(), any());
     }
 
@@ -331,6 +347,10 @@ class FinancePaymentApplicationServiceImplTest {
                 deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
                 salaryLineMapper, taxLineMapper);
         injectBusinessStaffSupport();
+        cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport participant =
+                mock(cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport.class);
+        when(participant.canReadBill(any(), any(), any())).thenReturn(true);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "processParticipantSupport", participant);
 
         FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
         req.setId(4L);

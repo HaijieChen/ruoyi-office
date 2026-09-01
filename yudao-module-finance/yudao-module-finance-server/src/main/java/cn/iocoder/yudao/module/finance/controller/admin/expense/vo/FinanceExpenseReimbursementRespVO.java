@@ -21,6 +21,8 @@ public class FinanceExpenseReimbursementRespVO {
     private Boolean proxyTicket;
     private String status;
     private String processInstanceId;
+    /** 审批流程是否已结束；无流程实例视为已结束 */
+    private Boolean processEnded;
     private Long applicantUserId;
     private Long actualUserId;
     private Long applicantDeptId;
