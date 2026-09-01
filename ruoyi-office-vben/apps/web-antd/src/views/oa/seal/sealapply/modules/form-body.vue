@@ -20,8 +20,6 @@ import type { Dayjs } from 'dayjs';
 import { submitSealApplyBill } from '#/api/oa/seal/sealapply';
 import { FileUpload } from '#/components/upload';
 
-import { SealSelectModal } from '../../components';
-
 defineOptions({ name: 'OaSealApplyFormBody' });
 
 const emit = defineEmits<{
@@ -31,7 +29,6 @@ const emit = defineEmits<{
 
 const userStore = useUserStore();
 const formRef = ref();
-const modalRef = ref<InstanceType<typeof SealSelectModal>>();
 const submitting = ref(false);
 
 const formData = ref<{
@@ -40,14 +37,7 @@ const formData = ref<{
   companyName?: string;
   companyId?: number;
   deptId?: number;
-  sealId?: number;
-  sealNo?: string;
   sealName?: string;
-  sealType?: number;
-  keeperId?: number;
-  keeperName?: string;
-  keeperDeptId?: number;
-  keeperDeptName?: string;
   useType?: number;
   useMode?: number;
   documentTitle?: string;
@@ -94,7 +84,7 @@ async function reset() {
 }
 
 const rules: Record<string, Rule[]> = {
-  sealName: [{ required: true, message: '请选择印章', trigger: 'change' }],
+  sealName: [{ required: true, message: '请输入印章', trigger: 'blur' }],
   useType: [{ required: true, message: '请选择用章类型', trigger: 'change' }],
   useMode: [{ required: true, message: '请选择用章方式', trigger: 'change' }],
   expectedUseTime: [
@@ -103,26 +93,11 @@ const rules: Record<string, Rule[]> = {
   cause: [{ required: true, message: '请填写用章事由', trigger: 'blur' }],
 };
 
-function openSealSelect() {
-  modalRef.value?.modalApi.open();
-}
-
-function handleSealSelect(val: any) {
-  if (!val) return;
-  formData.value.sealId = val.id;
-  formData.value.sealNo = val.sealNo;
-  formData.value.sealName = val.sealName;
-  formData.value.sealType = val.sealType;
-  formData.value.keeperId = val.keeperId;
-  formData.value.keeperName = val.keeperName;
-  formData.value.keeperDeptId = val.keeperDeptId;
-  formData.value.keeperDeptName = val.keeperDeptName;
-}
-
 async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
   await formRef.value?.validate();
-  if (!formData.value.sealId || !formData.value.sealNo) {
-    message.warning('请选择印章');
+  const sealName = String(formData.value.sealName || '').trim();
+  if (!sealName) {
+    message.warning('请输入印章');
     throw new Error('seal required');
   }
   if (
@@ -139,14 +114,7 @@ async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
     const urls = formData.value.attachmentUrls || [];
     await submitSealApplyBill({
       billCode: '',
-      sealId: formData.value.sealId,
-      sealNo: String(formData.value.sealNo),
-      sealName: formData.value.sealName,
-      sealType: formData.value.sealType,
-      keeperId: formData.value.keeperId,
-      keeperName: formData.value.keeperName,
-      keeperDeptId: formData.value.keeperDeptId,
-      keeperDeptName: formData.value.keeperDeptName,
+      sealName,
       cause: String(formData.value.cause).trim(),
       useType: Number(formData.value.useType),
       useMode: Number(formData.value.useMode),
@@ -212,19 +180,7 @@ defineExpose({ reset, submit, getPredictVariables: () => ({}), submitting });
       <Input :value="formData.deptName" disabled />
     </Form.Item>
     <Form.Item label="印章" name="sealName">
-      <Input
-        :value="formData.sealName"
-        readonly
-        placeholder="请选择印章"
-        class="cursor-pointer"
-        @click="openSealSelect"
-      />
-    </Form.Item>
-    <Form.Item label="保管人">
-      <Input :value="formData.keeperName" disabled />
-    </Form.Item>
-    <Form.Item label="保管部门">
-      <Input :value="formData.keeperDeptName" disabled />
+      <Input v-model:value="formData.sealName" placeholder="请输入印章" />
     </Form.Item>
     <Form.Item label="用章类型" name="useType">
       <Select
@@ -314,5 +270,4 @@ defineExpose({ reset, submit, getPredictVariables: () => ({}), submitting });
       />
     </Form.Item>
   </Form>
-  <SealSelectModal ref="modalRef" @select="handleSealSelect" />
 </template>

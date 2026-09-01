@@ -11,8 +11,8 @@ export namespace SealApplyBillApi {
     billCode: string;
     processInstanceId?: string;
     processStatus?: number;
-    sealId: number;
-    sealNo: string;
+    sealId?: number;
+    sealNo?: string;
     sealName?: string;
     sealType?: number;
     keeperId?: number;
