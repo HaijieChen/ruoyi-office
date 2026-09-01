@@ -39,8 +39,6 @@ import cn.iocoder.yudao.module.finance.enums.FinancePaymentApplicationStatusEnum
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
 import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
-import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
-import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
@@ -55,7 +53,6 @@ import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.ObjectProvider;
-import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -109,10 +106,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private final FinancePaymentPayLineMapper payLineMapper;
     private final FinancePaymentSalaryLineMapper salaryLineMapper;
     private final FinancePaymentTaxLineMapper taxLineMapper;
-    @Resource
-    private FinanceBusinessStaffSupport businessStaffSupport;
-    @Resource
-    private FinanceProcessParticipantSupport processParticipantSupport;
 
     public FinancePaymentApplicationServiceImpl(FinancePaymentApplicationMapper applicationMapper,
                                                 FinancePaymentApplicationNoRedisDAO applicationNoRedisDAO,
@@ -167,7 +160,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         applicationMapper.insert(application);
 
         String processInstanceId = startProcess(applicantUserId, application,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(application.getId());
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -234,7 +227,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
 
         FinancePaymentApplicationDO reloaded = getApplication(id);
-        String processInstanceId = startProcess(userId, reloaded, reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
+        String processInstanceId = startProcess(userId, reloaded, reqVO.getStartUserSelectAssignees(), PROCESS_KEY, reqVO.getStartCompanyDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(id);
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -281,7 +274,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         applicationMapper.insert(application);
         insertSalaryLines(application.getId(), preparedLines.salaryLines());
         String processInstanceId = startProcess(applicantUserId, application,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(application.getId());
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -330,7 +323,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         applicationMapper.insert(application);
         insertTaxLines(application.getId(), preparedLines.taxLines());
         String processInstanceId = startProcess(applicantUserId, application,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(application.getId());
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -400,7 +393,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
         FinancePaymentApplicationDO reloaded = getApplication(id);
         String processInstanceId = startProcess(userId, reloaded,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_SALARY, reqVO.getStartCompanyDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(id);
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -468,7 +461,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
         FinancePaymentApplicationDO reloaded = getApplication(id);
         String processInstanceId = startProcess(userId, reloaded,
-                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId(), reqVO.getStartDeptId());
+                reqVO.getStartUserSelectAssignees(), PROCESS_KEY_TAX, reqVO.getStartCompanyDeptId());
         FinancePaymentApplicationDO processUpdate = new FinancePaymentApplicationDO();
         processUpdate.setId(id);
         processUpdate.setProcessInstanceId(processInstanceId);
@@ -569,8 +562,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     public FinancePaymentApplicationDO getApplicationForRead(Long id, Long userId, boolean manageAll) {
         FinancePaymentApplicationDO application = getApplication(id);
-        if (manageAll || processParticipantSupport.canReadBill(
-                userId, application.getApplicantUserId(), application.getProcessInstanceId())) {
+        if (manageAll || Objects.equals(application.getApplicantUserId(), userId)
+                || isActiveTaskCandidateOrAssignee(application, userId)) {
             return application;
         }
         throw exception(PAYMENT_APPLICATION_ACCESS_DENIED);
@@ -594,14 +587,17 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (application == null) {
             return false;
         }
-        return processParticipantSupport.canReadBill(
-                userId, application.getApplicantUserId(), application.getProcessInstanceId());
+        if (Objects.equals(application.getApplicantUserId(), userId)) {
+            return true;
+        }
+        return isActiveTaskCandidateOrAssignee(application, userId);
     }
 
     @Override
     public PageResult<FinancePaymentApplicationDO> getApplicationPage(FinancePaymentApplicationPageReqVO pageReqVO,
                                                                       Long loginUserId, boolean manageAll) {
-        return applicationMapper.selectPage(pageReqVO, (Long) null);
+        Long filterApplicant = manageAll ? null : loginUserId;
+        return applicationMapper.selectPage(pageReqVO, filterApplicant);
     }
 
     @Override
@@ -624,12 +620,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                         FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
                 .set("current_node_key", nodeKey)
                 .set("current_node_name", nodeName);
-        // 仅出纳节点进入待支付；财务/部门等审批节点必须保持审批中
-        if (TASK_CASHIER.equals(nodeKey) || "cashier".equals(nodeKey)) {
-            uw.set("status", FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus());
-        } else {
-            uw.set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus());
-        }
+        // 审批链未结束一律审批中；待支付只在流程 APPROVE 结束时写入
+        uw.set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus());
         applicationMapper.update(null, uw);
     }
 
@@ -640,12 +632,12 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID);
         }
         String normalized = outcome.trim().toUpperCase();
-        // 合同/BPM 可能传 APPROVED；审批结束落待支付，由列表支付写 PAID
-        if ("APPROVED".equals(normalized)
-                || FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)) {
+        // 审批流通过结束 → 已通过待支付；真正付款后才 PAID
+        if ("APPROVED".equals(normalized)) {
             normalized = FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus();
         }
         if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(normalized)
+                && !FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)
                 && !FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(normalized)
                 && !FinancePaymentApplicationStatusEnum.CANCELLED.getStatus().equals(normalized)) {
             throw exception(PAYMENT_APPLICATION_APPROVAL_OUTCOME_INVALID);
@@ -670,6 +662,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         // 已终态且不同则忽略（防乱序）
         if (isTerminal(current.getStatus()) && !normalized.equals(current.getStatus())) {
             return;
+        }
+        // F1：PAID 必须已有出纳证据，防止无凭证进入累计
+        if (FinancePaymentApplicationStatusEnum.PAID.getStatus().equals(normalized)) {
+            assertCashierEvidencePresent(current);
         }
         // 锁内再判 pay_line，与 recordPay 串行
         if (FinancePaymentApplicationStatusEnum.REJECTED.getStatus().equals(normalized)
@@ -754,7 +750,13 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
         }
 
-        Task task = resolveCashierTaskForPay(reqVO.getTaskId(), application, userId);
+        // 审批流已结束后从列表支付：无出纳任务；流程中出纳节点仍可带 taskId
+        Task task = null;
+        if (StrUtil.isNotBlank(reqVO.getTaskId())) {
+            task = requireCashierTask(reqVO.getTaskId(), application, userId);
+        } else if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())) {
+            throw exception(PAYMENT_APPLICATION_TASK_INVALID);
+        }
 
         // 账户归属主体：普通付款用单头主体；薪资/税金可用账户所属主体（须在明细主体集合内）
         Long entityForAccount = resolvePayEntityCompanyDeptId(application, reqVO.getCompanyBankAccountId());
@@ -799,25 +801,32 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         BigDecimal newSum = alreadyPaid.add(payAmount);
         if (newSum.compareTo(application.getApplyAmount()) == 0) {
             // 写申请头证据字段（兼容 F1 / 历史详情展示）
-            int updated = applicationMapper.update(null, new UpdateWrapper<FinancePaymentApplicationDO>()
+            UpdateWrapper<FinancePaymentApplicationDO> headerUw = new UpdateWrapper<FinancePaymentApplicationDO>()
                     .eq("id", application.getId())
                     .in("status",
                             FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
                             FinancePaymentApplicationStatusEnum.PENDING.getStatus())
-                    .eq("process_instance_id", application.getProcessInstanceId())
-                    .set("status", FinancePaymentApplicationStatusEnum.PAID.getStatus())
                     .set("actual_pay_date", reqVO.getActualPayDate())
                     .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
                     .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null))
-                    .set("materials_status", Boolean.FALSE.equals(reqVO.getMaterialsComplete()) ? "WAIT_INVOICE" : "COMPLETE"));
+                    .set("materials_status", Boolean.FALSE.equals(reqVO.getMaterialsComplete()) ? "WAIT_INVOICE" : "COMPLETE")
+                    .set("status", FinancePaymentApplicationStatusEnum.PAID.getStatus())
+                    .set("current_node_key", null)
+                    .set("current_node_name", null);
+            if (StrUtil.isNotBlank(application.getProcessInstanceId())) {
+                headerUw.eq("process_instance_id", application.getProcessInstanceId());
+            }
+            int updated = applicationMapper.update(null, headerUw);
             if (updated == 0) {
                 throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
             }
             boolean complete = reqVO.getCompleteWhenFullyPaid() == null || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
-            if (Boolean.FALSE.equals(reqVO.getMaterialsComplete()) && task != null) {
+            if (Boolean.FALSE.equals(reqVO.getMaterialsComplete())) {
                 complete = false;
-                processInstanceApi.returnCurrentTaskToStartUserTask(
-                        userId, task.getId(), "发票/资料不齐，退回发起人补传");
+                if (task != null) {
+                    processInstanceApi.returnCurrentTaskToStartUserTask(
+                            userId, task.getId(), "发票/资料不齐，退回发起人补传");
+                }
             }
             if (complete && task != null) {
                 completeCashierTask(task);
@@ -1070,7 +1079,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 .specialNote(trimToNull(reqVO.getSpecialNote()))
                 .processTitle(title)
                 .applicantUserId(applicantUserId)
-                .businessStaffUserId(businessStaffSupport.resolve(applicantUserId, reqVO.getBusinessStaffUserId()))
                 .applicantDeptId(deptId)
                 .build();
     }
@@ -1078,22 +1086,15 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private String startProcess(Long userId, FinancePaymentApplicationDO application,
                                 Map<String, List<Long>> startUserSelectAssignees,
                                 String processDefinitionKey) {
-        return startProcess(userId, application, startUserSelectAssignees, processDefinitionKey, null, null);
+        return startProcess(userId, application, startUserSelectAssignees, processDefinitionKey, null);
     }
 
     private String startProcess(Long userId, FinancePaymentApplicationDO application,
                                 Map<String, List<Long>> startUserSelectAssignees,
                                 String processDefinitionKey, Long startCompanyDeptId) {
-        return startProcess(userId, application, startUserSelectAssignees, processDefinitionKey, startCompanyDeptId, null);
-    }
-
-    private String startProcess(Long userId, FinancePaymentApplicationDO application,
-                                Map<String, List<Long>> startUserSelectAssignees,
-                                String processDefinitionKey, Long startCompanyDeptId, Long startDeptId) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("paymentApplicationId", application.getId());
         variables.put("applicationNo", application.getApplicationNo());
-        variables.put(BpmProcessVariableConstants.BILL_CODE, application.getApplicationNo());
         variables.put("applyAmount", application.getApplyAmount());
         variables.put("payeeName", application.getPayeeName());
         variables.put("paymentReason", application.getPaymentReason());
@@ -1104,9 +1105,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         // EXP-73 BPM-1：待办公司列展示业务主体，而非仅任职公司
         if (startCompanyDeptId != null) {
             variables.put("startCompanyDeptId", startCompanyDeptId);
-        }
-        if (startDeptId != null) {
-            variables.put("startDeptId", startDeptId);
         }
         if (application.getEntityCompanyDeptId() != null) {
             variables.put(BpmProcessVariableConstants.COMPANY_ID, application.getEntityCompanyDeptId());
@@ -1138,26 +1136,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
     private Task requireCashierTask(String taskId, FinancePaymentApplicationDO application, Long userId) {
         return requireTask(taskId, application, TASK_CASHIER, userId);
-    }
-
-    /**
-     * 列表支付：无出纳任务也可登记。旧流程若仍停在出纳，带 taskId 或按实例查找后 complete。
-     */
-    private Task resolveCashierTaskForPay(String taskId, FinancePaymentApplicationDO application, Long userId) {
-        if (StrUtil.isNotBlank(taskId)) {
-            return requireCashierTask(taskId, application, userId);
-        }
-        if (StrUtil.isBlank(application.getProcessInstanceId())) {
-            return null;
-        }
-        TaskService taskService = taskServiceProvider.getIfAvailable();
-        if (taskService == null) {
-            return null;
-        }
-        return taskService.createTaskQuery()
-                .processInstanceId(application.getProcessInstanceId())
-                .taskDefinitionKey(TASK_CASHIER)
-                .singleResult();
     }
 
     /**
@@ -1476,8 +1454,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             BigDecimal net = nonNeg(line.getNetSalaryAmount());
             BigDecimal tax = nonNeg(line.getPersonalTaxAmount());
             BigDecimal social = nonNeg(line.getSocialInsuranceAmount());
-            BigDecimal housing = nonNeg(line.getHousingFundAmount());
-            BigDecimal lineTotal = net.add(tax).add(social).add(housing);
+            BigDecimal lineTotal = net.add(tax).add(social);
             if (lineTotal.compareTo(ZERO) <= 0) {
                 throw exception(PAYMENT_APPLICATION_LINES_INVALID);
             }
@@ -1491,7 +1468,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .netSalaryAmount(net)
                     .personalTaxAmount(tax)
                     .socialInsuranceAmount(social)
-                    .housingFundAmount(housing)
                     .currency(currency)
                     .lineTotal(lineTotal)
                     .sort(sort++)
@@ -1666,7 +1642,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         String specialNote;
         String processTitle;
         Long applicantUserId;
-        Long businessStaffUserId;
         Long applicantDeptId;
 
         FinancePaymentApplicationDO.FinancePaymentApplicationDOBuilder toDoBuilder() {
@@ -1694,7 +1669,6 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                     .specialNote(specialNote)
                     .processTitle(processTitle)
                     .applicantUserId(applicantUserId)
-                    .businessStaffUserId(businessStaffUserId)
                     .applicantDeptId(applicantDeptId);
         }
     }

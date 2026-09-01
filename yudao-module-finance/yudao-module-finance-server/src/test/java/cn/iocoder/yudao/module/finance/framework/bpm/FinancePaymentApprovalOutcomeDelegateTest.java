@@ -41,6 +41,36 @@ class FinancePaymentApprovalOutcomeDelegateTest {
     }
 
     @Test
+    void mapApproveToWaitPay() {
+        assertEquals(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
+                FinancePaymentApprovalOutcomeDelegate.mapProcessStatusToOutcome(
+                        BpmProcessInstanceStatusEnum.APPROVE.getStatus()));
+    }
+
+    @Test
+    void mapRunningEndToWaitPay() {
+        assertEquals(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
+                FinancePaymentApprovalOutcomeDelegate.mapProcessStatusToOutcome(
+                        BpmProcessInstanceStatusEnum.RUNNING.getStatus()));
+        assertEquals(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
+                FinancePaymentApprovalOutcomeDelegate.mapProcessStatusToOutcome(null));
+    }
+
+    @Test
+    void executeApproveWritesWaitPayWithPi() {
+        DelegateExecution execution = mock(DelegateExecution.class);
+        when(execution.getProcessInstanceBusinessKey()).thenReturn("70");
+        when(execution.getProcessInstanceId()).thenReturn("pi-70");
+        when(execution.getVariable(FinancePaymentApprovalOutcomeDelegate.PROCESS_STATUS_VARIABLE))
+                .thenReturn(BpmProcessInstanceStatusEnum.APPROVE.getStatus());
+
+        delegate.execute(execution);
+
+        verify(paymentService).onApprovalOutcome(70L,
+                FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(), "pi-70");
+    }
+
+    @Test
     void executeRejectWritesRejectedWithPi() {
         DelegateExecution execution = mock(DelegateExecution.class);
         when(execution.getProcessInstanceBusinessKey()).thenReturn("42");

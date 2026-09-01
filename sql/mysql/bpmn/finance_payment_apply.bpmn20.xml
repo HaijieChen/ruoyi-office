@@ -3,8 +3,8 @@
   付款申请 finance_payment_apply（PAY-P1-3）
   - 语义：部门负责人 → gateway(applyAmount>5000) → 业务负责人? → 财务主管 → end
   - 含 BPMNDiagram/DI
-  - 结束：${financePaymentApprovalOutcomeDelegate} 落 WAIT_PAY
-  - 支付改到列表，回单 OCR
+  - 结束：${financePaymentApprovalOutcomeDelegate} → WAIT_PAY（已通过待支付）
+  - 支付在列表登记，不在审批链内
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -47,7 +47,6 @@
         <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
         <!-- F4：complete 前会计科目必填 -->
         <flowable:taskListener event="complete" delegateExpression="${financePaymentFinanceCompleteGuardListener}"/>
-        <flowable:formCustomViewPath>/finance/payment-application/detail/finance</flowable:formCustomViewPath>
       </extensionElements>
     </userTask>
 

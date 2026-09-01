@@ -291,6 +291,22 @@ class FinancePaymentApplicationServiceImplTest {
     }
 
     @Test
+    void onApprovalOutcomeApprovedMarksWaitPayWithoutEvidence() {
+        when(mapper.selectById(70L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(70L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-70")
+                .build());
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        service.onApprovalOutcome(70L, "APPROVED", "pi-70");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertTrue(updateWritesStatus(cap.getValue(), "WAIT_PAY"));
+        assertFalse(updateWritesStatus(cap.getValue(), "PAID"));
+    }
+
+    @Test
     void assertCashierEvidenceForCompleteRejectsEmpty() {
         when(mapper.selectById(3L)).thenReturn(FinancePaymentApplicationDO.builder()
                 .id(3L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus()).build());
@@ -439,6 +455,62 @@ class FinancePaymentApplicationServiceImplTest {
         verify(mapper, atLeastOnce()).selectByIdForUpdate(30L);
         verify(payLineMapper).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
         verify(taskService).complete("t-30");
+    }
+
+    @Test
+    void recordPayWaitPayWithoutTaskMarksPaid() {
+        when(mapper.selectByIdForUpdate(71L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(71L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-71")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .applicationKind("ORDINARY")
+                .build());
+        var account = cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                .accountHolder("甲").accountNo("6222").currency("CNY").status(0).build();
+        when(companyBankAccountService.get(77L)).thenReturn(account);
+        when(companyBankAccountService.requireEnabledForEntityCompany(eq(77L), eq(20L))).thenReturn(account);
+        when(payLineMapper.sumPayAmountByApplicationId(71L)).thenReturn(BigDecimal.ZERO);
+        when(mapper.update(isNull(), any())).thenReturn(1);
+
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(71L);
+        req.setCompanyBankAccountId(77L);
+        req.setActualPayDate(LocalDate.now());
+        req.setPayVoucherUrl("http://voucher");
+        req.setIdempotencyKey("idem-list");
+        service.recordPay(req, 1L);
+
+        verify(payLineMapper).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertTrue(updateWritesStatus(cap.getValue(), "PAID"));
+        verify(taskProvider, never()).getIfAvailable();
+    }
+
+    @Test
+    void recordPayPendingWithoutTaskRejected() {
+        when(mapper.selectByIdForUpdate(72L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(72L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-72")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .build());
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(72L);
+        req.setCompanyBankAccountId(77L);
+        req.setActualPayDate(LocalDate.now());
+        req.setPayVoucherUrl("http://voucher");
+        req.setIdempotencyKey("idem-pending");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_TASK_INVALID.getCode(), ex.getCode());
+        verify(payLineMapper, never()).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
     }
 
     @Test
@@ -1504,13 +1576,14 @@ class FinancePaymentApplicationServiceImplTest {
     }
 
     @Test
-    void updateCurrentNodeCashierMarksWaitPay() {
+    void updateCurrentNodeCashierDoesNotMarkWaitPay() {
         when(mapper.update(isNull(), any())).thenReturn(1);
         service.updateCurrentNode(30L, "cashier", "待出纳");
         ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
                 ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
         verify(mapper).update(isNull(), cap.capture());
-        assertTrue(updateWritesStatus(cap.getValue(), "WAIT_PAY"));
+        assertFalse(updateWritesStatus(cap.getValue(), "WAIT_PAY"));
+        assertTrue(updateWritesStatus(cap.getValue(), "PENDING"));
     }
 
     private static boolean updateWritesStatus(

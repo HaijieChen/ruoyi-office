@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   薪资付款申请 finance_salary_payment_apply（PAY-P1-3）
-  - 语义：部门负责人 → gateway(applyAmount>5000) → 业务负责人? → 财务主管 → 出纳 → end
+  - 语义：部门负责人 → gateway(applyAmount>5000) → 业务负责人? → 财务主管 → end
   - 含 BPMNDiagram/DI
-  - 结束：${financePaymentApprovalOutcomeDelegate}
-  - 出纳 complete 前须 recordPay 写支付日/凭证
+  - 结束：${financePaymentApprovalOutcomeDelegate} → WAIT_PAY（已通过待支付）
+  - 支付在列表登记，不在审批链内
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -47,19 +47,6 @@
         <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
         <!-- F4：complete 前会计科目必填 -->
         <flowable:taskListener event="complete" delegateExpression="${financePaymentFinanceCompleteGuardListener}"/>
-        <flowable:formCustomViewPath>/finance/salary-payment/detail/finance</flowable:formCustomViewPath>
-      </extensionElements>
-    </userTask>
-
-    <userTask id="taskCashier" name="出纳支付"
-              flowable:candidateStrategy="10" flowable:candidateParam="payment_cashier">
-      <extensionElements>
-        <flowable:candidateStrategy>10</flowable:candidateStrategy>
-        <flowable:candidateParam>payment_cashier</flowable:candidateParam>
-        <flowable:taskListener event="create" delegateExpression="${financePaymentTaskNodeLabelListener}"/>
-        <!-- F1：complete 前台账须有支付日+凭证；否则拒绝通用 BPM 通过 -->
-        <flowable:taskListener event="complete" delegateExpression="${financePaymentCashierCompleteGuardListener}"/>
-        <flowable:formCustomViewPath>/finance/salary-payment/detail/cashier</flowable:formCustomViewPath>
       </extensionElements>
     </userTask>
 
@@ -78,8 +65,7 @@
       <conditionExpression xsi:type="tFormalExpression"><![CDATA[${applyAmount <= 5000}]]></conditionExpression>
     </sequenceFlow>
     <sequenceFlow id="flow5" sourceRef="taskBizHead" targetRef="taskFinance"/>
-    <sequenceFlow id="flow6" sourceRef="taskFinance" targetRef="taskCashier"/>
-    <sequenceFlow id="flow7" sourceRef="taskCashier" targetRef="endEvent"/>
+    <sequenceFlow id="flow6" sourceRef="taskFinance" targetRef="endEvent"/>
   </process>
 
   <bpmndi:BPMNDiagram id="BPMNDiagram_finance_salary_payment_apply">
@@ -99,11 +85,8 @@
       <bpmndi:BPMNShape id="shape_taskFinance" bpmnElement="taskFinance">
         <omgdc:Bounds x="620" y="140" width="110" height="80"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape_taskCashier" bpmnElement="taskCashier">
-        <omgdc:Bounds x="780" y="140" width="100" height="80"/>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_endEvent" bpmnElement="endEvent">
-        <omgdc:Bounds x="940" y="162" width="36" height="36"/>
+        <omgdc:Bounds x="780" y="162" width="36" height="36"/>
       </bpmndi:BPMNShape>
 
       <bpmndi:BPMNEdge id="edge_flow1" bpmnElement="flow1">
@@ -125,9 +108,6 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_flow6" bpmnElement="flow6">
         <omgdi:waypoint x="730" y="180"/><omgdi:waypoint x="780" y="180"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_flow7" bpmnElement="flow7">
-        <omgdi:waypoint x="880" y="180"/><omgdi:waypoint x="940" y="180"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

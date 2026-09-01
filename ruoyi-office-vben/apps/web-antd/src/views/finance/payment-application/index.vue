@@ -57,11 +57,7 @@ function handleResubmit(row: FinancePaymentApplicationApi.Application) {
   createModalApi.open();
 }
 
-function handleRecordPay(row: FinancePaymentApplicationApi.Application) {
-  if (row.status !== 'WAIT_PAY') {
-    message.warning('仅审批结束后可支付');
-    return;
-  }
+async function handleRecordPay(row: FinancePaymentApplicationApi.Application) {
   payModalApi.setData({ id: row.id });
   payModalApi.open();
 }

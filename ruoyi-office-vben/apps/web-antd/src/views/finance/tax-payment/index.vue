@@ -79,7 +79,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
           allowClear: true,
           options: [
             { label: '审批中', value: 'PENDING' },
-            { label: '待支付', value: 'WAIT_PAY' },
+            { label: '已通过 · 待支付', value: 'WAIT_PAY' },
             { label: '已支付', value: 'PAID' },
             { label: '已驳回', value: 'REJECTED' },
             { label: '已撤回', value: 'CANCELLED' },

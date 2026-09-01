@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 付款申请终态同步落账（PAY-R8：主路径）。
+ * <p>审批通过结束 → WAIT_PAY（已通过待支付）；支付在列表登记后才 PAID。
  * <p>BPMN endEvent 在同一流程事务内调用；reject/cancel 经 moveTaskToEnd → end 也会走到此处。
  * 辅路径见 {@link FinancePaymentApplicationStatusListener}（async 通知，可失败；补偿用 replay API）。
  * <pre>${financePaymentApprovalOutcomeDelegate}</pre>
@@ -57,7 +58,7 @@ public class FinancePaymentApprovalOutcomeDelegate implements JavaDelegate, Exec
     public static String mapProcessStatusToOutcome(Integer processStatus) {
         if (processStatus == null
                 || BpmProcessInstanceStatusEnum.RUNNING.getStatus().equals(processStatus)) {
-            // end 事件常在已通过后触发
+            // 审批流结束且尚未支付：已通过待支付
             return FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus();
         }
         if (BpmProcessInstanceStatusEnum.APPROVE.getStatus().equals(processStatus)
