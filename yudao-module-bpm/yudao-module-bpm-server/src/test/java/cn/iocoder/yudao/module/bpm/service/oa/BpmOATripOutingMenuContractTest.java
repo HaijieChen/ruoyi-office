@@ -90,6 +90,12 @@ class BpmOATripOutingMenuContractTest {
         assertTrue(detailText.contains("ApprovalOverviewPanel"),
                 "列表详情须展示审批全貌");
         assertTrue(detailText.contains("processInstanceId"));
+        assertTrue(detailText.contains("inProcessShell"),
+                "流程壳传入 processInstance 时只渲染字段，不包整页");
+        int shellIdx = detailText.indexOf("v-if=\"inProcessShell\"");
+        int wrapIdx = detailText.indexOf("<ContentWrap");
+        assertTrue(shellIdx >= 0 && wrapIdx > shellIdx,
+                "壳内字段布局必须排在 ContentWrap 之前，避免盖住审批时间线");
     }
 
     private static String grantBlock(String text) {

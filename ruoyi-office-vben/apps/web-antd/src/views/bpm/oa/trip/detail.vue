@@ -36,8 +36,13 @@ const [Descriptions] = useDescription({
   schema: useDetailFormSchema(),
 });
 
+/** 流程详情壳会传入 processInstance，此时只渲染字段，把时间线留给壳 */
+const inProcessShell = computed(
+  () => !!props.processInstance || !!props.embedded,
+);
+
 const showOverview = computed(
-  () => !props.processInstance && !!formData.value?.processInstanceId,
+  () => !inProcessShell.value && !!formData.value?.processInstanceId,
 );
 
 async function getDetailData() {
@@ -58,7 +63,7 @@ onMounted(() => {
 watch(
   () => props.id,
   () => {
-    if (props.embedded) {
+    if (inProcessShell.value) {
       void getDetailData();
     }
   },
@@ -66,7 +71,7 @@ watch(
 </script>
 
 <template>
-  <div v-if="embedded">
+  <div v-if="inProcessShell">
     <Spin :spinning="loading" tip="加载中...">
       <div v-if="!formData && !loading">无法加载前置单据</div>
       <Descriptions v-else :data="formData" />
