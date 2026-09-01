@@ -25,15 +25,14 @@ public class SealApplyBillSaveReqVO {
     @Schema(description = "单据状态", example = "1")
     private Integer processStatus;
 
-    @Schema(description = "印章ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
-    @NotNull(message = "印章ID不能为空")
+    @Schema(description = "印章ID", example = "1")
     private Long sealId;
 
-    @Schema(description = "印章编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "YZ001")
-    @NotEmpty(message = "印章编号不能为空")
+    @Schema(description = "印章编号", example = "YZ001")
     private String sealNo;
 
-    @Schema(description = "印章名称", example = "公司公章")
+    @Schema(description = "印章名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "公司公章")
+    @NotBlank(message = "印章名称不能为空")
     private String sealName;
 
     @Schema(description = "印章类型", example = "1")

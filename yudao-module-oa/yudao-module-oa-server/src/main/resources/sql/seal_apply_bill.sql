@@ -6,8 +6,8 @@ CREATE TABLE `oa_seal_apply_bill` (
     `process_status` tinyint DEFAULT '0' COMMENT '单据状态（0草稿 1审批中 2审批通过 3审批拒绝 4已取消）',
     
     -- 印章相关信息
-    `seal_id` bigint NOT NULL COMMENT '印章ID',
-    `seal_no` varchar(50) NOT NULL COMMENT '印章编号',
+    `seal_id` bigint DEFAULT NULL COMMENT '印章ID',
+    `seal_no` varchar(50) DEFAULT NULL COMMENT '印章编号',
     `seal_name` varchar(100) DEFAULT NULL COMMENT '印章名称',
     `seal_type` tinyint DEFAULT NULL COMMENT '印章类型',
     `keeper_id` bigint DEFAULT NULL COMMENT '保管人ID',
