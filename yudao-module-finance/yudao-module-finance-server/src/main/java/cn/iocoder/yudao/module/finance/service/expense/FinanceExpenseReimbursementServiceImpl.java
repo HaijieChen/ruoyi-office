@@ -40,6 +40,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -63,6 +64,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_FORBIDDEN;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_INVALID;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_OCCUPIED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_USED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED;
@@ -156,6 +158,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
             apply = apply.add(line.getAmount());
             i++;
         }
+        assertPredocsNotOccupied(reqVO.getLines());
         if (apply.compareTo(BigDecimal.ZERO) <= 0) {
             throw exception(EXPENSE_REIMBURSEMENT_AMOUNT_INVALID);
         }
@@ -527,6 +530,60 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     @Override
     public boolean invoiceNoUsed(String invoiceNo) {
         return lineMapper.existsInvoiceNo(invoiceNo);
+    }
+
+    @Override
+    public List<String> listOccupiedPredocProcessInstanceIds() {
+        return lineMapper.selectOccupiedPredocProcessInstanceIds();
+    }
+
+    private void assertPredocsNotOccupied(List<FinanceExpenseReimbursementLineReqVO> lines) {
+        Set<String> ids = new LinkedHashSet<>();
+        for (FinanceExpenseReimbursementLineReqVO line : lines) {
+            String id = StrUtil.trimToNull(line.getPredocProcessInstanceId());
+            if (id != null) {
+                ids.add(id);
+            }
+        }
+        for (String id : ids) {
+            if (lineMapper.existsOccupiedPredoc(id)) {
+                throw exception(EXPENSE_REIMBURSEMENT_PREDOC_OCCUPIED);
+            }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void onApprovalOutcome(Long id, String outcome, String processInstanceId) {
+        if (id == null || StrUtil.isBlank(outcome)) {
+            throw exception(EXPENSE_REIMBURSEMENT_STATUS_INVALID);
+        }
+        String normalized = outcome.trim().toUpperCase();
+        if (!FinanceExpenseReimbursementDO.STATUS_REJECTED.equals(normalized)
+                && !FinanceExpenseReimbursementDO.STATUS_CANCELLED.equals(normalized)) {
+            throw exception(EXPENSE_REIMBURSEMENT_STATUS_INVALID);
+        }
+        FinanceExpenseReimbursementDO current = mapper.selectById(id);
+        if (current == null) {
+            throw exception(EXPENSE_REIMBURSEMENT_NOT_EXISTS);
+        }
+        if (StrUtil.isNotBlank(processInstanceId)
+                && StrUtil.isNotBlank(current.getProcessInstanceId())
+                && !Objects.equals(processInstanceId, current.getProcessInstanceId())) {
+            return;
+        }
+        if (normalized.equals(current.getStatus())) {
+            return;
+        }
+        if (FinanceExpenseReimbursementDO.STATUS_PAID.equals(current.getStatus())
+                || FinanceExpenseReimbursementDO.STATUS_REJECTED.equals(current.getStatus())
+                || FinanceExpenseReimbursementDO.STATUS_CANCELLED.equals(current.getStatus())) {
+            return;
+        }
+        mapper.updateById(FinanceExpenseReimbursementDO.builder()
+                .id(id)
+                .status(normalized)
+                .build());
     }
 
     /** 差旅住宿标准：房间数×城市标准×天数，只做超标说明，不卡控金额。 */

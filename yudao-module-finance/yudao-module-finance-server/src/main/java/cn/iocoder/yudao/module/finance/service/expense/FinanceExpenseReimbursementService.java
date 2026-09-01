@@ -27,4 +27,12 @@ public interface FinanceExpenseReimbursementService {
     void recordPay(FinanceExpenseRecordPayReqVO reqVO, Long userId);
 
     boolean invoiceNoUsed(String invoiceNo);
+
+    java.util.List<String> listOccupiedPredocProcessInstanceIds();
+
+    /**
+     * BPM 终态回写。仅 REJECTED / CANCELLED；APPROVE 不改占用。
+     * 已是该终态则幂等返回；已 PAID 禁止改 REJECTED/CANCELLED。
+     */
+    void onApprovalOutcome(Long id, String outcome, String processInstanceId);
 }

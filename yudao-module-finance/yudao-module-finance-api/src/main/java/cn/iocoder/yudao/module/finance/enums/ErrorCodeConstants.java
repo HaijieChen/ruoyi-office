@@ -320,6 +320,8 @@ public interface ErrorCodeConstants {
             "发票已被使用");
     ErrorCode EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED = new ErrorCode(1_040_008_024,
             "其他附件最多 30 个");
+    ErrorCode EXPENSE_REIMBURSEMENT_PREDOC_OCCUPIED = new ErrorCode(1_040_008_025,
+            "该出差/外出单已被报销占用");
 
     // ========== EXP-73 通用币种契约（P1/P2 共用） ==========
     /** 交易币种仅允许 CNY/USD/HKD */

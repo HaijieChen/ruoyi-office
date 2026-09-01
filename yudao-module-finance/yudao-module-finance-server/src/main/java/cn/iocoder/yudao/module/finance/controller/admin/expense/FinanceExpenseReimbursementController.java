@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 import static cn.iocoder.yudao.module.finance.service.expense.FinanceExpenseReimbursementService.QUERY_PERMISSION;
@@ -67,6 +69,12 @@ public class FinanceExpenseReimbursementController {
             result = result.withUsed(true);
         }
         return success(result);
+    }
+
+    @GetMapping("/occupied-predoc-ids")
+    @Operation(summary = "当前占用中的出差/外出单流程实例 ID")
+    public CommonResult<List<String>> occupiedPredocIds() {
+        return success(expenseReimbursementService.listOccupiedPredocProcessInstanceIds());
     }
 
     @GetMapping("/get")

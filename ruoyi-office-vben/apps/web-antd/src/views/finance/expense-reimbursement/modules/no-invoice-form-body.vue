@@ -19,7 +19,10 @@ import dayjs from 'dayjs';
 
 import { getOutingPage } from '#/api/bpm/oa/outing';
 import { getTripPage } from '#/api/bpm/oa/trip';
-import { createNoInvoiceExpense } from '#/api/finance/expense-reimbursement';
+import {
+  createNoInvoiceExpense,
+  getOccupiedPredocIds,
+} from '#/api/finance/expense-reimbursement';
 import { getEmployeeWageCardByUserId } from '#/api/hrm/employee';
 import { getSimpleDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
@@ -122,12 +125,14 @@ function onActualUserChange(id?: number) {
 
 async function loadPredocOptions() {
   try {
-    const [trips, outings] = await Promise.all([
+    const [trips, outings, occupied] = await Promise.all([
       getTripPage({ pageNo: 1, pageSize: 50 }),
       getOutingPage({ pageNo: 1, pageSize: 50 }),
+      getOccupiedPredocIds().catch(() => [] as string[]),
     ]);
+    const occupiedSet = new Set((occupied || []).map((id) => String(id)));
     tripOptions.value = (trips?.list || [])
-      .filter((t) => Number(t.status) === 2 && t.processInstanceId)
+      .filter((t) => Number(t.status) === 2 && t.processInstanceId && !occupiedSet.has(String(t.processInstanceId)))
       .map((t) => ({
         value: String(t.processInstanceId),
         type: 'TRIP' as const,
@@ -136,7 +141,7 @@ async function loadPredocOptions() {
         label: `出差#${t.id} ${t.destination || ''}`.trim(),
       }));
     outingOptions.value = (outings?.list || [])
-      .filter((t) => Number(t.status) === 2 && t.processInstanceId)
+      .filter((t) => Number(t.status) === 2 && t.processInstanceId && !occupiedSet.has(String(t.processInstanceId)))
       .map((t) => ({
         value: String(t.processInstanceId),
         type: 'OUTING' as const,

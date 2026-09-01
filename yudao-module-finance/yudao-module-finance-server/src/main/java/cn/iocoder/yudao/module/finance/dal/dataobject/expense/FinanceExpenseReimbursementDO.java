@@ -21,6 +21,8 @@ public class FinanceExpenseReimbursementDO extends TenantBaseDO {
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_WAIT_PAY = "WAIT_PAY";
     public static final String STATUS_PAID = "PAID";
+    public static final String STATUS_REJECTED = "REJECTED";
+    public static final String STATUS_CANCELLED = "CANCELLED";
     public static final String MODE_WITH_INVOICE = "WITH_INVOICE";
     public static final String MODE_NO_INVOICE = "NO_INVOICE";
 

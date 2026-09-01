@@ -43,7 +43,11 @@
       </multiInstanceLoopCharacteristics>
     </userTask>
 
-    <endEvent id="endEvent" name="结束"/>
+    <endEvent id="endEvent" name="结束">
+      <extensionElements>
+        <flowable:executionListener event="end" delegateExpression="${financeExpenseApprovalOutcomeDelegate}"/>
+      </extensionElements>
+    </endEvent>
 
     <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskDeptLeaderMulti"/>
     <sequenceFlow id="flow2" sourceRef="taskDeptLeaderMulti" targetRef="taskFinance"/>

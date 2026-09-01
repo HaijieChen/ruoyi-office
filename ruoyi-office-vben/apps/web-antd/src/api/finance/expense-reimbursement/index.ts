@@ -112,6 +112,12 @@ export function ocrExpenseInvoice(fileUrl: string, file?: File) {
   );
 }
 
+export function getOccupiedPredocIds() {
+  return requestClient.get<string[]>(
+    '/finance/expense-reimbursement/occupied-predoc-ids',
+  );
+}
+
 export function getExpenseReimbursement(id: number) {
   return requestClient.get<FinanceExpenseApi.Bill>(
     '/finance/expense-reimbursement/get',

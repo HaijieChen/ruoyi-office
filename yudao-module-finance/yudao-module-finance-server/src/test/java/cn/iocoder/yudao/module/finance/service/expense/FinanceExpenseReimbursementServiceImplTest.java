@@ -28,6 +28,7 @@ import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_R
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_INVOICE_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PAY_ACCOUNT_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_REQUIRED;
+import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_PREDOC_OCCUPIED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_FIELD_REQUIRED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED;
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.EXPENSE_REIMBURSEMENT_ACCESS_DENIED;
@@ -72,6 +73,10 @@ class FinanceExpenseReimbursementServiceImplTest {
         predoc = mock(FinanceExpensePredocService.class);
         when(predoc.isApprovedTrip(anyLong(), any())).thenReturn(true);
         when(predoc.isApprovedOuting(anyLong(), any())).thenReturn(true);
+        when(predoc.resolveStay(anyLong(), any(), any())).thenReturn(
+                new FinanceExpensePredocService.StayStay("杭州",
+                        LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 2),
+                        1L, List.of()));
         cn.iocoder.yudao.module.system.api.dept.DeptApi deptApi =
                 mock(cn.iocoder.yudao.module.system.api.dept.DeptApi.class);
         cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO company =
@@ -268,6 +273,102 @@ class FinanceExpenseReimbursementServiceImplTest {
         assertEquals(EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED.getCode(), ex.getCode());
     }
 
+    @Test
+    void onApprovalOutcomeRejectsPendingToRejected() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).status(FinanceExpenseReimbursementDO.STATUS_PENDING)
+                .processInstanceId("pi-1").build());
+        service.onApprovalOutcome(88L, FinanceExpenseReimbursementDO.STATUS_REJECTED, "pi-1");
+        ArgumentCaptor<FinanceExpenseReimbursementDO> cap =
+                ArgumentCaptor.forClass(FinanceExpenseReimbursementDO.class);
+        verify(mapper).updateById(cap.capture());
+        assertEquals(FinanceExpenseReimbursementDO.STATUS_REJECTED, cap.getValue().getStatus());
+    }
+
+    @Test
+    void onApprovalOutcomeCancelPendingToCancelled() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).status(FinanceExpenseReimbursementDO.STATUS_PENDING)
+                .processInstanceId("pi-2").build());
+        service.onApprovalOutcome(88L, FinanceExpenseReimbursementDO.STATUS_CANCELLED, "pi-2");
+        ArgumentCaptor<FinanceExpenseReimbursementDO> cap =
+                ArgumentCaptor.forClass(FinanceExpenseReimbursementDO.class);
+        verify(mapper).updateById(cap.capture());
+        assertEquals(FinanceExpenseReimbursementDO.STATUS_CANCELLED, cap.getValue().getStatus());
+    }
+
+    @Test
+    void onApprovalOutcomeRejectedIsIdempotent() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).status(FinanceExpenseReimbursementDO.STATUS_REJECTED)
+                .processInstanceId("pi-1").build());
+        service.onApprovalOutcome(88L, FinanceExpenseReimbursementDO.STATUS_REJECTED, "pi-1");
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never())
+                .updateById(any(FinanceExpenseReimbursementDO.class));
+    }
+
+    @Test
+    void occupiedTripBlocksAnotherReimbursement() {
+        when(lineMapper.existsOccupiedPredoc("trip-1")).thenReturn(true);
+        FinanceExpenseReimbursementCreateReqVO req = travelReq("trip-1");
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.create(req, 1L));
+        assertEquals(EXPENSE_REIMBURSEMENT_PREDOC_OCCUPIED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void sameBillTwoLinesSameTripSucceeds() {
+        when(lineMapper.existsOccupiedPredoc("trip-1")).thenReturn(false);
+        FinanceExpenseReimbursementCreateReqVO req = travelReq("trip-1");
+        FinanceExpenseReimbursementLineReqVO line2 = travelLine("trip-1");
+        line2.setAmount(new BigDecimal("20"));
+        line2.setInvoiceFileUrl("https://files.example/inv-t2.jpg");
+        req.setLines(List.of(req.getLines().get(0), line2));
+        assertEquals(88L, service.create(req, 1L));
+        org.mockito.Mockito.verify(lineMapper, org.mockito.Mockito.times(1)).existsOccupiedPredoc("trip-1");
+    }
+
+    @Test
+    void occupiedHeaderSqlIncludesOccupyStatusesAndExcludesReleased() {
+        String sql = FinanceExpenseReimbursementLineMapper.OCCUPIED_HEADER_IDS_SQL;
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("'PENDING'"));
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("'WAIT_PAY'"));
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("'PAID'"));
+        org.junit.jupiter.api.Assertions.assertFalse(sql.contains("'REJECTED'"));
+        org.junit.jupiter.api.Assertions.assertFalse(sql.contains("'CANCELLED'"));
+    }
+
+    @Test
+    void rejectedOccupantDoesNotBlock() {
+        when(lineMapper.existsOccupiedPredoc("trip-1")).thenReturn(false);
+        assertEquals(88L, service.create(travelReq("trip-1"), 1L));
+    }
+
+    @Test
+    void onApprovalOutcomeIgnoresStaleProcessInstance() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).status(FinanceExpenseReimbursementDO.STATUS_PENDING)
+                .processInstanceId("pi-new").build());
+        service.onApprovalOutcome(88L, FinanceExpenseReimbursementDO.STATUS_REJECTED, "pi-old");
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never())
+                .updateById(any(FinanceExpenseReimbursementDO.class));
+    }
+
+    @Test
+    void listOccupiedPredocIdsDelegatesToMapper() {
+        when(lineMapper.selectOccupiedPredocProcessInstanceIds()).thenReturn(List.of("trip-1"));
+        assertEquals(List.of("trip-1"), service.listOccupiedPredocProcessInstanceIds());
+    }
+
+    @Test
+    void onApprovalOutcomePaidStaysPaidOnReject() {
+        when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
+                .id(88L).status(FinanceExpenseReimbursementDO.STATUS_PAID)
+                .processInstanceId("pi-3").build());
+        service.onApprovalOutcome(88L, FinanceExpenseReimbursementDO.STATUS_REJECTED, "pi-3");
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never())
+                .updateById(any(FinanceExpenseReimbursementDO.class));
+    }
+
     private static FinanceExpenseReimbursementCreateReqVO baseReq(boolean proxy) {
         FinanceExpenseReimbursementLineReqVO line = new FinanceExpenseReimbursementLineReqVO();
         line.setLineKind(FinanceExpenseReimbursementLineDO.KIND_NORMAL);
@@ -288,6 +389,29 @@ class FinanceExpenseReimbursementServiceImplTest {
         req.setPayeeBankName("工商银行");
         req.setPayeeAccountNo("622200001111");
         req.setLines(List.of(line, line2));
+        return req;
+    }
+
+    private static FinanceExpenseReimbursementLineReqVO travelLine(String tripPi) {
+        FinanceExpenseReimbursementLineReqVO line = new FinanceExpenseReimbursementLineReqVO();
+        line.setLineKind(FinanceExpenseReimbursementLineDO.KIND_NORMAL);
+        line.setCategory("travel");
+        line.setFeeDate(LocalDate.of(2026, 8, 1));
+        line.setAmount(new BigDecimal("10"));
+        line.setInvoiceFileUrl("https://files.example/inv-t.jpg");
+        line.setPredocType("TRIP");
+        line.setPredocProcessInstanceId(tripPi);
+        return line;
+    }
+
+    private static FinanceExpenseReimbursementCreateReqVO travelReq(String tripPi) {
+        FinanceExpenseReimbursementCreateReqVO req = new FinanceExpenseReimbursementCreateReqVO();
+        req.setPeriodLabel("2026-08");
+        req.setProxyTicket(false);
+        req.setPayeeAccountName("张三");
+        req.setPayeeBankName("工商银行");
+        req.setPayeeAccountNo("622200001111");
+        req.setLines(List.of(travelLine(tripPi)));
         return req;
     }
 }
