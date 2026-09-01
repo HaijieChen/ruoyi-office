@@ -127,6 +127,7 @@ class BpmOATripServiceTest {
         assertEquals("oa_business_trip", dto.getProcessDefinitionKey());
         assertEquals("5", dto.getBusinessKey());
         assertEquals("北京", dto.getVariables().get("destination"));
+        assertEquals("TRIP-5", dto.getVariables().get("billCode"));
         assertEquals(0, new BigDecimal("1.5").compareTo((BigDecimal) dto.getVariables().get("hours")));
         assertNull(dto.getStartUserSelectAssignees());
 

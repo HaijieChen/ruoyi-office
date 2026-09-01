@@ -297,8 +297,13 @@ public class CrmContractServiceImpl implements CrmContractService {
         }
 
         // 2. 创建合同审批流程实例
+        java.util.Map<String, Object> variables = new java.util.HashMap<>();
+        String billCode = contract.getNo();
+        variables.put("billCode", billCode != null && !billCode.isBlank() ? billCode : "CONTRACT-" + id);
         String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO()
-                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY).setBusinessKey(String.valueOf(id))).getCheckedData();
+                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                .setVariables(variables)
+                .setBusinessKey(String.valueOf(id))).getCheckedData();
 
         // 3. 更新合同工作流编号
         contractMapper.updateById(new CrmContractDO().setId(id).setProcessInstanceId(processInstanceId)

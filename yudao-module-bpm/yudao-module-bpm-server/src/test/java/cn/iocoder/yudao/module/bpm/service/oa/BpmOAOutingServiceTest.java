@@ -112,6 +112,7 @@ class BpmOAOutingServiceTest {
         assertEquals("oa_outing", dto.getProcessDefinitionKey());
         assertEquals("5", dto.getBusinessKey());
         assertEquals(0, new BigDecimal("1.5").compareTo((BigDecimal) dto.getVariables().get("hours")));
+        assertEquals("OUT-5", dto.getVariables().get("billCode"));
         assertEquals("true", dto.getVariables().get("need_output"));
         assertNull(dto.getStartUserSelectAssignees());
 

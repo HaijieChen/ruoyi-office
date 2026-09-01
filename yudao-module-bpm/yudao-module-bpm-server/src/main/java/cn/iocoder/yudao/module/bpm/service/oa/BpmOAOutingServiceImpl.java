@@ -76,6 +76,7 @@ public class BpmOAOutingServiceImpl implements BpmOAOutingService {
         Map<String, Object> processInstanceVariables = new HashMap<>();
         processInstanceVariables.put("hours", hours);
         processInstanceVariables.put("need_output", createReqVO.getNeedOutput());
+        processInstanceVariables.put("billCode", "OUT-" + outing.getId());
         if (createReqVO.getStartCompanyDeptId() != null) {
             processInstanceVariables.put("startCompanyDeptId", createReqVO.getStartCompanyDeptId());
         }

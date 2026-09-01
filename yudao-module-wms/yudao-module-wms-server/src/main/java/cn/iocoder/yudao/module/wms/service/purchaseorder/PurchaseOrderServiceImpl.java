@@ -71,6 +71,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         // 发起 BPM 流程
         Map<String, Object> processInstanceVariables = new HashMap<>();
+        String billCode = purchaseOrder.getPurchaseOrderCode();
+        processInstanceVariables.put("billCode",
+                billCode != null && !billCode.isBlank() ? billCode : "PO-" + purchaseOrder.getId());
         String processInstanceId = processInstanceApi.createProcessInstance(Long.valueOf(createReqVO.getApplicantUserId()),
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(FlowCodeEnum.WMS_PURCHASE_ORDER_FLOW.getFlowCode())
                         .setVariables(processInstanceVariables).setBusinessKey(String.valueOf(purchaseOrder.getId()))

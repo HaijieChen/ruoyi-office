@@ -248,8 +248,13 @@ public class CrmReceivableServiceImpl implements CrmReceivableService {
         }
 
         // 2. 创建回款审批流程实例
+        Map<String, Object> variables = new java.util.HashMap<>();
+        String billCode = receivable.getNo();
+        variables.put("billCode", billCode != null && !billCode.isBlank() ? billCode : "REC-" + id);
         String processInstanceId = bpmProcessInstanceApi.createProcessInstance(userId, new BpmProcessInstanceCreateReqDTO()
-                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY).setBusinessKey(String.valueOf(id))).getCheckedData();
+                .setProcessDefinitionKey(BPM_PROCESS_DEFINITION_KEY)
+                .setVariables(variables)
+                .setBusinessKey(String.valueOf(id))).getCheckedData();
 
         // 3. 更新回款工作流编号
         receivableMapper.updateById(new CrmReceivableDO().setId(id).setProcessInstanceId(processInstanceId)
