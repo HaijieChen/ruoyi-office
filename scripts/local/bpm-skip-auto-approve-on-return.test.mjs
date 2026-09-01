@@ -32,7 +32,7 @@ test('return-target node skips APPROVE_ALL auto-approve', () => {
   );
   assert.match(
     body,
-    /ObjUtil\.notEqual\(returnTaskFlag, Boolean\.TRUE\)[\s\S]{0,1200}BpmAutoApproveTypeEnum\.APPROVE_ALL/,
+    /if \(processDefinitionInfo\.getAutoApprovalType\(\) != null\s*&&\s*ObjUtil\.notEqual\(returnTaskFlag, Boolean\.TRUE\)\) \{[\s\S]*BpmAutoApproveTypeEnum\.APPROVE_ALL[\s\S]*BpmAutoApproveTypeEnum\.APPROVE_SEQUENT/,
   );
 });
 
@@ -40,6 +40,6 @@ test('return-target node also skips APPROVE_SEQUENT auto-approve', () => {
   const body = processTaskAssignedBody();
   assert.match(
     body,
-    /ObjUtil\.notEqual\(returnTaskFlag, Boolean\.TRUE\)[\s\S]{0,1600}BpmAutoApproveTypeEnum\.APPROVE_SEQUENT/,
+    /if \(processDefinitionInfo\.getAutoApprovalType\(\) != null\s*&&\s*ObjUtil\.notEqual\(returnTaskFlag, Boolean\.TRUE\)\) \{[\s\S]*BpmAutoApproveTypeEnum\.APPROVE_SEQUENT/,
   );
 });
