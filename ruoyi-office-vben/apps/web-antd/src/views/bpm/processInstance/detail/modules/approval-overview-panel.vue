@@ -82,10 +82,12 @@ async function load() {
       modelType.value = detail?.processDefinition?.modelType;
     } else {
       activityNodes.value = [];
-      errorMsg.value = resolveApiErrorMsg(
+      const msg = resolveApiErrorMsg(
         detailResult.reason,
         '加载审批进度失败',
       );
+      // 已结束实例偶发查不到时，显示空状态而不是红字
+      errorMsg.value = msg.includes('流程实例不存在') ? '' : msg;
     }
 
     if (modelResult.status === 'fulfilled') {

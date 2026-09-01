@@ -59,6 +59,10 @@ import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.history.HistoricProcessInstanceQuery;
+import org.flowable.engine.impl.persistence.entity.HistoricProcessInstanceEntity;
+import org.flowable.variable.api.history.HistoricVariableInstance;
+import org.flowable.variable.api.history.HistoricVariableInstanceQuery;
+import org.flowable.variable.service.impl.persistence.entity.HistoricVariableInstanceEntity;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ProcessInstance;
@@ -157,8 +161,52 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
     @Override
     public HistoricProcessInstance getHistoricProcessInstance(String id) {
-        return historyService.createHistoricProcessInstanceQuery().processInstanceId(id).includeProcessVariables()
+        if (StrUtil.isBlank(id)) {
+            return null;
+        }
+        HistoricProcessInstance instance = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(id)
+                .includeProcessVariables()
                 .singleResult();
+        if (instance != null) {
+            return instance;
+        }
+        // includeProcessVariables 联查可能漏掉已结束实例；再按 ID 查历史行
+        instance = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(id)
+                .singleResult();
+        if (instance == null) {
+            return null;
+        }
+        fillHistoricProcessVariables(instance, id);
+        return instance;
+    }
+
+    /**
+     * 不带 includeProcessVariables 查到的历史实例没有流程变量；
+     * 审批详情依赖 PROCESS_STATUS，从 ACT_HI_VARINST 补上。
+     */
+    private void fillHistoricProcessVariables(HistoricProcessInstance instance, String id) {
+        if (CollUtil.isNotEmpty(instance.getProcessVariables())) {
+            return;
+        }
+        HistoricVariableInstanceQuery variableQuery = historyService.createHistoricVariableInstanceQuery();
+        if (variableQuery == null) {
+            return;
+        }
+        List<HistoricVariableInstance> list = variableQuery.processInstanceId(id).list();
+        if (CollUtil.isEmpty(list) || !(instance instanceof HistoricProcessInstanceEntity entity)) {
+            return;
+        }
+        List<HistoricVariableInstanceEntity> queryVars = new ArrayList<>();
+        for (HistoricVariableInstance variable : list) {
+            if (variable instanceof HistoricVariableInstanceEntity historicVar) {
+                queryVars.add(historicVar);
+            }
+        }
+        if (CollUtil.isNotEmpty(queryVars)) {
+            entity.setQueryVariables(queryVars);
+        }
     }
 
     @Override
@@ -197,6 +245,10 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
             }
             startUserId = Long.valueOf(historicProcessInstance.getStartUserId());
             processInstanceStatus = FlowableUtils.getProcessInstanceStatus(historicProcessInstance);
+            // 历史已结束但 PROCESS_STATUS 缺失时，按结束处理，避免再查 runtime
+            if (processInstanceStatus == null && historicProcessInstance.getEndTime() != null) {
+                processInstanceStatus = BpmProcessInstanceStatusEnum.APPROVE.getStatus();
+            }
             // 合并 DB 和前端传递的流量变量，以前端的为主
             if (CollUtil.isNotEmpty(historicProcessInstance.getProcessVariables())) {
                 processVariables.putAll(historicProcessInstance.getProcessVariables());

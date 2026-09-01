@@ -130,6 +130,9 @@ public class FlowableUtils {
      * @return 状态
      */
     private static Integer getProcessInstanceStatus(Map<String, Object> processVariables) {
+        if (processVariables == null) {
+            return null;
+        }
         return (Integer) processVariables.get(BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_STATUS);
     }
 
