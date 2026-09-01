@@ -14,6 +14,8 @@ export const FINANCE_APPROVAL_PSHELL_VIEW_PATHS = [
   '/oa/seal/sealapply/info/index',
   '/oa/seal/seal-apply-info',
   '/bpm/oa/trip/detail',
+  '/bpm/oa/leave/detail',
+  '/bpm/oa/outing/detail',
 ] as const;
 
 export function isFinanceApprovalPShellViewPath(

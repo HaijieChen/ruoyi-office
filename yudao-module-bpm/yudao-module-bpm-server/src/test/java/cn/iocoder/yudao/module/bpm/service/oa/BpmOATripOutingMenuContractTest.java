@@ -96,6 +96,27 @@ class BpmOATripOutingMenuContractTest {
         int wrapIdx = detailText.indexOf("<ContentWrap");
         assertTrue(shellIdx >= 0 && wrapIdx > shellIdx,
                 "壳内字段布局必须排在 ContentWrap 之前，避免盖住审批时间线");
+
+        assertTrue(constantsText.contains("'/bpm/oa/leave/detail'"),
+                "请假 formCustomViewPath 必须进 P-shell 白名单");
+        assertTrue(constantsText.contains("'/bpm/oa/outing/detail'"),
+                "外出 formCustomViewPath 必须进 P-shell 白名单");
+        assertShellFieldOnly(
+                findRoot().resolve("ruoyi-office-vben/apps/web-antd/src/views/bpm/oa/leave/detail.vue"),
+                "请假");
+        assertShellFieldOnly(
+                findRoot().resolve("ruoyi-office-vben/apps/web-antd/src/views/bpm/oa/outing/detail.vue"),
+                "外出");
+    }
+
+    private static void assertShellFieldOnly(Path detail, String label) throws Exception {
+        String detailText = Files.readString(detail);
+        assertTrue(detailText.contains("inProcessShell"),
+                label + " 流程壳传入 processInstance 时只渲染字段，不包整页");
+        int shellIdx = detailText.indexOf("v-if=\"inProcessShell\"");
+        int wrapIdx = detailText.indexOf("<ContentWrap");
+        assertTrue(shellIdx >= 0 && wrapIdx > shellIdx,
+                label + " 壳内字段布局必须排在 ContentWrap 之前，避免盖住审批时间线");
     }
 
     private static String grantBlock(String text) {

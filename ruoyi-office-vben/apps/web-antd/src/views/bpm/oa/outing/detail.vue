@@ -14,8 +14,10 @@ import { useDescription } from '#/components/description';
 import { useDetailFormSchema } from './data';
 
 const props = defineProps<{
-  id?: string;
+  activityNodes?: any[];
   embedded?: boolean;
+  id?: string;
+  processInstance?: any;
 }>();
 
 const { query } = useRoute();
@@ -31,7 +33,11 @@ const [Descriptions] = useDescription({
   schema: useDetailFormSchema(),
 });
 
-/** 获取详情数据 */
+/** 流程详情壳会传入 processInstance，此时只渲染字段，把时间线留给壳 */
+const inProcessShell = computed(
+  () => !!props.processInstance || !!props.embedded,
+);
+
 async function getDetailData() {
   try {
     loading.value = true;
@@ -50,7 +56,7 @@ onMounted(() => {
 watch(
   () => props.id,
   () => {
-    if (props.embedded) {
+    if (inProcessShell.value) {
       void getDetailData();
     }
   },
@@ -58,7 +64,7 @@ watch(
 </script>
 
 <template>
-  <div v-if="embedded">
+  <div v-if="inProcessShell">
     <Spin :spinning="loading" tip="加载中...">
       <div v-if="!formData && !loading">无法加载前置单据</div>
       <Descriptions v-else :data="formData" />

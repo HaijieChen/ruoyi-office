@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { BpmOALeaveApi } from '#/api/bpm/oa/leave';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { ContentWrap } from '@vben/common-ui';
@@ -14,7 +14,10 @@ import { useDescription } from '#/components/description';
 import { useDetailFormSchema } from './data';
 
 const props = defineProps<{
-  id: string;
+  activityNodes?: any[];
+  embedded?: boolean;
+  id?: string;
+  processInstance?: any;
 }>();
 
 const { query } = useRoute();
@@ -30,24 +33,44 @@ const [Descriptions] = useDescription({
   schema: useDetailFormSchema(),
 });
 
-/** 获取详情数据 */
+/** 流程详情壳会传入 processInstance，此时只渲染字段，把时间线留给壳 */
+const inProcessShell = computed(
+  () => !!props.processInstance || !!props.embedded,
+);
+
 async function getDetailData() {
   try {
     loading.value = true;
     formData.value = await getLeave(Number(props.id || queryId.value));
+  } catch {
+    formData.value = undefined;
   } finally {
     loading.value = false;
   }
 }
 
-/** 初始化 */
 onMounted(() => {
   getDetailData();
 });
+
+watch(
+  () => props.id,
+  () => {
+    if (inProcessShell.value) {
+      void getDetailData();
+    }
+  },
+);
 </script>
 
 <template>
-  <ContentWrap class="m-2">
+  <div v-if="inProcessShell">
+    <Spin :spinning="loading" tip="加载中...">
+      <div v-if="!formData && !loading">无法加载前置单据</div>
+      <Descriptions v-else :data="formData" />
+    </Spin>
+  </div>
+  <ContentWrap v-else class="m-2">
     <Spin :spinning="loading" tip="加载中...">
       <Descriptions :data="formData" />
     </Spin>
