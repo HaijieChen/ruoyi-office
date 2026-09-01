@@ -619,11 +619,16 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
         UpdateWrapper<FinancePaymentApplicationDO> uw = new UpdateWrapper<FinancePaymentApplicationDO>()
                 .eq("id", appId)
+                .in("status",
+                        FinancePaymentApplicationStatusEnum.PENDING.getStatus(),
+                        FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
                 .set("current_node_key", nodeKey)
                 .set("current_node_name", nodeName);
-        // 出纳节点 → WAIT_PAY
+        // 仅出纳节点进入待支付；财务/部门等审批节点必须保持审批中
         if (TASK_CASHIER.equals(nodeKey) || "cashier".equals(nodeKey)) {
             uw.set("status", FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus());
+        } else {
+            uw.set("status", FinancePaymentApplicationStatusEnum.PENDING.getStatus());
         }
         applicationMapper.update(null, uw);
     }

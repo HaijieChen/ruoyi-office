@@ -1480,4 +1480,47 @@ class FinancePaymentApplicationServiceImplTest {
         verify(payLineMapper, never()).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
     }
 
+    @Test
+    void updateCurrentNodeFinanceDoesNotMarkWaitPay() {
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        service.updateCurrentNode(37L, "finance", "待财务主管");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertFalse(updateWritesStatus(cap.getValue(), "WAIT_PAY"), String.valueOf(cap.getValue().getSqlSet()));
+        assertTrue(updateWritesStatus(cap.getValue(), "PENDING"),
+                "财务复审未结束，必须保持审批中而不是待支付");
+    }
+
+    @Test
+    void updateCurrentNodeTaskFinanceDoesNotMarkWaitPay() {
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        service.updateCurrentNode(37L, "taskFinance", "财务复审");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertFalse(updateWritesStatus(cap.getValue(), "WAIT_PAY"));
+        assertTrue(updateWritesStatus(cap.getValue(), "PENDING"));
+    }
+
+    @Test
+    void updateCurrentNodeCashierMarksWaitPay() {
+        when(mapper.update(isNull(), any())).thenReturn(1);
+        service.updateCurrentNode(30L, "cashier", "待出纳");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertTrue(updateWritesStatus(cap.getValue(), "WAIT_PAY"));
+    }
+
+    private static boolean updateWritesStatus(
+            com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO> uw,
+            String status) {
+        String sqlSet = String.valueOf(uw.getSqlSet());
+        if (sqlSet.contains("'" + status + "'") || sqlSet.contains('"' + status + '"')) {
+            return true;
+        }
+        return uw.getParamNameValuePairs().values().stream().anyMatch(status::equals);
+    }
+
 }
