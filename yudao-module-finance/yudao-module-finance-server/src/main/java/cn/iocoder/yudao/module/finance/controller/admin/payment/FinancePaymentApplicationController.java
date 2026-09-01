@@ -15,6 +15,7 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -43,7 +44,7 @@ public class FinancePaymentApplicationController {
     @Resource
     private SecurityFrameworkService securityFrameworkService;
     @Resource
-    private cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient invoiceOcrClient;
+    private FinanceInvoiceOcrClient invoiceOcrClient;
 
     @PostMapping("/create-and-start")
     @Operation(summary = "创建付款申请并启动审批")
@@ -120,13 +121,12 @@ public class FinancePaymentApplicationController {
     @PostMapping("/ocr-voucher")
     @Operation(summary = "识别银行回单金额（失败返回空字段）")
     @PreAuthorize("@ss.hasPermission('finance:payment-application:record-pay')")
-    public CommonResult<cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient.Result> ocrVoucher(
+    public CommonResult<FinanceInvoiceOcrClient.Result> ocrVoucher(
             @RequestParam(value = "fileUrl", required = false) String fileUrl,
             @RequestParam(value = "file", required = false) MultipartFile file) throws IOException {
-        cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient.Result result =
-                file != null && !file.isEmpty()
-                        ? invoiceOcrClient.recognizeBytes(file.getBytes())
-                        : invoiceOcrClient.recognize(fileUrl);
+        FinanceInvoiceOcrClient.Result result = file != null && !file.isEmpty()
+                ? invoiceOcrClient.recognizeBytes(file.getBytes())
+                : invoiceOcrClient.recognize(fileUrl);
         return success(result);
     }
 

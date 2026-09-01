@@ -103,8 +103,23 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="累计已支付">{{ detail.cumulativePaid }}</Descriptions.Item>
         <Descriptions.Item label="本次后累计">{{ detail.cumulativeAfter }}</Descriptions.Item>
         <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
+        <Descriptions.Item label="已付合计">
+          {{ detail.paidLineSum ?? 0 }}
+        </Descriptions.Item>
         <Descriptions.Item label="支付凭证" :span="2">
           <FilePreviewList :value="detail.payVoucherUrl" />
+        </Descriptions.Item>
+        <Descriptions.Item v-if="detail.payLines?.length" label="历次回单">
+          <div
+            v-for="(line, i) in detail.payLines"
+            :key="i"
+            class="mb-2"
+          >
+            <div class="text-xs text-gray-500">
+              {{ displayDate(line.actualPayDate) }} / {{ line.payAmount }}
+            </div>
+            <FilePreviewList :value="line.payVoucherUrl" />
+          </div>
         </Descriptions.Item>
       </Descriptions>
     </Spin>

@@ -6,6 +6,7 @@ export namespace FinancePaymentApplicationApi {
   export type Status =
     | 'PENDING'
     | 'WAIT_PAY'
+    | 'PARTIAL_PAID'
     | 'PAID'
     | 'REJECTED'
     | 'CANCELLED';
@@ -48,6 +49,12 @@ export namespace FinancePaymentApplicationApi {
     actualPayDate?: string;
     payVoucherUrl?: string;
     erpVoucherNo?: string;
+    paidLineSum?: number;
+    payLines?: Array<{
+      payAmount?: number;
+      actualPayDate?: string;
+      payVoucherUrl?: string;
+    }>;
     cumulativePaid?: number;
     cumulativeAfter?: number;
     createTime?: string;

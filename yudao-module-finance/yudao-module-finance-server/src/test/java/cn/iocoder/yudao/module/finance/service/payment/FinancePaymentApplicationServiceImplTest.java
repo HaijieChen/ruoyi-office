@@ -1596,4 +1596,117 @@ class FinancePaymentApplicationServiceImplTest {
         return uw.getParamNameValuePairs().values().stream().anyMatch(status::equals);
     }
 
+    @Test
+    void recordPayPartialSetsPartialPaidAndKeepsTaskOpen() {
+        stubCashierTask("t-70", "pi-70", "1");
+        stubPayAccount(77L, 20L);
+        when(mapper.selectByIdForUpdate(70L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(70L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-70")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .applicationKind("ORDINARY")
+                .build());
+        when(payLineMapper.sumPayAmountByApplicationId(70L)).thenReturn(BigDecimal.ZERO);
+        when(mapper.update(isNull(), any())).thenReturn(1);
+
+        FinancePaymentRecordPayReqVO req = basePayReq(70L, "t-70", new BigDecimal("40.00"));
+        service.recordPay(req, 1L);
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertTrue(cap.getValue().getParamNameValuePairs().containsValue("PARTIAL_PAID"));
+        verify(taskProvider.getIfAvailable(), never()).complete(anyString());
+    }
+
+    @Test
+    void recordPayRejectsWhenConfirmedAmountWouldExceedApply() {
+        stubCashierTask("t-71", "pi-71", "1");
+        stubPayAccount(77L, 20L);
+        when(mapper.selectByIdForUpdate(71L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(71L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-71")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .applicationKind("ORDINARY")
+                .build());
+        when(payLineMapper.sumPayAmountByApplicationId(71L)).thenReturn(new BigDecimal("80.00"));
+
+        FinancePaymentRecordPayReqVO req = basePayReq(71L, "t-71", new BigDecimal("30.00"));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID.getCode(), ex.getCode());
+        verify(payLineMapper, never()).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
+    }
+
+    @Test
+    void recordPayAfterProcessEndedDoesNotRequireTaskId() {
+        stubPayAccount(77L, 20L);
+        org.flowable.engine.HistoryService historyService = mock(org.flowable.engine.HistoryService.class);
+        org.flowable.engine.history.HistoricProcessInstanceQuery hq =
+                mock(org.flowable.engine.history.HistoricProcessInstanceQuery.class);
+        org.flowable.engine.history.HistoricProcessInstance hi =
+                mock(org.flowable.engine.history.HistoricProcessInstance.class);
+        when(historyProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hq);
+        when(hq.processInstanceId("pi-72")).thenReturn(hq);
+        when(hq.singleResult()).thenReturn(hi);
+        when(hi.getEndTime()).thenReturn(new java.util.Date());
+        when(mapper.selectByIdForUpdate(72L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(72L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-72")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .applicationKind("ORDINARY")
+                .build());
+        when(payLineMapper.sumPayAmountByApplicationId(72L)).thenReturn(BigDecimal.ZERO);
+        when(mapper.update(isNull(), any())).thenReturn(1);
+
+        FinancePaymentRecordPayReqVO req = basePayReq(72L, null, new BigDecimal("100.00"));
+        assertDoesNotThrow(() -> service.recordPay(req, 1L));
+        verify(payLineMapper).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
+    }
+
+    private void stubCashierTask(String taskId, String processInstanceId, String userId) {
+        org.flowable.engine.TaskService taskService = mock(org.flowable.engine.TaskService.class);
+        org.flowable.task.api.TaskQuery tq = mock(org.flowable.task.api.TaskQuery.class);
+        org.flowable.task.api.Task task = mock(org.flowable.task.api.Task.class);
+        when(taskProvider.getIfAvailable()).thenReturn(taskService);
+        when(taskService.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId(taskId)).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(task);
+        when(task.getTaskDefinitionKey()).thenReturn("taskCashier");
+        when(task.getProcessInstanceId()).thenReturn(processInstanceId);
+        when(task.getId()).thenReturn(taskId);
+        when(tq.taskCandidateOrAssigned(userId)).thenReturn(tq);
+        when(tq.count()).thenReturn(1L);
+    }
+
+    private void stubPayAccount(Long accountId, Long entityCompanyDeptId) {
+        var account = cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                .id(accountId).entityCompanyDeptId(entityCompanyDeptId).accountName("基本户").bankName("工行")
+                .accountHolder("甲").accountNo("6222").currency("CNY").status(0).build();
+        when(companyBankAccountService.get(accountId)).thenReturn(account);
+        when(companyBankAccountService.requireEnabledForEntityCompany(eq(accountId), eq(entityCompanyDeptId)))
+                .thenReturn(account);
+    }
+
+    private static FinancePaymentRecordPayReqVO basePayReq(Long id, String taskId, BigDecimal amount) {
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(id);
+        req.setTaskId(taskId);
+        req.setCompanyBankAccountId(77L);
+        req.setPayAmount(amount);
+        req.setActualPayDate(LocalDate.now());
+        req.setPayVoucherUrl("http://voucher");
+        req.setIdempotencyKey("idem-" + id);
+        return req;
+    }
+
 }

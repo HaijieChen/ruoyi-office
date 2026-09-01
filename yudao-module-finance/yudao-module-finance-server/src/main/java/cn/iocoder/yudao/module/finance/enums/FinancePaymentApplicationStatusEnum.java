@@ -7,6 +7,7 @@ public enum FinancePaymentApplicationStatusEnum {
 
     PENDING("PENDING", "审批中"),
     WAIT_PAY("WAIT_PAY", "待支付"),
+    PARTIAL_PAID("PARTIAL_PAID", "部分支付"),
     PAID("PAID", "已支付"),
     REJECTED("REJECTED", "已驳回"),
     CANCELLED("CANCELLED", "已取消");

@@ -738,7 +738,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
 
         if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
-                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())) {
+                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())
+                && !FinancePaymentApplicationStatusEnum.PARTIAL_PAID.getStatus().equals(application.getStatus())) {
             // 已足额且终态：无新键时也视为幂等成功
             BigDecimal paid = sumPayLines(application.getId());
             if (application.getApplyAmount() != null
@@ -754,7 +755,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         Task task = null;
         if (StrUtil.isNotBlank(reqVO.getTaskId())) {
             task = requireCashierTask(reqVO.getTaskId(), application, userId);
-        } else if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())) {
+        } else if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
+                && !FinancePaymentApplicationStatusEnum.PARTIAL_PAID.getStatus().equals(application.getStatus())) {
             throw exception(PAYMENT_APPLICATION_TASK_INVALID);
         }
 
@@ -800,28 +802,15 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
         BigDecimal newSum = alreadyPaid.add(payAmount);
         if (newSum.compareTo(application.getApplyAmount()) == 0) {
-            // 写申请头证据字段（兼容 F1 / 历史详情展示）
-            UpdateWrapper<FinancePaymentApplicationDO> headerUw = new UpdateWrapper<FinancePaymentApplicationDO>()
-                    .eq("id", application.getId())
-                    .in("status",
-                            FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
-                            FinancePaymentApplicationStatusEnum.PENDING.getStatus())
-                    .set("actual_pay_date", reqVO.getActualPayDate())
-                    .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
-                    .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null))
-                    .set("materials_status", Boolean.FALSE.equals(reqVO.getMaterialsComplete()) ? "WAIT_INVOICE" : "COMPLETE")
+            int updated = applicationMapper.update(null, payEvidenceUpdate(application, reqVO)
                     .set("status", FinancePaymentApplicationStatusEnum.PAID.getStatus())
                     .set("current_node_key", null)
-                    .set("current_node_name", null);
-            if (StrUtil.isNotBlank(application.getProcessInstanceId())) {
-                headerUw.eq("process_instance_id", application.getProcessInstanceId());
-            }
-            int updated = applicationMapper.update(null, headerUw);
+                    .set("current_node_name", null));
             if (updated == 0) {
                 throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
             }
             boolean complete = reqVO.getCompleteWhenFullyPaid() == null || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid());
-            if (Boolean.FALSE.equals(reqVO.getMaterialsComplete())) {
+            if (Boolean.FALSE.equals(reqVO.getMaterialsComplete()) && task != null) {
                 complete = false;
                 if (task != null) {
                     processInstanceApi.returnCurrentTaskToStartUserTask(
@@ -833,8 +822,31 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
             }
         } else if (newSum.compareTo(application.getApplyAmount()) > 0) {
             throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
+        } else {
+            int updated = applicationMapper.update(null, payEvidenceUpdate(application, reqVO)
+                    .set("status", FinancePaymentApplicationStatusEnum.PARTIAL_PAID.getStatus()));
+            if (updated == 0) {
+                throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+            }
         }
-        // 未足额：仅落支付明细，不 complete（允许多笔）
+    }
+
+    private UpdateWrapper<FinancePaymentApplicationDO> payEvidenceUpdate(
+            FinancePaymentApplicationDO application, FinancePaymentRecordPayReqVO reqVO) {
+        UpdateWrapper<FinancePaymentApplicationDO> uw = new UpdateWrapper<FinancePaymentApplicationDO>()
+                .eq("id", application.getId())
+                .in("status",
+                        FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus(),
+                        FinancePaymentApplicationStatusEnum.PENDING.getStatus(),
+                        FinancePaymentApplicationStatusEnum.PARTIAL_PAID.getStatus())
+                .set("actual_pay_date", reqVO.getActualPayDate())
+                .set("pay_voucher_url", reqVO.getPayVoucherUrl().trim())
+                .set("erp_voucher_no", StrUtil.blankToDefault(trimToNull(reqVO.getErpVoucherNo()), null))
+                .set("materials_status", Boolean.FALSE.equals(reqVO.getMaterialsComplete()) ? "WAIT_INVOICE" : "COMPLETE");
+        if (StrUtil.isNotBlank(application.getProcessInstanceId())) {
+            uw.eq("process_instance_id", application.getProcessInstanceId());
+        }
+        return uw;
     }
 
     @Override

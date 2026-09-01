@@ -175,7 +175,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '支付',
               type: 'link',
-              ifShow: row.status === 'WAIT_PAY',
+              ifShow: row.status === 'WAIT_PAY' || row.status === 'PARTIAL_PAID',
               onClick: handleRecordPay.bind(null, row),
             },
           ]"

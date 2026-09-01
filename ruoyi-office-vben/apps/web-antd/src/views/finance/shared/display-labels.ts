@@ -4,6 +4,7 @@ import { getDictLabel } from '@vben/hooks';
 const STATUS: Record<string, string> = {
   PENDING: '审批中',
   WAIT_PAY: '已通过 · 待支付',
+  PARTIAL_PAID: '部分支付',
   PAID: '已支付',
   REJECTED: '已驳回',
   CANCELLED: '已取消',
