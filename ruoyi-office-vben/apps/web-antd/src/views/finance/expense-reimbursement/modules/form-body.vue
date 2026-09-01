@@ -323,7 +323,7 @@ async function runInvoiceOcr(index: number, url: string, file?: File) {
     }
     if (!buyerMatchesEntity(ocr?.buyerName, formData.value.entityCompanyName)) {
       message.error(
-        `与报销主体不匹配，请重新上传发票（抬头：${ocr?.buyerName || '未识别'}，主体：${formData.value.entityCompanyName || '未识别'}）`,
+        `发票主体与报销主体不一致，不允许上传（发票主体：${ocr?.buyerName || '未识别'}，报销主体：${formData.value.entityCompanyName || '未识别'}）`,
       );
       throw new Error('buyer mismatch');
     }

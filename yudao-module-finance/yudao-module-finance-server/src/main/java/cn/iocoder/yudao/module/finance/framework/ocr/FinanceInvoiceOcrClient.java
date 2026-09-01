@@ -261,6 +261,32 @@ public class FinanceInvoiceOcrClient {
                 }
             }
         }
+        java.util.regex.Matcher companyNameField = java.util.regex.Pattern
+                .compile("(?<!项目)名称[:：]?(.{2,80}?)(?=(?<!项目)名称[:：]?|纳税人识别号|统一社会信用代码)")
+                .matcher(compact);
+        String firstCompanyName = null;
+        int companyCount = 0;
+        while (companyNameField.find()) {
+            String name = cleanBuyerName(companyNameField.group(1));
+            if (name == null) {
+                continue;
+            }
+            if (firstCompanyName == null) {
+                firstCompanyName = name;
+            }
+            companyCount++;
+        }
+        int taxIdentityLabelCount = 0;
+        java.util.regex.Matcher taxIdentityLabel = java.util.regex.Pattern
+                .compile("纳税人识别号|统一社会信用代码")
+                .matcher(compact);
+        while (taxIdentityLabel.find()) {
+            taxIdentityLabelCount++;
+        }
+        // 横版 OCR 可能按区块或按行输出；仅在买卖双方名称和税号标签都齐全时取首个名称。
+        if (companyCount >= 2 && taxIdentityLabelCount >= 2) {
+            return firstCompanyName;
+        }
         return null;
     }
 

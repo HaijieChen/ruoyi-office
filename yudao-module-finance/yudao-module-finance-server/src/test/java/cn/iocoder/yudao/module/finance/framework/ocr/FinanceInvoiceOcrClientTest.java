@@ -63,6 +63,39 @@ class FinanceInvoiceOcrClientTest {
         assertEquals("北京某某科技有限公司",
                 FinanceInvoiceOcrClient.parseBuyerName("购货单位：北京某某科技有限公司 纳税人识别号"));
         assertNull(FinanceInvoiceOcrClient.parseBuyerName("销售方名称：某商户"));
+        assertEquals("明确购买方有限公司", FinanceInvoiceOcrClient.parseBuyerName(
+                "名称：错误候选有限公司 统一社会信用代码：913100000000000001 "
+                        + "名称：销售方有限公司 统一社会信用代码：913200000000000002 "
+                        + "购买方名称：明确购买方有限公司 纳税人识别号"));
+    }
+
+    @Test
+    void parseBuyerNameWithoutVerticalRoleLabelsUsesFirstTaxIdentityCompanyBlock() {
+        String raw = "电子发票 增值税专用发票 发票号码：26300000000000000001 "
+                + "名称：卡饭（上海）信息安全有限公司 "
+                + "统一社会信用代码/纳税人识别号：913100000000000001 "
+                + "项目名称 *住宿服务*住宿费 "
+                + "名称：南京创梦酒店管理有限公司 "
+                + "统一社会信用代码/纳税人识别号：913200000000000002";
+
+        assertEquals("卡饭（上海）信息安全有限公司", FinanceInvoiceOcrClient.parseBuyerName(raw));
+    }
+
+    @Test
+    void parseBuyerNameFromHorizontalRowMajorCompanyFields() {
+        String raw = "名称：卡饭（上海）信息安全有限公司 "
+                + "名称：南京创梦酒店管理有限公司 "
+                + "统一社会信用代码/纳税人识别号：913100000000000001 "
+                + "统一社会信用代码/纳税人识别号：913200000000000002";
+
+        assertEquals("卡饭（上海）信息安全有限公司", FinanceInvoiceOcrClient.parseBuyerName(raw));
+    }
+
+    @Test
+    void sellerOnlyTaxIdentityBlockDoesNotBecomeBuyer() {
+        assertNull(FinanceInvoiceOcrClient.parseBuyerName(
+                "名称：南京创梦酒店管理有限公司 "
+                        + "统一社会信用代码/纳税人识别号：913200000000000002"));
     }
 
     @Test
