@@ -40,6 +40,13 @@ class FinancePaymentApplicationStatusListenerTest {
     }
 
     @Test
+    void onEventRunningDoesNotMarkWaitPay() {
+        listener.onEvent(statusEvent("10", "39", "pi-start",
+                BpmProcessInstanceStatusEnum.RUNNING.getStatus()));
+        verify(paymentService, never()).onApprovalOutcome(anyLong(), anyString(), anyString());
+    }
+
+    @Test
     void onEventBlankPiFailClosed() {
         assertThrows(IllegalStateException.class, () -> listener.onEvent(rejectEvent("1", "88", null)));
         verify(paymentService, never()).onApprovalOutcome(anyLong(), anyString(), anyString());
@@ -76,12 +83,17 @@ class FinancePaymentApplicationStatusListenerTest {
     }
 
     private static BpmProcessInstanceStatusEvent rejectEvent(String tenantId, String businessKey, String pi) {
+        return statusEvent(tenantId, businessKey, pi, BpmProcessInstanceStatusEnum.REJECT.getStatus());
+    }
+
+    private static BpmProcessInstanceStatusEvent statusEvent(
+            String tenantId, String businessKey, String pi, Integer status) {
         BpmProcessInstanceStatusEvent event = new BpmProcessInstanceStatusEvent();
         BpmProcessInstanceInfo info = new BpmProcessInstanceInfo();
         info.setTenantId(tenantId);
         info.setBusinessKey(businessKey);
         info.setProcessInstanceId(pi);
-        info.setStatus(BpmProcessInstanceStatusEnum.REJECT.getStatus());
+        info.setStatus(status);
         event.setProcessInstanceInfo(info);
         return event;
     }

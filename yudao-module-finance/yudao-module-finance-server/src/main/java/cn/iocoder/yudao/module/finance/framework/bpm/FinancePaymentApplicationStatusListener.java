@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.framework.bpm;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceStatusEvent;
 import cn.iocoder.yudao.module.bpm.api.event.BpmProcessInstanceStatusEventListener;
+import cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
 import cn.iocoder.yudao.module.finance.service.payment.FinancePaymentApplicationService;
@@ -39,6 +40,11 @@ public class FinancePaymentApplicationStatusListener extends BpmProcessInstanceS
             return;
         }
         Integer processStatus = event.getProcessInstanceInfo().getStatus();
+        // 流程启动会发 RUNNING；endEvent 才把 RUNNING/null 视为通过。启动中不得写成待支付。
+        if (processStatus == null
+                || BpmProcessInstanceStatusEnum.RUNNING.getStatus().equals(processStatus)) {
+            return;
+        }
         String outcome = FinancePaymentApprovalOutcomeDelegate.mapProcessStatusToOutcome(processStatus);
         if (outcome == null) {
             return;

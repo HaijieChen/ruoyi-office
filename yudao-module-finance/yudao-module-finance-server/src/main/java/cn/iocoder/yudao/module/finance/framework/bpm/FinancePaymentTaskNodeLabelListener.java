@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * 付款申请 UserTask create → 回写节点标签；出纳节点标 WAIT_PAY。
+ * 付款申请 UserTask create → 回写节点标签。审批中节点保持 PENDING。
  */
 @Component("financePaymentTaskNodeLabelListener")
 @Slf4j
