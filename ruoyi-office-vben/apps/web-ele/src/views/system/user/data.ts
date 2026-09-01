@@ -269,6 +269,15 @@ export function useGridFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'nickname',
+      label: '用户昵称',
+      component: 'Input',
+      componentProps: {
+        placeholder: '请输入用户昵称',
+        clearable: true,
+      },
+    },
+    {
       fieldName: 'mobile',
       label: '手机号码',
       component: 'Input',

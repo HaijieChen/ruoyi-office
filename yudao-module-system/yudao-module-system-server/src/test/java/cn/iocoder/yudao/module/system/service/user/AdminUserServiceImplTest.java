@@ -337,6 +337,7 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
         // 准备参数
         UserPageReqVO reqVO = new UserPageReqVO();
         reqVO.setUsername("tu");
+        reqVO.setNickname("严");
         reqVO.setMobile("1560");
         reqVO.setStatus(CommonStatusEnum.ENABLE.getStatus());
         reqVO.setCreateTime(buildBetweenTime(2020, 12, 1, 2020, 12, 24));
@@ -360,6 +361,7 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
         // mock 数据
         AdminUserDO dbUser = randomAdminUserDO(o -> { // 等会查询到
             o.setUsername("tudou");
+            o.setNickname("严伟");
             o.setMobile("15601691300");
             o.setStatus(CommonStatusEnum.ENABLE.getStatus());
             o.setCreateTime(buildTime(2020, 12, 12));
@@ -368,6 +370,8 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
         userMapper.insert(dbUser);
         // 测试 username 不匹配
         userMapper.insert(cloneIgnoreId(dbUser, o -> o.setUsername("dou")));
+        // 测试 nickname 不匹配
+        userMapper.insert(cloneIgnoreId(dbUser, o -> o.setNickname("沈文斌")));
         // 测试 mobile 不匹配
         userMapper.insert(cloneIgnoreId(dbUser, o -> o.setMobile("18818260888")));
         // 测试 status 不匹配
