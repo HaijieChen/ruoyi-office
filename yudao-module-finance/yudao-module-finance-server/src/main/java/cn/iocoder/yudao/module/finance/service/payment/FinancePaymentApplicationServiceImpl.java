@@ -550,6 +550,24 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         }
     }
 
+    /**
+     * 历史实例是否已结束。无流程实例视为已结束（导入单）。
+     */
+    private boolean isHistoricProcessEnded(String processInstanceId) {
+        if (StrUtil.isBlank(processInstanceId)) {
+            return true;
+        }
+        HistoryService historyService = historyServiceProvider.getIfAvailable();
+        if (historyService == null) {
+            return false;
+        }
+        HistoricProcessInstance hi = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .finished()
+                .singleResult();
+        return hi != null && hi.getEndTime() != null;
+    }
+
     @Override
     public FinancePaymentApplicationDO getApplication(Long id) {
         FinancePaymentApplicationDO application = applicationMapper.selectById(id);
