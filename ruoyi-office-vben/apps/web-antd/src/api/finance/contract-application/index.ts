@@ -43,6 +43,7 @@ export namespace FinanceContractApplicationApi {
     sealFileUrl?: string;
     actualSealerUserId?: number;
     archivedAt?: string;
+    archiveFileUrls?: string;
     mailTrackingNo?: string;
     remark?: string;
     voided?: boolean;
@@ -158,10 +159,10 @@ export function recordContractSeal(id: number, taskId: string, sealFileUrl: stri
   );
 }
 
-export function recordContractArchive(id: number) {
+export function recordContractArchive(id: number, archiveFileUrls: string[]) {
   return requestClient.post<boolean>(
     '/finance/contract-application/record-archive',
-    null,
+    archiveFileUrls,
     { params: { id } },
   );
 }

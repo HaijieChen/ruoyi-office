@@ -429,6 +429,25 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void recordArchive(Long id, List<String> archiveFileUrls, Long userId) {
+        FinanceContractApplicationDO application = getApplication(id);
+        if (!FinanceContractApprovalStatusEnum.APPROVED.getStatus().equals(application.getApprovalStatus())
+                || Boolean.TRUE.equals(application.getVoided())
+                || application.getArchivedAt() != null) {
+            throw exception(CONTRACT_APPLICATION_EXEC_NOT_ALLOWED);
+        }
+        String json = toArchiveFileJson(archiveFileUrls);
+        if (StrUtil.isBlank(json) || "[]".equals(json)) {
+            throw exception(CONTRACT_APPLICATION_ARCHIVE_FILE_REQUIRED);
+        }
+        applicationMapper.update(null, new UpdateWrapper<FinanceContractApplicationDO>()
+                .eq("id", id)
+                .set("archive_file_urls", json)
+                .set("archived_at", LocalDateTime.now()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void recordMail(Long id, String taskId, String mailTrackingNo, Long userId) {
         FinanceContractApplicationDO application = getApplication(id);
         requirePending(application);
@@ -750,5 +769,29 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
                 || Boolean.TRUE.equals(application.getVoided())) {
             throw exception(CONTRACT_APPLICATION_EXEC_NOT_ALLOWED);
         }
+    }
+
+    private static String toArchiveFileJson(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return "[]";
+        }
+        List<String> cleaned = new java.util.ArrayList<>();
+        for (String url : urls) {
+            if (StrUtil.isNotBlank(url)) {
+                cleaned.add(url.trim());
+            }
+        }
+        if (cleaned.isEmpty()) {
+            return "[]";
+        }
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < cleaned.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append('"').append(cleaned.get(i).replace("\"", "\\\"")).append('"');
+        }
+        sb.append(']');
+        return sb.toString();
     }
 }

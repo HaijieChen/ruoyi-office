@@ -2,7 +2,7 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { FinanceContractApplicationApi } from '#/api/finance/contract-application';
 
-import { nextTick, onMounted, watch } from 'vue';
+import { nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
@@ -13,6 +13,7 @@ import {
   getContractApplicationPage,
   recordContractArchive,
 } from '#/api/finance/contract-application';
+import { FileUpload } from '#/components/upload';
 import { message, Modal } from 'ant-design-vue';
 
 import { displayDate } from '#/utils/display-time';
@@ -123,20 +124,41 @@ function handleDetail(row: FinanceContractApplicationApi.Application) {
   detailModalApi.open();
 }
 
+const archiveFiles = ref<string[]>([]);
+const archiveTargetId = ref<number | null>(null);
+const archiveSubmitting = ref(false);
+const archiveModalOpen = ref(false);
+
 function handleArchive(row: FinanceContractApplicationApi.Application) {
-  if (row.approvalStatus !== 'APPROVED' || row.voided || row.archivedAt) {
+  if (row.approvalStatus !== 'APPROVED' || row.archivedAt || row.voided) {
     message.warning('仅已通过且未归档的合同可归档');
     return;
   }
-  Modal.confirm({
-    title: '确认归档？',
-    content: '归档后记录归档时间，不进入流程节点。',
-    onOk: async () => {
-      await recordContractArchive(row.id);
-      message.success('已归档');
-      handleRefresh();
-    },
-  });
+  archiveTargetId.value = row.id;
+  archiveFiles.value = [];
+  archiveModalOpen.value = true;
+}
+
+async function submitArchive() {
+  const id = archiveTargetId.value;
+  const files = (archiveFiles.value || []).map((s) => String(s || '').trim()).filter(Boolean);
+  if (id == null) return;
+  if (files.length === 0) {
+    message.warning('请上传至少一份归档资料');
+    return;
+  }
+  archiveSubmitting.value = true;
+  try {
+    await recordContractArchive(id, files);
+    message.success('已归档');
+    archiveModalOpen.value = false;
+    handleRefresh();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '归档失败';
+    message.error(msg);
+  } finally {
+    archiveSubmitting.value = false;
+  }
 }
 
 function handleCancel(row: FinanceContractApplicationApi.Application) {
@@ -290,6 +312,22 @@ const [Grid, gridApi] = useVbenVxeGrid({
     <CreateModal @success="handleRefresh" />
     <DetailModal />
     <ContractApplicationImportModal @success="handleRefresh" />
+    <Modal
+      v-model:open="archiveModalOpen"
+      title="合同归档"
+      :confirm-loading="archiveSubmitting"
+      ok-text="确认归档"
+      @ok="submitArchive"
+    >
+      <p class="mb-2 text-sm text-gray-600">请上传至少一份归档资料，可多份。</p>
+      <FileUpload
+        v-model:value="archiveFiles"
+        :max-number="10"
+        :max-size="30"
+        :multiple="true"
+        help-text="支持 PDF/图片等，至少一份"
+      />
+    </Modal>
     <Grid table-title="合同签约申请">
       <template #toolbar-tools>
         <TableAction

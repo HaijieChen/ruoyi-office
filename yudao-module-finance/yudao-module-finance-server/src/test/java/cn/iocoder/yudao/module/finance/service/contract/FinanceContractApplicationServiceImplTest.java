@@ -619,6 +619,40 @@ class FinanceContractApplicationServiceImplTest {
     }
 
     @Test
+    void recordArchiveRejectsEmptyFiles() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.recordArchive(100L, java.util.List.of(), 200L));
+        assertEquals(CONTRACT_APPLICATION_ARCHIVE_FILE_REQUIRED.getCode(), ex.getCode());
+        verify(applicationMapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void recordArchiveWritesFilesWithoutCompletingTask() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .applicantUserId(200L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .archivedAt(null)
+                .build());
+        when(applicationMapper.update(isNull(), any())).thenReturn(1);
+        service.recordArchive(100L, java.util.List.of("https://x/a.pdf", "https://x/b.pdf"), 200L);
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(applicationMapper).update(isNull(), cap.capture());
+        String sql = cap.getValue().getSqlSet();
+        org.junit.jupiter.api.Assertions.assertTrue(sql != null && sql.contains("archive_file_urls"));
+        org.junit.jupiter.api.Assertions.assertTrue(sql.contains("archived_at"));
+        verify(taskServiceProvider, never()).getIfAvailable();
+    }
+
+    @Test
     void createPersistsEntityCompanyAndCurrency() {
         mockProcessCreate();
         Long id = service.createAndStart(validReq(), 200L);

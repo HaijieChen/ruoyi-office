@@ -44,6 +44,7 @@ public class FinanceContractApplicationRespVO {
     private String sealFileUrl;
     private Long actualSealerUserId;
     private LocalDateTime archivedAt;
+    private String archiveFileUrls;
     private String mailTrackingNo;
     private String remark;
     private Boolean voided;

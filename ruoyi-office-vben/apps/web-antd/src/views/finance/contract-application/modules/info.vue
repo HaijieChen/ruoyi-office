@@ -159,6 +159,9 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="归档时间">
           {{ displayTime(detail.archivedAt) }}
         </Descriptions.Item>
+        <Descriptions.Item label="归档资料" :span="2">
+          <FilePreviewList :value="detail.archiveFileUrls" />
+        </Descriptions.Item>
         <Descriptions.Item label="邮寄单号">
           {{ detail.mailTrackingNo || '-' }}
         </Descriptions.Item>

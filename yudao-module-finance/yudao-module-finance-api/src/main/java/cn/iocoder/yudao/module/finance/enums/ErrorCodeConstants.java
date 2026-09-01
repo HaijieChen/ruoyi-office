@@ -179,6 +179,8 @@ public interface ErrorCodeConstants {
             "BPM 任务无效、节点不匹配或当前用户无权执行");
     ErrorCode CONTRACT_APPLICATION_PRODUCT_TYPE_INVALID = new ErrorCode(1_040_005_016,
             "产品类型不在启用字典中");
+    ErrorCode CONTRACT_APPLICATION_ARCHIVE_FILE_REQUIRED = new ErrorCode(1_040_005_017,
+            "合同归档必须上传资料");
 
     // ========== 付款申请 / 前置引用 1-040-006-000 ==========
     ErrorCode PAYMENT_PURCHASE_REF_INVALID = new ErrorCode(1_040_006_000,

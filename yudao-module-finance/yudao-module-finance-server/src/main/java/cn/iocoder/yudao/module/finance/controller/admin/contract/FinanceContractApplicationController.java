@@ -184,10 +184,11 @@ public class FinanceContractApplicationController {
     }
 
     @PostMapping("/record-archive")
-    @Operation(summary = "合同列表归档（不走流程节点）")
+    @Operation(summary = "合同列表归档：必填多份资料，只写台账")
     @PreAuthorize("@ss.hasPermission('finance:contract-application:record-seal')")
-    public CommonResult<Boolean> recordArchive(@RequestParam("id") Long id) {
-        contractApplicationService.recordArchive(id, getLoginUserId());
+    public CommonResult<Boolean> recordArchive(@RequestParam("id") Long id,
+                                               @RequestBody List<String> archiveFileUrls) {
+        contractApplicationService.recordArchive(id, archiveFileUrls, getLoginUserId());
         return success(true);
     }
 

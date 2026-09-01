@@ -57,6 +57,9 @@ public interface FinanceContractApplicationService {
     /** 归档：列表操作，只写 archived_at，不 complete BPM 任务 */
     void recordArchive(Long id, Long userId);
 
+    /** 列表归档：必填多份资料，只写台账，不 complete BPM */
+    void recordArchive(Long id, java.util.List<String> archiveFileUrls, Long userId);
+
     /** 邮寄：写台账 + complete */
     void recordMail(Long id, String taskId, String mailTrackingNo, Long userId);
 

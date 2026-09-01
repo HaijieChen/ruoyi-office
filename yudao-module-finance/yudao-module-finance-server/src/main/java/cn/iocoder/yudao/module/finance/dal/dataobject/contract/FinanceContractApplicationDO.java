@@ -66,6 +66,8 @@ public class FinanceContractApplicationDO extends TenantBaseDO {
     private String sealFileUrl;
     private Long actualSealerUserId;
     private LocalDateTime archivedAt;
+    /** JSON URL 数组：归档资料 */
+    private String archiveFileUrls;
     private String mailTrackingNo;
     private String remark;
     private Boolean voided;

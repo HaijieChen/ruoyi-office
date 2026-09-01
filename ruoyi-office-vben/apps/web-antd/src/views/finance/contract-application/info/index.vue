@@ -335,7 +335,6 @@ watch(
           </Space>
         </Card>
 
-
         <Card
           v-if="isMailNode && isApproval !== false"
           class="mb-4"
@@ -438,6 +437,9 @@ watch(
           </DescriptionsItem>
           <DescriptionsItem label="归档时间">
             {{ displayTime(detail.archivedAt) }}
+          </DescriptionsItem>
+          <DescriptionsItem label="归档资料" :span="2">
+            <FilePreviewList :value="detail.archiveFileUrls" />
           </DescriptionsItem>
           <DescriptionsItem label="邮寄单号">
             {{ detail.mailTrackingNo || '-' }}
