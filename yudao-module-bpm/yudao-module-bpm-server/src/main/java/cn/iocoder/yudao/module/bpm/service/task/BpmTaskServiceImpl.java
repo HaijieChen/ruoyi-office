@@ -1777,13 +1777,20 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     return;
                 }
 
+                // 判断是否为退回或者驳回：如果是退回或者驳回，不走自动去重（使用 local variable）
+                String returnFlagKey = String.format(BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_RETURN_FLAG, task.getTaskDefinitionKey());
+                Boolean returnTaskFlag = runtimeService.getVariableLocal(task.getExecutionId(), returnFlagKey, Boolean.class);
+                log.debug("[processTaskAssigned] 检查RETURN_FLAG: taskId={}, taskDefinitionKey={}, returnFlagKey={}, returnTaskFlag={}",
+                        task.getId(), task.getTaskDefinitionKey(), returnFlagKey, returnTaskFlag);
+
                 // 自动去重，通过自动审批的方式
                 BpmProcessDefinitionInfoDO processDefinitionInfo = bpmProcessDefinitionService.getProcessDefinitionInfo(task.getProcessDefinitionId());
                 if (processDefinitionInfo == null) {
                     log.error("[processTaskAssigned][taskId({}) 没有找到流程定义({})]", task.getId(), task.getProcessDefinitionId());
                     return;
                 }
-                if (processDefinitionInfo.getAutoApprovalType() != null) {
+                if (processDefinitionInfo.getAutoApprovalType() != null
+                        && ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
                     HistoricTaskInstanceQuery sameAssigneeQuery = historyService.createHistoricTaskInstanceQuery()
                             .processInstanceId(task.getProcessInstanceId())
                             .taskAssignee(task.getAssignee()) // 相同审批人
@@ -1819,11 +1826,6 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     return;
                 }
                 FlowElement userTaskElement = BpmnModelUtils.getFlowElementById(bpmnModel, task.getTaskDefinitionKey());
-                // 判断是否为退回或者驳回：如果是退回或者驳回不走这个策略（使用 local variable）
-                String returnFlagKey = String.format(BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_RETURN_FLAG, task.getTaskDefinitionKey());
-                Boolean returnTaskFlag = runtimeService.getVariableLocal(task.getExecutionId(), returnFlagKey, Boolean.class);
-                log.debug("[processTaskAssigned] 检查RETURN_FLAG: taskId={}, taskDefinitionKey={}, returnFlagKey={}, returnTaskFlag={}",
-                        task.getId(), task.getTaskDefinitionKey(), returnFlagKey, returnTaskFlag);
                 Boolean skipStartUserNodeFlag = Convert.toBool(runtimeService.getVariable(processInstance.getProcessInstanceId(),
                         BpmnVariableConstants.PROCESS_INSTANCE_VARIABLE_SKIP_START_USER_NODE, String.class));
                 if (userTaskElement.getId().equals(START_USER_NODE_ID)
