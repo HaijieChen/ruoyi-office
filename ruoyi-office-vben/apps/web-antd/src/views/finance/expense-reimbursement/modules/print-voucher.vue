@@ -50,8 +50,12 @@ function onPrint() {
           <tr>
             <th>标题</th>
             <td>{{ bill.processTitle }}</td>
+            <th>单据编号</th>
+            <td>{{ bill.applicationNo || '-' }}</td>
+          </tr>
+          <tr>
             <th>期间</th>
-            <td>{{ bill.periodLabel }}</td>
+            <td colspan="3">{{ bill.periodLabel }}</td>
           </tr>
           <tr>
             <th>主体公司</th>

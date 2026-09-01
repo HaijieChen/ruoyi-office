@@ -24,6 +24,7 @@ const [Grid] = useVbenVxeGrid({
   gridOptions: {
     columns: [
       { field: 'processTitle', title: '标题', minWidth: 200 },
+      { field: 'applicationNo', title: '单据编号', width: 160 },
       { field: 'periodLabel', title: '期间', width: 100 },
       { field: 'applyAmount', title: '申请金额', width: 110 },
       { field: 'approvedAmount', title: '实报', width: 110 },

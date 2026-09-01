@@ -26,6 +26,7 @@ public class FinanceExpenseReimbursementDO extends TenantBaseDO {
 
     @TableId
     private Long id;
+    private String applicationNo;
     private String processTitle;
     private String periodLabel;
     private String payeeAccountName;

@@ -10,6 +10,7 @@ import java.util.List;
 public class FinanceExpenseReimbursementRespVO {
 
     private Long id;
+    private String applicationNo;
     private String processTitle;
     private String periodLabel;
     private String payeeAccountName;

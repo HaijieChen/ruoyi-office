@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.expense.FinanceExpenseReim
 import cn.iocoder.yudao.module.finance.dal.dataobject.expense.FinanceExpenseReimbursementLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementMapper;
+import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
@@ -44,6 +45,7 @@ class FinanceExpenseReimbursementServiceImplTest {
     private FinanceExpenseReimbursementMapper mapper;
     private FinanceExpenseReimbursementLineMapper lineMapper;
     private FinanceExpensePredocService predoc;
+    private FinanceBpmProcessInstanceApi bpm;
     private FinanceExpenseReimbursementServiceImpl service;
 
     @BeforeEach
@@ -51,7 +53,7 @@ class FinanceExpenseReimbursementServiceImplTest {
         mapper = mock(FinanceExpenseReimbursementMapper.class);
         lineMapper = mock(FinanceExpenseReimbursementLineMapper.class);
         AdminUserApi users = mock(AdminUserApi.class);
-        FinanceBpmProcessInstanceApi bpm = mock(FinanceBpmProcessInstanceApi.class);
+        bpm = mock(FinanceBpmProcessInstanceApi.class);
         AdminUserRespDTO user = new AdminUserRespDTO();
         user.setId(1L);
         user.setDeptId(10L);
@@ -80,9 +82,12 @@ class FinanceExpenseReimbursementServiceImplTest {
         org.springframework.beans.factory.ObjectProvider<org.flowable.engine.TaskService> taskServiceProvider =
                 mock(org.springframework.beans.factory.ObjectProvider.class);
         when(taskServiceProvider.getIfAvailable()).thenReturn(null);
+        cn.iocoder.yudao.module.finance.dal.redis.no.FinanceExpenseReimbursementNoRedisDAO noDao =
+                mock(cn.iocoder.yudao.module.finance.dal.redis.no.FinanceExpenseReimbursementNoRedisDAO.class);
+        when(noDao.generate(any(LocalDate.class))).thenReturn("EXP-20260831-1");
         service = new FinanceExpenseReimbursementServiceImpl(mapper, lineMapper, users, bpm,
                 mock(cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService.class),
-                predoc, deptApi, taskServiceProvider);
+                predoc, deptApi, taskServiceProvider, noDao);
     }
 
     @Test
@@ -95,6 +100,13 @@ class FinanceExpenseReimbursementServiceImplTest {
         assertEquals(new BigDecimal("30.00"), cap.getValue().getApplyAmount());
         assertEquals("工商银行", cap.getValue().getPayeeBankName());
         assertEquals("【报销】-张三-2026-08-30.00", cap.getValue().getProcessTitle());
+        ArgumentCaptor<BpmProcessInstanceCreateReqDTO> bpmCap =
+                ArgumentCaptor.forClass(BpmProcessInstanceCreateReqDTO.class);
+        verify(bpm).createProcessInstance(anyLong(), bpmCap.capture());
+        assertEquals(cap.getValue().getApplicationNo(), bpmCap.getValue().getVariables().get("billCode"));
+        assertEquals(cap.getValue().getApplicationNo(), bpmCap.getValue().getVariables().get("applicationNo"));
+        org.junit.jupiter.api.Assertions.assertNotNull(cap.getValue().getApplicationNo());
+        org.junit.jupiter.api.Assertions.assertTrue(cap.getValue().getApplicationNo().startsWith("EXP-"));
         verify(mapper).updateById(any(FinanceExpenseReimbursementDO.class));
     }
 

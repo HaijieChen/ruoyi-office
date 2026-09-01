@@ -164,6 +164,7 @@ onMounted(load);
         </div>
         <Descriptions bordered :column="2" size="small" class="print:hidden">
           <Descriptions.Item label="标题">{{ bill.processTitle }}</Descriptions.Item>
+          <Descriptions.Item label="单据编号">{{ bill.applicationNo || '-' }}</Descriptions.Item>
           <Descriptions.Item label="状态">{{ bill.status }}</Descriptions.Item>
           <Descriptions.Item label="期间">{{ bill.periodLabel }}</Descriptions.Item>
           <Descriptions.Item v-if="bill.entityCompanyName" label="主体公司">{{ bill.entityCompanyName }}</Descriptions.Item>

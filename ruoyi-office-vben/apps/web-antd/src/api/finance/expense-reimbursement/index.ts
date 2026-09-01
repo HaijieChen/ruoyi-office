@@ -24,6 +24,7 @@ export namespace FinanceExpenseApi {
 
   export interface Bill {
     id: number;
+    applicationNo?: string;
     processTitle?: string;
     periodLabel: string;
     payeeAccountName: string;

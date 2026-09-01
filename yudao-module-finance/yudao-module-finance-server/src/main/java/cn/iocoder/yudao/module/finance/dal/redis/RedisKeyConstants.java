@@ -16,4 +16,6 @@ public interface RedisKeyConstants {
 
     String FINANCE_INVOICE_REDFUSH_NO = "finance_invoice_redflush_no:%s";
 
+    String FINANCE_EXPENSE_REIMBURSEMENT_NO = "finance_expense_reimbursement_no:%s";
+
 }

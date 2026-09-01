@@ -10,10 +10,12 @@ import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpens
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementLineReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseReimbursementRespVO;
+import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
 import cn.iocoder.yudao.module.finance.dal.dataobject.expense.FinanceExpenseReimbursementDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.expense.FinanceExpenseReimbursementLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementLineMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.expense.FinanceExpenseReimbursementMapper;
+import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceExpenseReimbursementNoRedisDAO;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
 import jakarta.annotation.Resource;
@@ -75,6 +77,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private final ObjectProvider<TaskService> taskServiceProvider;
     @Resource
     private FinanceProcessParticipantSupport processParticipantSupport;
+    private final FinanceExpenseReimbursementNoRedisDAO applicationNoRedisDAO;
 
     public FinanceExpenseReimbursementServiceImpl(FinanceExpenseReimbursementMapper mapper,
                                                   FinanceExpenseReimbursementLineMapper lineMapper,
@@ -83,7 +86,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
                                                   FinanceCompanyBankAccountService companyBankAccountService,
                                                   FinanceExpensePredocService predocService,
                                                   DeptApi deptApi,
-                                                  ObjectProvider<TaskService> taskServiceProvider) {
+                                                  ObjectProvider<TaskService> taskServiceProvider,
+                                                  FinanceExpenseReimbursementNoRedisDAO applicationNoRedisDAO) {
         this.mapper = mapper;
         this.lineMapper = lineMapper;
         this.adminUserApi = adminUserApi;
@@ -92,6 +96,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         this.predocService = predocService;
         this.deptApi = deptApi;
         this.taskServiceProvider = taskServiceProvider;
+        this.applicationNoRedisDAO = applicationNoRedisDAO;
     }
 
     @Override
@@ -156,7 +161,9 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         String nickname = StrUtil.blankToDefault(user.getNickname(), String.valueOf(actualUserId));
         String title = "【报销】-" + nickname + "-" + reqVO.getPeriodLabel().trim() + "-" + apply.toPlainString();
 
+        String applicationNo = applicationNoRedisDAO.generate(LocalDate.now());
         FinanceExpenseReimbursementDO header = FinanceExpenseReimbursementDO.builder()
+                .applicationNo(applicationNo)
                 .processTitle(title)
                 .periodLabel(reqVO.getPeriodLabel().trim())
                 .payeeAccountName(reqVO.getPayeeAccountName().trim())
@@ -202,6 +209,8 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         }
 
         Map<String, Object> vars = new HashMap<>();
+        vars.put(BpmProcessVariableConstants.BILL_CODE, applicationNo);
+        vars.put("applicationNo", applicationNo);
         // 网关条件 ${applyAmount > 300} 需要数字类型；BigDecimal 在 JUEL 里比较会失败
         vars.put("applyAmount", apply.doubleValue());
         vars.put("periodLabel", header.getPeriodLabel());
@@ -248,6 +257,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     private FinanceExpenseReimbursementRespVO toResp(FinanceExpenseReimbursementDO header, boolean revealAccount) {
         FinanceExpenseReimbursementRespVO vo = new FinanceExpenseReimbursementRespVO();
         vo.setId(header.getId());
+        vo.setApplicationNo(header.getApplicationNo());
         vo.setProcessTitle(header.getProcessTitle());
         vo.setPeriodLabel(header.getPeriodLabel());
         vo.setPayeeAccountName(header.getPayeeAccountName());
