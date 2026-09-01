@@ -175,12 +175,20 @@ export function ocrPaymentVoucher(fileUrl: string, file?: File) {
       ? (file as any).originFileObj
       : file;
   if (raw instanceof Blob) {
-    return requestClient.upload<{ amount?: number; feeDate?: string }>(
+    return requestClient.upload<{
+      amount?: number;
+      feeDate?: string;
+      invoiceNo?: string;
+    }>(
       '/finance/payment-application/ocr-voucher',
       { file: raw },
     );
   }
-  return requestClient.post<{ amount?: number; feeDate?: string }>(
+  return requestClient.post<{
+    amount?: number;
+    feeDate?: string;
+    invoiceNo?: string;
+  }>(
     '/finance/payment-application/ocr-voucher',
     null,
     { params: { fileUrl } },

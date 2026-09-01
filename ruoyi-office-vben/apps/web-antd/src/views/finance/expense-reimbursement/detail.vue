@@ -25,7 +25,7 @@ import {
 import type { FinanceExpenseApi } from '#/api/finance/expense-reimbursement';
 import { getDictLabel } from '@vben/hooks';
 
-import { FileUpload } from '#/components/upload';
+import { FilePreviewList, FileUpload } from '#/components/upload';
 import PrintVoucher from './modules/print-voucher.vue';
 import PredocOverlay from './modules/predoc-overlay.vue';
 
@@ -195,6 +195,9 @@ onMounted(load);
             >
               {{ predocLinkLabel(line) }}
             </Button>
+            <div v-if="line.invoiceFileUrl" class="mt-1">
+              <FilePreviewList :value="line.invoiceFileUrl" />
+            </div>
           </div>
         </div>
         <div
@@ -202,11 +205,14 @@ onMounted(load);
           class="mt-3 print:hidden"
         >
           <div class="mb-1 text-sm font-medium">其他附件</div>
-          <FileUpload
-            :value="bill.extraAttachments || []"
-            :max-number="30"
-            disabled
-          />
+          <FilePreviewList :value="bill.extraAttachments" />
+        </div>
+        <div
+          v-if="bill.payVoucherUrl"
+          class="mt-3 print:hidden"
+        >
+          <div class="mb-1 text-sm font-medium">支付附件</div>
+          <FilePreviewList :value="bill.payVoucherUrl" />
         </div>
         <div v-if="bill.status === 'PENDING'" class="mt-6 space-y-2">
           <div class="font-medium">财务实报</div>

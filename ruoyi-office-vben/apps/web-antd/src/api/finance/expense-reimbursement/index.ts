@@ -46,6 +46,7 @@ export namespace FinanceExpenseApi {
     actualPayDate?: string;
     companyBankAccountId?: number;
     extraAttachments?: string[];
+    payVoucherUrl?: string;
     lines?: Line[];
   }
 

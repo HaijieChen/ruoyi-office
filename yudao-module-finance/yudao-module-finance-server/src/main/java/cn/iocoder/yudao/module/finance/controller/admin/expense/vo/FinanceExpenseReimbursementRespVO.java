@@ -32,6 +32,7 @@ public class FinanceExpenseReimbursementRespVO {
     private String financeComment;
     private LocalDate actualPayDate;
     private Long companyBankAccountId;
+    private String payVoucherUrl;
     private List<String> extraAttachments;
     private List<FinanceExpenseReimbursementLineReqVO> lines;
 }

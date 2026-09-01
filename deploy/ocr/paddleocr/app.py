@@ -68,7 +68,58 @@ def parse_amount(joined):
         amounts = re.findall(pattern, compact)
         if amounts:
             return amounts[-1].replace(",", "")
+    return parse_receipt_amount(joined)
+
+
+def parse_receipt_amount(joined):
+    compact = re.sub(r"[\s　]", "", joined)
+    patterns = [
+        r"交易金额(?:\(小写\)|（小写）)[:：]?(?:CNY)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+        r"金额(?:\(小写\)|（小写）)[:：]?(?:CNY)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+        r"小写金额[:：]?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+        r"金额[:：]?[¥￥]?(?:CNY)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+        r"CNY((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+        r"[¥￥]((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, compact)
+        if m:
+            return m.group(1).replace(",", "")
     return None
+
+
+def parse_receipt_serial(joined):
+    compact = re.sub(r"[\s　]", "", joined)
+    patterns = [
+        r"交易流水号[:：]?([A-Za-z0-9-]{6,40})",
+        r"交易流水[:：]?([A-Za-z0-9-]{6,40})",
+        r"账户明细编号-交易流水号[:：]?([A-Za-z0-9-]{6,40})",
+        r"核心流水号[:：]?([A-Za-z0-9-]{6,40})",
+        r"会计流水号[:：]?([A-Za-z0-9-]{6,40})",
+        r"电子回单号码[:：]?([A-Za-z0-9-]{6,40})",
+        r"回单编号[:：]?([A-Za-z0-9-]{6,40})",
+        r"凭证号[:：]?([A-Za-z0-9-]{6,40})",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, compact)
+        if m:
+            return m.group(1)
+    return None
+
+
+def parse_receipt_date(joined):
+    m = re.search(
+        r"(?:记账日期|交易日期|交易时间|会计日期|时间戳|日期)[:：]?\s*(20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}|20\d{6})",
+        joined,
+    )
+    if m:
+        return m.group(1)
+    compact = re.sub(r"[\s　]", "", joined)
+    m = re.search(
+        r"(?:记账日期|交易日期|交易时间|会计日期|时间戳|日期)[:：]?(20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}|20\d{6})",
+        compact,
+    )
+    return m.group(1) if m else None
 
 
 def parse_buyer_name(joined):
@@ -90,12 +141,20 @@ def parse_buyer_name(joined):
 def parse_text(joined):
     dates = re.findall(r"(?:开票日期|日期)[:：]?\s*(20\d{2}[-./年]\d{1,2}[-./月]\d{1,2})", joined)
     if not dates:
+        receipt_date = parse_receipt_date(joined)
+        if receipt_date:
+            dates = [receipt_date]
+    if not dates:
         dates = re.findall(r"20\d{2}[-./年]\d{1,2}[-./月]\d{1,2}", joined)
     fee = None
     if dates:
-        fee = dates[0].replace("年", "-").replace("月", "-").replace(".", "-").replace("/", "-")[:10]
+        raw_date = dates[0]
+        if re.fullmatch(r"20\d{6}", raw_date):
+            fee = f"{raw_date[0:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+        else:
+            fee = raw_date.replace("年", "-").replace("月", "-").replace(".", "-").replace("/", "-")[:10]
     amt = parse_amount(joined)
-    no = parse_invoice_no(joined)
+    no = parse_invoice_no(joined) or parse_receipt_serial(joined)
     return fee, amt, no, parse_tax_amount(joined), parse_invoice_type(joined), parse_buyer_name(joined), joined[:2000]
 
 

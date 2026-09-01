@@ -562,8 +562,15 @@ watch(
               { title: '账号', dataIndex: 'accountNoMaskedSnapshot', key: 'c' },
               { title: '金额', dataIndex: 'payAmount', key: 'd' },
               { title: '支付日', dataIndex: 'actualPayDate', key: 'e' },
+              { title: '回单', dataIndex: 'payVoucherUrl', key: 'f' },
             ]"
-          />
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'f'">
+                <FilePreviewList :value="record.payVoucherUrl" />
+              </template>
+            </template>
+          </Table>
         </Card>
 
         <Card

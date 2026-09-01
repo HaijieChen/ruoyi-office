@@ -110,25 +110,34 @@ function rawUploadFile(file: File) {
 
 async function uploadVoucherAndOcr(file: File, onUploadProgress?: any) {
   const raw = rawUploadFile(file);
-  const hide = message.loading({ content: '正在识别回单金额...', duration: 0 });
+  const hide = message.loading({ content: '正在识别回单金额、流水号、日期...', duration: 0 });
   try {
     let amount: number | undefined;
-    if (raw instanceof Blob) {
-      const ocr = unwrapOcr(await ocrPaymentVoucher('', raw as File));
+    let feeDate: string | undefined;
+    let serialNo: string | undefined;
+    function applyOcr(ocr: any) {
       if (ocr?.amount != null && !Number.isNaN(Number(ocr.amount))) {
         amount = Number(ocr.amount);
       }
+      if (ocr?.feeDate) feeDate = String(ocr.feeDate).slice(0, 10);
+      serialNo = ocr?.invoiceNo || ocr?.serialNo || serialNo;
+    }
+    if (raw instanceof Blob) {
+      applyOcr(unwrapOcr(await ocrPaymentVoucher('', raw as File)));
     }
     const res = await httpRequest(raw, onUploadProgress);
     const url =
       typeof res === 'string'
         ? res
         : String((res as any)?.url || (res as any)?.data || '');
-    if (amount == null && url) {
-      const ocr = unwrapOcr(await ocrPaymentVoucher(url));
-      if (ocr?.amount != null && !Number.isNaN(Number(ocr.amount))) {
-        amount = Number(ocr.amount);
-      }
+    if ((amount == null || !feeDate || !serialNo) && url) {
+      applyOcr(unwrapOcr(await ocrPaymentVoucher(url)));
+    }
+    if (feeDate && dayjs(feeDate).isValid()) {
+      form.value.actualPayDate = dayjs(feeDate);
+    }
+    if (serialNo) {
+      form.value.erpVoucherNo = serialNo;
     }
     if (amount != null) {
       if (amount - remaining.value > 1e-9) {
@@ -140,8 +149,8 @@ async function uploadVoucherAndOcr(file: File, onUploadProgress?: any) {
       form.value.payAmount = amount;
       message.success(
         amount + 1e-9 >= remaining.value
-          ? '已识别为全部付款，请核对'
-          : '已识别为部分付款，请核对',
+          ? '已识别为全部付款，请核对金额、流水号、日期'
+          : '已识别为部分付款，请核对金额、流水号、日期',
       );
     } else {
       message.warning('未识别到金额，请手填');
@@ -299,13 +308,13 @@ watch(
           :max-size="20"
           :multiple="false"
           :accept="['pdf', 'jpg', 'jpeg', 'png']"
-          help-text="必传；上传后识别金额，小于剩余为部分付款，等于全部，大于拦截"
+          help-text="必传；识别金额、流水号、日期。小于剩余为部分付款，等于全部，大于拦截"
           :api="(file, progress) => uploadVoucherAndOcr(file as File, progress)"
           @update:value="onVoucherUpload"
         />
       </Form.Item>
-      <Form.Item label="ERP 凭证号">
-        <Input v-model:value="form.erpVoucherNo" />
+      <Form.Item label="流水号">
+        <Input v-model:value="form.erpVoucherNo" placeholder="OCR 回填，可改" />
       </Form.Item>
       <Form.Item label="资料/发票完整">
         <Switch v-model:checked="form.materialsComplete" />

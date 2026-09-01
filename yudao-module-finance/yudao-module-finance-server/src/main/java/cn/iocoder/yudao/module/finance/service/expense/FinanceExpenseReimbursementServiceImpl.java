@@ -294,6 +294,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         vo.setFinanceComment(header.getFinanceComment());
         vo.setActualPayDate(header.getActualPayDate());
         vo.setCompanyBankAccountId(header.getCompanyBankAccountId());
+        vo.setPayVoucherUrl(header.getPayVoucherUrl());
         vo.setExtraAttachments(splitCsv(header.getExtraAttachments()));
         List<FinanceExpenseReimbursementLineReqVO> lines = new ArrayList<>();
         for (FinanceExpenseReimbursementLineDO line : lineMapper.selectByReimbursementId(header.getId())) {

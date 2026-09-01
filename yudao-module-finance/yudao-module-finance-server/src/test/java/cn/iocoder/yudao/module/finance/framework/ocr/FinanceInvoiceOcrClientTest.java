@@ -65,4 +65,82 @@ class FinanceInvoiceOcrClientTest {
         assertEquals("普票", FinanceInvoiceOcrClient.parseInvoiceType("增值税普通发票"));
         assertEquals("其他", FinanceInvoiceOcrClient.parseInvoiceType("收据"));
     }
+
+    @Test
+    void parseIcbcReceipt() {
+        String raw = "中国工商银行 网上银行电子回单 电子回单号码：0918-3117-0241-1100 金额 ¥100.00元 交易流水号 82900515 时间戳 2026-07-01-04.40.28.695730 记账日期 2026年07月01日";
+        assertEquals(new java.math.BigDecimal("100.00"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("82900515", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 7, 1),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseCmbReceipt() {
+        String raw = "招商银行 入账回单 交易日期：2026年01月01日 交易流水：C0147BT000BP9GZ 交易金额(小写)： CNY100,000.00 回单编号：715B3J0479928";
+        assertEquals(new java.math.BigDecimal("100000.00"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("C0147BT000BP9GZ", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 1, 1),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseCcbReceipt() {
+        String raw = "中国建设银行网上银行电子回执 日期： 20260629 凭证号： 103H260626433661 账户明细编号-交易流水号： 65-3107836009VZUYRV6SY 小写金额 5,459.54";
+        assertEquals(new java.math.BigDecimal("5459.54"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("65-3107836009VZUYRV6SY", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 6, 29),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseBocReceipt() {
+        String raw = "中国银行 国内支付业务收款回单 日期： 2026年04月01日 金额：CNY258.66 交易流水号：111592080-478 回单编号：702692759947145";
+        assertEquals(new java.math.BigDecimal("258.66"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("111592080-478", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 4, 1),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseAbcReceipt() {
+        String raw = "中国农业银行 网上银行电子回单 回单编号：31317259950084332781 金额（小写） 55136.10 交易时间 2026-07-01 15:05:44 会计日期 20260701 凭证号 09350350200002992";
+        assertEquals(new java.math.BigDecimal("55136.10"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("31317259950084332781", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 7, 1),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseBocomReceipt() {
+        String raw = "交通银行 回单 回单编号： 260G894672A8 金额： 0.30 记账日期： 20260705 会计流水号： PEA0000U60384512";
+        assertEquals(new java.math.BigDecimal("0.30"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("PEA0000U60384512", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 7, 5),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseBosReceipt() {
+        String raw = "上海银行业务回单 回单编号：29420260701034827001599286 记账日期 2026-07-01 核心流水号 V026070100241911 金额（小写） 55,027.60";
+        assertEquals(new java.math.BigDecimal("55027.60"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("V026070100241911", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 7, 1),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseCibReceipt() {
+        String raw = "兴业银行 收款回单 回单编号：202607020100036802 交易日期：2026-07-02 07:27:12 金额（小写）：CNY50,000.00";
+        assertEquals(new java.math.BigDecimal("50000.00"), FinanceInvoiceOcrClient.parseReceiptAmount(raw));
+        assertEquals("202607020100036802", FinanceInvoiceOcrClient.parseReceiptSerialNo(raw));
+        assertEquals(java.time.LocalDate.of(2026, 7, 2),
+                FinanceInvoiceOcrClient.parseDate(FinanceInvoiceOcrClient.parseReceiptDate(raw)));
+    }
+
+    @Test
+    void parseCompactYmdDate() {
+        assertEquals(java.time.LocalDate.of(2026, 6, 29), FinanceInvoiceOcrClient.parseDate("20260629"));
+        assertEquals(java.time.LocalDate.of(2026, 7, 5), FinanceInvoiceOcrClient.parseDate("20260705"));
+    }
 }

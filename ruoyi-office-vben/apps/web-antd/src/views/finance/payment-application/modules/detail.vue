@@ -103,7 +103,7 @@ const [Modal, modalApi] = useVbenModal({
         <Descriptions.Item label="累计已支付">{{ detail.cumulativePaid }}</Descriptions.Item>
         <Descriptions.Item label="本次后累计">{{ detail.cumulativeAfter }}</Descriptions.Item>
         <Descriptions.Item label="支付日">{{ displayDate(detail.actualPayDate) }}</Descriptions.Item>
-        <Descriptions.Item label="支付凭证">
+        <Descriptions.Item label="支付凭证" :span="2">
           <FilePreviewList :value="detail.payVoucherUrl" />
         </Descriptions.Item>
       </Descriptions>

@@ -14,7 +14,11 @@ import { checkFileType, isFunction, isObject, isString } from '@vben/utils';
 
 import { Button, Modal, message, Upload } from 'ant-design-vue';
 
-import { fetchPreviewBlob, guessPreviewKind } from '#/utils/file-preview';
+import {
+  downloadAuthFile,
+  fetchPreviewBlob,
+  guessPreviewKind,
+} from '#/utils/file-preview';
 
 import { UploadResultStatus } from './typing';
 import { useUpload, useUploadType } from './use-upload';
@@ -137,6 +141,30 @@ async function handleRemove(file: UploadFile) {
     emit('update:modelValue', value);
     emit('change', value);
     emit('delete', file);
+  }
+}
+
+async function handleDownload(file: UploadFile) {
+  const url = file.url || '';
+  if (file.originFileObj) {
+    const obj = URL.createObjectURL(file.originFileObj);
+    const a = document.createElement('a');
+    a.href = obj;
+    a.download = file.name || 'file';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(obj), 1000);
+    return;
+  }
+  if (!url) {
+    message.warning('没有可下载的地址');
+    return;
+  }
+  try {
+    await downloadAuthFile(url, file.name);
+  } catch {
+    message.error('下载失败');
   }
 }
 
@@ -346,6 +374,7 @@ function getValue() {
       }"
       @remove="handleRemove"
       @preview="handlePreview"
+      @download="handleDownload"
       @reject="handleExceed"
     >
       <div v-if="drag" class="upload-drag-area">

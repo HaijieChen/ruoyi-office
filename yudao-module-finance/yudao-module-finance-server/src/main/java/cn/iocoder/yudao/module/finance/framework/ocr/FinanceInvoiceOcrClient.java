@@ -63,9 +63,15 @@ public class FinanceInvoiceOcrClient {
             if (StrUtil.isBlank(invoiceNo)) {
                 invoiceNo = parseInvoiceNo(rawText);
             }
+            if (StrUtil.isBlank(invoiceNo)) {
+                invoiceNo = parseReceiptSerialNo(rawText);
+            }
             BigDecimal amount = json.getBigDecimal("amount");
             if (amount == null) {
                 amount = parseAmount(rawText);
+            }
+            if (amount == null) {
+                amount = parseReceiptAmount(rawText);
             }
             BigDecimal taxAmount = json.getBigDecimal("taxAmount");
             if (taxAmount == null) {
@@ -82,6 +88,9 @@ public class FinanceInvoiceOcrClient {
             LocalDate feeDate = parseDate(json.getStr("feeDate"));
             if (feeDate == null) {
                 feeDate = parseDate(parseFeeDate(rawText));
+            }
+            if (feeDate == null) {
+                feeDate = parseDate(parseReceiptDate(rawText));
             }
             return new Result(feeDate, amount, rawText, invoiceNo, taxAmount, invoiceType, buyerName, false);
         } catch (Exception ex) {
@@ -129,6 +138,9 @@ public class FinanceInvoiceOcrClient {
         }
         String n = raw.trim().replace("年", "-").replace("月", "-").replace("日", "")
                 .replace(".", "-").replace("/", "-");
+        if (n.matches("20\\d{6}")) {
+            n = n.substring(0, 4) + "-" + n.substring(4, 6) + "-" + n.substring(6, 8);
+        }
         if (n.length() >= 10) {
             n = n.substring(0, 10);
         }
@@ -256,6 +268,72 @@ public class FinanceInvoiceOcrClient {
             last = m.group(1);
         }
         return last == null ? null : new BigDecimal(last);
+    }
+
+    /** 银行电子回单金额：小写/CNY/¥ */
+    static BigDecimal parseReceiptAmount(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String compact = raw.replaceAll("[\\s　]", "");
+        String[] patterns = {
+                "交易金额(?:\\(小写\\)|（小写）)[:：]?(?:CNY)?((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+                "金额(?:\\(小写\\)|（小写）)[:：]?(?:CNY)?((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+                "小写金额[:：]?((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+                "金额[:：]?[¥￥]?(?:CNY)?((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+                "CNY((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+                "[¥￥]((?:\\d{1,3}(?:,\\d{3})+|\\d+)\\.\\d{2})",
+        };
+        for (String pattern : patterns) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(pattern).matcher(compact);
+            if (m.find()) {
+                return new BigDecimal(m.group(1).replace(",", ""));
+            }
+        }
+        return null;
+    }
+
+    /** 银行电子回单流水号 */
+    static String parseReceiptSerialNo(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String compact = raw.replaceAll("[\\s　]", "");
+        String[] patterns = {
+                "交易流水号[:：]?([A-Za-z0-9-]{6,40})",
+                "交易流水[:：]?([A-Za-z0-9-]{6,40})",
+                "账户明细编号-交易流水号[:：]?([A-Za-z0-9-]{6,40})",
+                "核心流水号[:：]?([A-Za-z0-9-]{6,40})",
+                "会计流水号[:：]?([A-Za-z0-9-]{6,40})",
+                "电子回单号码[:：]?([A-Za-z0-9-]{6,40})",
+                "回单编号[:：]?([A-Za-z0-9-]{6,40})",
+                "凭证号[:：]?([A-Za-z0-9-]{6,40})",
+        };
+        for (String pattern : patterns) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(pattern).matcher(compact);
+            if (m.find()) {
+                return m.group(1);
+            }
+        }
+        return null;
+    }
+
+    /** 银行电子回单日期 */
+    static String parseReceiptDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                "(?:记账日期|交易日期|交易时间|会计日期|时间戳|日期)[:：]?\\s*(20\\d{2}[-./年]\\d{1,2}[-./月]\\d{1,2}|20\\d{6})")
+                .matcher(raw);
+        if (m.find()) {
+            return m.group(1);
+        }
+        String compact = raw.replaceAll("[\\s　]", "");
+        m = java.util.regex.Pattern.compile(
+                "(?:记账日期|交易日期|交易时间|会计日期|时间戳|日期)[:：]?(20\\d{2}[-./年]\\d{1,2}[-./月]\\d{1,2}|20\\d{6})")
+                .matcher(compact);
+        return m.find() ? m.group(1) : null;
     }
 
     static String parseInvoiceType(String raw) {
