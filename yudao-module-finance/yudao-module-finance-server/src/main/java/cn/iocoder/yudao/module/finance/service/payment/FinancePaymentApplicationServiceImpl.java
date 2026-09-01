@@ -706,6 +706,10 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recordPay(FinancePaymentRecordPayReqVO reqVO, Long userId) {
+        if (CollUtil.isNotEmpty(reqVO.getLines())) {
+            recordPayBatch(reqVO, userId);
+            return;
+        }
         if (reqVO.getActualPayDate() == null || StrUtil.isBlank(reqVO.getPayVoucherUrl())) {
             throw exception(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED);
         }
@@ -829,6 +833,124 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
                 throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
             }
         }
+    }
+
+    private void recordPayBatch(FinancePaymentRecordPayReqVO reqVO, Long userId) {
+        FinancePaymentApplicationDO application = applicationMapper.selectByIdForUpdate(reqVO.getId());
+        if (application == null) {
+            throw exception(PAYMENT_APPLICATION_NOT_EXISTS);
+        }
+        if (!FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
+                && !FinancePaymentApplicationStatusEnum.PENDING.getStatus().equals(application.getStatus())
+                && !FinancePaymentApplicationStatusEnum.PARTIAL_PAID.getStatus().equals(application.getStatus())) {
+            throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+        }
+
+        BigDecimal alreadyPaid = sumPayLines(application.getId());
+        BigDecimal remaining = application.getApplyAmount().subtract(alreadyPaid);
+        BigDecimal batchSum = ZERO;
+        for (FinancePaymentRecordPayReqVO.Line row : reqVO.getLines()) {
+            if (row.getCompanyBankAccountId() == null
+                    || row.getActualPayDate() == null
+                    || StrUtil.isBlank(row.getPayVoucherUrl())
+                    || trimToNull(row.getIdempotencyKey()) == null) {
+                throw exception(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED);
+            }
+            if (!isAcceptableFileUrl(row.getPayVoucherUrl().trim())) {
+                throw exception(PAYMENT_APPLICATION_EVIDENCE_URL_INVALID);
+            }
+            BigDecimal amount = normalizePayAmount(row.getPayAmount());
+            if (amount.compareTo(ZERO) <= 0) {
+                throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
+            }
+            batchSum = batchSum.add(amount);
+        }
+        if (batchSum.compareTo(remaining) > 0) {
+            throw exception(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID);
+        }
+
+        boolean processEnded = isHistoricProcessEnded(application.getProcessInstanceId());
+        boolean listPay = FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus().equals(application.getStatus())
+                || FinancePaymentApplicationStatusEnum.PARTIAL_PAID.getStatus().equals(application.getStatus());
+        Task task = null;
+        if (StrUtil.isNotBlank(reqVO.getTaskId())) {
+            task = requireCashierTask(reqVO.getTaskId(), application, userId);
+        } else if (!processEnded && !listPay) {
+            throw exception(PAYMENT_APPLICATION_TASK_INVALID);
+        }
+
+        FinancePaymentRecordPayReqVO last = null;
+        for (FinancePaymentRecordPayReqVO.Line row : reqVO.getLines()) {
+            String idem = trimToNull(row.getIdempotencyKey());
+            FinancePaymentPayLineDO existing =
+                    payLineMapper.selectByAppAndIdempotencyKey(application.getId(), idem);
+            FinancePaymentRecordPayReqVO one = toSingleReq(reqVO, row);
+            if (existing != null) {
+                assertIdempotentPayLineMatches(existing, one, application);
+                last = one;
+                continue;
+            }
+            Long entityForAccount = resolvePayEntityCompanyDeptId(application, row.getCompanyBankAccountId());
+            FinanceCompanyBankAccountDO account = companyBankAccountService
+                    .requireEnabledForEntityCompany(row.getCompanyBankAccountId(), entityForAccount);
+            assertAccountCurrencyMatchesApplication(application, account);
+            FinancePaymentPayLineDO line = FinancePaymentPayLineDO.builder()
+                    .paymentApplicationId(application.getId())
+                    .companyBankAccountId(account.getId())
+                    .entityCompanyDeptId(account.getEntityCompanyDeptId())
+                    .accountNameSnapshot(account.getAccountName())
+                    .bankNameSnapshot(account.getBankName())
+                    .accountHolderSnapshot(account.getAccountHolder())
+                    .accountNoSnapshot(account.getAccountNo())
+                    .accountNoMaskedSnapshot(FinanceCompanyBankAccountService.maskAccountNo(account.getAccountNo()))
+                    .currencySnapshot(account.getCurrency())
+                    .payAmount(normalizePayAmount(row.getPayAmount()))
+                    .actualPayDate(row.getActualPayDate())
+                    .payVoucherUrl(row.getPayVoucherUrl().trim())
+                    .erpVoucherNo(trimToNull(row.getErpVoucherNo()))
+                    .idempotencyKey(idem)
+                    .build();
+            applyCurrentTenantId(line);
+            payLineMapper.insert(line);
+            last = one;
+        }
+        if (last == null) {
+            return;
+        }
+        BigDecimal newSum = alreadyPaid.add(batchSum);
+        if (newSum.compareTo(application.getApplyAmount()) == 0) {
+            int updated = applicationMapper.update(null, payEvidenceUpdate(application, last)
+                    .set("status", FinancePaymentApplicationStatusEnum.PAID.getStatus()));
+            if (updated == 0) {
+                throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+            }
+            if ((reqVO.getCompleteWhenFullyPaid() == null || Boolean.TRUE.equals(reqVO.getCompleteWhenFullyPaid()))
+                    && task != null) {
+                completeCashierTask(task);
+            }
+        } else {
+            int updated = applicationMapper.update(null, payEvidenceUpdate(application, last)
+                    .set("status", FinancePaymentApplicationStatusEnum.PARTIAL_PAID.getStatus()));
+            if (updated == 0) {
+                throw exception(PAYMENT_APPLICATION_STATUS_INVALID);
+            }
+        }
+    }
+
+    private static FinancePaymentRecordPayReqVO toSingleReq(FinancePaymentRecordPayReqVO parent,
+                                                            FinancePaymentRecordPayReqVO.Line row) {
+        FinancePaymentRecordPayReqVO one = new FinancePaymentRecordPayReqVO();
+        one.setId(parent.getId());
+        one.setTaskId(parent.getTaskId());
+        one.setCompanyBankAccountId(row.getCompanyBankAccountId());
+        one.setPayAmount(row.getPayAmount());
+        one.setActualPayDate(row.getActualPayDate());
+        one.setPayVoucherUrl(row.getPayVoucherUrl());
+        one.setErpVoucherNo(row.getErpVoucherNo());
+        one.setIdempotencyKey(row.getIdempotencyKey());
+        one.setCompleteWhenFullyPaid(parent.getCompleteWhenFullyPaid());
+        one.setMaterialsComplete(parent.getMaterialsComplete());
+        return one;
     }
 
     private UpdateWrapper<FinancePaymentApplicationDO> payEvidenceUpdate(

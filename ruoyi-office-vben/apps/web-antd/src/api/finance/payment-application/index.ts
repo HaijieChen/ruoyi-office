@@ -106,19 +106,28 @@ export namespace FinancePaymentApplicationApi {
     summary?: string;
   }
 
-  export interface RecordPayRequest {
-    id: number;
-    taskId?: string;
-    /** 公司银行账户 id */
+  export interface RecordPayLine {
     companyBankAccountId: number;
-    /** 本笔金额；缺省按剩余未付 */
-    payAmount?: number;
+    payAmount: number;
     actualPayDate: string;
     payVoucherUrl: string;
     erpVoucherNo?: string;
-    /** 幂等键（必填；同一支付尝试内稳定复用） */
     idempotencyKey: string;
+  }
+
+  export interface RecordPayRequest {
+    id: number;
+    taskId?: string;
+    /** 公司银行账户 id；单行提交时必填 */
+    companyBankAccountId?: number;
+    /** 本笔金额；缺省按剩余未付 */
+    payAmount?: number;
+    actualPayDate?: string;
+    payVoucherUrl?: string;
+    erpVoucherNo?: string;
+    idempotencyKey?: string;
     materialsComplete?: boolean;
+    lines?: RecordPayLine[];
   }
 }
 

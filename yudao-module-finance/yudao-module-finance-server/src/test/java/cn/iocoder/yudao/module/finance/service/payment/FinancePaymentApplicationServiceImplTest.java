@@ -1697,6 +1697,72 @@ class FinancePaymentApplicationServiceImplTest {
                 .thenReturn(account);
     }
 
+    @Test
+    void recordPayBatchRejectsWhenLineSumWouldExceedRemaining() {
+        stubPayAccount(77L, 20L);
+        stubPayAccount(88L, 20L);
+        when(mapper.selectByIdForUpdate(80L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(80L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-80")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .applicationKind("ORDINARY")
+                .build());
+        when(payLineMapper.sumPayAmountByApplicationId(80L)).thenReturn(BigDecimal.ZERO);
+
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(80L);
+        req.setLines(List.of(
+                payLine(77L, new BigDecimal("60.00"), "http://v1", "idem-80-a"),
+                payLine(88L, new BigDecimal("50.00"), "http://v2", "idem-80-b")));
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.recordPay(req, 1L));
+        assertEquals(PAYMENT_APPLICATION_PAY_AMOUNT_INVALID.getCode(), ex.getCode());
+        verify(payLineMapper, never()).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
+    }
+
+    @Test
+    void recordPayBatchPartialSetsPartialPaid() {
+        stubPayAccount(77L, 20L);
+        stubPayAccount(88L, 20L);
+        when(mapper.selectByIdForUpdate(81L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(81L)
+                .status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus())
+                .processInstanceId("pi-81")
+                .entityCompanyDeptId(20L)
+                .applyAmount(new BigDecimal("100.00"))
+                .currency("CNY")
+                .applicationKind("ORDINARY")
+                .build());
+        when(payLineMapper.sumPayAmountByApplicationId(81L)).thenReturn(BigDecimal.ZERO);
+        when(mapper.update(isNull(), any())).thenReturn(1);
+
+        FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
+        req.setId(81L);
+        req.setLines(List.of(
+                payLine(77L, new BigDecimal("40.00"), "http://v1", "idem-81-a"),
+                payLine(88L, new BigDecimal("30.00"), "http://v2", "idem-81-b")));
+        service.recordPay(req, 1L);
+
+        verify(payLineMapper, times(2)).insert(any(cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentPayLineDO.class));
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertTrue(cap.getValue().getParamNameValuePairs().containsValue("PARTIAL_PAID"));
+    }
+
+    private static FinancePaymentRecordPayReqVO.Line payLine(
+            Long accountId, BigDecimal amount, String voucher, String idem) {
+        FinancePaymentRecordPayReqVO.Line line = new FinancePaymentRecordPayReqVO.Line();
+        line.setCompanyBankAccountId(accountId);
+        line.setPayAmount(amount);
+        line.setActualPayDate(LocalDate.now());
+        line.setPayVoucherUrl(voucher);
+        line.setIdempotencyKey(idem);
+        return line;
+    }
+
     private static FinancePaymentRecordPayReqVO basePayReq(Long id, String taskId, BigDecimal amount) {
         FinancePaymentRecordPayReqVO req = new FinancePaymentRecordPayReqVO();
         req.setId(id);

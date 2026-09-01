@@ -1,15 +1,17 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 
 import {
+  Button,
   DatePicker,
   Form,
   Input,
   InputNumber,
   Select,
   Switch,
+  Table,
   message,
 } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -27,66 +29,29 @@ defineOptions({ name: 'FinancePaymentRecordPay' });
 
 const emit = defineEmits(['success']);
 
-const form = ref<{
-  id?: number;
-  taskId?: string;
+interface ReceiptRow {
+  key: string;
   companyBankAccountId?: number;
   payAmount?: number;
   actualPayDate?: Dayjs;
   payVoucherUrl?: string;
   erpVoucherNo?: string;
-  idempotencyKey?: string;
+  idempotencyKey: string;
+}
+
+const form = ref<{
+  id?: number;
+  taskId?: string;
   entityCompanyDeptId?: number;
   applyAmount?: number;
   paidLineSum?: number;
-  applicationKind?: string;
-  salaryLines?: any[];
-  taxLines?: any[];
   entityCompanyName?: string;
   materialsComplete?: boolean;
 }>({ materialsComplete: true });
 
+const rows = ref<ReceiptRow[]>([]);
 const accountOptions = ref<{ label: string; value: number }[]>([]);
-
-const payEntityOptions = computed(() => {
-  const f = form.value;
-  const kind = f.applicationKind || 'ORDINARY';
-  if (kind === 'SALARY' && f.salaryLines?.length) {
-    const map = new Map<number, string>();
-    for (const l of f.salaryLines) {
-      if (l.entityCompanyDeptId != null) {
-        map.set(
-          l.entityCompanyDeptId,
-          l.entityCompanyName || String(l.entityCompanyDeptId),
-        );
-      }
-    }
-    return [...map.entries()].map(([value, label]) => ({ value, label }));
-  }
-  if (kind === 'TAX' && f.taxLines?.length) {
-    const map = new Map<number, string>();
-    for (const l of f.taxLines) {
-      if (l.entityCompanyDeptId != null) {
-        map.set(
-          l.entityCompanyDeptId,
-          l.entityCompanyName || String(l.entityCompanyDeptId),
-        );
-      }
-    }
-    return [...map.entries()].map(([value, label]) => ({ value, label }));
-  }
-  if (f.entityCompanyDeptId != null) {
-    return [
-      {
-        value: f.entityCompanyDeptId,
-        label: f.entityCompanyName || String(f.entityCompanyDeptId),
-      },
-    ];
-  }
-  return [];
-});
-
-const multiEntity = computed(() => payEntityOptions.value.length > 1);
+const { httpRequest } = useUpload();
 
 const remaining = computed(() => {
   const apply = Number(form.value.applyAmount || 0);
@@ -94,7 +59,9 @@ const remaining = computed(() => {
   return Math.max(0, +(apply - paid).toFixed(2));
 });
 
-const { httpRequest } = useUpload();
+const draftSum = computed(() =>
+  rows.value.reduce((sum, row) => sum + Number(row.payAmount || 0), 0),
+);
 
 function unwrapOcr(raw: any) {
   if (!raw || typeof raw !== 'object') return raw;
@@ -108,9 +75,40 @@ function rawUploadFile(file: File) {
   return inner instanceof Blob ? inner : file;
 }
 
-async function uploadVoucherAndOcr(file: File, onUploadProgress?: any) {
+function newRow(): ReceiptRow {
+  return {
+    key:
+      (globalThis.crypto?.randomUUID?.() as string) ||
+      `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    actualPayDate: dayjs(),
+    idempotencyKey:
+      (globalThis.crypto?.randomUUID?.() as string) ||
+      `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  };
+}
+
+function addRow() {
+  rows.value.push(newRow());
+}
+
+function removeRow(key: string) {
+  if (rows.value.length <= 1) {
+    message.warning('至少保留一行回执');
+    return;
+  }
+  rows.value = rows.value.filter((row) => row.key !== key);
+}
+
+async function uploadRowVoucherAndOcr(
+  row: ReceiptRow,
+  file: File,
+  onUploadProgress?: any,
+) {
   const raw = rawUploadFile(file);
-  const hide = message.loading({ content: '正在识别回单金额、流水号、日期...', duration: 0 });
+  const hide = message.loading({
+    content: '正在识别回单金额、流水号、日期...',
+    duration: 0,
+  });
   try {
     let amount: number | undefined;
     let feeDate: string | undefined;
@@ -134,24 +132,21 @@ async function uploadVoucherAndOcr(file: File, onUploadProgress?: any) {
       applyOcr(unwrapOcr(await ocrPaymentVoucher(url)));
     }
     if (feeDate && dayjs(feeDate).isValid()) {
-      form.value.actualPayDate = dayjs(feeDate);
+      row.actualPayDate = dayjs(feeDate);
     }
     if (serialNo) {
-      form.value.erpVoucherNo = serialNo;
+      row.erpVoucherNo = serialNo;
     }
     if (amount != null) {
-      if (amount - remaining.value > 1e-9) {
+      const other = draftSum.value - Number(row.payAmount || 0);
+      if (other + amount - remaining.value > 1e-9) {
         message.error(
-          `回单金额 ¥${amount.toFixed(2)} 超过剩余可付 ¥${remaining.value.toFixed(2)}，已拦截`,
+          `回单金额 ¥${amount.toFixed(2)} 会使合计超过剩余可付 ¥${remaining.value.toFixed(2)}，已拦截`,
         );
         throw new Error('OCR amount exceed remaining');
       }
-      form.value.payAmount = amount;
-      message.success(
-        amount + 1e-9 >= remaining.value
-          ? '已识别为全部付款，请核对金额、流水号、日期'
-          : '已识别为部分付款，请核对金额、流水号、日期',
-      );
+      row.payAmount = amount;
+      message.success('已识别金额、流水号、日期，请核对');
     } else {
       message.warning('未识别到金额，请手填');
     }
@@ -161,14 +156,13 @@ async function uploadVoucherAndOcr(file: File, onUploadProgress?: any) {
   }
 }
 
-function onVoucherUpload(val: string | string[]) {
+function onRowVoucherUpload(row: ReceiptRow, val: string | string[]) {
   const arr = Array.isArray(val) ? val : val ? [val] : [];
-  form.value.payVoucherUrl = arr[0] || '';
+  row.payVoucherUrl = arr[0] || '';
 }
 
 async function loadAccounts(entityCompanyDeptId?: number) {
   accountOptions.value = [];
-  form.value.companyBankAccountId = undefined;
   if (!entityCompanyDeptId) return;
   try {
     const list = await getCompanyBankAccountSimpleList(entityCompanyDeptId);
@@ -188,11 +182,9 @@ const [Modal, modalApi] = useVbenModal({
     form.value = {
       id: data.id,
       taskId: data.taskId || '',
-      actualPayDate: dayjs(),
-      idempotencyKey:
-        (globalThis.crypto?.randomUUID?.() as string) ||
-        `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      materialsComplete: true,
     };
+    rows.value = [newRow()];
     if (data.id) {
       try {
         const app = await getPaymentApplication(data.id);
@@ -200,13 +192,6 @@ const [Modal, modalApi] = useVbenModal({
         form.value.entityCompanyName = app.entityCompanyName;
         form.value.applyAmount = Number(app.applyAmount || 0);
         form.value.paidLineSum = Number((app as any).paidLineSum || 0);
-        form.value.applicationKind = (app as any).applicationKind;
-        form.value.salaryLines = (app as any).salaryLines;
-        form.value.taxLines = (app as any).taxLines;
-        form.value.payAmount = remaining.value || form.value.applyAmount;
-        const entities = payEntityOptions.value;
-        form.value.entityCompanyDeptId =
-          entities[0]?.value ?? app.entityCompanyDeptId;
         await loadAccounts(form.value.entityCompanyDeptId);
       } catch {
         // ignore
@@ -218,22 +203,31 @@ const [Modal, modalApi] = useVbenModal({
       message.error('缺少申请 id');
       return;
     }
-    if (!form.value.companyBankAccountId) {
-      message.error('请选择付款账户');
+    const lines = rows.value.map((row) => ({
+      companyBankAccountId: row.companyBankAccountId!,
+      payAmount: Number(row.payAmount || 0),
+      actualPayDate: row.actualPayDate?.format('YYYY-MM-DD') || '',
+      payVoucherUrl: row.payVoucherUrl || '',
+      erpVoucherNo: row.erpVoucherNo,
+      idempotencyKey: row.idempotencyKey,
+    }));
+    if (
+      lines.some(
+        (line) =>
+          !line.companyBankAccountId ||
+          !line.payAmount ||
+          line.payAmount <= 0 ||
+          !line.actualPayDate ||
+          !line.payVoucherUrl,
+      )
+    ) {
+      message.error('每行须填写账户、金额、日期和回单');
       return;
     }
-    if (!form.value.actualPayDate || !form.value.payVoucherUrl) {
-      message.error('支付日与银行回单必填');
-      return;
-    }
-    const amount = Number(form.value.payAmount || 0);
-    if (!amount || amount <= 0) {
-      message.error('请填写支付金额');
-      return;
-    }
-    if (amount - remaining.value > 1e-9) {
+    const sum = lines.reduce((acc, line) => acc + line.payAmount, 0);
+    if (sum - remaining.value > 1e-9) {
       message.error(
-        `支付金额 ¥${amount.toFixed(2)} 超过剩余可付 ¥${remaining.value.toFixed(2)}，已拦截`,
+        `支付金额 ¥${sum.toFixed(2)} 超过剩余可付 ¥${remaining.value.toFixed(2)}，已拦截`,
       );
       return;
     }
@@ -242,16 +236,11 @@ const [Modal, modalApi] = useVbenModal({
       await recordPayPaymentApplication({
         id: form.value.id,
         taskId: form.value.taskId || undefined,
-        companyBankAccountId: form.value.companyBankAccountId,
-        payAmount: form.value.payAmount,
-        actualPayDate: form.value.actualPayDate.format('YYYY-MM-DD'),
-        payVoucherUrl: form.value.payVoucherUrl,
-        erpVoucherNo: form.value.erpVoucherNo,
-        idempotencyKey: form.value.idempotencyKey!,
+        lines,
         materialsComplete: form.value.materialsComplete !== false,
       });
       message.success(
-        amount + 1e-9 >= remaining.value ? '已全部付款' : '已登记部分付款',
+        sum + 1e-9 >= remaining.value ? '已全部付款' : '已登记部分付款',
       );
       emit('success');
       modalApi.close();
@@ -260,62 +249,74 @@ const [Modal, modalApi] = useVbenModal({
     }
   },
 });
-
-watch(
-  () => form.value.entityCompanyDeptId,
-  (v) => loadAccounts(v),
-);
 </script>
 
 <template>
-  <Modal title="支付" class="w-[560px]">
-    <Form :label-col="{ span: 7 }" :wrapper-col="{ span: 15 }">
-      <Form.Item v-if="multiEntity" label="付款主体" required>
-        <Select
-          v-model:value="form.entityCompanyDeptId"
-          :options="payEntityOptions"
-          placeholder="按明细主体选择"
-        />
-      </Form.Item>
-      <Form.Item label="付款账户" required>
-        <Select
-          v-model:value="form.companyBankAccountId"
-          :options="accountOptions"
-          show-search
-          option-filter-prop="label"
-          placeholder="仅显示该主体启用账户（账号脱敏）"
-        />
-      </Form.Item>
-      <Form.Item label="本笔金额" required>
-        <InputNumber
-          v-model:value="form.payAmount"
-          class="w-full"
-          :min="0.01"
-          :max="remaining || undefined"
-          :precision="2"
-        />
-        <div class="text-xs text-gray-500">
-          剩余可付 {{ remaining }}
-        </div>
-      </Form.Item>
-      <Form.Item label="实际支付日期" required>
-        <DatePicker v-model:value="form.actualPayDate" class="w-full" />
-      </Form.Item>
-      <Form.Item label="银行回单" required>
-        <FileUpload
-          :value="form.payVoucherUrl ? [form.payVoucherUrl] : []"
-          :max-number="1"
-          :max-size="20"
-          :multiple="false"
-          :accept="['pdf', 'jpg', 'jpeg', 'png']"
-          help-text="必传；识别金额、流水号、日期。小于剩余为部分付款，等于全部，大于拦截"
-          :api="(file, progress) => uploadVoucherAndOcr(file as File, progress)"
-          @update:value="onVoucherUpload"
-        />
-      </Form.Item>
-      <Form.Item label="流水号">
-        <Input v-model:value="form.erpVoucherNo" placeholder="OCR 回填，可改" />
-      </Form.Item>
+  <Modal title="支付" class="w-[980px]">
+    <div class="mb-3 text-xs text-gray-500">
+      申请金额 {{ form.applyAmount ?? 0 }}，已付 {{ form.paidLineSum ?? 0 }}，剩余可付
+      {{ remaining }}，本表合计 {{ draftSum.toFixed(2) }}
+    </div>
+    <Table
+      :data-source="rows"
+      :pagination="false"
+      size="small"
+      row-key="key"
+      bordered
+    >
+      <Table.Column title="付款账户" width="200">
+        <template #default="{ record }">
+          <Select
+            v-model:value="record.companyBankAccountId"
+            class="w-full"
+            :options="accountOptions"
+            show-search
+            option-filter-prop="label"
+            placeholder="选择账户"
+          />
+        </template>
+      </Table.Column>
+      <Table.Column title="银行回单" width="180">
+        <template #default="{ record }">
+          <FileUpload
+            :value="record.payVoucherUrl ? [record.payVoucherUrl] : []"
+            :max-number="1"
+            :max-size="20"
+            :multiple="false"
+            :accept="['pdf', 'jpg', 'jpeg', 'png']"
+            :api="(file, progress) => uploadRowVoucherAndOcr(record, file as File, progress)"
+            @update:value="(val) => onRowVoucherUpload(record, val)"
+          />
+        </template>
+      </Table.Column>
+      <Table.Column title="金额" width="110">
+        <template #default="{ record }">
+          <InputNumber
+            v-model:value="record.payAmount"
+            class="w-full"
+            :min="0.01"
+            :precision="2"
+          />
+        </template>
+      </Table.Column>
+      <Table.Column title="日期" width="140">
+        <template #default="{ record }">
+          <DatePicker v-model:value="record.actualPayDate" class="w-full" />
+        </template>
+      </Table.Column>
+      <Table.Column title="流水号" width="140">
+        <template #default="{ record }">
+          <Input v-model:value="record.erpVoucherNo" placeholder="OCR 回填" />
+        </template>
+      </Table.Column>
+      <Table.Column title="" width="70">
+        <template #default="{ record }">
+          <Button type="link" danger @click="removeRow(record.key)">删除</Button>
+        </template>
+      </Table.Column>
+    </Table>
+    <Button class="mt-2" @click="addRow">新增回执行</Button>
+    <Form class="mt-4" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
       <Form.Item label="资料/发票完整">
         <Switch v-model:checked="form.materialsComplete" />
         <div class="text-xs text-gray-500">关闭则付款已登记但单据为待补票</div>
