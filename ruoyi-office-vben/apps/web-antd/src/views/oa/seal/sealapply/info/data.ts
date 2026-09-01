@@ -9,10 +9,9 @@ import { message } from 'ant-design-vue';
 
 /** 新增/修改的表单 */
 export function useFormSchema(
-  modalRef?: any,
   readonly?: Ref<boolean>,
   nodeKeyName?: Ref<string>,
-  canReturnEdit?: Ref<boolean>, // Added canReturnEdit parameter
+  canReturnEdit?: Ref<boolean>,
 ): VbenFormSchema[] {
   return [
     {
@@ -36,72 +35,9 @@ export function useFormSchema(
       fieldName: 'sealName',
       label: '印章',
       rules: 'required',
-      component: 'HelpInput',
-      componentProps: {
-        placeholder: '请选择印章',
-        bind: {
-          readonly,
-          onClick: () => {
-            modalRef.value?.modalApi.open();
-          },
-        },
-        onClick: () => {
-          modalRef.value?.modalApi.open();
-        },
-      },
-    },
-    {
-      fieldName: 'sealId',
-      label: '印章id',
-      component: 'Input',
-      dependencies: {
-        triggerFields: [''],
-        show: () => false,
-      },
-    },
-    {
-      fieldName: 'sealNo',
-      label: '印章编号',
-      component: 'Input',
-      dependencies: {
-        triggerFields: [''],
-        show: () => false,
-      },
-    },
-    {
-      fieldName: 'sealType',
-      label: '印章类型',
-      component: 'Input',
-      dependencies: {
-        triggerFields: [''],
-        show: () => false,
-      },
-    },
-    {
-      fieldName: 'keeperId',
-      label: '保管人ID',
-      component: 'Input',
-      dependencies: {
-        triggerFields: [''],
-        show: () => false,
-      },
-    },
-    {
-      fieldName: 'keeperName',
-      label: '保管人',
       component: 'Input',
       componentProps: {
-        placeholder: '自动填充',
-        disabled: true,
-      },
-    },
-    {
-      fieldName: 'keeperDeptName',
-      label: '保管部门',
-      component: 'Input',
-      componentProps: {
-        placeholder: '自动填充',
-        disabled: true,
+        placeholder: '请输入印章',
       },
     },
     {

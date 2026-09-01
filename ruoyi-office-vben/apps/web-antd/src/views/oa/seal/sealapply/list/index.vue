@@ -21,14 +21,10 @@ import {
 } from '#/api/oa/seal/sealapply';
 import { $t } from '#/locales';
 
-import { SealSelectModal } from '../../components';
 import { useGridColumns, useGridFormSchema } from './data';
 
 const userStore = useUserStore();
 const router = useRouter();
-
-// 印章选择弹窗引用
-const modalRef = ref<InstanceType<typeof SealSelectModal>>();
 
 defineOptions({ name: 'OaSealApplyBillList' });
 
@@ -118,15 +114,9 @@ async function handleExport() {
   downloadFileFromBlobPart({ fileName: '用印申请单.xls', source: data });
 }
 
-// 处理印章选择
-function handleSealSelect(seal: any) {
-  gridApi.formApi.setFieldValue('sealNo', seal.sealNo);
-  gridApi.formApi.setFieldValue('sealId', seal.id);
-}
-
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
-    schema: useGridFormSchema(modalRef),
+    schema: useGridFormSchema(),
     wrapperClass: 'grid-cols-4',
     collapsed: true,
   },
@@ -234,8 +224,5 @@ onActivated(() => {
         />
       </template>
     </Grid>
-
-    <!-- 印章选择弹窗 -->
-    <SealSelectModal ref="modalRef" @select="handleSealSelect" />
   </Page>
 </template>

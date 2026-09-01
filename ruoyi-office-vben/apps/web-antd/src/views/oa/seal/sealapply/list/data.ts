@@ -4,15 +4,13 @@ import type { SealApplyBillApi } from '#/api/oa/seal/sealapply';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
-import { handleTree } from '@vben/utils';
 
 import { createRouterLinkColumn } from '#/adapter/vxe-table';
-import { getCompanyList } from '#/api/system/dept';
 import { getRangePickerDefaultProps } from '#/utils';
 import { getCurrentUserCompanyDeptTree } from '#/utils/dept-tree';
 
 /** 列表的搜索表单 */
-export function useGridFormSchema(modalRef?: any): VbenFormSchema[] {
+export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
       fieldName: 'billCode',
@@ -37,36 +35,12 @@ export function useGridFormSchema(modalRef?: any): VbenFormSchema[] {
       },
     },
     {
-      fieldName: 'sealNo',
+      fieldName: 'sealName',
       label: '印章',
-      component: 'HelpInput',
+      component: 'Input',
       componentProps: {
         allowClear: true,
-        placeholder: '请选择印章',
-        onClick: () => {
-          modalRef.value?.modalApi.open();
-        },
-      },
-    },
-    {
-      fieldName: 'sealId',
-      label: '印章ID',
-      component: 'ApiTreeSelect',
-      dependencies: {
-        triggerFields: [''],
-        show: () => false,
-      },
-      componentProps: {
-        allowClear: true,
-        api: async () => {
-          const data = await getCompanyList();
-          return handleTree(data);
-        },
-        labelField: 'name',
-        valueField: 'id',
-        childrenField: 'children',
-        placeholder: '请选择公司',
-        treeDefaultExpandAll: true,
+        placeholder: '请输入印章',
       },
     },
     {

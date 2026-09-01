@@ -25,7 +25,6 @@ import { AttachmentList } from '#/components/attachment-list';
 import { BasicForm, CardContainer } from '#/components/basic-form';
 import { $t } from '#/locales';
 
-import { SealSelectModal } from '../../components';
 import { useFormSchema } from './data';
 
 defineOptions({ name: 'OaSealApplyBillInfo' });
@@ -55,9 +54,6 @@ const loading = ref(false);
 // BasicForm组件引用
 const basicFormRef = ref();
 
-// 印章选择弹窗引用
-const modalRef = ref<InstanceType<typeof SealSelectModal>>();
-
 // 附件列表引用
 const attachmentListRef = ref();
 
@@ -67,12 +63,7 @@ const formSchema = shallowRef<VbenFormSchema[]>([]);
 // 初始化表单schema
 function initFormSchema() {
   const nodeKeyName = ref(props.nodeKeyName || '');
-  formSchema.value = useFormSchema(
-    modalRef,
-    readonly,
-    nodeKeyName,
-    canReturnEdit,
-  );
+  formSchema.value = useFormSchema(readonly, nodeKeyName, canReturnEdit);
 }
 
 // 优先使用 props 传递的 id，如果没有则使用路由参数
@@ -112,11 +103,18 @@ async function handleSaveAndSubmit(isSubmit: boolean) {
           false,
         )) as SealApplyBillApi.SealApplyBill);
 
-    // 合并表单值和其他数据
+    // 合并表单值其他数据；新建不传空的章库 ID
     const data = {
       ...formData.value,
       ...formValues,
     };
+    if (!data.sealId) {
+      delete data.sealId;
+      delete data.sealNo;
+    }
+    if (typeof data.sealName === 'string') {
+      data.sealName = data.sealName.trim();
+    }
 
     id = await (isSubmit ? submitSealApplyBill(data) : saveSealApplyBill(data));
 
@@ -173,8 +171,6 @@ async function loadData() {
       documentCount: 1,
       isUrgent: 0,
       useMode: 1, // 默认现场用章
-      sealId: 0,
-      sealNo: '',
       cause: '',
       useType: 1,
       billCode: '',
@@ -228,25 +224,6 @@ async function loadData() {
 function handleUploadAttachment() {
   if (attachmentListRef.value) {
     attachmentListRef.value.handleTriggerUpload();
-  }
-}
-
-function handleSealSelect(val: any) {
-  if (basicFormRef.value && val) {
-    const sealData = {
-      sealId: val.id,
-      sealNo: val.sealNo,
-      sealName: val.sealName,
-      sealType: val.sealType,
-      keeperId: val.keeperId,
-      keeperName: val.keeperName,
-      keeperDeptId: val.keeperDeptId,
-      keeperDeptName: val.keeperDeptName,
-    };
-    basicFormRef.value.setFormValues(sealData);
-
-    // 同时更新formData
-    Object.assign(formData.value, sealData);
   }
 }
 
@@ -338,9 +315,6 @@ onMounted(() => {
         </CardContainer>
       </template>
     </BasicForm>
-
-    <!-- 印章选择弹窗 -->
-    <SealSelectModal ref="modalRef" @select="handleSealSelect" />
   </Loading>
 </template>
 
