@@ -10,6 +10,7 @@ import { formatDateTime } from '@vben/utils';
 
 import { z } from '#/adapter/form';
 import { DictTag } from '#/components/dict-tag';
+import { FilePreviewList } from '#/components/upload';
 import { getRangePickerDefaultProps } from '#/utils';
 
 const INVALID_RANGE_MESSAGE = '结束时间必须晚于开始时间，且时长须大于 0';
@@ -327,10 +328,7 @@ export function useDetailFormSchema(): DescriptionItemSchema[] {
     {
       label: '附件',
       field: 'attachmentUrls',
-      render: (val) => {
-        if (!Array.isArray(val) || val.length === 0) return '';
-        return val.join('\n');
-      },
+      render: (val) => h(FilePreviewList, { value: val }),
     },
   ];
 }

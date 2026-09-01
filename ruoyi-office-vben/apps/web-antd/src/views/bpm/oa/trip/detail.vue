@@ -6,16 +6,21 @@ import { useRoute } from 'vue-router';
 
 import { ContentWrap } from '@vben/common-ui';
 
-import { Spin } from 'ant-design-vue';
+import { Divider, Spin } from 'ant-design-vue';
 
 import { getTrip } from '#/api/bpm/oa/trip';
 import { useDescription } from '#/components/description';
+import ApprovalOverviewPanel from '#/views/bpm/processInstance/detail/modules/approval-overview-panel.vue';
 
 import { useDetailFormSchema } from './data';
 
+defineOptions({ name: 'OATripDetail' });
+
 const props = defineProps<{
-  id?: string;
+  activityNodes?: any[];
   embedded?: boolean;
+  id?: string;
+  processInstance?: any;
 }>();
 
 const { query } = useRoute();
@@ -30,6 +35,10 @@ const [Descriptions] = useDescription({
   class: 'mx-4',
   schema: useDetailFormSchema(),
 });
+
+const showOverview = computed(
+  () => !props.processInstance && !!formData.value?.processInstanceId,
+);
 
 async function getDetailData() {
   try {
@@ -66,6 +75,12 @@ watch(
   <ContentWrap v-else class="m-2">
     <Spin :spinning="loading" tip="加载中...">
       <Descriptions :data="formData" />
+      <template v-if="showOverview">
+        <Divider orientation="left" class="!mt-6">审批全貌</Divider>
+        <ApprovalOverviewPanel
+          :process-instance-id="formData?.processInstanceId"
+        />
+      </template>
     </Spin>
   </ContentWrap>
 </template>

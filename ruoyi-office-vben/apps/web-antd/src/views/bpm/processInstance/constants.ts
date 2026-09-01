@@ -13,6 +13,7 @@ export const FINANCE_APPROVAL_PSHELL_VIEW_PATHS = [
   '/finance/expense-reimbursement/detail',
   '/oa/seal/sealapply/info/index',
   '/oa/seal/seal-apply-info',
+  '/bpm/oa/trip/detail',
 ] as const;
 
 export function isFinanceApprovalPShellViewPath(

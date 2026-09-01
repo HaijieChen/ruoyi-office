@@ -69,6 +69,29 @@ class BpmOATripOutingMenuContractTest {
         assertTrue(text.contains("'/bpm/oa/outing/detail'"));
     }
 
+    @Test
+    void tripDetailUsesApprovalShellAndFilePreview() throws Exception {
+        Path constants = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/constants.ts");
+        String constantsText = Files.readString(constants);
+        assertTrue(constantsText.contains("'/bpm/oa/trip/detail'"),
+                "出差 formCustomViewPath 必须进 P-shell 白名单");
+
+        Path data = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/bpm/oa/trip/data.ts");
+        String dataText = Files.readString(data);
+        assertTrue(dataText.contains("FilePreviewList"),
+                "详情附件须用 FilePreviewList 预览，不能只拼 URL");
+        assertFalse(dataText.contains("val.join('\\n')"));
+
+        Path detail = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/bpm/oa/trip/detail.vue");
+        String detailText = Files.readString(detail);
+        assertTrue(detailText.contains("ApprovalOverviewPanel"),
+                "列表详情须展示审批全貌");
+        assertTrue(detailText.contains("processInstanceId"));
+    }
+
     private static String grantBlock(String text) {
         int idx = text.indexOf("INSERT INTO `system_role_menu`");
         assertTrue(idx >= 0);
