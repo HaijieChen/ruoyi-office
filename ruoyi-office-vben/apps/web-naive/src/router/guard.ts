@@ -3,7 +3,12 @@ import type { Router } from 'vue-router';
 import { LOGIN_PATH } from '@vben/constants';
 import { $t } from '@vben/locales';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useDictStore, useUserStore } from '@vben/stores';
+import {
+  shouldRefreshDictCache,
+  useAccessStore,
+  useDictStore,
+  useUserStore,
+} from '@vben/stores';
 import { startProgress, stopProgress } from '@vben/utils';
 
 import { message } from '#/adapter/naive';
@@ -89,13 +94,21 @@ function setupAccessGuard(router: Router) {
       return to;
     }
 
+    // 登录后每次业务路由都刷新字典（不阻塞导航）；改字典后无需整页重启
+    if (
+      shouldRefreshDictCache({
+        hasAccessToken: true,
+        isCoreRoute: false,
+        isAccessChecked: accessStore.isAccessChecked,
+      })
+    ) {
+      dictStore.setDictCacheByApi(getSimpleDictDataList);
+    }
+
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
       return true;
     }
-
-    // 加载字典数据（不阻塞加载）
-    dictStore.setDictCacheByApi(getSimpleDictDataList);
 
     // 生成路由表
     // 当前登录用户拥有的角色标识列表

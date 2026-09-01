@@ -13,6 +13,16 @@ interface DictState {
   dictCache: Dict;
 }
 
+export function shouldRefreshDictCache(input: {
+  hasAccessToken: boolean;
+  isCoreRoute: boolean;
+  isAccessChecked: boolean;
+}): boolean {
+  return input.hasAccessToken && !input.isCoreRoute;
+}
+
+let dictRefreshGeneration = 0;
+
 export const useDictStore = defineStore('core-dict', {
   actions: {
     getDictData(dictType: string, value: any) {
@@ -35,26 +45,29 @@ export const useDictStore = defineStore('core-dict', {
     setDictCache(dicts: Dict) {
       this.dictCache = dicts;
     },
-    setDictCacheByApi(
+    async setDictCacheByApi(
       api: (params: Record<string, any>) => Promise<Record<string, any>[]>,
       params: Record<string, any> = {},
       labelField: string = 'label',
       valueField: string = 'value',
     ) {
-      api(params).then((dicts) => {
-        const dictCacheData: Dict = {};
-        dicts.forEach((dict) => {
-          dictCacheData[dict.dictType] = dicts
-            .filter((d) => d.dictType === dict.dictType)
-            .map((d) => ({
-              colorType: d.colorType,
-              cssClass: d.cssClass,
-              label: d[labelField],
-              value: d[valueField],
-            }));
-        });
-        this.setDictCache(dictCacheData);
+      const generation = ++dictRefreshGeneration;
+      const dicts = await api(params);
+      if (generation !== dictRefreshGeneration) {
+        return;
+      }
+      const dictCacheData: Dict = {};
+      dicts.forEach((dict) => {
+        dictCacheData[dict.dictType] = dicts
+          .filter((d) => d.dictType === dict.dictType)
+          .map((d) => ({
+            colorType: d.colorType,
+            cssClass: d.cssClass,
+            label: d[labelField],
+            value: d[valueField],
+          }));
       });
+      this.setDictCache(dictCacheData);
     },
   },
   persist: {
