@@ -11,8 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 有票费用报销流程状态 — 辅路径 Listener。
- * <p>主路径：BPMN endEvent → {@link FinanceExpenseApprovalOutcomeDelegate}。
+ * 费用报销流程状态事件 → 台账头状态。
+ * <p>驳回 / 取消 / 撤回写 REJECTED 或 CANCELLED 并释放占用；通过不改占用。
+ * 流程图不挂 finance bean。
  */
 @Component
 @Slf4j
@@ -37,7 +38,7 @@ public class FinanceExpenseApplicationStatusListener extends BpmProcessInstanceS
         if (StrUtil.isBlank(businessKey)) {
             return;
         }
-        String outcome = FinanceExpenseApprovalOutcomeDelegate.mapProcessStatusToOutcome(
+        String outcome = FinanceExpenseProcessStatusMapper.toOutcome(
                 event.getProcessInstanceInfo().getStatus());
         if (outcome == null) {
             return;
