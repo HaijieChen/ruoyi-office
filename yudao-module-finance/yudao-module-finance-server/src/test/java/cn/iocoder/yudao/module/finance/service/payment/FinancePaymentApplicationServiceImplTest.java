@@ -789,6 +789,10 @@ class FinancePaymentApplicationServiceImplTest {
         line.setSocialInsuranceAmount(BigDecimal.ZERO);
         line.setHousingFundAmount(new BigDecimal("800.00"));
         req.setLines(List.of(line));
+        when(companyBankAccountService.requireEnabledForEntityCompany(isNull(), eq(20L)))
+                .thenReturn(cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                        .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                        .accountHolder("甲").accountNo("622200001111").currency("CNY").status(0).build());
 
         service.createAndStartSalary(req, 1L);
         ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
@@ -815,6 +819,10 @@ class FinancePaymentApplicationServiceImplTest {
         line.setPersonalTaxAmount(BigDecimal.ZERO);
         line.setSocialInsuranceAmount(BigDecimal.ZERO);
         req.setLines(List.of(line));
+        when(companyBankAccountService.requireEnabledForEntityCompany(isNull(), eq(20L)))
+                .thenReturn(cn.iocoder.yudao.module.finance.dal.dataobject.companyaccount.FinanceCompanyBankAccountDO.builder()
+                        .id(77L).entityCompanyDeptId(20L).accountName("基本户").bankName("工行")
+                        .accountHolder("甲").accountNo("622200001111").currency("CNY").status(0).build());
 
         service.createAndStartSalary(req, 1L);
         ArgumentCaptor<FinancePaymentApplicationDO> cap = ArgumentCaptor.forClass(FinancePaymentApplicationDO.class);
