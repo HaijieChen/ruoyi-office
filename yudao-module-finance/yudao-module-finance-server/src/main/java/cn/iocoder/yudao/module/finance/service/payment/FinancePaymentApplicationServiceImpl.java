@@ -1018,8 +1018,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
 
     @Override
     public void assertCashierEvidenceForComplete(Long appId) {
-        FinancePaymentApplicationDO application = getApplication(appId);
-        assertCashierEvidencePresent(application);
+        getApplication(appId);
+        // 出纳节点允许直接通过；支付在列表完成，complete 不再要求回单
     }
 
     @Override

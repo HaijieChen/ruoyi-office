@@ -307,12 +307,27 @@ class FinancePaymentApplicationServiceImplTest {
     }
 
     @Test
-    void assertCashierEvidenceForCompleteRejectsEmpty() {
+    void assertCashierEvidenceForCompleteAllowsEmpty() {
         when(mapper.selectById(3L)).thenReturn(FinancePaymentApplicationDO.builder()
                 .id(3L).status(FinancePaymentApplicationStatusEnum.WAIT_PAY.getStatus()).build());
-        ServiceException ex = assertThrows(ServiceException.class,
-                () -> service.assertCashierEvidenceForComplete(3L));
-        assertEquals(PAYMENT_APPLICATION_CASHIER_FIELDS_REQUIRED.getCode(), ex.getCode());
+        assertDoesNotThrow(() -> service.assertCashierEvidenceForComplete(3L));
+    }
+
+    @Test
+    void onApprovalOutcomeApprovedMapsToWaitPayWithoutEvidence() {
+        when(mapper.selectByIdForUpdate(21L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(21L)
+                .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus())
+                .processInstanceId("pi-21")
+                .build());
+        when(mapper.update(isNull(), any())).thenReturn(1);
+
+        service.onApprovalOutcome(21L, "APPROVED", "pi-21");
+
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<FinancePaymentApplicationDO>> cap =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper.class);
+        verify(mapper).update(isNull(), cap.capture());
+        assertTrue(cap.getValue().getParamNameValuePairs().containsValue("WAIT_PAY"));
     }
 
     @Test

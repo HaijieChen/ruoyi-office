@@ -16,30 +16,23 @@ import {
   Alert,
   Button,
   Card,
-  DatePicker,
   Descriptions,
-  Input,
-  InputNumber,
-  Table,
-  message,
   Select,
-  Space,
   Spin,
+  Table,
   Tag,
+  message,
 } from 'ant-design-vue';
-import dayjs, { type Dayjs } from 'dayjs';
 
 import {
   confirmPaymentMaterials,
   getPaymentApplication,
-  recordPayPaymentApplication,
   updatePaymentAccountingSubject,
 } from '#/api/finance/payment-application';
-import { getCompanyBankAccountSimpleList } from '#/api/finance/company-bank-account';
 import type { DefaultOptionType } from 'ant-design-vue/es/select';
 
 import { getDictOptions } from '@vben/hooks';
-import { FilePreviewList, FileUpload } from '#/components/upload';
+import { FilePreviewList } from '#/components/upload';
 import { previewAuthUrl } from '#/utils/file-preview';
 import { displayDate } from '#/utils/display-time';
 import {
@@ -101,23 +94,6 @@ const detail = ref<
   }) | null
 >(null);
 const accountingSubject = ref('');
-const actualPayDate = ref<Dayjs | undefined>(dayjs());
-const payVoucherUrl = ref('');
-const erpVoucherNo = ref('');
-const idempotencyKey = ref('');
-function ensureIdempotencyKey() {
-  if (!idempotencyKey.value) {
-    idempotencyKey.value =
-      (globalThis.crypto?.randomUUID?.() as string) ||
-      `pay-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-  return idempotencyKey.value;
-}
-
-const companyBankAccountId = ref<number | undefined>();
-const payAmount = ref<number | undefined>();
-const payEntityCompanyDeptId = ref<number | undefined>();
-const accountOptions = ref<{ label: string; value: number }[]>([]);
 
 function resolveId(): number | undefined {
   if (props.id !== null && props.id !== undefined && props.id !== '') {
@@ -173,63 +149,6 @@ const canResubmit = computed(() => {
   return d.status === 'REJECTED' || d.materialsStatus === 'WAIT_INVOICE';
 });
 
-const remainingPay = computed(() => {
-  const apply = Number(detail.value?.applyAmount || 0);
-  const paid = Number(detail.value?.paidLineSum || 0);
-  return Math.max(0, +(apply - paid).toFixed(2));
-});
-
-/** F6：可选支付主体（薪资/税金多主体；普通付款仅单头） */
-const payEntityOptions = computed(() => {
-  const d = detail.value;
-  if (!d) return [] as { label: string; value: number }[];
-  const kind = d.applicationKind || 'ORDINARY';
-  if (kind === 'SALARY' && d.salaryLines?.length) {
-    const map = new Map<number, string>();
-    for (const l of d.salaryLines) {
-      if (l.entityCompanyDeptId != null) {
-        map.set(l.entityCompanyDeptId, l.entityCompanyName || String(l.entityCompanyDeptId));
-      }
-    }
-    return [...map.entries()].map(([value, label]) => ({ value, label }));
-  }
-  if (kind === 'TAX' && d.taxLines?.length) {
-    const map = new Map<number, string>();
-    for (const l of d.taxLines) {
-      if (l.entityCompanyDeptId != null) {
-        map.set(l.entityCompanyDeptId, l.entityCompanyName || String(l.entityCompanyDeptId));
-      }
-    }
-    return [...map.entries()].map(([value, label]) => ({ value, label }));
-  }
-  if (d.entityCompanyDeptId != null) {
-    return [
-      {
-        value: d.entityCompanyDeptId,
-        label: d.entityCompanyName || String(d.entityCompanyDeptId),
-      },
-    ];
-  }
-  return [];
-});
-
-const multiEntity = computed(() => payEntityOptions.value.length > 1);
-
-async function loadAccounts(entityCompanyDeptId?: number) {
-  accountOptions.value = [];
-  companyBankAccountId.value = undefined;
-  if (!entityCompanyDeptId) return;
-  try {
-    const list = await getCompanyBankAccountSimpleList(entityCompanyDeptId);
-    accountOptions.value = (list || []).map((a) => ({
-      label: `${a.accountName} / ${a.bankName} / ${a.accountNoMasked || ''}`,
-      value: a.id,
-    }));
-  } catch {
-    accountOptions.value = [];
-  }
-}
-
 async function loadData() {
   const id = resolveId();
   if (id === undefined) {
@@ -240,14 +159,6 @@ async function loadData() {
   try {
     detail.value = await getPaymentApplication(id);
     accountingSubject.value = detail.value?.accountingSubject || '';
-    payAmount.value = remainingPay.value || Number(detail.value?.applyAmount || 0);
-    ensureIdempotencyKey();
-    const entities = payEntityOptions.value;
-    payEntityCompanyDeptId.value =
-      entities[0]?.value ?? detail.value?.entityCompanyDeptId;
-    if (isCashierNode.value && resolvedTaskId.value) {
-      await loadAccounts(payEntityCompanyDeptId.value);
-    }
   } catch (error) {
     detail.value = null;
     message.error(error instanceof Error ? error.message : '加载付款详情失败');
@@ -279,51 +190,6 @@ async function handleSaveSubject() {
   }
 }
 
-async function handleRecordPay() {
-  const id = resolveId();
-  const tid = resolvedTaskId.value;
-  if (id === undefined || !tid) {
-    message.error('缺少申请或任务编号，请从待办进入');
-    return;
-  }
-  if (!companyBankAccountId.value) {
-    message.warning('请选择付款账户');
-    return;
-  }
-  if (!actualPayDate.value || !payVoucherUrl.value?.trim()) {
-    message.warning('支付日与支付凭证必填');
-    return;
-  }
-  if (!payAmount.value || payAmount.value <= 0) {
-    message.warning('本笔支付金额须大于 0');
-    return;
-  }
-  submitting.value = true;
-  try {
-    await recordPayPaymentApplication({
-      id,
-      taskId: tid,
-      companyBankAccountId: companyBankAccountId.value,
-      payAmount: payAmount.value,
-      actualPayDate: actualPayDate.value.format('YYYY-MM-DD'),
-      payVoucherUrl: payVoucherUrl.value.trim(),
-      erpVoucherNo: erpVoucherNo.value || undefined,
-      idempotencyKey: ensureIdempotencyKey(),
-    });
-    message.success(
-      remainingPay.value - Number(payAmount.value) > 0.001
-        ? '本笔支付已登记（尚未足额，可继续登记）'
-        : '出纳办结成功',
-    );
-    idempotencyKey.value = '';
-    await loadData();
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '出纳办结失败');
-  } finally {
-    submitting.value = false;
-  }
-}
-
 async function handleGoResubmit() {
   const id = resolveId() ?? detail.value?.id;
   if (id === undefined) return;
@@ -337,12 +203,6 @@ async function handleGoResubmit() {
     query: { openResubmit: String(id) },
   });
 }
-
-watch(payEntityCompanyDeptId, (v) => {
-  if (isCashierNode.value && resolvedTaskId.value) {
-    void loadAccounts(v);
-  }
-});
 
 onMounted(() => {
   void loadData();
@@ -417,88 +277,6 @@ watch(
             >
               保存费用科目/性质
             </Button>
-          </div>
-        </Card>
-
-        <!-- F1/F6 出纳：账户必选 + 金额/多笔 residual -->
-        <Card
-          v-if="false"
-          class="mb-4"
-          size="small"
-          title="出纳支付办结"
-        >
-          <Alert
-            class="mb-3"
-            type="info"
-            show-icon
-            :message="`申请金额 ${detail.applyAmount} ${detail.currency || ''}，已登记 ${detail.paidLineSum ?? 0}，剩余 ${remainingPay}。请勿使用底部通用「通过」。`"
-          />
-          <div v-if="multiEntity" class="mb-2">
-            <div class="mb-1 text-sm text-gray-600">付款主体公司</div>
-            <Select
-              v-model:value="payEntityCompanyDeptId"
-              class="w-full max-w-md"
-              :options="payEntityOptions"
-              placeholder="按明细主体选择"
-            />
-          </div>
-          <div class="mb-2">
-            <div class="mb-1 text-sm text-gray-600">付款账户（必选）</div>
-            <Select
-              v-model:value="companyBankAccountId"
-              class="w-full max-w-md"
-              :options="accountOptions"
-              show-search
-              option-filter-prop="label"
-              placeholder="仅显示该主体启用账户（账号脱敏）"
-            />
-          </div>
-          <div class="mb-2">
-            <div class="mb-1 text-sm text-gray-600">本笔支付金额</div>
-            <InputNumber
-              v-model:value="payAmount"
-              class="w-full max-w-xs"
-              :min="0.01"
-              :max="remainingPay || undefined"
-              :precision="2"
-            />
-          </div>
-          <div class="mb-2">
-            <div class="mb-1 text-sm text-gray-600">实际支付日期</div>
-            <DatePicker v-model:value="actualPayDate" class="w-full max-w-xs" />
-          </div>
-          <div class="mb-2">
-            <div class="mb-1 text-sm text-gray-600">支付凭证</div>
-            <FileUpload
-              :value="payVoucherUrl ? [payVoucherUrl] : []"
-              :max-number="1"
-              :max-size="20"
-              :multiple="false"
-              help-text="上传回单/截图"
-              @update:value="
-                (v: string | string[]) => {
-                  const arr = Array.isArray(v) ? v : v ? [v] : [];
-                  payVoucherUrl = arr[0] || '';
-                }
-              "
-            />
-          </div>
-          <div class="mb-3">
-            <div class="mb-1 text-sm text-gray-600">ERP 凭证号（选填）</div>
-            <Input v-model:value="erpVoucherNo" class="max-w-md" />
-          </div>
-          <Space>
-            <Button
-              type="primary"
-              :loading="submitting"
-              :disabled="!resolvedTaskId || remainingPay <= 0"
-              @click="handleRecordPay"
-            >
-              {{ remainingPay <= 0 ? '已足额' : '提交本笔支付' }}
-            </Button>
-          </Space>
-          <div v-if="!resolvedTaskId" class="mt-2 text-sm text-orange-600">
-            未拿到 taskId，请从「我的待办」进入
           </div>
         </Card>
 

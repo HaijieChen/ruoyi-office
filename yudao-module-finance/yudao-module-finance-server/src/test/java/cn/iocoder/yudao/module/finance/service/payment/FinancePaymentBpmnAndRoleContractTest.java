@@ -22,16 +22,31 @@ class FinancePaymentBpmnAndRoleContractTest {
 
         assertTrue(xml.contains("id=\"finance_payment_apply\"") || xml.contains("id='finance_payment_apply'"));
         assertTrue(xml.contains("taskFinance"), "must include taskFinance");
-        assertTrue(xml.contains("taskCashier"), "must include taskCashier");
         assertTrue(xml.contains("payment_finance"), "finance candidate role");
-        assertTrue(xml.contains("payment_cashier"), "cashier candidate role");
-        // 金额网关两条支路最终汇入财务
+        // 金额网关两条支路最终汇入财务；出纳支付已挪到列表，种子财务直连结束
         assertTrue(xml.contains("sourceRef=\"gatewayAmount\"") || xml.contains("gatewayAmount"));
         assertTrue(xml.contains("sourceRef=\"taskBizHead\"") || xml.contains("taskBizHead"));
         assertTrue(xml.contains("targetRef=\"taskFinance\""));
-        assertTrue(xml.contains("sourceRef=\"taskFinance\"") && xml.contains("targetRef=\"taskCashier\""),
-                "taskFinance → taskCashier");
+        assertTrue(xml.contains("sourceRef=\"taskFinance\"") && xml.contains("targetRef=\"endEvent\""),
+                "taskFinance → endEvent");
+        assertFalse(xml.contains("id=\"taskCashier\""), "ordinary payment seed has no cashier node");
         assertTrue(xml.toLowerCase(Locale.ROOT).contains("bpmndiagram"), "must include diagram DI");
+        assertFalse(xml.contains("financePaymentCashierCompleteGuardListener"),
+                "ordinary payment cashier must complete without pay evidence");
+    }
+
+    @Test
+    void cashierApproveButtonMustStayVisible() throws Exception {
+        Path root = findRepositoryRoot();
+        Path vue = root.resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/detail/modules/operation-button.vue");
+        String text = Files.readString(vue);
+        assertFalse(text.contains("isPaymentCashierTask()"),
+                "do not hide APPROVE on payment cashier");
+        Path detail = root.resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/finance/payment-application/detail/index.vue");
+        String detailText = Files.readString(detail);
+        assertFalse(detailText.contains("请勿使用底部通用「通过」"));
     }
 
     @Test
