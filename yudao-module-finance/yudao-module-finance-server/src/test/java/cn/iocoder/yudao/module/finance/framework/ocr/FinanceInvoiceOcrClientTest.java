@@ -38,6 +38,14 @@ class FinanceInvoiceOcrClientTest {
     }
 
     @Test
+    void parseItinerarySerialNotETicketNo() {
+        String raw = "航空运输电子客票行程单 SERIAL NUMBER: 6316372299 4 "
+                + "电子客票号码 07424977183958 合计 CNY 13336.00";
+        assertEquals("63163722994", FinanceInvoiceOcrClient.parseInvoiceNo(raw));
+        assertNull(FinanceInvoiceOcrClient.parseInvoiceNo("电子客票号码 07424977183958"));
+    }
+
+    @Test
     void parseAmountFromTotal() {
         assertEquals(new java.math.BigDecimal("1234.56"),
                 FinanceInvoiceOcrClient.parseAmount("价税合计（大写）壹仟圆整（小写）¥1,234.56"));
@@ -63,6 +71,8 @@ class FinanceInvoiceOcrClientTest {
                 FinanceInvoiceOcrClient.parseTaxAmount("税额：13.00 价税合计"));
         assertEquals("专票", FinanceInvoiceOcrClient.parseInvoiceType("增值税专用发票"));
         assertEquals("普票", FinanceInvoiceOcrClient.parseInvoiceType("增值税普通发票"));
+        assertEquals("普票", FinanceInvoiceOcrClient.parseInvoiceType("电子发票（铁路电子客票） 票价 ￥77.00"));
+        assertEquals("其他", FinanceInvoiceOcrClient.parseInvoiceType("航空运输电子客票行程单"));
         assertEquals("其他", FinanceInvoiceOcrClient.parseInvoiceType("收据"));
     }
 

@@ -166,6 +166,23 @@ public class FinanceInvoiceOcrClient {
         if (raw == null || raw.isBlank()) {
             return null;
         }
+        java.util.regex.Matcher serial = java.util.regex.Pattern
+                .compile("(?:印刷序号|SERIAL\\s*NUM(?:BER)?)\\s*[:：]?\\s*([0-9][0-9 ]{6,24}\\d)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(raw);
+        if (serial.find()) {
+            return serial.group(1).replaceAll("\\s+", "");
+        }
+        java.util.regex.Matcher spaced = java.util.regex.Pattern
+                .compile("(?:印刷序号|SERIAL\\s*NUM(?:BER)?).{0,80}?((?:\\d[ \\t]*){10,14})",
+                        java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(raw);
+        if (spaced.find()) {
+            String digits = spaced.group(1).replaceAll("\\s+", "");
+            if (digits.length() >= 10 && digits.length() <= 14) {
+                return digits;
+            }
+        }
         String compact = raw.replaceAll("[\\s　]", "");
         java.util.regex.Matcher labeled = java.util.regex.Pattern
                 .compile("发票号码[:：]?[^0-9]{0,8}([0-9]{8,20})")
@@ -180,7 +197,7 @@ public class FinanceInvoiceOcrClient {
             return eInvoice.group(1);
         }
         java.util.regex.Matcher number = java.util.regex.Pattern
-                .compile("号码[:：]([0-9]{8,20})")
+                .compile("(?<!电子客票)号码[:：]([0-9]{8,20})")
                 .matcher(compact);
         if (number.find()) {
             return number.group(1);
@@ -339,6 +356,13 @@ public class FinanceInvoiceOcrClient {
     static String parseInvoiceType(String raw) {
         if (raw == null || raw.isBlank()) {
             return "其他";
+        }
+        if (raw.contains("航空运输电子客票行程单")
+                || raw.toUpperCase().contains("ITINERARY/RECEIPT OF E-TICKET")) {
+            return "其他";
+        }
+        if (raw.contains("电子发票（铁路电子客票）") || raw.contains("铁路电子客票")) {
+            return "普票";
         }
         if (raw.contains("增值税专用发票") || raw.contains("专用发票")
                 || (raw.contains("专票") && !raw.contains("普票"))) {
