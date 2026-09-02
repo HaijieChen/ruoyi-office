@@ -327,6 +327,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       { field: 'applicationNo', title: '业务单号', minWidth: 150 },
       { field: 'counterpartyName', title: '对方', minWidth: 120 },
       { field: 'signCompany', title: '主体公司', minWidth: 100 },
+      { field: 'applicantName', title: '申请人', width: 100 },
       { field: 'fileType', title: '合同类型', minWidth: 110 },
       { field: 'fileName', title: '文件名称', minWidth: 140 },
       {

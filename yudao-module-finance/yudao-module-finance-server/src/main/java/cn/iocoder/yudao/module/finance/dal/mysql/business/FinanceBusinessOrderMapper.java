@@ -48,6 +48,12 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
             wrapper.apply("contract_application_id IS NOT NULL");
             wrapper.apply("product_type_snapshot IS NOT NULL AND TRIM(product_type_snapshot) <> ''");
         }
+        if (reqVO.getCustomerCompanyId() != null) {
+            wrapper.apply(
+                    "contract_application_id IN (SELECT id FROM finance_contract_application "
+                            + "WHERE deleted = b'0' AND counterparty_company_id = {0})",
+                    reqVO.getCustomerCompanyId());
+        }
         return selectPage(reqVO, wrapper.orderByDesc(FinanceBusinessOrderDO::getId));
     }
 
@@ -77,6 +83,12 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
             wrapper.apply("settlement_amount > IFNULL(invoiced_occupied_amount, 0)");
             wrapper.apply("contract_application_id IS NOT NULL");
             wrapper.apply("product_type_snapshot IS NOT NULL AND TRIM(product_type_snapshot) <> ''");
+        }
+        if (reqVO.getCustomerCompanyId() != null) {
+            wrapper.apply(
+                    "contract_application_id IN (SELECT id FROM finance_contract_application "
+                            + "WHERE deleted = b'0' AND counterparty_company_id = {0})",
+                    reqVO.getCustomerCompanyId());
         }
         return selectList(wrapper.orderByDesc(FinanceBusinessOrderDO::getId));
     }

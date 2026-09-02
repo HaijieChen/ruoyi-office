@@ -39,5 +39,7 @@ public class FinanceBusinessOrderPageReqVO extends PageParam {
     private LocalDate[] orderDate;
     @Schema(description = "开票可选（invoice-selectable）：可开余额 > 0 且有合同且 product_type_snapshot 非空")
     private Boolean onlyOpenable;
+    @Schema(description = "关联合同对方客商公司编号（开票按客户过滤）")
+    private Long customerCompanyId;
 
 }

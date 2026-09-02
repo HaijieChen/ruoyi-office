@@ -76,6 +76,7 @@ export namespace FinanceBusinessOrderApi {
     contractApplicationNo?: string;
     /** 开票可选：可开余额 > 0 且有合同且非空 product_type_snapshot（后端 invoice-selectable） */
     onlyOpenable?: boolean;
+    customerCompanyId?: number;
   }
 
   /** 创建/编辑表单数据（排除服务端只读字段；产品由服务端从合同派生，勿提交） */

@@ -134,6 +134,8 @@ public interface ErrorCodeConstants {
             "合同可开票金额不足（签约金额减去已开票占用）");
     ErrorCode INVOICE_APPLICATION_DELETE_NOT_ALLOWED = new ErrorCode(1_040_003_026,
             "审批中的开票请先撤回，不能直接删除");
+    ErrorCode INVOICE_APPLICATION_CUSTOMER_MISMATCH = new ErrorCode(1_040_003_028,
+            "前置合同/商务单必须属于所选客户公司");
     ErrorCode INVOICE_APPLICATION_DELETE_HAS_CLAIM = new ErrorCode(1_040_003_027,
             "开票申请已有认领金额或红冲锁定，不能删除");
 

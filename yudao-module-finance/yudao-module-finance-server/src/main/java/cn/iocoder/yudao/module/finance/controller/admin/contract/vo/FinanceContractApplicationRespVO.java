@@ -18,6 +18,8 @@ public class FinanceContractApplicationRespVO {
     private String currentNodeKey;
     private String currentNodeName;
     private Long applicantUserId;
+    @Schema(description = "申请人姓名")
+    private String applicantName;
     private Long businessStaffUserId;
     private Long applicantDeptId;
     private Long counterpartyCompanyId;

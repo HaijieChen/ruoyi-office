@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.finance.controller.admin.contract;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.common.util.collection.MapUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
@@ -11,6 +12,8 @@ import cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicati
 import cn.iocoder.yudao.module.finance.service.contract.FinanceContractApplicationService;
 import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationService;
 import cn.iocoder.yudao.module.finance.service.payment.FinancePaymentPredocService;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,8 +30,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
+import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - 合同签约申请")
@@ -50,6 +55,8 @@ public class FinanceContractApplicationController {
     private FinanceInvoiceApplicationService invoiceApplicationService;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @GetMapping("/get-import-template")
     @Operation(summary = "获得合同签约导入模板")
@@ -176,6 +183,7 @@ public class FinanceContractApplicationController {
                 id, getLoginUserId(), manageAll());
         FinanceContractApplicationRespVO vo = BeanUtils.toBean(application, FinanceContractApplicationRespVO.class);
         fillInvoiceOpenable(List.of(vo));
+        fillApplicantNames(List.of(vo));
         return success(vo);
     }
 
@@ -188,6 +196,7 @@ public class FinanceContractApplicationController {
                 pageReqVO, getLoginUserId(), manageAll());
         PageResult<FinanceContractApplicationRespVO> voPage = BeanUtils.toBean(page, FinanceContractApplicationRespVO.class);
         fillInvoiceOpenable(voPage.getList());
+        fillApplicantNames(voPage.getList());
         return success(voPage);
     }
 
@@ -245,6 +254,18 @@ public class FinanceContractApplicationController {
                                             @RequestParam("mailTrackingNo") String mailTrackingNo) {
         contractApplicationService.recordMail(id, taskId, mailTrackingNo, getLoginUserId());
         return success(true);
+    }
+
+    private void fillApplicantNames(List<FinanceContractApplicationRespVO> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
+                convertSet(list, FinanceContractApplicationRespVO::getApplicantUserId));
+        for (FinanceContractApplicationRespVO vo : list) {
+            MapUtils.findAndThen(userMap, vo.getApplicantUserId(),
+                    user -> vo.setApplicantName(user.getNickname()));
+        }
     }
 
     private void fillInvoiceOpenable(List<FinanceContractApplicationRespVO> list) {

@@ -38,4 +38,7 @@ public class FinanceContractApplicationPageReqVO extends PageParam {
 
     @Schema(description = "对方名称")
     private String counterpartyName;
+
+    @Schema(description = "对方客商公司编号")
+    private Long counterpartyCompanyId;
 }

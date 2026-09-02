@@ -364,6 +364,11 @@ function upsertBoOption(opt: BoOption) {
 }
 
 async function loadBusinessOrderOptions(keyword?: string) {
+  const customerCompanyId = formData.value.customerCompanyId;
+  if (!customerCompanyId) {
+    boOptions.value = [];
+    return;
+  }
   loadingBo.value = true;
   try {
     const page = await getBusinessOrderPage({
@@ -371,6 +376,7 @@ async function loadBusinessOrderOptions(keyword?: string) {
       pageSize: 50,
       orderNo: keyword?.trim() || undefined,
       onlyOpenable: true,
+      customerCompanyId,
     });
     // 复审 #7：前端再过滤一次，避免 legacy productName-only BO 进入候选
     const mapped = (page?.list || [])
@@ -436,7 +442,12 @@ function mapContractOption(row: {
 
 async function loadContractOptions(keyword?: string) {
   const productType = formData.value.productType;
+  const customerCompanyId = formData.value.customerCompanyId;
   if (!productType || BUSINESS_ORDER_PRODUCT_TYPES.has(String(productType))) {
+    contractOptions.value = [];
+    return;
+  }
+  if (!customerCompanyId) {
     contractOptions.value = [];
     return;
   }
@@ -449,6 +460,7 @@ async function loadContractOptions(keyword?: string) {
       approvalStatus: 'APPROVED',
       fileType: '销售合同',
       productType,
+      counterpartyCompanyId: customerCompanyId,
     });
     const mapped = (page?.list || []).map((row) => mapContractOption(row));
     const selectedIds = new Set(
@@ -637,7 +649,7 @@ async function loadCustomerCompanyOptions() {
 }
 
 /** 选中购方客户公司：只读税项 */
-function onCustomerCompanyChange(id?: number) {
+function applyCustomerSnapshot(id?: number) {
   if (id === null || id === undefined) {
     formData.value.buyerName = undefined;
     formData.value.buyerTaxNo = undefined;
@@ -652,6 +664,21 @@ function onCustomerCompanyChange(id?: number) {
   formData.value.buyerTaxNo = opt.taxNo;
   formData.value.buyerAddressPhone = opt.addressPhone;
   formData.value.buyerBankAccount = opt.bankAccount;
+}
+
+function onCustomerCompanyChange(id?: number) {
+  applyCustomerSnapshot(id);
+  formData.value.lines = [{}];
+  boOptions.value = [];
+  contractOptions.value = [];
+  if (!id) {
+    return;
+  }
+  if (usesBusinessOrder.value) {
+    void loadBusinessOrderOptions();
+  } else if (formData.value.productType) {
+    void loadContractOptions();
+  }
 }
 
 function getPredictVariables(): Record<string, unknown> {
@@ -696,7 +723,7 @@ async function reset(opts?: { id?: number; mode?: string }) {
         (o) => o.value === formData.value.customerCompanyId,
       );
       if (stillEnabled) {
-        onCustomerCompanyChange(formData.value.customerCompanyId);
+        applyCustomerSnapshot(formData.value.customerCompanyId);
       } else {
         const snapName =
           formData.value.buyerName || `#${formData.value.customerCompanyId}`;
@@ -775,7 +802,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
     throw new Error('validation');
   }
   onCompanyChange(formData.value.invoiceCompanyDeptId);
-  onCustomerCompanyChange(formData.value.customerCompanyId);
+  applyCustomerSnapshot(formData.value.customerCompanyId);
   submitting.value = true;
   try {
     const brand = usesBusinessOrder.value;

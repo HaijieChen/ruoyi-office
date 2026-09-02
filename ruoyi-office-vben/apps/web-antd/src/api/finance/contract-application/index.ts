@@ -17,6 +17,7 @@ export namespace FinanceContractApplicationApi {
     currentNodeKey?: string;
     currentNodeName?: string;
     applicantUserId?: number;
+    applicantName?: string;
     businessStaffUserId?: number;
     applicantDeptId?: number;
     counterpartyCompanyId?: number;
@@ -90,6 +91,7 @@ export namespace FinanceContractApplicationApi {
     fileType?: string;
     productType?: string;
     counterpartyName?: string;
+    counterpartyCompanyId?: number;
   }
 }
 

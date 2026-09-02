@@ -169,9 +169,10 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 if (!productType.equals(boProduct)) {
                     throw exception(INVOICE_APPLICATION_PRODUCT_MIXED);
                 }
+                requireBusinessOrderCustomer(order, reqVO.getCustomerCompanyId());
             }
         } else {
-            requireSalesContracts(lines, productType, null);
+            requireSalesContracts(lines, productType, null, reqVO.getCustomerCompanyId());
         }
         String commonProductType = productType;
 
@@ -387,9 +388,10 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 if (!productType.equals(resolveBusinessOrderProductType(order))) {
                     throw exception(INVOICE_APPLICATION_PRODUCT_MIXED);
                 }
+                requireBusinessOrderCustomer(order, reqVO.getCustomerCompanyId());
             }
         } else {
-            requireSalesContracts(lines, productType, appId);
+            requireSalesContracts(lines, productType, appId, reqVO.getCustomerCompanyId());
         }
         String commonProductType = productType;
 
@@ -911,8 +913,23 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         }
     }
 
+    private void requireBusinessOrderCustomer(FinanceBusinessOrderDO order, Long customerCompanyId) {
+        if (order == null || order.getContractApplicationId() == null) {
+            throw exception(INVOICE_APPLICATION_CUSTOMER_MISMATCH);
+        }
+        FinanceContractApplicationDO contract = contractApplicationMapper.selectById(order.getContractApplicationId());
+        requireContractCustomer(contract, customerCompanyId);
+    }
+
+    private void requireContractCustomer(FinanceContractApplicationDO contract, Long customerCompanyId) {
+        if (customerCompanyId == null || contract == null
+                || !customerCompanyId.equals(contract.getCounterpartyCompanyId())) {
+            throw exception(INVOICE_APPLICATION_CUSTOMER_MISMATCH);
+        }
+    }
+
     private void requireSalesContracts(List<? extends FinanceInvoiceApplicationCreateAndStartReqVO.Line> lines,
-                                       String productType, Long excludeApplicationId) {
+                                       String productType, Long excludeApplicationId, Long customerCompanyId) {
         List<Long> ids = new ArrayList<>();
         Map<Long, BigDecimal> occupyByContract = new LinkedHashMap<>();
         for (FinanceInvoiceApplicationCreateAndStartReqVO.Line line : lines) {
@@ -936,6 +953,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                     || !productType.equals(StrUtil.trim(contract.getProductType()))) {
                 throw exception(INVOICE_APPLICATION_CONTRACT_INVALID);
             }
+            requireContractCustomer(contract, customerCompanyId);
         }
         for (Map.Entry<Long, BigDecimal> entry : occupyByContract.entrySet()) {
             FinanceContractApplicationDO contract = byId.get(entry.getKey());
