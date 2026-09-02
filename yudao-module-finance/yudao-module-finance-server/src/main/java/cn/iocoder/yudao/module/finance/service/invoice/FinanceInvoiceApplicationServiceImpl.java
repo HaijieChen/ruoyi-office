@@ -586,6 +586,40 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void update(Long id, FinanceInvoiceApplicationCreateAndStartReqVO reqVO) {
+        FinanceInvoiceApplicationDO current = getApplication(id);
+        if (FinanceInvoiceApprovalStatusEnum.PENDING.getStatus().equals(current.getApprovalStatus())
+                && !Boolean.TRUE.equals(current.getVoided())) {
+            throw exception(INVOICE_APPLICATION_DELETE_NOT_ALLOWED);
+        }
+        BigDecimal claimed = defaultZero(current.getConfirmedClaimedAmount())
+                .add(defaultZero(current.getPendingClaimedAmount()));
+        if (claimed.compareTo(ZERO) > 0 || current.getRedFlushLockApplicationId() != null) {
+            throw exception(INVOICE_APPLICATION_DELETE_HAS_CLAIM);
+        }
+        BuyerSnapshot buyer = resolveBuyerSnapshot(reqVO.getCustomerCompanyId());
+        FinanceEntityCompanyResolver.ResolvedCompany company =
+                entityCompanyResolver.requireByDeptId(reqVO.getInvoiceCompanyDeptId());
+        FinanceInvoiceApplicationDO patch = new FinanceInvoiceApplicationDO();
+        patch.setId(id);
+        patch.setCustomerCompanyId(buyer.customerCompanyId());
+        patch.setBuyerName(buyer.buyerName());
+        patch.setBuyerTaxNo(buyer.buyerTaxNo());
+        patch.setBuyerAddressPhone(buyer.buyerAddressPhone());
+        patch.setBuyerBankAccount(buyer.buyerBankAccount());
+        patch.setInvoiceCompanyDeptId(company.deptId());
+        patch.setInvoiceCompany(company.name());
+        patch.setCurrency(FinanceCurrencySupport.requireSupported(reqVO.getCurrency()));
+        patch.setInvoiceType(reqVO.getInvoiceType());
+        patch.setTaxContent(reqVO.getTaxContent());
+        patch.setSpecialInvoiceRequirement(reqVO.getSpecialInvoiceRequirement());
+        patch.setRemark(reqVO.getRemark());
+        patch.setExpectedInvoiceDate(reqVO.getExpectedInvoiceDate());
+        applicationMapper.updateById(patch);
+    }
+
+    @Override
     public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(
             List<Long> ids) {
         cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO resp =

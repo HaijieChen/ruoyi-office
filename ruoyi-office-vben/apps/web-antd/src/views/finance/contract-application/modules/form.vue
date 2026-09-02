@@ -21,7 +21,9 @@ const [Modal, modalApi] = useVbenModal({
     formTitle.value =
       data.mode === 'resubmit'
         ? '驳回后重提合同签约'
-        : '提交合同签约申请（无草稿）';
+        : data.mode === 'edit'
+          ? '编辑合同签约'
+          : '提交合同签约申请（无草稿）';
     await nextTick();
     await bodyRef.value?.reset({ id: data.id, mode: data.mode });
   },

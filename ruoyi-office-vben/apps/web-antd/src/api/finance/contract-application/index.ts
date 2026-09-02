@@ -113,6 +113,17 @@ export function resubmitContractApplication(
   );
 }
 
+export function updateContractApplication(
+  id: number,
+  data: FinanceContractApplicationApi.CreateAndStartRequest,
+) {
+  return requestClient.put<boolean>(
+    '/finance/contract-application/update',
+    data,
+    { params: { id } },
+  );
+}
+
 export function cancelContractApplication(id: number) {
   return requestClient.post<boolean>(
     '/finance/contract-application/cancel',

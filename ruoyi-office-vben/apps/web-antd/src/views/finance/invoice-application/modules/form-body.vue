@@ -30,6 +30,7 @@ import {
   createAndStartInvoiceApplication,
   getInvoiceApplication,
   resubmitInvoiceApplication,
+  updateInvoiceApplication,
 } from '#/api/finance/invoice-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { financeProductLabel } from '#/views/finance/shared/display-labels';
@@ -53,7 +54,7 @@ interface LineItem {
 
 interface FormData {
   id?: number;
-  mode?: 'create' | 'resubmit';
+  mode?: 'create' | 'resubmit' | 'edit';
   customerCompanyId?: number;
   buyerName?: string;
   buyerTaxNo?: string;
@@ -128,6 +129,7 @@ let boSearchTimer: ReturnType<typeof setTimeout> | undefined;
 let contractSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
 const isResubmit = computed(() => formData.value.mode === 'resubmit');
+const isEdit = computed(() => formData.value.mode === 'edit');
 
 const BUSINESS_ORDER_PRODUCT_TYPES = new Set(['ppsw', 'yxly', 'qdcp', 'yjcp']);
 const invoiceTypeOptions = computed(() =>
@@ -659,11 +661,11 @@ function getPredictVariables(): Record<string, unknown> {
 async function reset(opts?: { id?: number; mode?: string }) {
   const defaultStaff = await loadBusinessStaff();
   await Promise.all([loadCompanyOptions(), loadCustomerCompanyOptions()]);
-  if (opts?.id && opts?.mode === 'resubmit') {
+  if (opts?.id && (opts?.mode === 'resubmit' || opts?.mode === 'edit')) {
     const detail = await getInvoiceApplication(opts.id);
     formData.value = {
       id: detail.id,
-      mode: 'resubmit',
+      mode: opts.mode === 'edit' ? 'edit' : 'resubmit',
       customerCompanyId: detail.customerCompanyId,
       buyerName: detail.buyerName,
       buyerTaxNo: detail.buyerTaxNo,
@@ -806,7 +808,10 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       startDeptId: ctx?.startDeptId,
       businessStaffUserId: formData.value.businessStaffUserId,
     };
-    if (isResubmit.value && formData.value.id) {
+    if (isEdit.value && formData.value.id) {
+      await updateInvoiceApplication(formData.value.id, payload);
+      message.success('已保存');
+    } else if (isResubmit.value && formData.value.id) {
       await resubmitInvoiceApplication(formData.value.id, {
         ...payload,
         id: formData.value.id,

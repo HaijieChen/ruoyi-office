@@ -118,6 +118,15 @@ function handleDetail(row: FinanceInvoiceApplicationApi.Application) {
   infoModalApi.open();
 }
 
+function handleEdit(row: FinanceInvoiceApplicationApi.Application) {
+  if (row.approvalStatus === 'PENDING' && !row.voided) {
+    message.warning('审批中不能直接编辑');
+    return;
+  }
+  createModalApi.setData({ id: row.id, mode: 'edit' });
+  createModalApi.open();
+}
+
 /**
  * 发起流程 catalog：formCustomCreatePath =
  * /finance/invoice-application?openCreate=1
@@ -302,6 +311,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               label: '详情',
               auth: ['finance:invoice-application:query'],
               onClick: () => handleDetail(row),
+            },
+            {
+              label: '编辑',
+              auth: ['finance:invoice-application:import'],
+              ifShow: row.approvalStatus !== 'PENDING' || !!row.voided,
+              onClick: () => handleEdit(row),
             },
             {
               label: '重提',

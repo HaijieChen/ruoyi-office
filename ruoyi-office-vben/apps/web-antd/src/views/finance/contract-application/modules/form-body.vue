@@ -24,6 +24,7 @@ import {
   createAndStartContractApplication,
   getContractApplication,
   resubmitContractApplication,
+  updateContractApplication,
 } from '#/api/finance/contract-application';
 import { getCustomerCompanySimpleList } from '#/api/finance/customer-company';
 import { FileUpload } from '#/components/upload';
@@ -65,7 +66,7 @@ const productTypeOptions = computed(() =>
 
 interface FormData {
   id?: number;
-  mode?: 'create' | 'resubmit';
+  mode?: 'create' | 'resubmit' | 'edit';
   counterpartyCompanyId?: number;
   amountNa?: boolean;
   contractAmount?: number;
@@ -108,6 +109,7 @@ const submitting = ref(false);
 const { staffOptions, loadBusinessStaff } = useBusinessStaffField();
 
 const isResubmit = computed(() => formData.value.mode === 'resubmit');
+const isEdit = computed(() => formData.value.mode === 'edit');
 const isSalesLikeContract = computed(
   () =>
     formData.value.fileType === '销售合同' ||
@@ -316,11 +318,11 @@ function getPredictVariables(): Record<string, unknown> {
 async function reset(opts?: { id?: number; mode?: string }) {
   const defaultStaff = await loadBusinessStaff();
   await Promise.all([loadCustomers(), loadCompanies()]);
-  if (opts?.mode === 'resubmit' && opts.id) {
+  if ((opts?.mode === 'resubmit' || opts?.mode === 'edit') && opts.id) {
     const detail = await getContractApplication(opts.id);
     formData.value = {
       id: detail.id,
-      mode: 'resubmit',
+      mode: opts.mode === 'edit' ? 'edit' : 'resubmit',
       counterpartyCompanyId: detail.counterpartyCompanyId,
       amountNa: !!detail.amountNa,
       contractAmount: detail.contractAmount,
@@ -364,10 +366,15 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       startCompanyDeptId: ctx?.startCompanyDeptId,
       startDeptId: ctx?.startDeptId,
     };
-    await (isResubmit.value && formData.value.id
-      ? resubmitContractApplication(formData.value.id, payload)
-      : createAndStartContractApplication(payload));
-    message.success('提交成功');
+    if (isEdit.value && formData.value.id) {
+      await updateContractApplication(formData.value.id, payload);
+      message.success('已保存');
+    } else {
+      await (isResubmit.value && formData.value.id
+        ? resubmitContractApplication(formData.value.id, payload)
+        : createAndStartContractApplication(payload));
+      message.success('提交成功');
+    }
     emit('success');
   } finally {
     submitting.value = false;

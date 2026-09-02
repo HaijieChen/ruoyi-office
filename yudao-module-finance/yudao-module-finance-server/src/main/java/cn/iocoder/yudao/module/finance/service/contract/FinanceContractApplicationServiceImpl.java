@@ -140,6 +140,32 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void update(Long id, FinanceContractApplicationCreateAndStartReqVO reqVO) {
+        FinanceContractApplicationDO current = getApplication(id);
+        if (FinanceContractApprovalStatusEnum.PENDING.getStatus().equals(current.getApprovalStatus())
+                && !Boolean.TRUE.equals(current.getVoided())) {
+            throw exception(CONTRACT_APPLICATION_STATUS_INVALID);
+        }
+        validateBusinessFields(reqVO);
+        FinanceCustomerCompanyDO counterparty = resolveCounterparty(reqVO.getCounterpartyCompanyId());
+        FinanceContractApplicationDO built = buildFromReq(reqVO, current.getApplicantUserId(), counterparty).build();
+        built.setId(id);
+        built.setApplicationNo(current.getApplicationNo());
+        built.setApprovalStatus(current.getApprovalStatus());
+        built.setProcessInstanceId(current.getProcessInstanceId());
+        built.setVoided(current.getVoided());
+        built.setCurrentNodeKey(current.getCurrentNodeKey());
+        built.setCurrentNodeName(current.getCurrentNodeName());
+        built.setSealFileUrl(current.getSealFileUrl());
+        built.setActualSealerUserId(current.getActualSealerUserId());
+        built.setArchivedAt(current.getArchivedAt());
+        built.setArchiveFileUrls(current.getArchiveFileUrls());
+        built.setMailTrackingNo(current.getMailTrackingNo());
+        applicationMapper.updateById(built);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void resubmit(Long id, FinanceContractApplicationResubmitReqVO reqVO, Long userId) {
         FinanceContractApplicationDO application = getApplication(id);
         assertOwner(application, userId);

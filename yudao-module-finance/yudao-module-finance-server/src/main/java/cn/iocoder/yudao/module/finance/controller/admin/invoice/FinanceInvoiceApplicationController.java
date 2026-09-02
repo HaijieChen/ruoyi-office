@@ -120,6 +120,16 @@ public class FinanceInvoiceApplicationController {
         ExcelUtils.write(response, "开票申请.xls", "开票申请", FinanceInvoiceApplicationExportExcelVO.class, rows);
     }
 
+    @PutMapping("/update")
+    @Operation(summary = "编辑开票申请台账（不重启审批）")
+    @Parameter(name = "id", description = "申请编号", required = true)
+    @PreAuthorize("@ss.hasAnyPermissions('finance:invoice-application:update', 'finance:invoice-application:import')")
+    public CommonResult<Boolean> update(@RequestParam("id") Long id,
+                                        @Valid @RequestBody FinanceInvoiceApplicationCreateAndStartReqVO reqVO) {
+        invoiceApplicationService.update(id, reqVO);
+        return success(true);
+    }
+
     @PostMapping("/create-and-start")
     @Operation(summary = "创建开票申请并启动审批（无草稿）")
     @PreAuthorize("isAuthenticated()")

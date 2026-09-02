@@ -124,6 +124,15 @@ function handleResubmit(row: FinanceContractApplicationApi.Application) {
   createModalApi.open();
 }
 
+function handleEdit(row: FinanceContractApplicationApi.Application) {
+  if (row.approvalStatus === 'PENDING' && !row.voided) {
+    message.warning('审批中请先撤回，不能直接编辑');
+    return;
+  }
+  createModalApi.setData({ id: row.id, mode: 'edit' });
+  createModalApi.open();
+}
+
 function handleDetail(row: FinanceContractApplicationApi.Application) {
   detailModalApi.setData({ id: row.id });
   detailModalApi.open();
@@ -444,6 +453,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               label: '详情',
               auth: ['finance:contract-application:query'],
               onClick: () => handleDetail(row),
+            },
+            {
+              label: '编辑',
+              auth: ['finance:contract-application:import'],
+              ifShow: row.approvalStatus !== 'PENDING' || !!row.voided,
+              onClick: () => handleEdit(row),
             },
             {
               label: '重提',

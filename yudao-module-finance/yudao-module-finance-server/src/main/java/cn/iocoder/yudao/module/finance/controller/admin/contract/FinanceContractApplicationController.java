@@ -111,6 +111,16 @@ public class FinanceContractApplicationController {
         return success(true);
     }
 
+    @PutMapping("/update")
+    @Operation(summary = "编辑合同签约台账（不重启审批）")
+    @Parameter(name = "id", description = "申请编号", required = true)
+    @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:update', 'finance:contract-application:import')")
+    public CommonResult<Boolean> update(@RequestParam("id") Long id,
+                                        @Valid @RequestBody FinanceContractApplicationCreateAndStartReqVO reqVO) {
+        contractApplicationService.update(id, reqVO);
+        return success(true);
+    }
+
     @PostMapping("/cancel")
     @Operation(summary = "申请人撤回（仅用印前；同步取消 Flowable）")
     @Parameter(name = "id", description = "申请编号", required = true)

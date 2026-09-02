@@ -22,6 +22,8 @@ public interface FinanceContractApplicationService {
      */
     void delete(Long id);
 
+    void update(Long id, FinanceContractApplicationCreateAndStartReqVO reqVO);
+
     cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(
             java.util.List<Long> ids);
 

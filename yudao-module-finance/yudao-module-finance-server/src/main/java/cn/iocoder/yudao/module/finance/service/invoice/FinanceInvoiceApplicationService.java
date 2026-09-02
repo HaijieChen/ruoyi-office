@@ -56,6 +56,8 @@ public interface FinanceInvoiceApplicationService {
 
     void delete(Long id);
 
+    void update(Long id, FinanceInvoiceApplicationCreateAndStartReqVO reqVO);
+
     cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(
             java.util.List<Long> ids);
 

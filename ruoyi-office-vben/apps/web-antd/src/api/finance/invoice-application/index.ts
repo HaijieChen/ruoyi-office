@@ -162,6 +162,17 @@ export function createAndStartInvoiceApplication(
   );
 }
 
+export function updateInvoiceApplication(
+  id: number,
+  data: FinanceInvoiceApplicationApi.CreateAndStartRequest,
+) {
+  return requestClient.put<boolean>(
+    '/finance/invoice-application/update',
+    data,
+    { params: { id } },
+  );
+}
+
 export function resubmitInvoiceApplication(
   id: number,
   data: FinanceInvoiceApplicationApi.ResubmitRequest,

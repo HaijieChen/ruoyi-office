@@ -19,7 +19,9 @@ const [Modal, modalApi] = useVbenModal({
     formTitle.value =
       data.mode === 'resubmit'
         ? '驳回后重提开票申请'
-        : '提交开票申请（无草稿）';
+        : data.mode === 'edit'
+          ? '编辑开票申请'
+          : '提交开票申请（无草稿）';
     await nextTick();
     await bodyRef.value?.reset({ id: data.id, mode: data.mode });
   },
