@@ -197,6 +197,8 @@ const FILE_TYPE_OPTIONS = [
   { label: '付款业务合同', value: '付款业务合同' },
   { label: '租赁合同', value: '租赁合同' },
   { label: '借款合同', value: '借款合同' },
+  { label: '推广充值业务合同', value: '推广充值业务合同' },
+  { label: '其他', value: '其他' },
 ];
 
 const [Grid, gridApi] = useVbenVxeGrid({

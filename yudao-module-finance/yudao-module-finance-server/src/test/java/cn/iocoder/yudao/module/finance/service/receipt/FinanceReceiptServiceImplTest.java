@@ -1,7 +1,12 @@
 package cn.iocoder.yudao.module.finance.service.receipt;
 
+import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
+import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.security.core.LoginUser;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
@@ -18,6 +23,7 @@ import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolv
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.mockito.MockedStatic;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -48,7 +54,7 @@ class FinanceReceiptServiceImplTest {
         receiptNoRedisDAO = mock(FinanceReceiptNoRedisDAO.class);
         entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         receiptService = new FinanceReceiptServiceImpl(
-                receiptMapper, lifecycleAuditMapper, receiptNoRedisDAO, entityCompanyResolver);
+                receiptMapper, lifecycleAuditMapper, receiptNoRedisDAO, entityCompanyResolver, null);
         when(entityCompanyResolver.loadEnabledCompanies()).thenReturn(List.of());
         when(entityCompanyResolver.matchByNameOrError(anyString(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenAnswer(invocation -> {
@@ -266,6 +272,28 @@ class FinanceReceiptServiceImplTest {
         when(receiptMapper.selectUnclaimedPage(reqVO)).thenReturn(expected);
 
         assertSame(expected, receiptService.getUnclaimedReceiptPage(reqVO));
+    }
+
+    @Test
+    void getUnclaimedReceiptPageShouldRestrictToPermittedCompanies() {
+        PermissionCommonApi permissionApi = mock(PermissionCommonApi.class);
+        receiptService = new FinanceReceiptServiceImpl(
+                receiptMapper, lifecycleAuditMapper, receiptNoRedisDAO, entityCompanyResolver, permissionApi);
+        LoginUser user = new LoginUser();
+        user.setId(5L);
+        DeptDataPermissionRespDTO perm = new DeptDataPermissionRespDTO();
+        perm.setAll(false);
+        perm.setDeptIds(java.util.Set.of(10L));
+        when(permissionApi.getDeptDataPermission(5L)).thenReturn(CommonResult.success(perm));
+        when(receiptMapper.selectUnclaimedPage(any())).thenReturn(new PageResult<>(List.of(), 0L));
+
+        try (MockedStatic<SecurityFrameworkUtils> sec = mockStatic(SecurityFrameworkUtils.class)) {
+            sec.when(SecurityFrameworkUtils::getLoginUser).thenReturn(user);
+            receiptService.getUnclaimedReceiptPage(new FinanceReceiptPageReqVO());
+        }
+
+        verify(receiptMapper).selectUnclaimedPage(argThat(req ->
+                req.getEntityCompanyDeptIds() != null && req.getEntityCompanyDeptIds().contains(10L)));
     }
 
     @Test

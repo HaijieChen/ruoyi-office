@@ -62,7 +62,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     private static final Set<String> SEAL_OR_LATER_TASK_KEYS = Set.of(TASK_SEAL, TASK_ARCHIVE, TASK_MAIL);
 
     private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
-            "采购合同", "销售合同", "付款业务合同", "租赁合同", "借款合同");
+            "采购合同", "销售合同", "付款业务合同", "租赁合同", "借款合同", "推广充值业务合同", "其他");
 
     private static final Set<String> SALES_LIKE_FILE_TYPES = Set.of("销售合同", "付款业务合同");
     private static final Set<String> PRE_PROCESS_REQUIRED_TYPES = Set.of("采购合同", "租赁合同");

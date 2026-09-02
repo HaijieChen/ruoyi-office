@@ -140,6 +140,20 @@ function col(
   };
 }
 
+function onPayrollWheel(e: WheelEvent) {
+  const scroller = (e.currentTarget as HTMLElement).querySelector(
+    '.ant-table-content',
+  ) as HTMLElement | null;
+  if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) {
+    return;
+  }
+  const dx = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  if (dx === 0) {
+    return;
+  }
+  scroller.scrollLeft += dx;
+}
+
 const lineColumns = [
   col('姓名', 'employeeName', 120, 'left'),
   col('年月', 'yearMonth', 90),
@@ -303,16 +317,18 @@ onMounted(async () => {
         <p v-if="unmatched.length" class="mt-2 mb-0">未匹配打卡姓名：{{ unmatched.join('、') }}</p>
         <p v-if="status === 'DRAFT'" class="mt-2 mb-0 text-gray-500">草稿可点单元格改补贴/加班/个税等，失焦保存并重算应付与实发。</p>
       </div>
-      <Table
-        class="payroll-line-table"
-        size="small"
-        :data-source="filteredLines"
-        :loading="loading"
-        row-key="id"
-        :pagination="false"
-        :scroll="{ x: 3600 }"
-        :columns="lineColumns"
-      />
+      <div class="payroll-line-table-wrap" @wheel.prevent="onPayrollWheel">
+        <Table
+          class="payroll-line-table"
+          size="small"
+          :data-source="filteredLines"
+          :loading="loading"
+          row-key="id"
+          :pagination="false"
+          :scroll="{ x: 3600 }"
+          :columns="lineColumns"
+        />
+      </div>
     </Card>
 
     <Drawer
@@ -358,7 +374,13 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.payroll-line-table-wrap {
+  width: 100%;
+}
 .payroll-line-table :deep(.ant-table-thead > tr > th) {
   white-space: nowrap;
+}
+.payroll-line-table :deep(.ant-table-content) {
+  overflow-x: auto;
 }
 </style>

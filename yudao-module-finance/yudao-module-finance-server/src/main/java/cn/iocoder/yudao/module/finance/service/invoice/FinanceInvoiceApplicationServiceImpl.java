@@ -615,6 +615,12 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     }
 
     @Override
+    public PageResult<FinanceInvoiceApplicationDO> getClaimableSourcePage(
+            FinanceInvoiceApplicationPageReqVO pageReqVO, Long userId) {
+        return applicationMapper.selectClaimableSourcePage(pageReqVO, userId);
+    }
+
+    @Override
     public List<FinanceInvoiceApplicationDO> listSelectableForRedFlush() {
         return applicationMapper.selectSelectableForRedFlush().stream()
                 .filter(FinanceInvoiceRedflushEligibility::isSelectablePredecessor)

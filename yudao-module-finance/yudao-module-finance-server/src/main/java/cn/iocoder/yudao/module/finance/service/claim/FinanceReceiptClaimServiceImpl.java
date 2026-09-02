@@ -381,6 +381,9 @@ public class FinanceReceiptClaimServiceImpl implements FinanceReceiptClaimServic
                 if (receipt != null && inv != null) {
                     cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport
                             .assertSameIfBothPresent(receipt.getCurrency(), inv.getCurrency());
+                    if (!java.util.Objects.equals(receipt.getEntityCompanyDeptId(), inv.getInvoiceCompanyDeptId())) {
+                        throw exception(RECEIPT_CLAIM_COMPANY_MISMATCH);
+                    }
                 }
             }
         }

@@ -60,6 +60,9 @@ public interface FinanceInvoiceApplicationService {
 
     PageResult<FinanceInvoiceApplicationDO> getApplicationPage(FinanceInvoiceApplicationPageReqVO pageReqVO);
 
+    PageResult<FinanceInvoiceApplicationDO> getClaimableSourcePage(
+            FinanceInvoiceApplicationPageReqVO pageReqVO, Long userId);
+
     /**
      * 已结束的流程实例 id。空 id 不入结果；历史导入无流程由调用方视为已结束。
      */

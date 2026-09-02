@@ -28,6 +28,10 @@ public class FinanceReceiptPageReqVO extends PageParam {
     @Schema(description = "主体公司组织部门编号")
     private Long entityCompanyDeptId;
 
+    /** 服务端按数据权限填充，不接受前端传入 */
+    @Schema(hidden = true)
+    private java.util.Collection<Long> entityCompanyDeptIds;
+
     @Schema(description = "交易日期")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime[] transactionDate;

@@ -104,6 +104,20 @@ const columns = [
   col('实发工资', 'net', 110, 'right'),
 ];
 
+function onPayrollWheel(e: WheelEvent) {
+  const scroller = (e.currentTarget as HTMLElement).querySelector(
+    '.ant-table-content',
+  ) as HTMLElement | null;
+  if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) {
+    return;
+  }
+  const dx = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  if (dx === 0) {
+    return;
+  }
+  scroller.scrollLeft += dx;
+}
+
 onMounted(async () => {
   loading.value = true;
   try {
@@ -117,19 +131,27 @@ onMounted(async () => {
 <template>
   <Page title="我的工资条">
     <p class="mb-3 text-sm text-gray-500">默认隐藏明细，点击左侧眼睛查看该月数据。</p>
-    <Table
-      class="payroll-line-table"
-      :data-source="lines"
-      :loading="loading"
-      row-key="id"
-      :scroll="{ x: 3260 }"
-      :columns="columns"
-    />
+    <div class="payroll-line-table-wrap" @wheel.prevent="onPayrollWheel">
+      <Table
+        class="payroll-line-table"
+        :data-source="lines"
+        :loading="loading"
+        row-key="id"
+        :scroll="{ x: 3260 }"
+        :columns="columns"
+      />
+    </div>
   </Page>
 </template>
 
 <style scoped>
+.payroll-line-table-wrap {
+  width: 100%;
+}
 .payroll-line-table :deep(.ant-table-thead > tr > th) {
   white-space: nowrap;
+}
+.payroll-line-table :deep(.ant-table-content) {
+  overflow-x: auto;
 }
 </style>

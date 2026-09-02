@@ -190,7 +190,7 @@ public class FinanceReceiptClaimController {
             pageReqVO.setApprovalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus());
         }
         PageResult<FinanceInvoiceApplicationDO> page =
-                invoiceApplicationService.getApplicationPage(pageReqVO);
+                invoiceApplicationService.getClaimableSourcePage(pageReqVO, getLoginUserId());
         // 保留 claimable=0；total 用分页真实命中数
         List<FinanceInvoiceApplicationRespVO> list = new ArrayList<>();
         for (FinanceInvoiceApplicationDO app : page.getList()) {

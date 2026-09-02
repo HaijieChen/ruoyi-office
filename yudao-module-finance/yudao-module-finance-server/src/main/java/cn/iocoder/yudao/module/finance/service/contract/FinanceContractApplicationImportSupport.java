@@ -10,7 +10,7 @@ import java.util.Set;
 final class FinanceContractApplicationImportSupport {
 
     private static final Set<String> ALLOWED_FILE_TYPES = Set.of(
-            "采购合同", "销售合同", "付款业务合同", "租赁合同", "借款合同");
+            "采购合同", "销售合同", "付款业务合同", "租赁合同", "借款合同", "推广充值业务合同", "其他");
     private static final Set<String> SALES_LIKE_FILE_TYPES = Set.of("销售合同", "付款业务合同");
     private static final Set<String> ALLOWED_SETTLEMENT_METHODS = Set.of(
             "CPA", "CPS", "CPC", "月结", "其他");
@@ -51,9 +51,15 @@ final class FinanceContractApplicationImportSupport {
         if (counterpartyName == null) {
             return "对方客商不能为空";
         }
-        String fileType = trimToNull(row.getFileType());
+        String fileTypeRaw = row.getFileType();
+        String fileType = matchAllowed(fileTypeRaw, ALLOWED_FILE_TYPES);
         if (fileType == null || !ALLOWED_FILE_TYPES.contains(fileType)) {
-            return "合同类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同";
+            String shown = trimToNull(fileTypeRaw);
+            if (shown == null) {
+                return "合同类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同/推广充值业务合同/其他，当前为空";
+            }
+            return "合同类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同/推广充值业务合同/其他，当前「"
+                    + shown + "」";
         }
         boolean sales = SALES_LIKE_FILE_TYPES.contains(fileType);
         String productType = trimToNull(row.getProductType());
@@ -127,11 +133,32 @@ final class FinanceContractApplicationImportSupport {
         throw new IllegalArgumentException("金额是否适用只允许是/否");
     }
 
+    private static String matchAllowed(String raw, Set<String> allowed) {
+        String t = trimToNull(raw);
+        if (t == null) {
+            return null;
+        }
+        if (allowed.contains(t)) {
+            return t;
+        }
+        String compact = t.replaceAll("\\s+", "");
+        for (String item : allowed) {
+            if (item.equals(compact)) {
+                return item;
+            }
+        }
+        return t;
+    }
+
     private static String trimToNull(String value) {
         if (value == null) {
             return null;
         }
-        String t = value.trim();
+        String t = value.replace('\u00a0', ' ')
+                .replace('\u3000', ' ')
+                .replace("\u200b", "")
+                .replace("\ufeff", "")
+                .trim();
         return t.isEmpty() ? null : t;
     }
 }

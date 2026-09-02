@@ -29,6 +29,23 @@ public interface FinanceInvoiceApplicationMapper extends BaseMapperX<FinanceInvo
                 .orderByDesc(FinanceInvoiceApplicationDO::getId));
     }
 
+    /** 到款认领可选源：申请人本人或明细商务单导入人。 */
+    default PageResult<FinanceInvoiceApplicationDO> selectClaimableSourcePage(
+            FinanceInvoiceApplicationPageReqVO reqVO, Long userId) {
+        String importerSql = "SELECT l.application_id FROM finance_invoice_application_line l "
+                + "INNER JOIN finance_business_order bo ON bo.id = l.business_order_id "
+                + "WHERE l.deleted = b'0' AND bo.deleted = b'0' AND bo.importer_id = " + userId;
+        return selectPage(reqVO, new LambdaQueryWrapperX<FinanceInvoiceApplicationDO>()
+                .likeIfPresent(FinanceInvoiceApplicationDO::getApplicationNo, reqVO.getApplicationNo())
+                .eqIfPresent(FinanceInvoiceApplicationDO::getApprovalStatus, reqVO.getApprovalStatus())
+                .eqIfPresent(FinanceInvoiceApplicationDO::getIssueStatus, reqVO.getIssueStatus())
+                .likeIfPresent(FinanceInvoiceApplicationDO::getBuyerName, reqVO.getBuyerName())
+                .and(w -> w.eq(FinanceInvoiceApplicationDO::getApplicantUserId, userId)
+                        .or()
+                        .inSql(FinanceInvoiceApplicationDO::getId, importerSql))
+                .orderByDesc(FinanceInvoiceApplicationDO::getId));
+    }
+
     default FinanceInvoiceApplicationDO selectByApplicationNo(String applicationNo) {
         return selectOne(new LambdaQueryWrapperX<FinanceInvoiceApplicationDO>()
                 .eq(FinanceInvoiceApplicationDO::getApplicationNo, applicationNo));

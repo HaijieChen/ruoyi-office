@@ -267,9 +267,24 @@ class FinanceContractApplicationImportTest {
 
         FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
 
-        assertEquals("合同类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同",
+        assertEquals("合同类型必须是 采购合同/销售合同/付款业务合同/租赁合同/借款合同/推广充值业务合同/其他，当前「未知类型」",
                 resp.getFailureRows().get(2));
         verify(mapper, never()).insert(any(FinanceContractApplicationDO.class));
+    }
+
+    @Test
+    void otherFileTypeShouldImport() {
+        FinanceContractApplicationImportExcelVO row = validRow();
+        row.setFileType("其他");
+
+        FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
+
+        assertTrue(resp.getFailureRows().isEmpty());
+        assertEquals(1, resp.getCreatedNos().size());
+        ArgumentCaptor<FinanceContractApplicationDO> captor =
+                ArgumentCaptor.forClass(FinanceContractApplicationDO.class);
+        verify(mapper).insert(captor.capture());
+        assertEquals("其他", captor.getValue().getFileType());
     }
 
     @Test

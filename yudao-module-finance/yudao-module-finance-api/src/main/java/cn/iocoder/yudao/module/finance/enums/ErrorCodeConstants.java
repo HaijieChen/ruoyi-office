@@ -78,6 +78,8 @@ public interface ErrorCodeConstants {
             "同一到款和开票申请不能重复分摊");
     ErrorCode RECEIPT_CLAIM_RECEIPT_NOT_BUSINESS_FUND = new ErrorCode(1_040_002_016,
             "仅业务款可发起到款认领");
+    ErrorCode RECEIPT_CLAIM_COMPANY_MISMATCH = new ErrorCode(1_040_002_017,
+            "到款只能认领到同一主体公司的开票申请");
 
     // ========== 开票申请 1-040-003-000 ==========
     ErrorCode INVOICE_APPLICATION_NOT_EXISTS = new ErrorCode(1_040_003_000, "开票申请不存在");

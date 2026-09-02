@@ -2,6 +2,8 @@ package cn.iocoder.yudao.module.finance.service.invoice;
 
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
+import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationPageReqVO;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
@@ -777,6 +779,17 @@ class FinanceInvoiceApplicationServiceImplTest {
                 ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
         verify(applicationMapper).updateById(appCaptor.capture());
         assertEquals(FinanceInvoiceIssueStatusEnum.FULL.getStatus(), appCaptor.getValue().getIssueStatus());
+    }
+
+    @Test
+    void getClaimableSourcePageShouldFilterByViewer() {
+        FinanceInvoiceApplicationPageReqVO req = new FinanceInvoiceApplicationPageReqVO();
+        PageResult<FinanceInvoiceApplicationDO> expected = new PageResult<>(List.of(), 0L);
+        when(applicationMapper.selectClaimableSourcePage(req, 88L)).thenReturn(expected);
+
+        assertSame(expected, service.getClaimableSourcePage(req, 88L));
+        verify(applicationMapper).selectClaimableSourcePage(req, 88L);
+        verify(applicationMapper, never()).selectPage(any());
     }
 
     private static FinanceInvoiceApplicationDO pendingApp(Long id) {

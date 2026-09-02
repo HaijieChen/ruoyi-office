@@ -135,6 +135,27 @@ class FinanceReceiptClaimServiceImplTest {
     }
 
     @Test
+    void createClaimShouldRejectCrossCompany() {
+        stubInvoiceSources(100L, "300.00", "0.00", "500.00", "0.00", "0.00");
+        when(invoiceApplicationMapper.selectListByIds(any())).thenReturn(List.of(
+                FinanceInvoiceApplicationDO.builder()
+                        .id(20L)
+                        .approvalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus())
+                        .applicantUserId(100L)
+                        .invoiceCompanyDeptId(99L)
+                        .totalAmount(new BigDecimal("500.00"))
+                        .confirmedClaimedAmount(ZERO)
+                        .pendingClaimedAmount(ZERO)
+                        .voided(Boolean.FALSE)
+                        .build()));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> claimService.createClaim(claim(null, item(1L, 20L, "10.00")), 100L));
+        assertEquals(cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.RECEIPT_CLAIM_COMPANY_MISMATCH.getCode(),
+                ex.getCode());
+    }
+
+    @Test
     void createClaimShouldRejectNonBusinessFundReceipt() {
         when(receiptMapper.selectListByIds(any())).thenReturn(List.of(FinanceReceiptDO.builder()
                 .id(1L).claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
@@ -319,6 +340,7 @@ class FinanceReceiptClaimServiceImplTest {
         return FinanceReceiptDO.builder().id(id)
                 .claimStatus(FinanceReceiptClaimStatusEnum.UNCLAIMED.getStatus())
                 .businessFund(Boolean.TRUE)
+                .entityCompanyDeptId(10L)
                 .unclaimedAmount(new BigDecimal(unclaimed))
                 .pendingClaimedAmount(new BigDecimal(pending))
                 .build();
@@ -335,6 +357,7 @@ class FinanceReceiptClaimServiceImplTest {
                 .applicationNo("INV-" + id)
                 .approvalStatus(FinanceInvoiceApprovalStatusEnum.APPROVED.getStatus())
                 .applicantUserId(applicantId)
+                .invoiceCompanyDeptId(10L)
                 .totalAmount(new BigDecimal(total))
                 .confirmedClaimedAmount(new BigDecimal(confirmed))
                 .pendingClaimedAmount(new BigDecimal(pending))

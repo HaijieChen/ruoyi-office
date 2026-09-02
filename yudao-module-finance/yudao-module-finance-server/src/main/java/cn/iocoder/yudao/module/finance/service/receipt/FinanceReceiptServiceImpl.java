@@ -2,7 +2,11 @@ package cn.iocoder.yudao.module.finance.service.receipt;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
+import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.security.core.LoginUser;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptPageReqVO;
@@ -34,15 +38,18 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
     private final FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper;
     private final FinanceReceiptNoRedisDAO receiptNoRedisDAO;
     private final FinanceEntityCompanyResolver entityCompanyResolver;
+    private final PermissionCommonApi permissionApi;
 
     public FinanceReceiptServiceImpl(FinanceBankReceiptMapper receiptMapper,
                                      FinanceReceiptLifecycleAuditMapper lifecycleAuditMapper,
                                      FinanceReceiptNoRedisDAO receiptNoRedisDAO,
-                                     FinanceEntityCompanyResolver entityCompanyResolver) {
+                                     FinanceEntityCompanyResolver entityCompanyResolver,
+                                     PermissionCommonApi permissionApi) {
         this.receiptMapper = receiptMapper;
         this.lifecycleAuditMapper = lifecycleAuditMapper;
         this.receiptNoRedisDAO = receiptNoRedisDAO;
         this.entityCompanyResolver = entityCompanyResolver;
+        this.permissionApi = permissionApi;
     }
 
     @Override
@@ -91,6 +98,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
 
     @Override
     public PageResult<FinanceReceiptDO> getReceiptPage(FinanceReceiptPageReqVO pageReqVO) {
+        applyCompanyDataScope(pageReqVO);
         return receiptMapper.selectReceiptPage(pageReqVO);
     }
 
@@ -136,7 +144,33 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
 
     @Override
     public PageResult<FinanceReceiptDO> getUnclaimedReceiptPage(FinanceReceiptPageReqVO pageReqVO) {
+        applyCompanyDataScope(pageReqVO);
         return receiptMapper.selectUnclaimedPage(pageReqVO);
+    }
+
+    private void applyCompanyDataScope(FinanceReceiptPageReqVO reqVO) {
+        reqVO.setEntityCompanyDeptIds(null);
+        LoginUser loginUser = SecurityFrameworkUtils.getLoginUser();
+        if (loginUser == null || permissionApi == null) {
+            return;
+        }
+        DeptDataPermissionRespDTO perm = permissionApi.getDeptDataPermission(loginUser.getId()).getCheckedData();
+        if (perm == null || Boolean.TRUE.equals(perm.getAll())) {
+            return;
+        }
+        Set<Long> depts = perm.getDeptIds() == null ? Set.of() : perm.getDeptIds();
+        if (reqVO.getEntityCompanyDeptId() != null) {
+            if (!depts.contains(reqVO.getEntityCompanyDeptId())) {
+                reqVO.setEntityCompanyDeptId(null);
+                reqVO.setEntityCompanyDeptIds(List.of(-1L));
+            }
+            return;
+        }
+        if (depts.isEmpty()) {
+            reqVO.setEntityCompanyDeptIds(List.of(-1L));
+            return;
+        }
+        reqVO.setEntityCompanyDeptIds(depts);
     }
 
     @Override
