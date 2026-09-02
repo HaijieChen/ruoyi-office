@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.collection.MapUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
+import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderExportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderImportExcelVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderImportRespVO;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderPageReqVO;
@@ -118,9 +119,30 @@ public class FinanceBusinessOrderController {
     @Operation(summary = "删除商务签单")
     @Parameter(name = "ids", description = "编号数组", required = true)
     @PreAuthorize("@ss.hasPermission('finance:business-order:delete')")
-    public CommonResult<Boolean> deleteBusinessOrder(@RequestParam("ids") List<Long> ids) {
-        businessOrderService.deleteBusinessOrder(ids);
-        return success(true);
+    public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> deleteBusinessOrder(
+            @RequestParam("ids") List<Long> ids) {
+        return success(businessOrderService.deleteList(ids));
+    }
+
+    @PostMapping("/delete-query")
+    @Operation(summary = "按当前筛选删除商务签单")
+    @PreAuthorize("@ss.hasPermission('finance:business-order:delete')")
+    public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> deleteQuery(
+            @Valid @RequestBody FinanceBusinessOrderPageReqVO reqVO) {
+        return success(businessOrderService.deleteByQuery(reqVO));
+    }
+
+    @GetMapping("/export-excel")
+    @Operation(summary = "按当前筛选导出商务签单 Excel")
+    @PreAuthorize("@ss.hasPermission('finance:business-order:query')")
+    public void exportExcel(@Valid FinanceBusinessOrderPageReqVO reqVO, HttpServletResponse response)
+            throws IOException {
+        List<FinanceBusinessOrderExportExcelVO> rows = new java.util.ArrayList<>();
+        for (FinanceBusinessOrderDO order : businessOrderService.listForExport(reqVO)) {
+            FinanceBusinessOrderExportExcelVO vo = BeanUtils.toBean(order, FinanceBusinessOrderExportExcelVO.class);
+            rows.add(vo);
+        }
+        ExcelUtils.write(response, "商务签单.xls", "商务签单", FinanceBusinessOrderExportExcelVO.class, rows);
     }
 
     @GetMapping("/get")

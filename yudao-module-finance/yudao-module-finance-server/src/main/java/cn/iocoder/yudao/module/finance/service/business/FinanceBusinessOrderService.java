@@ -18,6 +18,13 @@ public interface FinanceBusinessOrderService {
 
     void deleteBusinessOrder(List<Long> ids);
 
+    cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(List<Long> ids);
+
+    cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
+            FinanceBusinessOrderPageReqVO reqVO);
+
+    List<FinanceBusinessOrderDO> listForExport(FinanceBusinessOrderPageReqVO reqVO);
+
     FinanceBusinessOrderDO getBusinessOrder(Long id);
 
     PageResult<FinanceBusinessOrderDO> getBusinessOrderPage(FinanceBusinessOrderPageReqVO pageReqVO);

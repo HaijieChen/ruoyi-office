@@ -19,14 +19,22 @@ import java.util.List;
 @Mapper
 public interface FinanceInvoiceApplicationMapper extends BaseMapperX<FinanceInvoiceApplicationDO> {
 
-    default PageResult<FinanceInvoiceApplicationDO> selectPage(FinanceInvoiceApplicationPageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<FinanceInvoiceApplicationDO>()
+    default LambdaQueryWrapperX<FinanceInvoiceApplicationDO> buildQuery(FinanceInvoiceApplicationPageReqVO reqVO) {
+        return new LambdaQueryWrapperX<FinanceInvoiceApplicationDO>()
                 .likeIfPresent(FinanceInvoiceApplicationDO::getApplicationNo, reqVO.getApplicationNo())
                 .eqIfPresent(FinanceInvoiceApplicationDO::getApprovalStatus, reqVO.getApprovalStatus())
                 .eqIfPresent(FinanceInvoiceApplicationDO::getIssueStatus, reqVO.getIssueStatus())
                 .eqIfPresent(FinanceInvoiceApplicationDO::getApplicantUserId, reqVO.getApplicantUserId())
                 .likeIfPresent(FinanceInvoiceApplicationDO::getBuyerName, reqVO.getBuyerName())
-                .orderByDesc(FinanceInvoiceApplicationDO::getId));
+                .orderByDesc(FinanceInvoiceApplicationDO::getId);
+    }
+
+    default PageResult<FinanceInvoiceApplicationDO> selectPage(FinanceInvoiceApplicationPageReqVO reqVO) {
+        return selectPage(reqVO, buildQuery(reqVO));
+    }
+
+    default List<FinanceInvoiceApplicationDO> selectList(FinanceInvoiceApplicationPageReqVO reqVO) {
+        return selectList(buildQuery(reqVO));
     }
 
     /** 到款认领可选源：申请人本人或明细商务单导入人。 */

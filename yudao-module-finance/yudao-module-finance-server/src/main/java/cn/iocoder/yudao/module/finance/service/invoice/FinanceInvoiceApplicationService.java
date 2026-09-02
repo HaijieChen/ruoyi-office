@@ -54,6 +54,16 @@ public interface FinanceInvoiceApplicationService {
 
     FinanceInvoiceApplicationDO getApplication(Long id);
 
+    void delete(Long id);
+
+    cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(
+            java.util.List<Long> ids);
+
+    cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
+            FinanceInvoiceApplicationPageReqVO reqVO);
+
+    java.util.List<FinanceInvoiceApplicationDO> listForExport(FinanceInvoiceApplicationPageReqVO reqVO);
+
     List<FinanceInvoiceApplicationLineDO> getApplicationLines(Long applicationId);
 
     List<FinanceInvoiceApplicationFileDO> getApplicationFiles(Long applicationId);

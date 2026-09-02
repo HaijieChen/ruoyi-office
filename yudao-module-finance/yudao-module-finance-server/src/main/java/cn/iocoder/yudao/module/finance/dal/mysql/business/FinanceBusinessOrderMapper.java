@@ -51,6 +51,36 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
         return selectPage(reqVO, wrapper.orderByDesc(FinanceBusinessOrderDO::getId));
     }
 
+    default List<FinanceBusinessOrderDO> selectList(FinanceBusinessOrderPageReqVO reqVO) {
+        MPJLambdaWrapperX<FinanceBusinessOrderDO> wrapper = new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
+                .likeIfPresent(FinanceBusinessOrderDO::getOrderNo, reqVO.getOrderNo())
+                .eqIfPresent(FinanceBusinessOrderDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
+                .likeIfPresent(FinanceBusinessOrderDO::getContractProcessId, reqVO.getContractProcessId())
+                .likeIfPresent(FinanceBusinessOrderDO::getPayerName, reqVO.getPayerName())
+                .eqIfPresent(FinanceBusinessOrderDO::getImporterId, reqVO.getImporterId())
+                .betweenIfPresent(FinanceBusinessOrderDO::getImportDate, reqVO.getImportDate())
+                .betweenIfPresent(FinanceBusinessOrderDO::getOrderDate, reqVO.getOrderDate());
+        if (StrUtil.isNotBlank(reqVO.getProductName())) {
+            String pattern = "%" + reqVO.getProductName().trim() + "%";
+            wrapper.apply(
+                    "COALESCE(NULLIF(TRIM(product_type_snapshot), ''), product_name) LIKE {0}",
+                    pattern);
+        }
+        if (StrUtil.isNotBlank(reqVO.getContractApplicationNo())) {
+            String pattern = "%" + reqVO.getContractApplicationNo().trim() + "%";
+            wrapper.apply(
+                    "contract_application_id IN (SELECT id FROM finance_contract_application "
+                            + "WHERE deleted = b'0' AND application_no LIKE {0})",
+                    pattern);
+        }
+        if (Boolean.TRUE.equals(reqVO.getOnlyOpenable())) {
+            wrapper.apply("settlement_amount > IFNULL(invoiced_occupied_amount, 0)");
+            wrapper.apply("contract_application_id IS NOT NULL");
+            wrapper.apply("product_type_snapshot IS NOT NULL AND TRIM(product_type_snapshot) <> ''");
+        }
+        return selectList(wrapper.orderByDesc(FinanceBusinessOrderDO::getId));
+    }
+
     default PageResult<FinanceBusinessOrderDO> selectClaimablePage(FinanceBusinessOrderPageReqVO reqVO,
                                                                    Long importerId) {
         // 注意：apply() 返回父类型，不能接在变量声明的链式末尾，否则无法赋给 MPJLambdaWrapperX

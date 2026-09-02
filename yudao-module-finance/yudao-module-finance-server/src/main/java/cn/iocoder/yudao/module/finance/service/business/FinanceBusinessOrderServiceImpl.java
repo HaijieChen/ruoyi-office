@@ -188,6 +188,49 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
     }
 
     @Override
+    public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(List<Long> ids) {
+        cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO resp =
+                new cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO();
+        if (ids == null) {
+            return resp;
+        }
+        java.util.ArrayList<Long> ok = new java.util.ArrayList<>();
+        for (Long id : ids) {
+            if (id == null) {
+                continue;
+            }
+            try {
+                FinanceBusinessOrderDO order = validateBusinessOrderExists(id);
+                BigDecimal confirmed = order.getConfirmedClaimedAmount() == null
+                        ? ZERO : order.getConfirmedClaimedAmount();
+                if (confirmed.compareTo(BigDecimal.ZERO) > 0) {
+                    throw exception(BUSINESS_ORDER_DELETE_HAS_CLAIM);
+                }
+                ok.add(id);
+            } catch (cn.iocoder.yudao.framework.common.exception.ServiceException ex) {
+                resp.getErrors().add(id + "：" + ex.getMessage());
+            }
+        }
+        if (!ok.isEmpty()) {
+            businessOrderMapper.deleteByIds(ok);
+            resp.setDeleted(ok.size());
+        }
+        return resp;
+    }
+
+    @Override
+    public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
+            FinanceBusinessOrderPageReqVO reqVO) {
+        List<FinanceBusinessOrderDO> rows = businessOrderMapper.selectList(reqVO);
+        return deleteList(rows.stream().map(FinanceBusinessOrderDO::getId).toList());
+    }
+
+    @Override
+    public List<FinanceBusinessOrderDO> listForExport(FinanceBusinessOrderPageReqVO reqVO) {
+        return businessOrderMapper.selectList(reqVO);
+    }
+
+    @Override
     public FinanceBusinessOrderDO getBusinessOrder(Long id) {
         return businessOrderMapper.selectById(id);
     }

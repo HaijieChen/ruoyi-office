@@ -22,6 +22,14 @@ public interface FinanceContractApplicationService {
      */
     void delete(Long id);
 
+    cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(
+            java.util.List<Long> ids);
+
+    cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
+            FinanceContractApplicationPageReqVO reqVO);
+
+    java.util.List<FinanceContractApplicationDO> listForExport(FinanceContractApplicationPageReqVO reqVO);
+
     /**
      * 内部终态落账（仅 BPM Delegate / StatusListener）。不暴露用户 HTTP。
      *

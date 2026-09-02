@@ -237,3 +237,32 @@ export function getInvoiceApplicationPage(
     PageResult<FinanceInvoiceApplicationApi.Application>
   >('/finance/invoice-application/page', { params });
 }
+
+export interface FinanceBatchDeleteResult {
+  deleted: number;
+  errors?: string[];
+}
+
+export function deleteInvoiceApplicationList(ids: number[]) {
+  return requestClient.delete<FinanceBatchDeleteResult>(
+    '/finance/invoice-application/delete',
+    { params: { ids: ids.join(',') } },
+  );
+}
+
+export function deleteInvoiceApplicationByQuery(
+  data: FinanceInvoiceApplicationApi.PageQuery,
+) {
+  return requestClient.post<FinanceBatchDeleteResult>(
+    '/finance/invoice-application/delete-query',
+    data,
+  );
+}
+
+export function exportInvoiceApplicationExcel(
+  params: FinanceInvoiceApplicationApi.PageQuery,
+) {
+  return requestClient.download('/finance/invoice-application/export-excel', {
+    params,
+  });
+}

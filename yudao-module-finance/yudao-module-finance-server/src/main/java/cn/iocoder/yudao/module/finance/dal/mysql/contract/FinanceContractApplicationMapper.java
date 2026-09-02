@@ -7,11 +7,13 @@ import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContr
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import org.apache.ibatis.annotations.Mapper;
 
+import java.util.List;
+
 @Mapper
 public interface FinanceContractApplicationMapper extends BaseMapperX<FinanceContractApplicationDO> {
 
-    default PageResult<FinanceContractApplicationDO> selectPage(FinanceContractApplicationPageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<FinanceContractApplicationDO>()
+    default LambdaQueryWrapperX<FinanceContractApplicationDO> buildQuery(FinanceContractApplicationPageReqVO reqVO) {
+        return new LambdaQueryWrapperX<FinanceContractApplicationDO>()
                 .likeIfPresent(FinanceContractApplicationDO::getApplicationNo, reqVO.getApplicationNo())
                 .eqIfPresent(FinanceContractApplicationDO::getApprovalStatus, reqVO.getApprovalStatus())
                 .eqIfPresent(FinanceContractApplicationDO::getApplicantUserId, reqVO.getApplicantUserId())
@@ -21,7 +23,15 @@ public interface FinanceContractApplicationMapper extends BaseMapperX<FinanceCon
                 .eqIfPresent(FinanceContractApplicationDO::getFileType, reqVO.getFileType())
                 .eqIfPresent(FinanceContractApplicationDO::getProductType, reqVO.getProductType())
                 .likeIfPresent(FinanceContractApplicationDO::getCounterpartyName, reqVO.getCounterpartyName())
-                .orderByDesc(FinanceContractApplicationDO::getId));
+                .orderByDesc(FinanceContractApplicationDO::getId);
+    }
+
+    default PageResult<FinanceContractApplicationDO> selectPage(FinanceContractApplicationPageReqVO reqVO) {
+        return selectPage(reqVO, buildQuery(reqVO));
+    }
+
+    default List<FinanceContractApplicationDO> selectList(FinanceContractApplicationPageReqVO reqVO) {
+        return selectList(buildQuery(reqVO));
     }
 
     default FinanceContractApplicationDO selectByApplicationNo(String applicationNo) {

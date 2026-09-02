@@ -122,11 +122,37 @@ public class FinanceContractApplicationController {
 
     @DeleteMapping("/delete")
     @Operation(summary = "删除合同签约单据（逻辑删除；审批中请撤回）")
-    @Parameter(name = "id", description = "申请编号", required = true)
     @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:update', 'finance:contract-application:import')")
-    public CommonResult<Boolean> delete(@RequestParam("id") Long id) {
-        contractApplicationService.delete(id);
-        return success(true);
+    public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> delete(
+            @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "ids", required = false) List<Long> ids) {
+        java.util.ArrayList<Long> all = new java.util.ArrayList<>();
+        if (id != null) {
+            all.add(id);
+        }
+        if (ids != null) {
+            all.addAll(ids);
+        }
+        return success(contractApplicationService.deleteList(all));
+    }
+
+    @PostMapping("/delete-query")
+    @Operation(summary = "按当前筛选条件删除合同签约")
+    @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:update', 'finance:contract-application:import')")
+    public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> deleteQuery(
+            @Valid @RequestBody FinanceContractApplicationPageReqVO reqVO) {
+        return success(contractApplicationService.deleteByQuery(reqVO));
+    }
+
+    @GetMapping("/export-excel")
+    @Operation(summary = "按当前筛选导出合同签约 Excel")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:query')")
+    public void exportExcel(@Valid FinanceContractApplicationPageReqVO reqVO, HttpServletResponse response)
+            throws IOException {
+        java.util.List<FinanceContractApplicationExportExcelVO> rows =
+                BeanUtils.toBean(contractApplicationService.listForExport(reqVO),
+                        FinanceContractApplicationExportExcelVO.class);
+        ExcelUtils.write(response, "合同签约.xls", "合同签约", FinanceContractApplicationExportExcelVO.class, rows);
     }
 
     // CS-F1：已移除用户可调用的 on-approval-outcome HTTP 旁路；终态仅由 BPM 回调写入。

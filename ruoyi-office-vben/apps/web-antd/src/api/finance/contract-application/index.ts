@@ -121,9 +121,39 @@ export function cancelContractApplication(id: number) {
   );
 }
 
+export interface FinanceBatchDeleteResult {
+  deleted: number;
+  errors?: string[];
+}
+
 export function deleteContractApplication(id: number) {
-  return requestClient.delete<boolean>('/finance/contract-application/delete', {
-    params: { id },
+  return requestClient.delete<FinanceBatchDeleteResult>(
+    '/finance/contract-application/delete',
+    { params: { id } },
+  );
+}
+
+export function deleteContractApplicationList(ids: number[]) {
+  return requestClient.delete<FinanceBatchDeleteResult>(
+    '/finance/contract-application/delete',
+    { params: { ids: ids.join(',') } },
+  );
+}
+
+export function deleteContractApplicationByQuery(
+  data: FinanceContractApplicationApi.PageQuery,
+) {
+  return requestClient.post<FinanceBatchDeleteResult>(
+    '/finance/contract-application/delete-query',
+    data,
+  );
+}
+
+export function exportContractApplicationExcel(
+  params: FinanceContractApplicationApi.PageQuery,
+) {
+  return requestClient.download('/finance/contract-application/export-excel', {
+    params,
   });
 }
 

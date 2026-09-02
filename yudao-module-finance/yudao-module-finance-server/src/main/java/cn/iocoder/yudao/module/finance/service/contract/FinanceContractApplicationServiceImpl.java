@@ -249,6 +249,40 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     }
 
     @Override
+    public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(
+            List<Long> ids) {
+        cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO resp =
+                new cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO();
+        if (ids == null) {
+            return resp;
+        }
+        for (Long id : ids) {
+            if (id == null) {
+                continue;
+            }
+            try {
+                delete(id);
+                resp.setDeleted(resp.getDeleted() + 1);
+            } catch (cn.iocoder.yudao.framework.common.exception.ServiceException ex) {
+                resp.getErrors().add(id + "：" + ex.getMessage());
+            }
+        }
+        return resp;
+    }
+
+    @Override
+    public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
+            FinanceContractApplicationPageReqVO reqVO) {
+        List<FinanceContractApplicationDO> rows = applicationMapper.selectList(reqVO);
+        return deleteList(rows.stream().map(FinanceContractApplicationDO::getId).toList());
+    }
+
+    @Override
+    public List<FinanceContractApplicationDO> listForExport(FinanceContractApplicationPageReqVO reqVO) {
+        return applicationMapper.selectList(reqVO);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void onApprovalOutcome(Long appId, String outcome, String processInstanceId) {
         if (appId == null || StrUtil.isBlank(outcome)) {

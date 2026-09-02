@@ -11,10 +11,14 @@ import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   cancelContractApplication,
   deleteContractApplication,
+  deleteContractApplicationByQuery,
+  deleteContractApplicationList,
+  exportContractApplicationExcel,
   getContractApplicationPage,
   recordContractArchive,
 } from '#/api/finance/contract-application';
 import { FileUpload } from '#/components/upload';
+import { downloadFileFromBlobPart } from '@vben/utils';
 import { message, Modal } from 'ant-design-vue';
 
 import { displayDate } from '#/utils/display-time';
@@ -196,6 +200,51 @@ function handleDelete(row: FinanceContractApplicationApi.Application) {
   });
 }
 
+function reportDelete(result: { deleted: number; errors?: string[] }) {
+  const skipped = result.errors?.length || 0;
+  if (skipped) {
+    message.warning(`已删除 ${result.deleted} 条，跳过 ${skipped} 条`);
+  } else {
+    message.success(`已删除 ${result.deleted} 条`);
+  }
+  handleRefresh();
+}
+
+async function handleDeleteSelected() {
+  const rows = (gridApi.grid.getCheckboxRecords() ||
+    []) as FinanceContractApplicationApi.Application[];
+  if (!rows.length) {
+    message.warning('请先勾选要删除的记录');
+    return;
+  }
+  Modal.confirm({
+    title: `删除勾选的 ${rows.length} 条？`,
+    content: '审批中或已被引用的会跳过。',
+    okType: 'danger',
+    onOk: async () => {
+      reportDelete(await deleteContractApplicationList(rows.map((r) => r.id)));
+    },
+  });
+}
+
+async function handleDeleteFiltered() {
+  const formValues = (await gridApi.formApi.getValues()) || {};
+  Modal.confirm({
+    title: '删除当前筛选结果？',
+    content: '将删除符合筛选条件的全部记录；审批中或已被引用的会跳过。',
+    okType: 'danger',
+    onOk: async () => {
+      reportDelete(await deleteContractApplicationByQuery(formValues));
+    },
+  });
+}
+
+async function handleExport() {
+  const formValues = (await gridApi.formApi.getValues()) || {};
+  const data = await exportContractApplicationExcel(formValues);
+  downloadFileFromBlobPart({ fileName: '合同签约.xls', source: data });
+}
+
 function displayStatus(row: FinanceContractApplicationApi.Application) {
   if (row.voided) return '已作废';
   const a = row.approvalStatus;
@@ -265,6 +314,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   },
   gridOptions: {
     columns: [
+      { type: 'checkbox', width: 40 },
       { field: 'applicationNo', title: '业务单号', minWidth: 150 },
       { field: 'counterpartyName', title: '对方', minWidth: 120 },
       { field: 'signCompany', title: '主体公司', minWidth: 100 },
@@ -366,6 +416,23 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.UPLOAD,
               auth: ['finance:contract-application:import'],
               onClick: openImport,
+            },
+            {
+              label: '导出',
+              auth: ['finance:contract-application:query'],
+              onClick: handleExport,
+            },
+            {
+              label: '删除勾选',
+              danger: true,
+              auth: ['finance:contract-application:import'],
+              onClick: handleDeleteSelected,
+            },
+            {
+              label: '删除筛选',
+              danger: true,
+              auth: ['finance:contract-application:import'],
+              onClick: handleDeleteFiltered,
             },
           ]"
         />

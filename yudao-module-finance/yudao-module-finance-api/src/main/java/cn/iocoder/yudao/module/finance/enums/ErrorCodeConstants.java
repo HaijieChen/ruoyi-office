@@ -132,6 +132,10 @@ public interface ErrorCodeConstants {
             "办票累计金额不能超过开票申请金额");
     ErrorCode INVOICE_APPLICATION_CONTRACT_OCCUPY_EXCEED = new ErrorCode(1_040_003_025,
             "合同可开票金额不足（签约金额减去已开票占用）");
+    ErrorCode INVOICE_APPLICATION_DELETE_NOT_ALLOWED = new ErrorCode(1_040_003_026,
+            "审批中的开票请先撤回，不能直接删除");
+    ErrorCode INVOICE_APPLICATION_DELETE_HAS_CLAIM = new ErrorCode(1_040_003_027,
+            "开票申请已有认领金额或红冲锁定，不能删除");
 
     // ========== 客户公司 / 客商 1-040-004-000 ==========
     ErrorCode CUSTOMER_COMPANY_NOT_EXISTS = new ErrorCode(1_040_004_000, "客户公司不存在");

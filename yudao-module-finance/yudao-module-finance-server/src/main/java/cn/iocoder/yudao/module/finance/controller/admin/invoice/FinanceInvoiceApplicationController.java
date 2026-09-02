@@ -86,6 +86,40 @@ public class FinanceInvoiceApplicationController {
                 ExcelUtils.read(file, FinanceInvoiceApplicationImportExcelVO.class)));
     }
 
+    @DeleteMapping("/delete")
+    @Operation(summary = "删除开票申请")
+    @PreAuthorize("@ss.hasAnyPermissions('finance:invoice-application:update', 'finance:invoice-application:import')")
+    public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> delete(
+            @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "ids", required = false) List<Long> ids) {
+        java.util.ArrayList<Long> all = new java.util.ArrayList<>();
+        if (id != null) {
+            all.add(id);
+        }
+        if (ids != null) {
+            all.addAll(ids);
+        }
+        return success(invoiceApplicationService.deleteList(all));
+    }
+
+    @PostMapping("/delete-query")
+    @Operation(summary = "按当前筛选删除开票申请")
+    @PreAuthorize("@ss.hasAnyPermissions('finance:invoice-application:update', 'finance:invoice-application:import')")
+    public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> deleteQuery(
+            @Valid @RequestBody FinanceInvoiceApplicationPageReqVO reqVO) {
+        return success(invoiceApplicationService.deleteByQuery(reqVO));
+    }
+
+    @GetMapping("/export-excel")
+    @Operation(summary = "按当前筛选导出开票申请 Excel")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:query')")
+    public void exportExcel(@Valid FinanceInvoiceApplicationPageReqVO reqVO, HttpServletResponse response)
+            throws IOException {
+        List<FinanceInvoiceApplicationExportExcelVO> rows = BeanUtils.toBean(
+                invoiceApplicationService.listForExport(reqVO), FinanceInvoiceApplicationExportExcelVO.class);
+        ExcelUtils.write(response, "开票申请.xls", "开票申请", FinanceInvoiceApplicationExportExcelVO.class, rows);
+    }
+
     @PostMapping("/create-and-start")
     @Operation(summary = "创建开票申请并启动审批（无草稿）")
     @PreAuthorize("isAuthenticated()")

@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.service.invoice;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
@@ -558,6 +559,64 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
             throw exception(INVOICE_APPLICATION_NOT_EXISTS);
         }
         return application;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        FinanceInvoiceApplicationDO application = getApplication(id);
+        if (FinanceInvoiceApprovalStatusEnum.PENDING.getStatus().equals(application.getApprovalStatus())
+                && !Boolean.TRUE.equals(application.getVoided())) {
+            throw exception(INVOICE_APPLICATION_DELETE_NOT_ALLOWED);
+        }
+        BigDecimal claimed = defaultZero(application.getConfirmedClaimedAmount())
+                .add(defaultZero(application.getPendingClaimedAmount()));
+        if (claimed.compareTo(ZERO) > 0 || application.getRedFlushLockApplicationId() != null) {
+            throw exception(INVOICE_APPLICATION_DELETE_HAS_CLAIM);
+        }
+        if (!FinanceInvoiceApprovalStatusEnum.REJECTED.getStatus().equals(application.getApprovalStatus())
+                && !FinanceInvoiceApprovalStatusEnum.CANCELLED.getStatus().equals(application.getApprovalStatus())) {
+            releaseAllOccupyForApplicationIfAny(id);
+        }
+        lineMapper.delete(new LambdaQueryWrapperX<FinanceInvoiceApplicationLineDO>()
+                .eq(FinanceInvoiceApplicationLineDO::getApplicationId, id));
+        fileMapper.delete(new LambdaQueryWrapperX<FinanceInvoiceApplicationFileDO>()
+                .eq(FinanceInvoiceApplicationFileDO::getApplicationId, id));
+        applicationMapper.deleteById(id);
+    }
+
+    @Override
+    public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteList(
+            List<Long> ids) {
+        cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO resp =
+                new cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO();
+        if (ids == null) {
+            return resp;
+        }
+        for (Long id : ids) {
+            if (id == null) {
+                continue;
+            }
+            try {
+                delete(id);
+                resp.setDeleted(resp.getDeleted() + 1);
+            } catch (cn.iocoder.yudao.framework.common.exception.ServiceException ex) {
+                resp.getErrors().add(id + "：" + ex.getMessage());
+            }
+        }
+        return resp;
+    }
+
+    @Override
+    public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
+            FinanceInvoiceApplicationPageReqVO reqVO) {
+        List<FinanceInvoiceApplicationDO> rows = applicationMapper.selectList(reqVO);
+        return deleteList(rows.stream().map(FinanceInvoiceApplicationDO::getId).toList());
+    }
+
+    @Override
+    public List<FinanceInvoiceApplicationDO> listForExport(FinanceInvoiceApplicationPageReqVO reqVO) {
+        return applicationMapper.selectList(reqVO);
     }
 
     @Override

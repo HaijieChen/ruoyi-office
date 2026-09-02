@@ -138,10 +138,33 @@ export function updateBusinessOrder(data: FinanceBusinessOrderApi.SaveForm) {
   return requestClient.put<void>('/finance/business-order/update', data);
 }
 
+export interface FinanceBatchDeleteResult {
+  deleted: number;
+  errors?: string[];
+}
+
 /** 删除签单 */
 export function deleteBusinessOrder(ids: number[]) {
-  return requestClient.delete<void>('/finance/business-order/delete', {
-    params: { ids: ids.join(',') },
+  return requestClient.delete<FinanceBatchDeleteResult>(
+    '/finance/business-order/delete',
+    { params: { ids: ids.join(',') } },
+  );
+}
+
+export function deleteBusinessOrderByQuery(
+  data: FinanceBusinessOrderApi.PageQuery,
+) {
+  return requestClient.post<FinanceBatchDeleteResult>(
+    '/finance/business-order/delete-query',
+    data,
+  );
+}
+
+export function exportBusinessOrderExcel(
+  params: FinanceBusinessOrderApi.PageQuery,
+) {
+  return requestClient.download('/finance/business-order/export-excel', {
+    params,
   });
 }
 

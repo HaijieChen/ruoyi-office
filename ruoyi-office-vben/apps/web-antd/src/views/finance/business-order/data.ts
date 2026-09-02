@@ -56,6 +56,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
 /** 列表列定义（对应工作簿字段） */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
+    { type: 'checkbox', width: 40, fixed: 'left' },
     { field: 'orderNo', title: '订单编号', width: 180, fixed: 'left' },
     { field: 'importDate', title: '导入日期', width: 120, formatter: 'formatDate' },
     { field: 'importerName', title: '导入人', width: 100 },
