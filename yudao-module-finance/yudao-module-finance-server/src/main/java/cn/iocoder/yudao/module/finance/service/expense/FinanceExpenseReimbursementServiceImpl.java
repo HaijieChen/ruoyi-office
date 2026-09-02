@@ -680,21 +680,33 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
         if (raw == null || raw.isEmpty()) {
             return List.of();
         }
-        List<String> urls = new ArrayList<>();
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
         for (String item : raw) {
             if (StrUtil.isBlank(item)) {
                 continue;
             }
-            for (String part : item.split("[,，]")) {
+            String t = item.trim();
+            if (looksLikeUrl(t)) {
+                unique.add(t);
+                continue;
+            }
+            for (String part : t.split("[,，]")) {
                 if (StrUtil.isNotBlank(part)) {
-                    urls.add(part.trim());
+                    unique.add(part.trim());
                 }
             }
         }
-        if (urls.size() > 30) {
+        if (unique.size() > 30) {
             throw exception(EXPENSE_REIMBURSEMENT_EXTRA_ATTACHMENTS_EXCEED);
         }
-        return urls;
+        return new ArrayList<>(unique);
+    }
+
+    private static boolean looksLikeUrl(String value) {
+        return value.startsWith("http://")
+                || value.startsWith("https://")
+                || value.startsWith("/")
+                || value.contains("/admin-api/infra/file/");
     }
 
     private static List<String> splitCsv(String raw) {

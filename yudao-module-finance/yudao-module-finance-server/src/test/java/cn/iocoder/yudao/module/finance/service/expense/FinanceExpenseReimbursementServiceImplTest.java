@@ -274,6 +274,20 @@ class FinanceExpenseReimbursementServiceImplTest {
     }
 
     @Test
+    void extraAttachmentsDedupesRepeatedUrls() {
+        java.util.ArrayList<String> urls = new java.util.ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            urls.add("https://files.example/a" + i + ".pdf");
+        }
+        urls.addAll(new java.util.ArrayList<>(urls));
+        java.util.List<String> out =
+                FinanceExpenseReimbursementServiceImpl.normalizeExtraAttachments(urls);
+        assertEquals(16, out.size());
+        assertEquals("https://files.example/a0.pdf", out.get(0));
+        assertEquals("https://files.example/a15.pdf", out.get(15));
+    }
+
+    @Test
     void onApprovalOutcomeRejectsPendingToRejected() {
         when(mapper.selectById(88L)).thenReturn(FinanceExpenseReimbursementDO.builder()
                 .id(88L).status(FinanceExpenseReimbursementDO.STATUS_PENDING)
