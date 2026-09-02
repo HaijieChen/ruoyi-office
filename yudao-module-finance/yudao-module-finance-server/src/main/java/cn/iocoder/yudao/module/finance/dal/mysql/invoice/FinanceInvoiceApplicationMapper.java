@@ -33,7 +33,7 @@ public interface FinanceInvoiceApplicationMapper extends BaseMapperX<FinanceInvo
         return selectPage(reqVO, buildQuery(reqVO));
     }
 
-    default List<FinanceInvoiceApplicationDO> selectList(FinanceInvoiceApplicationPageReqVO reqVO) {
+    default List<FinanceInvoiceApplicationDO> selectListByQuery(FinanceInvoiceApplicationPageReqVO reqVO) {
         return selectList(buildQuery(reqVO));
     }
 

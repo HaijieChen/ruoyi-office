@@ -31,7 +31,7 @@ public interface FinanceContractApplicationMapper extends BaseMapperX<FinanceCon
         return selectPage(reqVO, buildQuery(reqVO));
     }
 
-    default List<FinanceContractApplicationDO> selectList(FinanceContractApplicationPageReqVO reqVO) {
+    default List<FinanceContractApplicationDO> selectListByQuery(FinanceContractApplicationPageReqVO reqVO) {
         return selectList(buildQuery(reqVO));
     }
 

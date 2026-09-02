@@ -221,13 +221,13 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
     @Override
     public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
             FinanceBusinessOrderPageReqVO reqVO) {
-        List<FinanceBusinessOrderDO> rows = businessOrderMapper.selectList(reqVO);
+        List<FinanceBusinessOrderDO> rows = businessOrderMapper.selectListByQuery(reqVO);
         return deleteList(rows.stream().map(FinanceBusinessOrderDO::getId).toList());
     }
 
     @Override
     public List<FinanceBusinessOrderDO> listForExport(FinanceBusinessOrderPageReqVO reqVO) {
-        return businessOrderMapper.selectList(reqVO);
+        return businessOrderMapper.selectListByQuery(reqVO);
     }
 
     @Override

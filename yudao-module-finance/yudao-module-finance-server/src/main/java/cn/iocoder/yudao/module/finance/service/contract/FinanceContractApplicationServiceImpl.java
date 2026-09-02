@@ -299,13 +299,13 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     @Override
     public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
             FinanceContractApplicationPageReqVO reqVO) {
-        List<FinanceContractApplicationDO> rows = applicationMapper.selectList(reqVO);
+        List<FinanceContractApplicationDO> rows = applicationMapper.selectListByQuery(reqVO);
         return deleteList(rows.stream().map(FinanceContractApplicationDO::getId).toList());
     }
 
     @Override
     public List<FinanceContractApplicationDO> listForExport(FinanceContractApplicationPageReqVO reqVO) {
-        return applicationMapper.selectList(reqVO);
+        return applicationMapper.selectListByQuery(reqVO);
     }
 
     @Override

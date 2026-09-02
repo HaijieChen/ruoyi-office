@@ -646,13 +646,13 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     @Override
     public cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO deleteByQuery(
             FinanceInvoiceApplicationPageReqVO reqVO) {
-        List<FinanceInvoiceApplicationDO> rows = applicationMapper.selectList(reqVO);
+        List<FinanceInvoiceApplicationDO> rows = applicationMapper.selectListByQuery(reqVO);
         return deleteList(rows.stream().map(FinanceInvoiceApplicationDO::getId).toList());
     }
 
     @Override
     public List<FinanceInvoiceApplicationDO> listForExport(FinanceInvoiceApplicationPageReqVO reqVO) {
-        return applicationMapper.selectList(reqVO);
+        return applicationMapper.selectListByQuery(reqVO);
     }
 
     @Override

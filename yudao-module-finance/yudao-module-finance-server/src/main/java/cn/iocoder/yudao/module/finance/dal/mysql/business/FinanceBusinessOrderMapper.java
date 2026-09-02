@@ -57,7 +57,7 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
         return selectPage(reqVO, wrapper.orderByDesc(FinanceBusinessOrderDO::getId));
     }
 
-    default List<FinanceBusinessOrderDO> selectList(FinanceBusinessOrderPageReqVO reqVO) {
+    default List<FinanceBusinessOrderDO> selectListByQuery(FinanceBusinessOrderPageReqVO reqVO) {
         MPJLambdaWrapperX<FinanceBusinessOrderDO> wrapper = new MPJLambdaWrapperX<FinanceBusinessOrderDO>()
                 .likeIfPresent(FinanceBusinessOrderDO::getOrderNo, reqVO.getOrderNo())
                 .eqIfPresent(FinanceBusinessOrderDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
