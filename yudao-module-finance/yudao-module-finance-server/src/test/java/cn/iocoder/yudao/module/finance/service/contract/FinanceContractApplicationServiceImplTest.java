@@ -11,9 +11,13 @@ import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContr
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationResubmitReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
+import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
+import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
@@ -48,6 +52,9 @@ class FinanceContractApplicationServiceImplTest {
     private FinanceEntityCompanyResolver entityCompanyResolver;
     private ObjectProvider<TaskService> taskServiceProvider;
     private DictDataApi dictDataApi;
+    private FinanceBusinessOrderMapper businessOrderMapper;
+    private FinancePaymentApplicationMapper paymentApplicationMapper;
+    private FinanceProcessParticipantSupport processParticipantSupport;
     private FinanceContractApplicationServiceImpl service;
 
     @BeforeEach
@@ -71,6 +78,26 @@ class FinanceContractApplicationServiceImplTest {
         service = new FinanceContractApplicationServiceImpl(
                 applicationMapper, applicationNoRedisDAO, processInstanceApi, customerCompanyService,
                 entityCompanyResolver, taskServiceProvider, dictDataApi, autoBo);
+        businessOrderMapper = mock(FinanceBusinessOrderMapper.class);
+        paymentApplicationMapper = mock(FinancePaymentApplicationMapper.class);
+        when(businessOrderMapper.selectCount(any())).thenReturn(0L);
+        when(paymentApplicationMapper.selectCount(any())).thenReturn(0L);
+        ReflectionTestUtils.setField(service, "businessOrderMapper", businessOrderMapper);
+        ReflectionTestUtils.setField(service, "paymentApplicationMapper", paymentApplicationMapper);
+        FinanceBusinessStaffSupport businessStaffSupport = mock(FinanceBusinessStaffSupport.class);
+        when(businessStaffSupport.resolve(any(), any())).thenAnswer(invocation -> {
+            Long login = invocation.getArgument(0);
+            Long requested = invocation.getArgument(1);
+            return requested != null ? requested : login;
+        });
+        ReflectionTestUtils.setField(service, "businessStaffSupport", businessStaffSupport);
+        processParticipantSupport = mock(FinanceProcessParticipantSupport.class);
+        when(processParticipantSupport.canReadBill(any(), any(), any())).thenAnswer(invocation -> {
+            Long userId = invocation.getArgument(0);
+            Long applicant = invocation.getArgument(1);
+            return java.util.Objects.equals(userId, applicant);
+        });
+        ReflectionTestUtils.setField(service, "processParticipantSupport", processParticipantSupport);
 
         when(applicationNoRedisDAO.generate(any(LocalDate.class))).thenReturn("CT-20260731-1");
         when(customerCompanyService.getEnabledCustomerCompany(50L)).thenReturn(
@@ -193,6 +220,43 @@ class FinanceContractApplicationServiceImplTest {
         assertDoesNotThrow(() -> service.createAndStart(req, 200L));
         verify(applicationMapper).insert(argThat((FinanceContractApplicationDO app) ->
                 Boolean.TRUE.equals(app.getAmountNa()) && app.getContractAmount() == null));
+    }
+
+    @Test
+    void deleteShouldRemoveApprovedWithoutDownstream() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .processInstanceId(null)
+                .voided(false)
+                .build());
+        service.delete(100L);
+        verify(applicationMapper).deleteById(100L);
+    }
+
+    @Test
+    void deleteShouldRejectPending() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.PENDING.getStatus())
+                .voided(false)
+                .build());
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.delete(100L));
+        assertEquals(CONTRACT_APPLICATION_DELETE_NOT_ALLOWED.getCode(), ex.getCode());
+        verify(applicationMapper, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteShouldRejectWhenBusinessOrderReferences() {
+        when(applicationMapper.selectById(100L)).thenReturn(FinanceContractApplicationDO.builder()
+                .id(100L)
+                .approvalStatus(FinanceContractApprovalStatusEnum.APPROVED.getStatus())
+                .voided(false)
+                .build());
+        when(businessOrderMapper.selectCount(any())).thenReturn(1L);
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.delete(100L));
+        assertEquals(CONTRACT_APPLICATION_IN_USE.getCode(), ex.getCode());
+        verify(applicationMapper, never()).deleteById(any());
     }
 
     @Test
@@ -443,6 +507,7 @@ class FinanceContractApplicationServiceImplTest {
         when(taskQuery.processInstanceId("proc-1")).thenReturn(taskQuery);
         when(taskQuery.taskCandidateOrAssigned("999")).thenReturn(taskQuery);
         when(taskQuery.count()).thenReturn(1L);
+        when(processParticipantSupport.canReadBill(999L, 200L, "proc-1")).thenReturn(true);
 
         FinanceContractApplicationDO app = service.getApplication(100L, 999L, false);
         assertEquals(100L, app.getId());
@@ -472,6 +537,7 @@ class FinanceContractApplicationServiceImplTest {
         when(taskQuery.processInstanceId("proc-1")).thenReturn(taskQuery);
         when(taskQuery.taskCandidateOrAssigned("999")).thenReturn(taskQuery);
         when(taskQuery.count()).thenReturn(1L);
+        when(processParticipantSupport.canReadBill(999L, 200L, "proc-1")).thenReturn(true);
         assertTrue(service.canAccessDetail(100L, 999L));
     }
 

@@ -18,6 +18,11 @@ public interface FinanceContractApplicationService {
     void cancel(Long id, Long userId);
 
     /**
+     * 逻辑删除整条合同签约单据。审批中须走撤回；已被商务单或付款引用则拒绝。
+     */
+    void delete(Long id);
+
+    /**
      * 内部终态落账（仅 BPM Delegate / StatusListener）。不暴露用户 HTTP。
      *
      * @param processInstanceId 触发终态的实际流程实例；与台账当前 process 不一致时幂等忽略（防旧实例污染重提）

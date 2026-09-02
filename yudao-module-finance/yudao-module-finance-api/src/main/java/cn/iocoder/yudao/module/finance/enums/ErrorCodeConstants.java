@@ -183,6 +183,10 @@ public interface ErrorCodeConstants {
             "产品类型不在启用字典中");
     ErrorCode CONTRACT_APPLICATION_ARCHIVE_FILE_REQUIRED = new ErrorCode(1_040_005_017,
             "合同归档必须上传资料");
+    ErrorCode CONTRACT_APPLICATION_DELETE_NOT_ALLOWED = new ErrorCode(1_040_005_018,
+            "审批中的合同请先撤回，不能直接删除");
+    ErrorCode CONTRACT_APPLICATION_IN_USE = new ErrorCode(1_040_005_019,
+            "合同已被商务单或付款申请引用，不能删除");
 
     // ========== 付款申请 / 前置引用 1-040-006-000 ==========
     ErrorCode PAYMENT_PURCHASE_REF_INVALID = new ErrorCode(1_040_006_000,

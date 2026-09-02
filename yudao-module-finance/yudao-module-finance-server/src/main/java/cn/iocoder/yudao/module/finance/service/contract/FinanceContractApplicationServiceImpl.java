@@ -10,9 +10,13 @@ import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationPageReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContractApplicationResubmitReqVO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.business.FinanceBusinessOrderDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
+import cn.iocoder.yudao.module.finance.dal.dataobject.payment.FinancePaymentApplicationDO;
+import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.payment.FinancePaymentApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
@@ -88,6 +92,10 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
 
     @Resource
     private ObjectProvider<BpmFinanceAttachAccess> financeAttachAccessProvider;
+    @Resource
+    private FinanceBusinessOrderMapper businessOrderMapper;
+    @Resource
+    private FinancePaymentApplicationMapper paymentApplicationMapper;
 
     public FinanceContractApplicationServiceImpl(FinanceContractApplicationMapper applicationMapper,
                                                  FinanceContractApplicationNoRedisDAO applicationNoRedisDAO,
@@ -215,6 +223,29 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
         }
         // 同步落账（StatusListener 为辅路径，可能异步）；绑定当前 processInstanceId
         onApprovalOutcome(id, FinanceContractApprovalStatusEnum.CANCELLED.getStatus(), processInstanceId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void delete(Long id) {
+        FinanceContractApplicationDO application = getApplication(id);
+        if (FinanceContractApprovalStatusEnum.PENDING.getStatus().equals(application.getApprovalStatus())
+                && !Boolean.TRUE.equals(application.getVoided())) {
+            throw exception(CONTRACT_APPLICATION_DELETE_NOT_ALLOWED);
+        }
+        Long boCount = businessOrderMapper.selectCount(new LambdaQueryWrapperX<FinanceBusinessOrderDO>()
+                .eq(FinanceBusinessOrderDO::getContractApplicationId, id));
+        if (boCount != null && boCount > 0) {
+            throw exception(CONTRACT_APPLICATION_IN_USE);
+        }
+        Long payCount = paymentApplicationMapper.selectCount(new LambdaQueryWrapperX<FinancePaymentApplicationDO>()
+                .and(w -> w.eq(FinancePaymentApplicationDO::getLeaseContractApplicationId, id)
+                        .or()
+                        .eq(FinancePaymentApplicationDO::getRelatedContractApplicationId, id)));
+        if (payCount != null && payCount > 0) {
+            throw exception(CONTRACT_APPLICATION_IN_USE);
+        }
+        applicationMapper.deleteById(id);
     }
 
     @Override

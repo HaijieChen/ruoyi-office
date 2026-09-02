@@ -10,6 +10,7 @@ import { Page, useVbenModal } from '@vben/common-ui';
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   cancelContractApplication,
+  deleteContractApplication,
   getContractApplicationPage,
   recordContractArchive,
 } from '#/api/finance/contract-application';
@@ -172,6 +173,24 @@ function handleCancel(row: FinanceContractApplicationApi.Application) {
     onOk: async () => {
       await cancelContractApplication(row.id);
       message.success('已撤回');
+      handleRefresh();
+    },
+  });
+}
+
+function handleDelete(row: FinanceContractApplicationApi.Application) {
+  if (row.approvalStatus === 'PENDING' && !row.voided) {
+    message.warning('审批中请先撤回，不能直接删除');
+    return;
+  }
+  Modal.confirm({
+    title: '确认删除该合同签约？',
+    content:
+      '删除后列表不再显示，同一业务单号可再导入。已被商务单或付款引用的不能删。',
+    okType: 'danger',
+    onOk: async () => {
+      await deleteContractApplication(row.id);
+      message.success('已删除');
       handleRefresh();
     },
   });
@@ -379,6 +398,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
               auth: ['finance:contract-application:create'],
               ifShow: row.approvalStatus === 'PENDING' && !row.voided,
               onClick: () => handleCancel(row),
+            },
+            {
+              label: '删除',
+              danger: true,
+              auth: ['finance:contract-application:import'],
+              ifShow: row.approvalStatus !== 'PENDING' || !!row.voided,
+              onClick: () => handleDelete(row),
             },
           ]"
         />

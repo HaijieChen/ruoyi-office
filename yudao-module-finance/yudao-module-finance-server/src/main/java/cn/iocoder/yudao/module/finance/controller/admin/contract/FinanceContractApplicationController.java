@@ -120,6 +120,15 @@ public class FinanceContractApplicationController {
         return success(true);
     }
 
+    @DeleteMapping("/delete")
+    @Operation(summary = "删除合同签约单据（逻辑删除；审批中请撤回）")
+    @Parameter(name = "id", description = "申请编号", required = true)
+    @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:update', 'finance:contract-application:import')")
+    public CommonResult<Boolean> delete(@RequestParam("id") Long id) {
+        contractApplicationService.delete(id);
+        return success(true);
+    }
+
     // CS-F1：已移除用户可调用的 on-approval-outcome HTTP 旁路；终态仅由 BPM 回调写入。
 
     @GetMapping("/get")

@@ -121,6 +121,12 @@ export function cancelContractApplication(id: number) {
   );
 }
 
+export function deleteContractApplication(id: number) {
+  return requestClient.delete<boolean>('/finance/contract-application/delete', {
+    params: { id },
+  });
+}
+
 export function getContractApplication(id: number) {
   return requestClient.get<FinanceContractApplicationApi.Application>(
     '/finance/contract-application/get',
