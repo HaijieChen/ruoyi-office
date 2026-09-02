@@ -12,6 +12,8 @@ import {
   InputNumber,
   Select,
   Spin,
+  Table,
+  Tag,
   message,
 } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -156,48 +158,142 @@ function categoryLabel(line: FinanceExpenseApi.Line) {
   return [cat, sub].filter(Boolean).join('/');
 }
 
+function money(v: unknown) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '-';
+  return `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+const STATUS_MAP: Record<string, { text: string; color: string }> = {
+  PENDING: { text: '审批中', color: 'processing' },
+  APPROVED: { text: '已通过', color: 'success' },
+  REJECTED: { text: '已驳回', color: 'error' },
+  CANCELLED: { text: '已取消', color: 'default' },
+  WAIT_PAY: { text: '待支付', color: 'warning' },
+  PAID: { text: '已支付', color: 'success' },
+};
+
+const statusMeta = computed(() => STATUS_MAP[bill.value?.status || ''] || {
+  text: bill.value?.status || '-',
+  color: 'default',
+});
+
+const showFullAccount = computed(() => {
+  const s = bill.value?.status;
+  return s === 'WAIT_PAY' || s === 'PAID';
+});
+
+const displayAccount = computed(() => {
+  const no = bill.value?.payeeAccountNo || '';
+  if (!no) return '-';
+  if (showFullAccount.value || no.length <= 4) return no;
+  return `${'*'.repeat(Math.max(4, no.length - 4))}${no.slice(-4)}`;
+});
+
+const linesTotal = computed(() =>
+  (bill.value?.lines || []).reduce((s, l) => s + Number(l.amount || 0), 0),
+);
+
+const lineRows = computed(() =>
+  (bill.value?.lines || []).map((line, index) => ({ ...line, _rowKey: index })),
+);
+
 onMounted(load);
 </script>
 
 <template>
   <component :is="embedded ? 'div' : Page" v-bind="embedded ? {} : { autoContentHeight: true }">
     <Spin :spinning="loading">
-      <div v-if="bill" class="mx-auto max-w-3xl p-4 print:max-w-none">
-        <div class="mb-2">
-          <PrintVoucher :bill="bill" />
+      <div
+        v-if="bill"
+        class="mx-auto p-4 print:max-w-none"
+        :class="embedded ? 'max-w-5xl' : 'max-w-4xl'"
+      >
+        <div class="mb-4 flex items-start justify-between gap-4 print:hidden">
+          <div>
+            <div class="text-2xl font-semibold tracking-tight">
+              {{ money(bill.applyAmount) }}
+            </div>
+            <div class="mt-1 text-sm text-gray-600">
+              付给 {{ bill.payeeAccountName || '-' }}
+              <span v-if="bill.entityCompanyName"> · {{ bill.entityCompanyName }}</span>
+            </div>
+            <div class="mt-0.5 text-xs text-gray-400">
+              {{ bill.applicationNo || '-' }}
+              <span v-if="bill.periodLabel"> · {{ bill.periodLabel }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <Tag :color="statusMeta.color">{{ statusMeta.text }}</Tag>
+            <PrintVoucher :bill="bill" />
+          </div>
         </div>
         <Descriptions bordered :column="2" size="small" class="print:hidden">
-          <Descriptions.Item label="标题">{{ bill.processTitle }}</Descriptions.Item>
-          <Descriptions.Item label="单据编号">{{ bill.applicationNo || '-' }}</Descriptions.Item>
-          <Descriptions.Item label="状态">{{ bill.status }}</Descriptions.Item>
-          <Descriptions.Item label="期间">{{ bill.periodLabel }}</Descriptions.Item>
-          <Descriptions.Item v-if="bill.entityCompanyName" label="主体公司">{{ bill.entityCompanyName }}</Descriptions.Item>
-          <Descriptions.Item label="收款户名">{{ bill.payeeAccountName }}</Descriptions.Item>
           <Descriptions.Item label="开户行">{{ bill.payeeBankName || '—' }}</Descriptions.Item>
-          <Descriptions.Item label="收款账号">{{ bill.payeeAccountNo }}</Descriptions.Item>
-          <Descriptions.Item label="申请金额">{{ bill.applyAmount }}</Descriptions.Item>
-          <Descriptions.Item label="实报金额">{{ bill.approvedAmount }}</Descriptions.Item>
+          <Descriptions.Item label="收款账号">{{ displayAccount }}</Descriptions.Item>
+          <Descriptions.Item label="申请金额">{{ money(bill.applyAmount) }}</Descriptions.Item>
+          <Descriptions.Item label="实报金额">
+            {{ bill.approvedAmount == null ? '待财务填写' : money(bill.approvedAmount) }}
+          </Descriptions.Item>
         </Descriptions>
-        <div class="mt-3 text-sm print:hidden">
-          <div v-for="(line, i) in bill.lines || []" :key="i">
-            {{ formatFeeDate(line.feeDate) }} ·
-            <span :class="bill.proxyTicket ? 'print:hidden' : ''">{{ categoryLabel(line) }}</span>
-            · 发票 {{ line.invoiceType || '-' }}
-            · {{ line.amount }}{{ line.taxAmount != null ? ' · 税额 ' + line.taxAmount : '' }}{{ line.invoiceNo ? ' · 票号 ' + line.invoiceNo : '' }}
-            {{ line.stayCityTier === 'T1' ? ' · 北上广深' : line.stayCityTier === 'OTHER' ? ' · 其他城市' : '' }}
-            {{ line.overLimitReason ? ` · 超标：${line.overLimitReason}` : "" }}
-            {{ line.remark ? ` · ${line.remark}` : "" }}
-            <Button
-              v-if="line.predocProcessInstanceId"
-              type="link"
-              class="px-1"
-              @click="openPredoc(line)"
+        <div class="mt-4 print:hidden">
+          <Table
+            size="small"
+            :pagination="false"
+            :data-source="lineRows"
+            row-key="_rowKey"
+            :scroll="{ x: 720 }"
+          >
+            <Table.Column title="日期" width="110">
+              <template #default="{ record }">{{ formatFeeDate(record.feeDate) }}</template>
+            </Table.Column>
+            <Table.Column v-if="!bill.proxyTicket" title="费用项" min-width="140">
+              <template #default="{ record }">{{ categoryLabel(record) }}</template>
+            </Table.Column>
+            <Table.Column title="发票" width="80" data-index="invoiceType" />
+            <Table.Column title="金额" width="110" align="right">
+              <template #default="{ record }">{{ money(record.amount) }}</template>
+            </Table.Column>
+            <Table.Column title="税额" width="90" align="right">
+              <template #default="{ record }">
+                {{ record.taxAmount == null ? '—' : money(record.taxAmount) }}
+              </template>
+            </Table.Column>
+            <Table.Column title="票号" width="140" data-index="invoiceNo" />
+            <Table.Column title="附件" min-width="160">
+              <template #default="{ record }">
+                <FilePreviewList
+                  v-if="record.invoiceFileUrl"
+                  :value="record.invoiceFileUrl"
+                />
+                <span v-else class="text-gray-400">—</span>
+              </template>
+            </Table.Column>
+            <Table.Column title="说明" min-width="140">
+              <template #default="{ record }">
+                <span v-if="record.stayCityTier === 'T1'">北上广深 </span>
+                <span v-else-if="record.stayCityTier === 'OTHER'">其他城市 </span>
+                <span v-if="record.overLimitReason">超标：{{ record.overLimitReason }} </span>
+                <span>{{ record.remark || '' }}</span>
+                <Button
+                  v-if="record.predocProcessInstanceId"
+                  type="link"
+                  class="px-1"
+                  @click="openPredoc(record)"
+                >
+                  {{ predocLinkLabel(record) }}
+                </Button>
+              </template>
+            </Table.Column>
+          </Table>
+          <div class="mt-2 flex justify-end text-sm text-gray-600">
+            明细合计 {{ money(linesTotal) }}
+            <span
+              v-if="Math.abs(linesTotal - Number(bill.applyAmount || 0)) > 0.009"
+              class="ml-2 text-amber-600"
             >
-              {{ predocLinkLabel(line) }}
-            </Button>
-            <div v-if="line.invoiceFileUrl" class="mt-1">
-              <FilePreviewList :value="line.invoiceFileUrl" />
-            </div>
+              （与申请金额不一致）
+            </span>
           </div>
         </div>
         <div
@@ -214,7 +310,7 @@ onMounted(load);
           <div class="mb-1 text-sm font-medium">支付附件</div>
           <FilePreviewList :value="bill.payVoucherUrl" />
         </div>
-        <div v-if="bill.status === 'PENDING'" class="mt-6 space-y-2">
+        <div v-if="bill.status === 'PENDING'" class="mt-6 space-y-2 print:hidden">
           <div class="font-medium">财务实报</div>
           <InputNumber v-model:value="approvedAmount" :min="0.01" :precision="2" class="w-40" />
           <Input v-model:value="financeComment" placeholder="审核意见" />
@@ -222,7 +318,7 @@ onMounted(load);
         </div>
         <div
           v-if="bill.status === 'WAIT_PAY' && !embedded && bill.processEnded !== false"
-          class="mt-6 space-y-2"
+          class="mt-6 space-y-2 print:hidden"
         >
           <div class="font-medium">支付（附件可选）</div>
           <Select v-model:value="companyBankAccountId" class="w-72" :options="accountOptions" placeholder="公司银行账户" />
