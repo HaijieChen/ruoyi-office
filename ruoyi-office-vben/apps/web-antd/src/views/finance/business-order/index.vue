@@ -157,7 +157,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
             {
               label: '导出',
-              auth: ['finance:business-order:query'],
+              auth: ['finance:business-order:export'],
               onClick: handleExport,
             },
             {

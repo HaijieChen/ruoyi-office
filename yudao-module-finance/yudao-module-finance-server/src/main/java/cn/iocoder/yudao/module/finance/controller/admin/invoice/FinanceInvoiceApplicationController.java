@@ -88,7 +88,7 @@ public class FinanceInvoiceApplicationController {
 
     @DeleteMapping("/delete")
     @Operation(summary = "删除开票申请")
-    @PreAuthorize("@ss.hasAnyPermissions('finance:invoice-application:update', 'finance:invoice-application:import')")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:delete')")
     public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> delete(
             @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "ids", required = false) List<Long> ids) {
@@ -104,7 +104,7 @@ public class FinanceInvoiceApplicationController {
 
     @PostMapping("/delete-query")
     @Operation(summary = "按当前筛选删除开票申请")
-    @PreAuthorize("@ss.hasAnyPermissions('finance:invoice-application:update', 'finance:invoice-application:import')")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:delete')")
     public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> deleteQuery(
             @Valid @RequestBody FinanceInvoiceApplicationPageReqVO reqVO) {
         return success(invoiceApplicationService.deleteByQuery(reqVO));
@@ -112,7 +112,7 @@ public class FinanceInvoiceApplicationController {
 
     @GetMapping("/export-excel")
     @Operation(summary = "按当前筛选导出开票申请 Excel")
-    @PreAuthorize("@ss.hasPermission('finance:invoice-application:query')")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:export')")
     public void exportExcel(@Valid FinanceInvoiceApplicationPageReqVO reqVO, HttpServletResponse response)
             throws IOException {
         List<FinanceInvoiceApplicationExportExcelVO> rows = BeanUtils.toBean(
@@ -123,7 +123,7 @@ public class FinanceInvoiceApplicationController {
     @PutMapping("/update")
     @Operation(summary = "编辑开票申请台账（不重启审批）")
     @Parameter(name = "id", description = "申请编号", required = true)
-    @PreAuthorize("@ss.hasAnyPermissions('finance:invoice-application:update', 'finance:invoice-application:import')")
+    @PreAuthorize("@ss.hasPermission('finance:invoice-application:update')")
     public CommonResult<Boolean> update(@RequestParam("id") Long id,
                                         @Valid @RequestBody FinanceInvoiceApplicationCreateAndStartReqVO reqVO) {
         invoiceApplicationService.update(id, reqVO);

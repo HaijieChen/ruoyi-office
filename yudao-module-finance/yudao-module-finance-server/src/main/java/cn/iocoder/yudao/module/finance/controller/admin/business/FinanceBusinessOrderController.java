@@ -134,7 +134,7 @@ public class FinanceBusinessOrderController {
 
     @GetMapping("/export-excel")
     @Operation(summary = "按当前筛选导出商务签单 Excel")
-    @PreAuthorize("@ss.hasPermission('finance:business-order:query')")
+    @PreAuthorize("@ss.hasPermission('finance:business-order:export')")
     public void exportExcel(@Valid FinanceBusinessOrderPageReqVO reqVO, HttpServletResponse response)
             throws IOException {
         List<FinanceBusinessOrderExportExcelVO> rows = new java.util.ArrayList<>();

@@ -114,7 +114,7 @@ public class FinanceContractApplicationController {
     @PutMapping("/update")
     @Operation(summary = "编辑合同签约台账（不重启审批）")
     @Parameter(name = "id", description = "申请编号", required = true)
-    @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:update', 'finance:contract-application:import')")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:update')")
     public CommonResult<Boolean> update(@RequestParam("id") Long id,
                                         @Valid @RequestBody FinanceContractApplicationCreateAndStartReqVO reqVO) {
         contractApplicationService.update(id, reqVO);
@@ -132,7 +132,7 @@ public class FinanceContractApplicationController {
 
     @DeleteMapping("/delete")
     @Operation(summary = "删除合同签约单据（逻辑删除；审批中请撤回）")
-    @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:update', 'finance:contract-application:import')")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:delete')")
     public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> delete(
             @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "ids", required = false) List<Long> ids) {
@@ -148,7 +148,7 @@ public class FinanceContractApplicationController {
 
     @PostMapping("/delete-query")
     @Operation(summary = "按当前筛选条件删除合同签约")
-    @PreAuthorize("@ss.hasAnyPermissions('finance:contract-application:update', 'finance:contract-application:import')")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:delete')")
     public CommonResult<cn.iocoder.yudao.module.finance.controller.admin.common.vo.FinanceBatchDeleteRespVO> deleteQuery(
             @Valid @RequestBody FinanceContractApplicationPageReqVO reqVO) {
         return success(contractApplicationService.deleteByQuery(reqVO));
@@ -156,7 +156,7 @@ public class FinanceContractApplicationController {
 
     @GetMapping("/export-excel")
     @Operation(summary = "按当前筛选导出合同签约 Excel")
-    @PreAuthorize("@ss.hasPermission('finance:contract-application:query')")
+    @PreAuthorize("@ss.hasPermission('finance:contract-application:export')")
     public void exportExcel(@Valid FinanceContractApplicationPageReqVO reqVO, HttpServletResponse response)
             throws IOException {
         java.util.List<FinanceContractApplicationExportExcelVO> rows =

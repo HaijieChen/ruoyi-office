@@ -286,19 +286,19 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
             {
               label: '导出',
-              auth: ['finance:invoice-application:query'],
+              auth: ['finance:invoice-application:export'],
               onClick: handleExport,
             },
             {
               label: '删除勾选',
               danger: true,
-              auth: ['finance:invoice-application:import'],
+              auth: ['finance:invoice-application:delete'],
               onClick: handleDeleteSelected,
             },
             {
               label: '删除筛选',
               danger: true,
-              auth: ['finance:invoice-application:import'],
+              auth: ['finance:invoice-application:delete'],
               onClick: handleDeleteFiltered,
             },
           ]"
@@ -314,7 +314,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             },
             {
               label: '编辑',
-              auth: ['finance:invoice-application:import'],
+              auth: ['finance:invoice-application:update'],
               ifShow: row.approvalStatus !== 'PENDING' || !!row.voided,
               onClick: () => handleEdit(row),
             },
@@ -327,7 +327,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             {
               label: '删除',
               danger: true,
-              auth: ['finance:invoice-application:import'],
+              auth: ['finance:invoice-application:delete'],
               ifShow: row.approvalStatus !== 'PENDING' || !!row.voided,
               onClick: () => handleDelete(row),
             },
