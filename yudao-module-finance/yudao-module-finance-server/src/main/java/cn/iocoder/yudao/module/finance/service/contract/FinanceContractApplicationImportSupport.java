@@ -39,9 +39,6 @@ final class FinanceContractApplicationImportSupport {
             return "导入行不能为空";
         }
         String applicationNo = trimToNull(row.getApplicationNo());
-        if (applicationNo == null) {
-            return "合同业务单号不能为空";
-        }
         String applicantUsername = trimToNull(row.getApplicantUsername());
         if (applicantUsername == null) {
             return "申请人账号不能为空";

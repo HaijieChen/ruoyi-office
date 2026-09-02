@@ -6,6 +6,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContr
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
@@ -19,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -35,6 +37,7 @@ class FinanceContractApplicationImportTest {
     private FinanceEntityCompanyResolver entityCompanyResolver;
     private AdminUserApi adminUserApi;
     private DictDataApi dictDataApi;
+    private FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
     private FinanceContractApplicationImportServiceImpl service;
 
     @BeforeEach
@@ -44,8 +47,10 @@ class FinanceContractApplicationImportTest {
         entityCompanyResolver = mock(FinanceEntityCompanyResolver.class);
         adminUserApi = mock(AdminUserApi.class);
         dictDataApi = mock(DictDataApi.class);
+        applicationNoRedisDAO = mock(FinanceContractApplicationNoRedisDAO.class);
         service = new FinanceContractApplicationImportServiceImpl(
-                mapper, customerCompanyService, entityCompanyResolver, adminUserApi, dictDataApi);
+                mapper, customerCompanyService, entityCompanyResolver, adminUserApi, dictDataApi,
+                applicationNoRedisDAO);
 
         AdminUserRespDTO user = new AdminUserRespDTO();
         user.setId(88L);
@@ -66,6 +71,9 @@ class FinanceContractApplicationImportTest {
         when(dictDataApi.validateDictDataList(eq("finance_product_type"), anyCollection()))
                 .thenReturn(CommonResult.success(true));
         when(mapper.selectByApplicationNo(anyString())).thenReturn(null);
+        AtomicInteger seq = new AtomicInteger(1);
+        when(applicationNoRedisDAO.generate(any(LocalDate.class)))
+                .thenAnswer(inv -> "CT-20260902-" + seq.getAndIncrement());
 
         AtomicLong ids = new AtomicLong(1);
         doAnswer(inv -> {
@@ -96,6 +104,7 @@ class FinanceContractApplicationImportTest {
         assertEquals("CNY", saved.getCurrency());
         assertEquals(Boolean.FALSE, saved.getAmountNa());
         assertEquals(0, new BigDecimal("1000").compareTo(saved.getContractAmount()));
+        verify(applicationNoRedisDAO, never()).generate(any(LocalDate.class));
     }
 
     @Test
@@ -166,6 +175,56 @@ class FinanceContractApplicationImportTest {
         FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
 
         assertEquals("金额不适用时合同金额必须为空", resp.getFailureRows().get(2));
+        verify(mapper, never()).insert(any(FinanceContractApplicationDO.class));
+    }
+
+    @Test
+    void blankApplicationNoShouldAutoGenerate() {
+        FinanceContractApplicationImportExcelVO row = validRow();
+        row.setApplicationNo(null);
+
+        FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
+
+        assertTrue(resp.getFailureRows().isEmpty());
+        assertEquals(List.of("CT-20260902-1"), resp.getCreatedNos());
+        verify(applicationNoRedisDAO).generate(any(LocalDate.class));
+    }
+
+    @Test
+    void whitespaceApplicationNoShouldAutoGenerate() {
+        FinanceContractApplicationImportExcelVO row = validRow();
+        row.setApplicationNo("   ");
+
+        FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
+
+        assertTrue(resp.getFailureRows().isEmpty());
+        assertEquals(List.of("CT-20260902-1"), resp.getCreatedNos());
+    }
+
+    @Test
+    void twoBlankRowsShouldGenerateDistinctNos() {
+        FinanceContractApplicationImportExcelVO first = validRow();
+        first.setApplicationNo(null);
+        FinanceContractApplicationImportExcelVO second = validRow();
+        second.setApplicationNo("");
+
+        FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(first, second));
+
+        assertTrue(resp.getFailureRows().isEmpty());
+        assertEquals(List.of("CT-20260902-1", "CT-20260902-2"), resp.getCreatedNos());
+        verify(applicationNoRedisDAO, times(2)).generate(any(LocalDate.class));
+    }
+
+    @Test
+    void invalidBlankRowShouldNotGenerate() {
+        FinanceContractApplicationImportExcelVO row = validRow();
+        row.setApplicationNo(null);
+        row.setApplicantUsername(null);
+
+        FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(row));
+
+        assertEquals("申请人账号不能为空", resp.getFailureRows().get(2));
+        verify(applicationNoRedisDAO, never()).generate(any(LocalDate.class));
         verify(mapper, never()).insert(any(FinanceContractApplicationDO.class));
     }
 

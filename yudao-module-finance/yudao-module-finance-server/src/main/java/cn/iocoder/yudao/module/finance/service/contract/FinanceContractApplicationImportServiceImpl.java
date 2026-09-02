@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.finance.controller.admin.contract.vo.FinanceContr
 import cn.iocoder.yudao.module.finance.dal.dataobject.contract.FinanceContractApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.customer.FinanceCustomerCompanyDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceContractApplicationNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,17 +39,20 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
     private final FinanceEntityCompanyResolver entityCompanyResolver;
     private final AdminUserApi adminUserApi;
     private final DictDataApi dictDataApi;
+    private final FinanceContractApplicationNoRedisDAO applicationNoRedisDAO;
 
     public FinanceContractApplicationImportServiceImpl(FinanceContractApplicationMapper applicationMapper,
                                                        FinanceCustomerCompanyService customerCompanyService,
                                                        FinanceEntityCompanyResolver entityCompanyResolver,
                                                        AdminUserApi adminUserApi,
-                                                       DictDataApi dictDataApi) {
+                                                       DictDataApi dictDataApi,
+                                                       FinanceContractApplicationNoRedisDAO applicationNoRedisDAO) {
         this.applicationMapper = applicationMapper;
         this.customerCompanyService = customerCompanyService;
         this.entityCompanyResolver = entityCompanyResolver;
         this.adminUserApi = adminUserApi;
         this.dictDataApi = dictDataApi;
+        this.applicationNoRedisDAO = applicationNoRedisDAO;
     }
 
     @Override
@@ -77,11 +82,12 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
                 continue;
             }
             FinanceContractApplicationImportSupport.ParsedRow row = parsed[0];
-            if (!seenNos.add(row.applicationNo())) {
+            if (row.applicationNo() != null && !seenNos.add(row.applicationNo())) {
                 resp.getFailureRows().put(rowNumber, "本文件内合同业务单号重复");
                 continue;
             }
-            if (applicationMapper.selectByApplicationNo(row.applicationNo()) != null) {
+            if (row.applicationNo() != null
+                    && applicationMapper.selectByApplicationNo(row.applicationNo()) != null) {
                 resp.getFailureRows().put(rowNumber, "合同业务单号已存在");
                 continue;
             }
@@ -127,8 +133,17 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
             }
             FinanceCustomerCompanyDO matchedCustomer = hits.get(0);
             FinanceEntityCompanyResolver.ResolvedCompany company = companyOut[0];
+            String applicationNo = row.applicationNo();
+            if (applicationNo == null) {
+                applicationNo = applicationNoRedisDAO.generate(LocalDate.now());
+                if (!seenNos.add(applicationNo)
+                        || applicationMapper.selectByApplicationNo(applicationNo) != null) {
+                    resp.getFailureRows().put(rowNumber, "合同业务单号已存在");
+                    continue;
+                }
+            }
             FinanceContractApplicationDO application = FinanceContractApplicationDO.builder()
-                    .applicationNo(row.applicationNo())
+                    .applicationNo(applicationNo)
                     .applicantUserId(user.getId())
                     .applicantDeptId(user.getDeptId())
                     .counterpartyCompanyId(matchedCustomer.getId())
@@ -153,7 +168,7 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
                     .endDate(row.endDate())
                     .build();
             applicationMapper.insert(application);
-            resp.getCreatedNos().add(row.applicationNo());
+            resp.getCreatedNos().add(applicationNo);
         }
         return resp;
     }
