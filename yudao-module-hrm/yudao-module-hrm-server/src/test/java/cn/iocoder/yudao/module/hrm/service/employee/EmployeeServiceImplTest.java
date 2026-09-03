@@ -14,9 +14,11 @@ import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmployme
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeRespVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeSaveReqVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.OnboardingAttachmentSaveReqVO;
+import cn.iocoder.yudao.framework.datapermission.core.util.DataPermissionUtils;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeContractDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEducationDO;
+import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.EmployeeEmploymentDO;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.OnboardingFileClaimDO;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeContractMapper;
 import cn.iocoder.yudao.module.hrm.dal.mysql.employee.EmployeeEducationMapper;
@@ -47,6 +49,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Callable;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -755,6 +759,75 @@ class EmployeeServiceImplTest {
         assertEquals(404L, updateCaptor.getValue().getId());
         assertEquals(221L, updateCaptor.getValue().getUserId());
         assertTrue(updateCaptor.getValue().getUserGenerated());
+    }
+
+    @Test
+    void listMyEmploymentsResolvesNamesIgnoringDataPermission() {
+        EmployeeDO archive = new EmployeeDO();
+        archive.setId(520L);
+        archive.setUserId(683L);
+        when(employeeArchiveMapper.selectByUserId(683L)).thenReturn(archive);
+        EmployeeEmploymentDO row = EmployeeEmploymentDO.builder()
+                .employeeId(520L).companyDeptId(360L).deptId(406L).signed(true).build();
+        when(employeeEmploymentMapper.selectListByEmployeeId(520L)).thenReturn(List.of(row));
+        try (MockedStatic<DataPermissionUtils> dataPermission = mockStatic(DataPermissionUtils.class)) {
+            dataPermission.when(() -> DataPermissionUtils.executeIgnore(any(Callable.class)))
+                    .thenAnswer(invocation -> ((Callable<?>) invocation.getArgument(0)).call());
+            DeptRespDTO company = new DeptRespDTO();
+            company.setId(360L);
+            company.setName("卡饭（上海）信息安全有限公司");
+            DeptRespDTO dept = new DeptRespDTO();
+            dept.setId(406L);
+            dept.setName("研发部");
+            when(deptApi.getDept(360L)).thenReturn(CommonResult.success(company));
+            when(deptApi.getDept(406L)).thenReturn(CommonResult.success(dept));
+
+            List<EmployeeEmploymentVO> result = employeeService.listMyEmployments(683L);
+
+            assertEquals(1, result.size());
+            assertEquals("卡饭（上海）信息安全有限公司", result.get(0).getCompanyName());
+            assertEquals("研发部", result.get(0).getDeptName());
+            dataPermission.verify(() -> DataPermissionUtils.executeIgnore(any(Callable.class)), times(2));
+        }
+    }
+
+    @Test
+    void listColleaguesByUserIdLoadsCompanyEmployeesIgnoringDataPermission() {
+        EmployeeDO self = new EmployeeDO();
+        self.setId(520L);
+        self.setUserId(683L);
+        self.setName("陈海杰");
+        when(employeeArchiveMapper.selectByUserId(683L)).thenReturn(self);
+        EmployeeEmploymentDO row = EmployeeEmploymentDO.builder()
+                .employeeId(520L).companyDeptId(360L).deptId(406L).signed(true).build();
+        when(employeeEmploymentMapper.selectListByEmployeeId(520L)).thenReturn(List.of(row));
+        EmployeeEmploymentDO colleagueRow = EmployeeEmploymentDO.builder()
+                .employeeId(600L).companyDeptId(360L).deptId(407L).signed(false).build();
+        when(employeeEmploymentMapper.selectListByCompanyDeptIds(Set.of(360L)))
+                .thenReturn(List.of(row, colleagueRow));
+        try (MockedStatic<DataPermissionUtils> dataPermission = mockStatic(DataPermissionUtils.class)) {
+            dataPermission.when(() -> DataPermissionUtils.executeIgnore(any(Callable.class)))
+                    .thenAnswer(invocation -> ((Callable<?>) invocation.getArgument(0)).call());
+            DeptRespDTO company = new DeptRespDTO();
+            company.setId(360L);
+            company.setName("卡饭（上海）信息安全有限公司");
+            DeptRespDTO dept = new DeptRespDTO();
+            dept.setId(406L);
+            dept.setName("研发部");
+            when(deptApi.getDept(360L)).thenReturn(CommonResult.success(company));
+            when(deptApi.getDept(406L)).thenReturn(CommonResult.success(dept));
+            EmployeeDO colleague = new EmployeeDO();
+            colleague.setId(600L);
+            colleague.setUserId(705L);
+            colleague.setName("同事");
+            when(employeeArchiveMapper.selectBatchIds(Set.of(520L, 600L)))
+                    .thenReturn(List.of(self, colleague));
+
+            var result = employeeService.listColleaguesByUserId(683L);
+
+            assertTrue(result.stream().anyMatch(c -> Long.valueOf(705L).equals(c.getUserId())));
+            dataPermission.verify(() -> DataPermissionUtils.executeIgnore(any(Callable.class)), atLeastOnce());
+        }
     }
 
 }
