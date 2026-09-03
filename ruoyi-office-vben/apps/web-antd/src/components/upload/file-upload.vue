@@ -273,6 +273,13 @@ async function handlePreview(file: UploadFile) {
       previewOpen.value = true;
       return;
     }
+    if (kind === 'image' && file.thumbUrl?.startsWith('blob:')) {
+      previewKind.value = 'image';
+      previewTitle.value = file.name || '预览';
+      previewSrc.value = file.thumbUrl;
+      previewOpen.value = true;
+      return;
+    }
     const url = file.url || '';
     if (!url) {
       message.warning('没有可预览的地址');
@@ -501,12 +508,12 @@ function getValue() {
         <div class="mx-1 font-bold text-primary">{{ accept.join('/') }}</div>
         格式文件
       </div>
-      <template v-if="listType !== 'text'" #itemRender="{ file, actions }">
+      <template v-if="listType !== 'text'" #itemRender="{ file }">
         <button
           type="button"
           class="file-upload-thumb"
           :title="file.name"
-          @click="actions.preview()"
+          @click.stop="handlePreview(file)"
         >
           <img
             v-if="isImageFile(file)"

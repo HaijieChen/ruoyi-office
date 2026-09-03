@@ -24,6 +24,8 @@ test('expense reimbursement attachments use compact picture-card thumbs', () => 
   assert.match(upload, /:list-type="listType"/);
   assert.match(upload, /file-upload-thumb/);
   assert.match(upload, /#itemRender/);
+  assert.match(upload, /handlePreview\(file\)/);
+  assert.doesNotMatch(upload, /actions\.preview\(\)/);
   assert.match(preview, /list-type="picture-card"/);
   assert.match(form, /list-type="picture-card"/);
   assert.match(detail, /title="附件"/);
