@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.biz.system.permission.PermissionCommonApi;
 import cn.iocoder.yudao.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.finance.controller.admin.receipt.vo.FinanceReceiptImportExcelVO;
@@ -98,7 +99,6 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
 
     @Override
     public PageResult<FinanceReceiptDO> getReceiptPage(FinanceReceiptPageReqVO pageReqVO) {
-        applyCompanyDataScope(pageReqVO);
         return receiptMapper.selectReceiptPage(pageReqVO);
     }
 
@@ -144,7 +144,6 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
 
     @Override
     public PageResult<FinanceReceiptDO> getUnclaimedReceiptPage(FinanceReceiptPageReqVO pageReqVO) {
-        applyCompanyDataScope(pageReqVO);
         return receiptMapper.selectUnclaimedPage(pageReqVO);
     }
 
@@ -213,6 +212,7 @@ public class FinanceReceiptServiceImpl implements FinanceReceiptService {
         return lifecycleAuditMapper.selectListByReceiptId(receiptId);
     }
 
+    @DataPermission(enable = false)
     private FinanceReceiptDO getRequiredReceipt(Long id) {
         FinanceReceiptDO receipt = receiptMapper.selectById(id);
         if (receipt == null) {

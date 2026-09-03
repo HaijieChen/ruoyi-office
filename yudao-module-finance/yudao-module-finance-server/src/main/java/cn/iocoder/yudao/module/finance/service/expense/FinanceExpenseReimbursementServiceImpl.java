@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.service.expense;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseApproveReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.expense.vo.FinanceExpenseRecordPayReqVO;
@@ -245,6 +246,7 @@ public class FinanceExpenseReimbursementServiceImpl implements FinanceExpenseRei
     }
 
     @Override
+    @DataPermission(enable = false)
     public FinanceExpenseReimbursementRespVO get(Long id, Long userId, boolean canQueryAll) {
         FinanceExpenseReimbursementDO header = mapper.selectById(id);
         if (header == null) {

@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
@@ -574,6 +575,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     }
 
     @Override
+    @DataPermission(enable = false)
     public FinancePaymentApplicationDO getApplication(Long id) {
         FinancePaymentApplicationDO application = applicationMapper.selectById(id);
         if (application == null) {
@@ -617,8 +619,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     public PageResult<FinancePaymentApplicationDO> getApplicationPage(FinancePaymentApplicationPageReqVO pageReqVO,
                                                                       Long loginUserId, boolean manageAll) {
-        Long filterApplicant = manageAll ? null : loginUserId;
-        return applicationMapper.selectPage(pageReqVO, filterApplicant);
+        return applicationMapper.selectPage(pageReqVO, null);
     }
 
     @Override
