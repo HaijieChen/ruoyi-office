@@ -685,14 +685,100 @@ function getPredictVariables(): Record<string, unknown> {
   return {};
 }
 
-async function reset(opts?: { id?: number; mode?: string }) {
+async function reset(opts?: {
+  id?: number;
+  mode?: string;
+  copyFromBusinessKey?: string;
+}) {
   const defaultStaff = await loadBusinessStaff();
   await Promise.all([loadCompanyOptions(), loadCustomerCompanyOptions()]);
+  const copyId = Number(opts?.copyFromBusinessKey);
   if (opts?.id && (opts?.mode === 'resubmit' || opts?.mode === 'edit')) {
     const detail = await getInvoiceApplication(opts.id);
     formData.value = {
       id: detail.id,
       mode: opts.mode === 'edit' ? 'edit' : 'resubmit',
+      customerCompanyId: detail.customerCompanyId,
+      buyerName: detail.buyerName,
+      buyerTaxNo: detail.buyerTaxNo,
+      buyerAddressPhone: detail.buyerAddressPhone,
+      buyerBankAccount: detail.buyerBankAccount,
+      invoiceCompanyDeptId: detail.invoiceCompanyDeptId,
+      currency: detail.currency || 'CNY',
+      invoiceCompany: detail.invoiceCompany,
+      invoiceType: detail.invoiceType,
+      productType: detail.taxContent,
+      specialInvoiceRequirement: detail.specialInvoiceRequirement,
+      remark: detail.remark as any,
+      businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
+      lines: (detail.lines || []).map((l) => ({
+        businessOrderId: l.businessOrderId,
+        sourceContractApplicationId: l.sourceContractApplicationId,
+        amount: Number(l.amount),
+        billingPeriod: l.billingPeriod,
+        remark: l.remark,
+      })),
+    };
+    priorBuyerSnapshotHint.value = undefined;
+    if (
+      formData.value.customerCompanyId !== null &&
+      formData.value.customerCompanyId !== undefined
+    ) {
+      const stillEnabled = customerCompanyOptions.value.some(
+        (o) => o.value === formData.value.customerCompanyId,
+      );
+      if (stillEnabled) {
+        applyCustomerSnapshot(formData.value.customerCompanyId);
+      } else {
+        const snapName =
+          formData.value.buyerName || `#${formData.value.customerCompanyId}`;
+        priorBuyerSnapshotHint.value = `原客户公司「${snapName}」已停用或不存在，请重新选择启用中的客户公司`;
+        formData.value.customerCompanyId = undefined;
+        formData.value.buyerName = undefined;
+        formData.value.buyerTaxNo = undefined;
+        formData.value.buyerAddressPhone = undefined;
+        formData.value.buyerBankAccount = undefined;
+        message.warning(priorBuyerSnapshotHint.value);
+      }
+    }
+    if (
+      formData.value.invoiceCompanyDeptId === null ||
+      (formData.value.invoiceCompanyDeptId === undefined &&
+        formData.value.invoiceCompany)
+    ) {
+      formData.value.invoiceCompanyDeptId = undefined;
+    } else if (
+      formData.value.invoiceCompanyDeptId !== null &&
+      formData.value.invoiceCompanyDeptId !== undefined &&
+      !companyOptions.value.some(
+        (o) => o.value === formData.value.invoiceCompanyDeptId,
+      )
+    ) {
+      companyOptions.value = [
+        {
+          value: formData.value.invoiceCompanyDeptId,
+          label:
+            formData.value.invoiceCompany ||
+            `公司 #${formData.value.invoiceCompanyDeptId}`,
+        },
+        ...companyOptions.value,
+      ];
+    }
+    if (formData.value.lines.length === 0) {
+      formData.value.lines = [{}];
+    }
+    if (!formData.value.productType && detail.taxContent) {
+      formData.value.productType = detail.taxContent;
+    }
+    if (BUSINESS_ORDER_PRODUCT_TYPES.has(String(formData.value.productType || ''))) {
+      await ensureSelectedBoOptions(formData.value.lines);
+    } else if (formData.value.productType) {
+      await loadContractOptions();
+    }
+  } else if (Number.isFinite(copyId) && copyId > 0) {
+    const detail = await getInvoiceApplication(copyId);
+    formData.value = {
+      mode: 'create',
       customerCompanyId: detail.customerCompanyId,
       buyerName: detail.buyerName,
       buyerTaxNo: detail.buyerTaxNo,

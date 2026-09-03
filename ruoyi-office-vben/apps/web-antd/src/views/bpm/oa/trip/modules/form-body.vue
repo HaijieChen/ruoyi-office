@@ -76,11 +76,19 @@ function onBizTypeChange() {
   }
 }
 
-async function reset(opts?: { id?: number; mode?: string }) {
+async function reset(opts?: {
+  id?: number;
+  mode?: string;
+  copyFromBusinessKey?: string;
+}) {
   formData.value = { attachmentUrls: [] };
   range.value = undefined;
-  if (opts?.id) {
-    const trip = await getTrip(Number(opts.id));
+  const copyId = Number(opts?.copyFromBusinessKey);
+  const loadId =
+    opts?.id ??
+    (Number.isFinite(copyId) && copyId > 0 ? copyId : undefined);
+  if (loadId) {
+    const trip = await getTrip(Number(loadId));
     formData.value = {
       bizType: trip.bizType,
       originCity: trip.originCity,
