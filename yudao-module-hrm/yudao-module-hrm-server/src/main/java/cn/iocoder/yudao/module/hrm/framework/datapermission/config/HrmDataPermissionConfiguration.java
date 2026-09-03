@@ -13,6 +13,7 @@ public class HrmDataPermissionConfiguration {
         return rule -> {
             rule.addDeptColumn(EmployeeDO.class, "dept_id");
             rule.addDeptColumn(EmployeeDO.class, "company_id");
+            rule.addUserColumn(EmployeeDO.class, "user_id");
         };
     }
 }
