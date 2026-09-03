@@ -54,10 +54,26 @@ function parseEvidence(raw) {
 }
 function getPredictVariables() { return { periodLabel: form.value.periodLabel, currency: form.value.currency }; }
 async function reset(opts) {
+  const copyId = Number(opts && opts.copyFromBusinessKey);
   if (opts && opts.id) {
     const detail = await getSalaryPayment(opts.id);
     form.value = {
       id: detail.id,
+      paymentTiming: detail.paymentTiming || 'IMMEDIATE',
+      periodLabel: detail.periodLabel,
+      currency: detail.currency || 'CNY',
+      specialNote: detail.specialNote,
+      evidenceFileUrls: parseEvidence(detail.evidenceFileUrls),
+      lines: (detail.salaryLines || []).map(function (l) {
+        if (l.entityCompanyDeptId) loadAccounts(l.entityCompanyDeptId);
+        return { entityCompanyDeptId: l.entityCompanyDeptId, companyBankAccountId: l.companyBankAccountId, netSalaryAmount: Number(l.netSalaryAmount || 0), personalTaxAmount: Number(l.personalTaxAmount || 0), socialInsuranceAmount: Number(l.socialInsuranceAmount || 0), housingFundAmount: Number(l.housingFundAmount || 0) };
+      }),
+    };
+    if (!form.value.lines.length) form.value.lines = [{}];
+  } else if (Number.isFinite(copyId) && copyId > 0) {
+    const detail = await getSalaryPayment(copyId);
+    form.value = {
+      id: undefined,
       paymentTiming: detail.paymentTiming || 'IMMEDIATE',
       periodLabel: detail.periodLabel,
       currency: detail.currency || 'CNY',

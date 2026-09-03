@@ -44,12 +44,25 @@ function openOriginal() {
   infoOpen.value = true;
 }
 
-async function reset() {
+async function reset(opts?: {
+  copyFrom?: Record<string, any>;
+  copyFromBusinessKey?: string;
+}) {
   predecessorId.value = undefined;
   reason.value = '';
   specialNote.value = '';
   snapshot.value = undefined;
   await loadOptions();
+  const pred = Number(opts?.copyFrom?.predecessorApplicationId);
+  if (Number.isFinite(pred) && pred > 0) {
+    reason.value = String(opts?.copyFrom?.reason || '');
+    specialNote.value = String(opts?.copyFrom?.specialNote || '');
+    try {
+      await onPick(pred);
+    } catch {
+      /* 再提带数失败仍可空白发起 */
+    }
+  }
 }
 
 function getPredictVariables() {

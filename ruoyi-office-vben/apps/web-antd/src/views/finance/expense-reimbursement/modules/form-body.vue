@@ -25,6 +25,7 @@ import { getSimpleDeptList } from '#/api/system/dept';
 import { getEmployeeWageCardByUserId } from '#/api/hrm/employee';
 import {
   createExpenseReimbursement,
+  getExpenseReimbursement,
   getOccupiedPredocIds,
   ocrExpenseInvoice,
 } from '#/api/finance/expense-reimbursement';
@@ -545,7 +546,16 @@ function getPredictVariables(): Record<string, unknown> {
   };
 }
 
-async function reset() {
+function feeDateStr(v: unknown) {
+  if (v == null || v === '') return undefined;
+  if (Array.isArray(v) && v.length >= 3) {
+    return `${v[0]}-${String(v[1]).padStart(2, '0')}-${String(v[2]).padStart(2, '0')}`;
+  }
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+async function reset(opts?: { copyFromBusinessKey?: string }) {
   formData.value = {
     proxyTicket: false,
     periodLabel: dayjs().format('YYYY-MM'),
@@ -556,6 +566,43 @@ async function reset() {
     lines: [{ lineKind: 'NORMAL' }],
   };
   applyLoginUser();
+  const copyId = Number(opts?.copyFromBusinessKey);
+  if (Number.isFinite(copyId) && copyId > 0) {
+    try {
+      const bill = await getExpenseReimbursement(copyId);
+      formData.value = {
+        ...formData.value,
+        proxyTicket: !!bill.proxyTicket,
+        periodLabel: bill.periodLabel || formData.value.periodLabel,
+        payeeAccountName: bill.payeeAccountName || '',
+        payeeBankName: bill.payeeBankName || '',
+        payeeAccountNo: bill.payeeAccountNo || '',
+        extraAttachments: bill.extraAttachments || [],
+        lines: (bill.lines || []).map((l) => ({
+          lineKind: l.lineKind || 'NORMAL',
+          category: l.category,
+          invoiceType: l.invoiceType,
+          subItem: l.subItem,
+          feeDate: feeDateStr(l.feeDate),
+          amount: l.amount,
+          taxAmount: l.taxAmount,
+          invoiceFileUrl: l.invoiceFileUrl,
+          invoiceNo: l.invoiceNo,
+          predocType: l.predocType,
+          predocProcessInstanceId: l.predocProcessInstanceId,
+          predocBillId: l.predocBillId,
+          remark: l.remark,
+          stayCityTier: l.stayCityTier,
+          overLimitReason: l.overLimitReason,
+        })),
+      };
+      if (!formData.value.lines.length) {
+        formData.value.lines = [{ lineKind: 'NORMAL' }];
+      }
+    } catch {
+      /* 再提带数失败仍可空白发起 */
+    }
+  }
   emit('predictChange', getPredictVariables());
 }
 

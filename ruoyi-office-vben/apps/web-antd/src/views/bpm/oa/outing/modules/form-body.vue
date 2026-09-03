@@ -6,7 +6,8 @@ import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
 import { DatePicker, Form, Input, InputNumber, Select, message } from 'ant-design-vue';
-import { createOuting } from '#/api/bpm/oa/outing';
+import dayjs from 'dayjs';
+import { createOuting, getOuting } from '#/api/bpm/oa/outing';
 import { FileUpload } from '#/components/upload';
 import { calcOutingHours } from '../data';
 defineOptions({ name: 'BpmOAOutingFormBody' });
@@ -33,10 +34,26 @@ function applyLoginUser() {
   formData.value.userNickname = (userStore.userInfo && userStore.userInfo.nickname) || '';
   formData.value.deptName = (userStore.userInfo && userStore.userInfo.deptName) || '';
 }
-async function reset() {
+async function reset(opts?: { copyFromBusinessKey?: string }) {
   formData.value = { userNickname: '', deptName: '', reason: '', location: '', hours: undefined, needOutput: undefined, attachmentUrls: [] };
   range.value = undefined;
   applyLoginUser();
+  const copyId = Number(opts?.copyFromBusinessKey);
+  if (Number.isFinite(copyId) && copyId > 0) {
+    try {
+      const outing = await getOuting(copyId);
+      formData.value.reason = outing.reason;
+      formData.value.location = outing.location;
+      formData.value.needOutput = outing.needOutput;
+      formData.value.attachmentUrls = outing.attachmentUrls || [];
+      if (outing.startTime && outing.endTime) {
+        range.value = [dayjs(outing.startTime), dayjs(outing.endTime)];
+      }
+      syncHours();
+    } catch {
+      /* 再提带数失败仍可空白发起 */
+    }
+  }
   notifyPredict();
 }
 const rules = {

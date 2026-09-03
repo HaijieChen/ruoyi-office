@@ -54,10 +54,26 @@ function parseEvidence(raw) {
 }
 function getPredictVariables() { return { periodLabel: form.value.periodLabel, currency: form.value.currency }; }
 async function reset(opts) {
+  const copyId = Number(opts && opts.copyFromBusinessKey);
   if (opts && opts.id) {
     const detail = await getTaxPayment(opts.id);
     form.value = {
       id: detail.id,
+      paymentTiming: detail.paymentTiming || 'IMMEDIATE',
+      periodLabel: detail.periodLabel,
+      currency: detail.currency || 'CNY',
+      specialNote: detail.specialNote,
+      evidenceFileUrls: parseEvidence(detail.evidenceFileUrls),
+      lines: (detail.taxLines || []).map(function (l) {
+        if (l.entityCompanyDeptId) loadAccounts(l.entityCompanyDeptId);
+        return { entityCompanyDeptId: l.entityCompanyDeptId, companyBankAccountId: l.companyBankAccountId, vatAmount: Number(l.vatAmount || 0), surchargeAmount: Number(l.surchargeAmount || 0), stampTaxAmount: Number(l.stampTaxAmount || 0), citAmount: Number(l.citAmount || 0) };
+      }),
+    };
+    if (!form.value.lines.length) form.value.lines = [{}];
+  } else if (Number.isFinite(copyId) && copyId > 0) {
+    const detail = await getTaxPayment(copyId);
+    form.value = {
+      id: undefined,
       paymentTiming: detail.paymentTiming || 'IMMEDIATE',
       periodLabel: detail.periodLabel,
       currency: detail.currency || 'CNY',

@@ -21,6 +21,7 @@ import { getOutingPage } from '#/api/bpm/oa/outing';
 import { getTripPage } from '#/api/bpm/oa/trip';
 import {
   createNoInvoiceExpense,
+  getExpenseReimbursement,
   getOccupiedPredocIds,
 } from '#/api/finance/expense-reimbursement';
 import { getEmployeeWageCardByUserId } from '#/api/hrm/employee';
@@ -244,7 +245,16 @@ function getPredictVariables(): Record<string, unknown> {
   return { applyAmount: lineTotal(), periodLabel: formData.value.periodLabel };
 }
 
-async function reset() {
+function feeDateStr(v: unknown) {
+  if (v == null || v === '') return undefined;
+  if (Array.isArray(v) && v.length >= 3) {
+    return `${v[0]}-${String(v[1]).padStart(2, '0')}-${String(v[2]).padStart(2, '0')}`;
+  }
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+async function reset(opts?: { copyFromBusinessKey?: string }) {
   formData.value = {
     periodLabel: dayjs().format('YYYY-MM'),
     payeeAccountName: '',
@@ -254,6 +264,35 @@ async function reset() {
     lines: [{}],
   };
   applyLoginUser();
+  const copyId = Number(opts?.copyFromBusinessKey);
+  if (Number.isFinite(copyId) && copyId > 0) {
+    try {
+      const bill = await getExpenseReimbursement(copyId);
+      formData.value = {
+        ...formData.value,
+        periodLabel: bill.periodLabel || formData.value.periodLabel,
+        payeeAccountName: bill.payeeAccountName || '',
+        payeeBankName: bill.payeeBankName || '',
+        payeeAccountNo: bill.payeeAccountNo || '',
+        extraAttachments: bill.extraAttachments || [],
+        lines: (bill.lines || []).map((l) => ({
+          category: l.category,
+          feeDate: feeDateStr(l.feeDate),
+          amount: l.amount,
+          predocType: l.predocType,
+          predocProcessInstanceId: l.predocProcessInstanceId,
+          remark: l.remark,
+          stayCityTier: l.stayCityTier,
+          overLimitReason: l.overLimitReason,
+        })),
+      };
+      if (!formData.value.lines.length) {
+        formData.value.lines = [{}];
+      }
+    } catch {
+      /* 再提带数失败仍可空白发起 */
+    }
+  }
   emit('predictChange', getPredictVariables());
 }
 
