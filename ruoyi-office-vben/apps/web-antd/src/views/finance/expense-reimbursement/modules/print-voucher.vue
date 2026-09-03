@@ -27,20 +27,24 @@ function subItemLabel(line: FinanceExpenseApi.Line) {
   if (line.subItem) {
     return getDictLabel('finance_expense_subitem', line.subItem) || line.subItem;
   }
-  return categoryLabel(line);
+  return props.bill.proxyTicket ? categoryLabel(line) : '—';
 }
 
-const printGroupLabel = computed(() =>
-  props.bill.proxyTicket ? '费用子项目' : '一级费用分类',
-);
-
 const printRows = computed(() => {
-  const map = new Map<string, number>();
+  const map = new Map<string, { category: string; subItem: string; amount: number }>();
   for (const line of props.bill.lines || []) {
-    const key = props.bill.proxyTicket ? subItemLabel(line) : categoryLabel(line);
-    map.set(key, (map.get(key) || 0) + Number(line.amount || 0));
+    const category = categoryLabel(line);
+    const subItem = subItemLabel(line);
+    const key = props.bill.proxyTicket ? subItem : `${category}\0${subItem}`;
+    const cur = map.get(key);
+    const amount = Number(line.amount || 0);
+    if (cur) {
+      cur.amount += amount;
+    } else {
+      map.set(key, { category, subItem, amount });
+    }
   }
-  return [...map.entries()].map(([name, amount]) => ({ name, amount }));
+  return [...map.values()];
 });
 
 function onPrint() {
@@ -85,15 +89,27 @@ function onPrint() {
       </table>
       <table class="mt">
         <thead>
-          <tr>
-            <th>{{ printGroupLabel }}</th>
+          <tr v-if="bill.proxyTicket">
+            <th>费用子项目</th>
+            <th>金额</th>
+          </tr>
+          <tr v-else>
+            <th>费用项目</th>
+            <th>费用子项目</th>
             <th>金额</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in printRows" :key="row.name">
-            <td>{{ row.name }}</td>
-            <td>{{ money(row.amount) }}</td>
+          <tr v-for="(row, i) in printRows" :key="i">
+            <template v-if="bill.proxyTicket">
+              <td>{{ row.subItem }}</td>
+              <td>{{ money(row.amount) }}</td>
+            </template>
+            <template v-else>
+              <td>{{ row.category }}</td>
+              <td>{{ row.subItem }}</td>
+              <td>{{ money(row.amount) }}</td>
+            </template>
           </tr>
         </tbody>
       </table>
