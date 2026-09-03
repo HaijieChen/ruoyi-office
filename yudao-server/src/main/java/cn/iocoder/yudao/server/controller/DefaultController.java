@@ -2,11 +2,19 @@ package cn.iocoder.yudao.server.controller;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
+import cn.iocoder.yudao.framework.datasource.core.DruidPoolSnapshot;
+import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import javax.sql.DataSource;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import static cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeConstants.NOT_IMPLEMENTED;
 
@@ -19,6 +27,33 @@ import static cn.iocoder.yudao.framework.common.exception.enums.GlobalErrorCodeC
 @RestController
 @Slf4j
 public class DefaultController {
+
+    @Resource
+    private DataSource dataSource;
+
+    /**
+     * 免登录的池状态健康检查：Nginx 只反代 /admin-api，actuator 根路径不对外。
+     */
+    @RequestMapping("/admin-api/actuator/health")
+    @PermitAll
+    public CommonResult<Map<String, Object>> druidPoolHealth() {
+        List<DruidPoolSnapshot> snapshots = DruidPoolSnapshot.collect(dataSource);
+        boolean down = snapshots.stream().anyMatch(DruidPoolSnapshot::isUnhealthy);
+        List<Map<String, Object>> pools = new ArrayList<>(snapshots.size());
+        for (DruidPoolSnapshot snapshot : snapshots) {
+            Map<String, Object> pool = new LinkedHashMap<>();
+            pool.put("name", snapshot.getName());
+            pool.put("active", snapshot.getActiveCount());
+            pool.put("max", snapshot.getMaxActive());
+            pool.put("pooling", snapshot.getPoolingCount());
+            pool.put("waitThreads", snapshot.getWaitThreadCount());
+            pools.add(pool);
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", down ? "DOWN" : "UP");
+        body.put("druidPool", pools);
+        return CommonResult.success(body);
+    }
 
     @RequestMapping("/admin-api/bpm/**")
     public CommonResult<Boolean> bpm404() {
