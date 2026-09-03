@@ -4,6 +4,15 @@ import type { AttachmentApi } from '#/api/common/attachment';
 
 import { computed, nextTick, ref, watch } from 'vue';
 
+import type { PreviewKind } from '#/utils/file-preview';
+
+import {
+  destroyDocxPreview,
+  fetchPreviewBlob,
+  guessPreviewKind,
+  renderDocxPreview,
+} from '#/utils/file-preview';
+
 import { Modal, message } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -165,22 +174,26 @@ function fileExt(row: any): string {
     .toLowerCase();
 }
 
-function previewKind(row: any): 'image' | 'pdf' | null {
+function previewKind(row: any): PreviewKind | null {
   const ext = fileExt(row);
-  if (ext === 'pdf') return 'pdf';
-  if (PREVIEW_MIME[ext]?.startsWith('image/')) return 'image';
-  return null;
+  return guessPreviewKind(row.fileName || (ext ? `file.${ext}` : '') || row.fileUrl || '');
 }
 
 const previewOpen = ref(false);
 const previewTitle = ref('预览');
 const previewSrc = ref('');
-const previewType = ref<'image' | 'pdf'>('image');
+const previewType = ref<PreviewKind>('image');
+const previewLoading = ref(false);
+const docxContainer = ref<HTMLElement | null>(null);
 let previewObjectUrl = '';
+let previewGen = 0;
 
 function closePreview() {
+  previewGen += 1;
   previewOpen.value = false;
   previewSrc.value = '';
+  previewLoading.value = false;
+  destroyDocxPreview(docxContainer.value);
   if (previewObjectUrl) {
     URL.revokeObjectURL(previewObjectUrl);
     previewObjectUrl = '';
@@ -230,14 +243,55 @@ async function fetchAuthorizedBlob(row: any): Promise<Blob | null> {
   return res.blob();
 }
 
-/** 预览：弹窗看图/PDF。Office/压缩包等不支持在线预览，走下载。 */
+async function resolvePreviewBlob(
+  row: AttachmentApi.AttachmentSaveReq,
+): Promise<Blob | null> {
+  const local = resolveLocalPreviewUrl(row);
+  if (local) {
+    const res = await fetch(local);
+    if (!res.ok) throw new Error(`预览失败 HTTP ${res.status}`);
+    return res.blob();
+  }
+  if (props.authDownload) {
+    const blob = await fetchAuthorizedBlob(row);
+    if (blob) return blob;
+  }
+  const url = row.fileUrl;
+  if (url && !url.startsWith('blob:')) {
+    return fetchPreviewBlob(url);
+  }
+  return null;
+}
+
+/** 预览：弹窗看图/PDF/DOCX。其它类型不支持在线预览，走下载。 */
 async function handlePreview(row: AttachmentApi.AttachmentSaveReq) {
   const kind = previewKind(row);
   if (!kind) {
     message.info('该文件类型不支持在线预览，请下载后查看');
     return;
   }
+  const gen = ++previewGen;
   try {
+    if (kind === 'docx') {
+      const blob = await resolvePreviewBlob(row);
+      if (!blob) {
+        message.warning('无法预览：缺少鉴权下载地址');
+        return;
+      }
+      if (gen !== previewGen) return;
+      previewType.value = 'docx';
+      previewTitle.value = row.fileName || '预览';
+      previewLoading.value = true;
+      previewOpen.value = true;
+      await nextTick();
+      if (gen !== previewGen) return;
+      const el = docxContainer.value;
+      if (!el) throw new Error('docx container missing');
+      await renderDocxPreview(blob, el);
+      if (gen !== previewGen) return;
+      previewLoading.value = false;
+      return;
+    }
     if (props.authDownload) {
       const local = resolveLocalPreviewUrl(row);
       if (local) {
@@ -261,6 +315,8 @@ async function handlePreview(row: AttachmentApi.AttachmentSaveReq) {
       message.warning('无法预览：缺少鉴权下载地址');
     }
   } catch (e: any) {
+    if (gen !== previewGen) return;
+    closePreview();
     message.error(e?.message || '预览失败（可能未登录或无权限）');
   }
 }
@@ -518,11 +574,26 @@ watch(
         class="max-h-[70vh] w-full object-contain"
       />
       <iframe
-        v-else
+        v-else-if="previewType === 'pdf'"
         :src="previewSrc"
         class="h-[70vh] w-full border-0"
         title="pdf-preview"
       />
+      <div v-else class="relative">
+        <div
+          v-if="previewLoading"
+          class="absolute inset-0 z-10 flex items-center justify-center bg-white/80"
+        >
+          加载中...
+        </div>
+        <div
+          ref="docxContainer"
+          role="document"
+          :aria-label="previewTitle"
+          tabindex="0"
+          class="h-[70vh] w-full overflow-auto"
+        ></div>
+      </div>
     </Modal>
   </div>
 </template>

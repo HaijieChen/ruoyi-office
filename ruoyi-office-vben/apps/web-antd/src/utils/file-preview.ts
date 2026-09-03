@@ -1,6 +1,8 @@
 import { isTenantEnable, useAppConfig } from '@vben/hooks';
 import { useAccessStore } from '@vben/stores';
 
+import { renderAsync } from 'docx-preview';
+
 import { resolveRequestTenantId } from '#/constants/tenant';
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -21,11 +23,26 @@ export function guessFileExt(nameOrUrl: string) {
   return dot >= 0 ? base.slice(dot + 1).toLowerCase() : '';
 }
 
-export function guessPreviewKind(nameOrUrl: string): 'image' | 'pdf' | null {
+export type PreviewKind = 'image' | 'pdf' | 'docx';
+
+export function guessPreviewKind(nameOrUrl: string): PreviewKind | null {
   const ext = guessFileExt(nameOrUrl);
   if (ext === 'pdf') return 'pdf';
+  if (ext === 'docx') return 'docx';
   if (MIME_BY_EXT[ext]?.startsWith('image/')) return 'image';
   return null;
+}
+
+export async function renderDocxPreview(blob: Blob, container: HTMLElement) {
+  container.innerHTML = '';
+  await renderAsync(await blob.arrayBuffer(), container);
+  if (!container.innerHTML.trim()) {
+    throw new Error('docx preview produced no content');
+  }
+}
+
+export function destroyDocxPreview(container?: HTMLElement | null) {
+  if (container) container.innerHTML = '';
 }
 
 export function blobWithGuessedType(blob: Blob, nameOrUrl: string) {

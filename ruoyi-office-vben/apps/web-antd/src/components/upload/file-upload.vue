@@ -6,7 +6,7 @@ import type { FileUploadProps } from './typing';
 
 import type { AxiosProgressEvent } from '#/api/infra/file';
 
-import { computed, ref, toRefs, watch } from 'vue';
+import { computed, nextTick, ref, toRefs, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
@@ -14,10 +14,14 @@ import { checkFileType, isFunction, isObject, isString } from '@vben/utils';
 
 import { Button, Modal, message, Upload } from 'ant-design-vue';
 
+import type { PreviewKind } from '#/utils/file-preview';
+
 import {
+  destroyDocxPreview,
   downloadAuthFile,
   fetchPreviewBlob,
   guessPreviewKind,
+  renderDocxPreview,
 } from '#/utils/file-preview';
 
 import { UploadResultStatus } from './typing';
@@ -77,12 +81,18 @@ const uploadList = ref<any[]>([]); // 临时上传列表
 const previewOpen = ref(false);
 const previewTitle = ref('预览');
 const previewSrc = ref('');
-const previewKind = ref<'image' | 'pdf'>('image');
+const previewKind = ref<PreviewKind>('image');
+const previewLoading = ref(false);
+const docxContainer = ref<HTMLElement | null>(null);
 let previewObjectUrl = '';
+let previewGen = 0;
 
 function closePreview() {
+  previewGen += 1;
   previewOpen.value = false;
   previewSrc.value = '';
+  previewLoading.value = false;
+  destroyDocxPreview(docxContainer.value);
   if (previewObjectUrl) {
     URL.revokeObjectURL(previewObjectUrl);
     previewObjectUrl = '';
@@ -177,7 +187,32 @@ async function handlePreview(file: UploadFile) {
     message.info('该文件类型不支持在线预览');
     return;
   }
+  const gen = ++previewGen;
   try {
+    if (kind === 'docx') {
+      let blob: Blob | undefined = file.originFileObj;
+      if (!blob) {
+        const url = file.url || '';
+        if (!url) {
+          message.warning('没有可预览的地址');
+          return;
+        }
+        blob = await fetchPreviewBlob(url);
+      }
+      if (gen !== previewGen) return;
+      previewKind.value = 'docx';
+      previewTitle.value = file.name || '预览';
+      previewLoading.value = true;
+      previewOpen.value = true;
+      await nextTick();
+      if (gen !== previewGen) return;
+      const el = docxContainer.value;
+      if (!el) throw new Error('docx container missing');
+      await renderDocxPreview(blob, el);
+      if (gen !== previewGen) return;
+      previewLoading.value = false;
+      return;
+    }
     if (file.originFileObj) {
       const local = URL.createObjectURL(file.originFileObj);
       previewObjectUrl = local;
@@ -200,6 +235,8 @@ async function handlePreview(file: UploadFile) {
     previewTitle.value = file.name || '预览';
     previewOpen.value = true;
   } catch {
+    if (gen !== previewGen) return;
+    closePreview();
     message.error('无法在本页预览该文件');
   }
 }
@@ -407,7 +444,7 @@ function getValue() {
       :open="previewOpen"
       :title="previewTitle"
       :footer="null"
-      width="720px"
+      :width="previewKind === 'docx' ? '860px' : '720px'"
       destroy-on-close
       @cancel="closePreview"
     >
@@ -418,11 +455,26 @@ function getValue() {
         class="max-h-[70vh] w-full object-contain"
       />
       <iframe
-        v-else
+        v-else-if="previewKind === 'pdf'"
         :src="previewSrc"
         class="h-[70vh] w-full border-0"
         title="pdf-preview"
       />
+      <div v-else class="relative">
+        <div
+          v-if="previewLoading"
+          class="absolute inset-0 z-10 flex items-center justify-center bg-white/80"
+        >
+          加载中...
+        </div>
+        <div
+          ref="docxContainer"
+          role="document"
+          :aria-label="previewTitle"
+          tabindex="0"
+          class="h-[70vh] w-full overflow-auto"
+        ></div>
+      </div>
     </Modal>
   </div>
 </template>
