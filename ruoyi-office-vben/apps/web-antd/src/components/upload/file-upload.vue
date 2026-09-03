@@ -460,8 +460,9 @@ function getValue() {
       :open="previewOpen"
       :title="previewTitle"
       :footer="null"
-      :width="previewKind === 'docx' ? '860px' : '720px'"
+      :width="previewKind === 'docx' ? 'min(96vw, 1120px)' : '720px'"
       destroy-on-close
+      :body-style="previewKind === 'docx' ? { overflow: 'auto' } : undefined"
       @cancel="closePreview"
     >
       <img

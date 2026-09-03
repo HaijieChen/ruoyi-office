@@ -66,7 +66,28 @@ export async function sniffPreviewKind(blob: Blob): Promise<PreviewKind | null> 
   return null;
 }
 
+const DOCX_HOST_CLASS = 'docx-preview-host';
+const DOCX_HOST_STYLE_ID = 'docx-preview-host-style';
+
+function ensureDocxHostStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(DOCX_HOST_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = DOCX_HOST_STYLE_ID;
+  style.textContent = `
+.${DOCX_HOST_CLASS} { overflow: auto !important; overscroll-behavior: contain; }
+.${DOCX_HOST_CLASS} .docx-wrapper {
+  align-items: flex-start !important;
+  min-width: min-content;
+}
+.${DOCX_HOST_CLASS} section.docx { overflow: visible !important; }
+`;
+  document.head.appendChild(style);
+}
+
 export async function renderDocxPreview(blob: Blob, container: HTMLElement) {
+  ensureDocxHostStyle();
+  container.classList.add(DOCX_HOST_CLASS);
   container.innerHTML = '';
   await renderAsync(await blob.arrayBuffer(), container);
   if (!container.innerHTML.trim()) {

@@ -563,8 +563,9 @@ watch(
       v-model:open="previewOpen"
       :title="previewTitle"
       :footer="null"
-      width="860px"
+      :width="previewType === 'docx' ? 'min(96vw, 1120px)' : '860px'"
       destroy-on-close
+      :body-style="previewType === 'docx' ? { overflow: 'auto' } : undefined"
       @cancel="closePreview"
     >
       <img
