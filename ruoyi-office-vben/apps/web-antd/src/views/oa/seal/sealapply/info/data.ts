@@ -113,14 +113,14 @@ export function useFormSchema(
     },
     {
       fieldName: 'expectedUseTime',
-      label: '预计用章时间',
+      label: '使用日期',
       rules: 'required',
       component: 'DatePicker',
       componentProps: {
         showTime: true,
         format: 'YYYY-MM-DD HH:mm:ss',
         valueFormat: 'x',
-        placeholder: '请选择预计用章时间',
+        placeholder: '请选择使用日期',
       },
       dependencies: {
         triggerFields: ['expectedReturnTime'],
@@ -139,31 +139,27 @@ export function useFormSchema(
     },
     {
       fieldName: 'expectedReturnTime',
-      label: '预计归还时间',
+      label: '预计归还日期',
       component: 'DatePicker',
       componentProps: {
         showTime: true,
         format: 'YYYY-MM-DD HH:mm:ss',
         valueFormat: 'x',
-        placeholder: '请选择预计归还时间',
+        placeholder: '选填',
       },
       dependencies: {
-        triggerFields: ['useMode', 'expectedUseTime'],
-        show: (values) => values.useMode === 2, // 仅外借用章时显示
+        triggerFields: ['expectedUseTime'],
         trigger: (values, formApi) => {
           if (
             values.expectedUseTime &&
             values.expectedReturnTime &&
             values.expectedReturnTime <= values.expectedUseTime
           ) {
-            message.error('预计归还时间必须大于预计用章时间');
-            // 立即清空预计用章时间字段
-            formApi?.setFieldValue('expectedUseTime', undefined);
+            message.error('预计归还日期须晚于使用日期');
+            formApi?.setFieldValue('expectedReturnTime', undefined);
           }
         },
       },
-      // 注意：这里的条件验证通过dependencies的show来控制显示，如果显示则必填
-      rules: 'required',
     },
     {
       fieldName: 'actualReturnTime',

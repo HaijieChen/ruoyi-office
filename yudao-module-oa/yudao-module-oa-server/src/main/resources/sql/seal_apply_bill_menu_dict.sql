@@ -26,7 +26,8 @@ ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
 INSERT INTO `system_dict_data` (`sort`, `label`, `value`, `dict_type`, `status`, `color_type`, `css_class`, `remark`) VALUES
 (1, '现场用印', '1', 'oa_seal_use_mode', 0, 'success', '', '在公司现场使用印章'),
-(2, '借用印章', '2', 'oa_seal_use_mode', 0, 'warning', '', '借出印章外出使用')
+(2, '借用印章', '2', 'oa_seal_use_mode', 0, 'warning', '', '借出印章外出使用'),
+(3, '电子图片印章', '3', 'oa_seal_use_mode', 0, 'processing', '', '使用电子图片印章')
 ON DUPLICATE KEY UPDATE `label` = VALUES(`label`), `value` = VALUES(`value`);
 
 -- 用印状态字典

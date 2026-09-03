@@ -44,6 +44,14 @@ function handleDetail(row: ExtendedProcessInstance) {
   });
 }
 
+/** 再提一单：打开发起页并带出该实例表单数据，提交为新流程 */
+function handleCopyStart(row: ExtendedProcessInstance) {
+  router.push({
+    path: '/bpm/start-process',
+    query: { processInstanceId: row.id.toString() },
+  });
+}
+
 /** 撤回流程实例 */
 function handleCancel(row: ExtendedProcessInstance) {
   prompt({
@@ -180,6 +188,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.VIEW,
               auth: ['bpm:process-instance:query'],
               onClick: handleDetail.bind(null, row),
+            },
+            {
+              label: '再提一单',
+              type: 'link',
+              auth: ['bpm:process-instance:query'],
+              onClick: handleCopyStart.bind(null, row),
             },
             {
               label: $t('ui.actionTitle.revoke'),

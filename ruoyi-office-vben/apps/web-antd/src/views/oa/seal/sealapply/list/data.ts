@@ -99,7 +99,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
     },
     {
       fieldName: 'expectedUseTime',
-      label: '预计用章时间',
+      label: '使用日期',
       component: 'RangePicker',
       componentProps: {
         ...getRangePickerDefaultProps(),
@@ -172,13 +172,13 @@ export function useGridColumns(): VxeTableGridOptions<SealApplyBillApi.SealApply
     },
     {
       field: 'expectedUseTime',
-      title: '预计用章时间',
+      title: '使用日期',
       minWidth: 140,
       formatter: 'formatDateTime',
     },
     {
       field: 'expectedReturnTime',
-      title: '预计归还时间',
+      title: '预计归还日期',
       minWidth: 140,
       formatter: 'formatDateTime',
     },

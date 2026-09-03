@@ -335,12 +335,17 @@ function onCompanyDropdownVisible(open: boolean) {
 }
 
 /** 初始化（壳内 mount 或 Modal open） */
-async function reset(opts?: { id?: number; mode?: string }) {
+async function reset(opts?: {
+  id?: number;
+  mode?: string;
+  copyFromBusinessKey?: string;
+}) {
   // 公司与收款方分开拉：收款方失败不能把主体公司也带空
   const defaultStaff = await loadBusinessStaff();
   await Promise.all([loadSuppliers(), loadCompanies()]);
   mode.value = opts?.mode === 'resubmit' ? 'resubmit' : 'create';
   currencyTouched.value = false;
+  const copyId = Number(opts?.copyFromBusinessKey);
   if (opts?.id) {
     const detail = await getPaymentApplication(opts.id);
     formData.value = {
@@ -367,6 +372,45 @@ async function reset(opts?: { id?: number; mode?: string }) {
       currencyTouched.value = true;
     }
     // 历史主体不在启用列表时补一条选项
+    if (
+      detail.entityCompanyDeptId != null &&
+      !companyOptions.value.some((o) => o.value === detail.entityCompanyDeptId)
+    ) {
+      companyOptions.value = [
+        {
+          label:
+            detail.entityCompanyName || `公司 #${detail.entityCompanyDeptId}`,
+          value: detail.entityCompanyDeptId,
+        },
+        ...companyOptions.value,
+      ];
+    }
+    await refreshCumulative(detail.payeeCompanyId);
+    if (detail.paymentReason === 'PURCHASE') await loadPurchase();
+    if (detail.paymentReason === 'LEASE') await loadLease();
+    if (detail.paymentReason === 'BUSINESS') await loadRelatedContracts();
+  } else if (Number.isFinite(copyId) && copyId > 0) {
+    const detail = await getPaymentApplication(copyId);
+    formData.value = {
+      paymentTiming: detail.paymentTiming,
+      paymentReason: detail.paymentReason,
+      purchaseProcessInstanceId: detail.purchaseProcessInstanceId,
+      leaseContractApplicationId: detail.leaseContractApplicationId,
+      relatedContractApplicationId: detail.relatedContractApplicationId,
+      entityCompanyDeptId: detail.entityCompanyDeptId,
+      payeeCompanyId: detail.payeeCompanyId,
+      payeeBankName: detail.payeeBankName,
+      payeeBankAccount: detail.payeeBankAccount,
+      applyAmount: detail.applyAmount,
+      currency: detail.currency || 'CNY',
+      businessSettlementTerm: detail.businessSettlementTerm,
+      costProject: detail.costProject,
+      evidenceFileUrls: parseEvidenceUrls(detail.evidenceFileUrls),
+      specialNote: detail.specialNote,
+    };
+    if (detail.entityCompanyDeptId) {
+      currencyTouched.value = true;
+    }
     if (
       detail.entityCompanyDeptId != null &&
       !companyOptions.value.some((o) => o.value === detail.entityCompanyDeptId)

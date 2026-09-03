@@ -82,7 +82,11 @@ async function getList() {
         message.error('重新发起流程失败，原因：流程定义不存在');
         return;
       }
-      await handleSelect(processDefinition, processInstance.formVariables);
+      await handleSelect(
+        processDefinition,
+        processInstance.formVariables,
+        processInstance.businessKey,
+      );
     }
   } finally {
     loading.value = false;
@@ -174,6 +178,7 @@ const processDefinitionGroup = computed(() => {
 async function handleSelect(
   row: BpmProcessDefinitionApi.ProcessDefinition,
   formVariables?: any,
+  businessKey?: string,
 ) {
   const redirectPath = resolveCreateShellRedirectPath(row.key);
   if (redirectPath) {
@@ -192,7 +197,11 @@ async function handleSelect(
   }
   selectProcessDefinition.value = row;
   await nextTick();
-  processDefinitionDetailRef.value?.initProcessInfo(row, formVariables);
+  processDefinitionDetailRef.value?.initProcessInfo(
+    row,
+    formVariables,
+    businessKey,
+  );
 }
 
 /** 过滤出有流程的分类列表。目的：只展示有流程的分类 */

@@ -329,7 +329,30 @@ async function loadEmployments(processDefinitionId?: string) {
   }
 }
 
-async function initProcessInfo(row: any, formVariables?: any) {
+const COPY_FROM_SKIP = new Set([
+  'id',
+  'processInstanceId',
+  'PROCESS_STATUS',
+  'startUserId',
+  'billCode',
+  'applicationNo',
+]);
+
+function toCopyFromVariables(raw?: Record<string, any>) {
+  if (!raw) return undefined;
+  const out: Record<string, any> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (COPY_FROM_SKIP.has(key) || key.startsWith('PROCESS_')) continue;
+    out[key] = value;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+async function initProcessInfo(
+  row: any,
+  formVariables?: any,
+  copyFromBusinessKey?: string,
+) {
   await loadEmployments(row?.id);
   embedInitGen += 1;
   const gen = embedInitGen;
@@ -440,9 +463,13 @@ async function initProcessInfo(row: any, formVariables?: any) {
       throw new Error('业务表单未就绪');
     }
 
-    // 3) 业务数据初始化：reset 403 才是发起权限不足
+    // 3) 业务数据初始化：reset 403 才是发起权限不足；再提一单带 copyFrom
     try {
-      await body.reset({ mode: 'create' });
+      await body.reset({
+        mode: 'create',
+        copyFrom: toCopyFromVariables(formVariables),
+        copyFromBusinessKey,
+      });
     } catch (error: any) {
       if (gen !== embedInitGen) return;
       if (isBizForbidden(error)) {

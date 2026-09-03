@@ -15,9 +15,9 @@ import {
   Select,
   message,
 } from 'ant-design-vue';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 
-import { submitSealApplyBill } from '#/api/oa/seal/sealapply';
+import { getSealApplyBill, submitSealApplyBill } from '#/api/oa/seal/sealapply';
 import { FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'OaSealApplyFormBody' });
@@ -54,7 +54,6 @@ const formData = ref<{
 }>({});
 
 const isContractUse = computed(() => formData.value.useType === 1);
-const isBorrow = computed(() => formData.value.useMode === 2);
 
 function applyLoginUser() {
   const info = userStore.userInfo as {
@@ -71,7 +70,17 @@ function applyLoginUser() {
   formData.value.deptId = info?.deptId;
 }
 
-async function reset() {
+function toDayjs(value: unknown): Dayjs | undefined {
+  if (value == null || value === '') return undefined;
+  const d = dayjs(value as string | Date);
+  return d.isValid() ? d : undefined;
+}
+
+async function reset(opts?: {
+  mode?: string;
+  copyFrom?: Record<string, any>;
+  copyFromBusinessKey?: string;
+}) {
   formData.value = {
     useType: 1,
     useMode: 1,
@@ -80,6 +89,41 @@ async function reset() {
     attachmentUrls: [],
   };
   applyLoginUser();
+  const billId = Number(opts?.copyFromBusinessKey);
+  if (Number.isFinite(billId) && billId > 0) {
+    try {
+      const bill = await getSealApplyBill(billId);
+      formData.value = {
+        ...formData.value,
+        sealId: bill.sealId,
+        sealNo: bill.sealNo,
+        sealName: bill.sealName,
+        sealType: bill.sealType,
+        keeperId: bill.keeperId,
+        keeperName: bill.keeperName,
+        keeperDeptId: bill.keeperDeptId,
+        keeperDeptName: bill.keeperDeptName,
+        useType: bill.useType ?? 1,
+        useMode: bill.useMode ?? 1,
+        documentTitle: bill.documentTitle,
+        documentType: bill.documentType,
+        documentCount: bill.documentCount ?? 1,
+        contractAmount: bill.contractAmount,
+        contractParty: bill.contractParty,
+        expectedUseTime: toDayjs(bill.expectedUseTime),
+        expectedReturnTime: toDayjs(bill.expectedReturnTime),
+        isUrgent: bill.isUrgent ?? 0,
+        cause: bill.cause,
+        remark: bill.remark,
+        attachmentUrls: (bill.attachments || [])
+          .map((a) => a.fileUrl || a.filePath)
+          .filter(Boolean) as string[],
+      };
+      applyLoginUser();
+    } catch {
+      /* 再提带数失败仍可空白发起 */
+    }
+  }
   emit('predictChange', {});
 }
 
@@ -88,7 +132,7 @@ const rules: Record<string, Rule[]> = {
   useType: [{ required: true, message: '请选择用章类型', trigger: 'change' }],
   useMode: [{ required: true, message: '请选择用章方式', trigger: 'change' }],
   expectedUseTime: [
-    { required: true, message: '请选择预计用章时间', trigger: 'change' },
+    { required: true, message: '请选择使用日期', trigger: 'change' },
   ],
   cause: [{ required: true, message: '请填写用章事由', trigger: 'blur' }],
 };
@@ -101,12 +145,11 @@ async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
     throw new Error('seal required');
   }
   if (
-    isBorrow.value &&
-    (!formData.value.expectedReturnTime ||
-      !formData.value.expectedUseTime ||
-      !formData.value.expectedReturnTime.isAfter(formData.value.expectedUseTime))
+    formData.value.expectedReturnTime &&
+    formData.value.expectedUseTime &&
+    !formData.value.expectedReturnTime.isAfter(formData.value.expectedUseTime)
   ) {
-    message.warning('外借用章须填写预计归还时间，且晚于预计用章时间');
+    message.warning('预计归还日期须晚于使用日期');
     throw new Error('return time');
   }
   submitting.value = true;
@@ -128,9 +171,7 @@ async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
         ? formData.value.contractParty
         : undefined,
       expectedUseTime: formData.value.expectedUseTime?.toDate(),
-      expectedReturnTime: isBorrow.value
-        ? formData.value.expectedReturnTime?.toDate()
-        : undefined,
+      expectedReturnTime: formData.value.expectedReturnTime?.toDate(),
       isUrgent: formData.value.isUrgent ?? 0,
       creatorName: formData.value.userNickname,
       companyId: formData.value.companyId || 0,
@@ -222,7 +263,7 @@ defineExpose({ reset, submit, getPredictVariables: () => ({}), submitting });
     <Form.Item v-if="isContractUse" label="合同对方">
       <Input v-model:value="formData.contractParty" placeholder="请输入合同对方" />
     </Form.Item>
-    <Form.Item label="预计用章时间" name="expectedUseTime">
+    <Form.Item label="使用日期" name="expectedUseTime">
       <DatePicker
         v-model:value="formData.expectedUseTime"
         class="w-full"
@@ -230,12 +271,13 @@ defineExpose({ reset, submit, getPredictVariables: () => ({}), submitting });
         format="YYYY-MM-DD HH:mm:ss"
       />
     </Form.Item>
-    <Form.Item v-if="isBorrow" label="预计归还时间">
+    <Form.Item label="预计归还日期">
       <DatePicker
         v-model:value="formData.expectedReturnTime"
         class="w-full"
         show-time
         format="YYYY-MM-DD HH:mm:ss"
+        placeholder="选填"
       />
     </Form.Item>
     <Form.Item label="是否紧急">

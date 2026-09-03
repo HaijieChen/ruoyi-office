@@ -85,7 +85,7 @@ public class SealApplyBillDO extends BaseDO {
      */
     private Integer useType;
     /**
-     * 用章方式（1现场用章 2外借用章）
+     * 用章方式（1现场用印 2借用印章 3电子图片印章）
      */
     private Integer useMode;
     /**
