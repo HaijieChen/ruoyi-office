@@ -43,6 +43,13 @@ const fields = computed(() => {
       value: props.detail?.materialsStatus === 'WAIT_INVOICE' ? '待补票' : '齐全',
     },
   );
+  if (props.detail?.specialNote) {
+    rows.push({
+      label: '特殊说明',
+      value: props.detail.specialNote,
+      span: 2 as const,
+    });
+  }
   return rows;
 });
 </script>

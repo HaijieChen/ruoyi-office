@@ -695,8 +695,14 @@ defineExpose({
           @update:value="onEvidenceUpload"
         />
       </Form.Item>
-      <Form.Item label="特殊说明">
-        <Input.TextArea v-model:value="formData.specialNote" :rows="2" />
+      <Form.Item label="特殊说明" name="specialNote">
+        <Input.TextArea
+          v-model:value="formData.specialNote"
+          class="w-full special-note-textarea"
+          :rows="3"
+          :auto-size="{ minRows: 2, maxRows: 6 }"
+          placeholder="选填"
+        />
       </Form.Item>
     </Form>
     <PredocOverlay
@@ -711,3 +717,16 @@ defineExpose({
     />
   </div>
 </template>
+
+<style scoped>
+.special-note-textarea,
+:deep(.special-note-textarea),
+:deep(.special-note-textarea textarea),
+:deep(textarea.ant-input) {
+  color: rgba(0, 0, 0, 0.88) !important;
+  -webkit-text-fill-color: rgba(0, 0, 0, 0.88) !important;
+  background-color: #fff !important;
+  caret-color: rgba(0, 0, 0, 0.88);
+  opacity: 1 !important;
+}
+</style>

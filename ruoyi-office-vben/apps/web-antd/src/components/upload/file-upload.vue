@@ -37,6 +37,7 @@ const props = withDefaults(defineProps<FileUploadProps>(), {
   disabled: false,
   drag: false,
   helpText: '',
+  listType: 'text',
   maxSize: 2,
   maxNumber: 1,
   accept: () => [],
@@ -408,7 +409,12 @@ function getValue() {
 </script>
 
 <template>
-  <div>
+  <div
+    :class="[
+      'file-upload-root',
+      listType !== 'text' ? 'file-upload-root--thumb' : '',
+    ]"
+  >
     <Upload
       v-bind="$attrs"
       v-model:file-list="fileList"
@@ -418,12 +424,12 @@ function getValue() {
       :disabled="disabled"
       :max-count="maxNumber"
       :multiple="multiple"
-      list-type="text"
+      :list-type="listType"
       :progress="{ showInfo: true }"
       :show-upload-list="{
         showPreviewIcon: true,
-        showRemoveIcon: true,
-        showDownloadIcon: true,
+        showRemoveIcon: !disabled,
+        showDownloadIcon: listType === 'text',
       }"
       @remove="handleRemove"
       @preview="handlePreview"
@@ -440,7 +446,13 @@ function getValue() {
         </p>
       </div>
       <div v-else-if="fileList && fileList.length < maxNumber">
-        <Button>
+        <div
+          v-if="listType === 'picture-card' || listType === 'picture'"
+          class="flex h-full flex-col items-center justify-center"
+        >
+          <IconifyIcon icon="lucide:plus" />
+        </div>
+        <Button v-else>
           <IconifyIcon icon="lucide:cloud-upload" />
           {{ $t('ui.upload.upload') }}
         </Button>
@@ -497,6 +509,25 @@ function getValue() {
 </template>
 
 <style scoped>
+.file-upload-root--thumb :deep(.ant-upload-list-item-name) {
+  display: none;
+}
+
+.file-upload-root--thumb :deep(.ant-upload-select-picture-card),
+.file-upload-root--thumb :deep(.ant-upload-list-picture-card .ant-upload-list-item) {
+  width: 56px;
+  height: 56px;
+  margin-block: 0;
+  margin-inline-end: 8px;
+}
+
+.file-upload-root--thumb :deep(.ant-upload-list-picture-card-container) {
+  width: 56px;
+  height: 56px;
+  margin-block: 0;
+  margin-inline-end: 8px;
+}
+
 .upload-drag-area {
   padding: 20px;
   text-align: center;

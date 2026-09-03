@@ -260,11 +260,22 @@ onMounted(load);
               </template>
             </Table.Column>
             <Table.Column title="票号" width="140" data-index="invoiceNo" />
-            <Table.Column title="附件" min-width="160">
+            <Table.Column title="附件" width="88">
               <template #default="{ record }">
-                <FilePreviewList
+                <FileUpload
                   v-if="record.invoiceFileUrl"
-                  :value="record.invoiceFileUrl"
+                  :value="
+                    Array.isArray(record.invoiceFileUrl)
+                      ? record.invoiceFileUrl
+                      : [record.invoiceFileUrl]
+                  "
+                  :max-number="
+                    Array.isArray(record.invoiceFileUrl)
+                      ? Math.max(record.invoiceFileUrl.length, 1)
+                      : 1
+                  "
+                  list-type="picture-card"
+                  disabled
                 />
                 <span v-else class="text-gray-400">—</span>
               </template>
