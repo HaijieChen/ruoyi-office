@@ -238,6 +238,7 @@ onMounted(load);
         </Descriptions>
         <div class="mt-4 print:hidden">
           <Table
+            class="expense-line-table"
             size="small"
             :pagination="false"
             :data-source="lineRows"
@@ -260,7 +261,7 @@ onMounted(load);
               </template>
             </Table.Column>
             <Table.Column title="票号" width="140" data-index="invoiceNo" />
-            <Table.Column title="附件" width="88">
+            <Table.Column title="附件" width="88" class="expense-line-attach">
               <template #default="{ record }">
                 <FilePreviewList :value="record.invoiceFileUrl" />
               </template>
@@ -337,3 +338,23 @@ onMounted(load);
     />
   </component>
 </template>
+
+<style scoped>
+.expense-line-table :deep(.ant-table-tbody > tr > td) {
+  vertical-align: middle;
+}
+
+.expense-line-table :deep(.file-upload-root),
+.expense-line-table :deep(.ant-upload),
+.expense-line-table :deep(.ant-upload-list),
+.expense-line-table :deep(.ant-upload-list-picture-card) {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.expense-line-table :deep(.ant-upload-list-picture-card-container) {
+  margin: 0;
+  float: none;
+}
+</style>
