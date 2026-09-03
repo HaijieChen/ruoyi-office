@@ -589,19 +589,27 @@ function getValue() {
   object-fit: cover;
 }
 
-.file-upload-root--thumb :deep(.ant-upload-select-picture-card),
-.file-upload-root--thumb :deep(.ant-upload-list-picture-card .ant-upload-list-item) {
-  width: 56px;
-  height: 56px;
-  margin-block: 0;
-  margin-inline-end: 8px;
+.file-upload-root--thumb :deep(.ant-upload-list) {
+  display: flex;
+  margin: 0;
+  line-height: 0;
+  align-items: center;
 }
 
-.file-upload-root--thumb :deep(.ant-upload-list-picture-card-container) {
-  width: 56px;
-  height: 56px;
-  margin-block: 0;
-  margin-inline-end: 8px;
+.file-upload-root--thumb :deep(.ant-upload-list::after) {
+  display: none !important;
+}
+
+.file-upload-root--thumb :deep(.ant-upload-select-picture-card),
+.file-upload-root--thumb :deep(.ant-upload-list-item-container),
+.file-upload-root--thumb :deep(.ant-upload-list-picture-card-container),
+.file-upload-root--thumb :deep(.ant-upload-list-picture-card .ant-upload-list-item) {
+  width: 56px !important;
+  height: 56px !important;
+  margin: 0 8px 0 0 !important;
+  padding: 0 !important;
+  float: none !important;
+  line-height: 0 !important;
 }
 
 .upload-drag-area {

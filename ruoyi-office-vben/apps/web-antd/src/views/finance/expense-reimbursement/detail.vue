@@ -261,9 +261,11 @@ onMounted(load);
               </template>
             </Table.Column>
             <Table.Column title="票号" width="140" data-index="invoiceNo" />
-            <Table.Column title="附件" width="88" class="expense-line-attach">
+            <Table.Column title="附件" width="88">
               <template #default="{ record }">
-                <FilePreviewList :value="record.invoiceFileUrl" />
+                <div class="expense-attach-cell">
+                  <FilePreviewList :value="record.invoiceFileUrl" />
+                </div>
               </template>
             </Table.Column>
             <Table.Column title="说明" min-width="140">
@@ -341,20 +343,22 @@ onMounted(load);
 
 <style scoped>
 .expense-line-table :deep(.ant-table-tbody > tr > td) {
-  vertical-align: middle;
+  vertical-align: middle !important;
+}
+
+.expense-attach-cell {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
 }
 
 .expense-line-table :deep(.file-upload-root),
+.expense-line-table :deep(.ant-upload-wrapper),
 .expense-line-table :deep(.ant-upload),
-.expense-line-table :deep(.ant-upload-list),
-.expense-line-table :deep(.ant-upload-list-picture-card) {
+.expense-line-table :deep(.ant-upload-list) {
   display: flex;
+  margin: 0;
+  line-height: 0;
   align-items: center;
-  margin: 0;
-}
-
-.expense-line-table :deep(.ant-upload-list-picture-card-container) {
-  margin: 0;
-  float: none;
 }
 </style>
