@@ -53,6 +53,13 @@ class TimestampLocalDateTimeDeserializerTest {
     }
 
     @Test
+    void shouldDeserializeIsoInstantWithZ() throws Exception {
+        String iso = "2026-09-03T02:19:16.940Z";
+        LocalDateTime actual = objectMapper.readValue("\"" + iso + "\"", LocalDateTime.class);
+        assertEquals(LocalDateTime.ofInstant(Instant.parse(iso), ZoneId.systemDefault()), actual);
+    }
+
+    @Test
     void shouldRejectInvalidDateString() {
         assertThrows(Exception.class,
                 () -> objectMapper.readValue("\"not-a-date\"", LocalDateTime.class));

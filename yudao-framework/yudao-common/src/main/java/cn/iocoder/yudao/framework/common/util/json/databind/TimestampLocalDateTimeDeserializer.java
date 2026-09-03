@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -64,6 +65,13 @@ public class TimestampLocalDateTimeDeserializer extends JsonDeserializer<LocalDa
             } catch (DateTimeParseException ignored) {
                 // try next
             }
+        }
+        try {
+            return OffsetDateTime.parse(text)
+                    .atZoneSameInstant(ZoneId.systemDefault())
+                    .toLocalDateTime();
+        } catch (DateTimeParseException ignored) {
+            // fall through
         }
         throw InvalidFormatException.from(p,
                 "Cannot deserialize value of type `java.time.LocalDateTime` from String \"" + text
