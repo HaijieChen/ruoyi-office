@@ -67,17 +67,19 @@ public class BpmOATripServiceImpl implements BpmOATripService {
     @Transactional(rollbackFor = Exception.class)
     public Long createTrip(Long userId, BpmOATripCreateReqVO createReqVO) {
         java.util.List<Long> companionIds = resolveCompanionIds(createReqVO);
-        applyBizFieldRules(createReqVO, companionIds);
-        if (companionIds.contains(userId)) {
-            throw exception(OA_TRIP_COMPANION_INVALID);
-        }
-        CommonResult<java.util.List<AdminUserRespDTO>> companions = adminUserApi.getUserList(companionIds);
-        java.util.List<AdminUserRespDTO> companionUsers = companions == null ? null : companions.getData();
-        if (companionUsers == null || companionUsers.size() != companionIds.size()) {
-            throw exception(OA_TRIP_COMPANION_INVALID);
+        applyBizFieldRules(createReqVO);
+        if (!companionIds.isEmpty()) {
+            if (companionIds.contains(userId)) {
+                throw exception(OA_TRIP_COMPANION_INVALID);
+            }
+            CommonResult<java.util.List<AdminUserRespDTO>> companions = adminUserApi.getUserList(companionIds);
+            java.util.List<AdminUserRespDTO> companionUsers = companions == null ? null : companions.getData();
+            if (companionUsers == null || companionUsers.size() != companionIds.size()) {
+                throw exception(OA_TRIP_COMPANION_INVALID);
+            }
         }
         createReqVO.setCompanionUserIds(companionIds);
-        createReqVO.setCompanionUserId(companionIds.get(0));
+        createReqVO.setCompanionUserId(companionIds.isEmpty() ? null : companionIds.get(0));
 
         BigDecimal hours = OaDurationHours.calc(createReqVO.getStartTime(), createReqVO.getEndTime())
                 .orElseThrow(() -> exception(OA_DURATION_INVALID));
@@ -88,7 +90,7 @@ public class BpmOATripServiceImpl implements BpmOATripService {
                 .setStatus(BpmTaskStatusEnum.RUNNING.getStatus())
                 .setAttendanceSyncStatus(OaAttendanceSyncStatusEnum.NOT_SYNCED.getStatus());
         trip.setCompanionUserIds(companionIds);
-        trip.setCompanionUserId(companionIds.get(0));
+        trip.setCompanionUserId(companionIds.isEmpty() ? null : companionIds.get(0));
         trip.setType(null);
         trip.setDestination(createReqVO.getDestination().trim());
         tripMapper.insert(trip);
@@ -149,13 +151,13 @@ public class BpmOATripServiceImpl implements BpmOATripService {
     static final int BIZ_EVENT = 2;
     static final int BIZ_OTHER = 3;
 
-    static void applyBizFieldRules(BpmOATripCreateReqVO vo, java.util.List<Long> companionIds) {
+    static void applyBizFieldRules(BpmOATripCreateReqVO vo) {
         Integer bizType = vo.getBizType();
         java.util.List<String> attachments = vo.getAttachmentUrls();
         boolean hasAttach = attachments != null && attachments.stream().anyMatch(StrUtil::isNotBlank);
         if (bizType == null || StrUtil.isBlank(vo.getDestination()) || StrUtil.isBlank(vo.getOriginCity())
                 || StrUtil.isBlank(vo.getReason()) || StrUtil.isBlank(vo.getTransport())
-                || companionIds == null || companionIds.isEmpty() || !hasAttach) {
+                || !hasAttach) {
             throw exception(OA_TRIP_FIELD_REQUIRED);
         }
         if (Objects.equals(bizType, BIZ_TALK) || Objects.equals(bizType, BIZ_EVENT)) {

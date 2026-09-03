@@ -118,7 +118,6 @@ const rules: Record<string, Rule[]> = {
   originCity: [{ required: true, message: '请选择出发城市', trigger: 'change' }],
   destination: [{ required: true, message: '请选择目的地城市', trigger: 'change' }],
   transport: [{ required: true, message: '请选择交通工具', trigger: 'change' }],
-  companionUserIds: [{ required: true, type: 'array', min: 1, message: '请选择同行人员', trigger: 'change' }],
 };
 
 async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number }): Promise<void> {
@@ -128,7 +127,7 @@ async function submit(ctx?: { startCompanyDeptId?: number; startDeptId?: number 
     throw new Error('invalid range');
   }
   const companionUserIds = (formData.value.companionUserIds || []).map(Number).filter(Boolean);
-  if (companionUserIds.length === 0 || companionUserIds.includes(Number(userStore.userInfo?.id))) {
+  if (companionUserIds.includes(Number(userStore.userInfo?.id))) {
     message.warning('同行人员须为组织内其他人员');
     throw new Error('companion');
   }

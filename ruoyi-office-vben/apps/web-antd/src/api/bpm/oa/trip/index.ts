@@ -50,7 +50,7 @@ export namespace BpmOATripApi {
     remark?: string;
     attachmentUrls: string[];
     companionUserId?: number;
-    companionUserIds: number[];
+    companionUserIds?: number[];
     startTime: number;
     endTime: number;
     startCompanyDeptId?: number;
