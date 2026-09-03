@@ -19,17 +19,25 @@ function money(v: unknown) {
   return `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function categoryLabel(line: FinanceExpenseApi.Line) {
+  return getDictLabel('finance_expense_category', line.category) || line.category || '未分类';
+}
+
 function subItemLabel(line: FinanceExpenseApi.Line) {
   if (line.subItem) {
     return getDictLabel('finance_expense_subitem', line.subItem) || line.subItem;
   }
-  return getDictLabel('finance_expense_category', line.category) || line.category || '未分类';
+  return categoryLabel(line);
 }
 
-const subItemTotals = computed(() => {
+const printGroupLabel = computed(() =>
+  props.bill.proxyTicket ? '费用子项目' : '一级费用分类',
+);
+
+const printRows = computed(() => {
   const map = new Map<string, number>();
   for (const line of props.bill.lines || []) {
-    const key = subItemLabel(line);
+    const key = props.bill.proxyTicket ? subItemLabel(line) : categoryLabel(line);
     map.set(key, (map.get(key) || 0) + Number(line.amount || 0));
   }
   return [...map.entries()].map(([name, amount]) => ({ name, amount }));
@@ -78,12 +86,12 @@ function onPrint() {
       <table class="mt">
         <thead>
           <tr>
-            <th>费用子项目</th>
+            <th>{{ printGroupLabel }}</th>
             <th>金额</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in subItemTotals" :key="row.name">
+          <tr v-for="row in printRows" :key="row.name">
             <td>{{ row.name }}</td>
             <td>{{ money(row.amount) }}</td>
           </tr>
