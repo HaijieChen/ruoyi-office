@@ -815,7 +815,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             :max-number="20"
             :multiple="true"
             :max-size="20"
-            :accept="['pdf', 'jpg', 'jpeg', 'png']"
+            :accept="['pdf', 'jpg', 'jpeg', 'png', 'docx']"
             help-text="可一次选多张，每张拆成一行并识别"
             :api="(file, progress) => uploadInvoice(index, file as File, progress)"
             @update:value="(v) => onInvoiceUpload(index, v)"

@@ -33,6 +33,39 @@ export function guessPreviewKind(nameOrUrl: string): PreviewKind | null {
   return null;
 }
 
+export function resolvePreviewKind(input: {
+  name?: string;
+  originName?: string;
+  type?: string;
+  url?: string;
+}): PreviewKind | null {
+  for (const n of [input.originName, input.name, input.url]) {
+    const kind = n ? guessPreviewKind(n) : null;
+    if (kind) return kind;
+  }
+  const type = String(input.type || '').toLowerCase();
+  if (type.includes('wordprocessingml')) return 'docx';
+  if (type === 'application/pdf') return 'pdf';
+  if (type.startsWith('image/')) return 'image';
+  return null;
+}
+
+export async function sniffPreviewKind(blob: Blob): Promise<PreviewKind | null> {
+  const fromType = resolvePreviewKind({ type: blob.type });
+  if (fromType) return fromType;
+  const head = new Uint8Array(await blob.slice(0, 4096).arrayBuffer());
+  if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) {
+    return 'pdf';
+  }
+  if (head[0] === 0xff && head[1] === 0xd8) return 'image';
+  if (head[0] === 0x89 && head[1] === 0x50) return 'image';
+  if (head[0] === 0x50 && head[1] === 0x4b) {
+    const text = new TextDecoder('latin1').decode(head);
+    if (text.includes('word/')) return 'docx';
+  }
+  return null;
+}
+
 export async function renderDocxPreview(blob: Blob, container: HTMLElement) {
   container.innerHTML = '';
   await renderAsync(await blob.arrayBuffer(), container);

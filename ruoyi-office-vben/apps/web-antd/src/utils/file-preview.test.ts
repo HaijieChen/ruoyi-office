@@ -6,7 +6,13 @@ vi.mock('docx-preview', () => ({
   renderAsync: (...args: unknown[]) => renderAsync(...args),
 }));
 
-import { destroyDocxPreview, guessPreviewKind, renderDocxPreview } from './file-preview';
+import {
+  destroyDocxPreview,
+  guessPreviewKind,
+  renderDocxPreview,
+  resolvePreviewKind,
+  sniffPreviewKind,
+} from './file-preview';
 
 describe('guessPreviewKind', () => {
   it('returns docx for .docx names', () => {
@@ -29,6 +35,35 @@ describe('guessPreviewKind', () => {
 
   it('still returns pdf for .pdf', () => {
     expect(guessPreviewKind('a.pdf')).toBe('pdf');
+  });
+});
+
+describe('resolvePreviewKind', () => {
+  it('uses origin file name when the stored URL has no extension', () => {
+    expect(
+      resolvePreviewKind({
+        name: 'a1b2c3',
+        url: 'https://minio.example/bucket/a1b2c3',
+        originName: '报销说明.docx',
+      }),
+    ).toBe('docx');
+  });
+
+  it('uses wordprocessingml MIME when names have no extension', () => {
+    expect(
+      resolvePreviewKind({
+        name: 'a1b2c3',
+        url: 'https://minio.example/bucket/a1b2c3',
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    ).toBe('docx');
+  });
+});
+
+describe('sniffPreviewKind', () => {
+  it('detects docx from a zip that contains word/', async () => {
+    const bytes = new TextEncoder().encode('PK\x03\x04xxxxword/document.xml');
+    await expect(sniffPreviewKind(new Blob([bytes]))).resolves.toBe('docx');
   });
 });
 

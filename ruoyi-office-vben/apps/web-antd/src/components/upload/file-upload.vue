@@ -20,8 +20,9 @@ import {
   destroyDocxPreview,
   downloadAuthFile,
   fetchPreviewBlob,
-  guessPreviewKind,
   renderDocxPreview,
+  resolvePreviewKind,
+  sniffPreviewKind,
 } from '#/utils/file-preview';
 
 import { UploadResultStatus } from './typing';
@@ -181,16 +182,31 @@ async function handleDownload(file: UploadFile) {
 /** 处理文件预览 */
 async function handlePreview(file: UploadFile) {
   emit('preview', file);
-  const nameOrUrl = file.name || file.url || '';
-  const kind = guessPreviewKind(nameOrUrl);
-  if (!kind) {
-    message.info('该文件类型不支持在线预览');
-    return;
-  }
+  let kind = resolvePreviewKind({
+    name: file.name,
+    url: file.url,
+    type: file.type,
+    originName: file.originFileObj?.name,
+  });
   const gen = ++previewGen;
   try {
+    let blob: Blob | undefined = file.originFileObj;
+    if (!kind) {
+      if (!blob) {
+        const url = file.url || '';
+        if (!url) {
+          message.info('该文件类型不支持在线预览');
+          return;
+        }
+        blob = await fetchPreviewBlob(url);
+      }
+      kind = await sniffPreviewKind(blob);
+    }
+    if (!kind) {
+      message.info('该文件类型不支持在线预览');
+      return;
+    }
     if (kind === 'docx') {
-      let blob: Blob | undefined = file.originFileObj;
       if (!blob) {
         const url = file.url || '';
         if (!url) {
@@ -227,8 +243,8 @@ async function handlePreview(file: UploadFile) {
       message.warning('没有可预览的地址');
       return;
     }
-    const blob = await fetchPreviewBlob(url);
-    const obj = URL.createObjectURL(blob);
+    const remote = blob ?? (await fetchPreviewBlob(url));
+    const obj = URL.createObjectURL(remote);
     previewObjectUrl = obj;
     previewSrc.value = obj;
     previewKind.value = kind;
