@@ -2,7 +2,7 @@
 import type { BpmCategoryApi } from '#/api/bpm/category';
 import type { BpmProcessDefinitionApi } from '#/api/bpm/definition';
 
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
@@ -33,7 +33,12 @@ const route = useRoute();
 const router = useRouter();
 
 const loading = ref(true); // 加载中
-const processInstanceId: any = route.query.processInstanceId; // 流程实例编号。场景：重新发起时
+
+function queryProcessInstanceId(): string {
+  const raw = route.query.processInstanceId;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value == null ? '' : String(value);
+}
 
 const categoryList: any = ref([]); // 分类的列表
 const activeCategory = ref(''); // 当前选中的分类
@@ -58,8 +63,9 @@ async function getList() {
     // 1.2 所有流程定义数据
     await loadProcessDefinitionList();
 
-    // 2. 如果 processInstanceId 非空，说明是重新发起
-    if (processInstanceId?.length > 0) {
+    // 2. 如果 processInstanceId 非空，说明是重新发起 / 再提一单
+    const processInstanceId = queryProcessInstanceId();
+    if (processInstanceId.length > 0) {
       const processInstance = await getProcessInstance(processInstanceId);
       if (!processInstance) {
         message.error('重新发起流程失败，原因：流程实例不存在');
@@ -82,6 +88,8 @@ async function getList() {
         message.error('重新发起流程失败，原因：流程定义不存在');
         return;
       }
+      selectProcessDefinition.value = undefined;
+      await nextTick();
       await handleSelect(
         processDefinition,
         processInstance.formVariables,
@@ -247,10 +255,23 @@ watch(
   { immediate: true },
 );
 
-/** 初始化 */
+/** 初始化；keepAlive 下再提一单只改 query，必须 watch / onActivated */
 onMounted(() => {
   getList();
 });
+onActivated(() => {
+  if (queryProcessInstanceId()) {
+    void getList();
+  }
+});
+watch(
+  () => queryProcessInstanceId(),
+  (id, prev) => {
+    if (id && id !== prev) {
+      void getList();
+    }
+  },
+);
 </script>
 
 <template>

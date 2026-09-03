@@ -47,7 +47,7 @@ function handleDetail(row: ExtendedProcessInstance) {
 /** 再提一单：打开发起页并带出该实例表单数据，提交为新流程 */
 function handleCopyStart(row: ExtendedProcessInstance) {
   router.push({
-    path: '/bpm/start-process',
+    path: '/bpm/task/create',
     query: { processInstanceId: row.id.toString() },
   });
 }
