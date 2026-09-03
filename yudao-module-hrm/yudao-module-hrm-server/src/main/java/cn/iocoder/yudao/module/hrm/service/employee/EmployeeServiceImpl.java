@@ -9,6 +9,7 @@ import cn.iocoder.yudao.common.server.attachment.service.AttachmentService;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.datapermission.core.util.DataPermissionUtils;
 import cn.iocoder.yudao.framework.dict.core.DictFrameworkUtils;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.*;
 import cn.iocoder.yudao.module.hrm.dal.dataobject.employee.*;
@@ -968,14 +969,17 @@ public class EmployeeServiceImpl implements EmployeeService {
             vo.setCompanyDeptId(row.getCompanyDeptId());
             vo.setDeptId(row.getDeptId());
             vo.setSigned(Boolean.TRUE.equals(row.getSigned()));
+            // 任职行本身已按员工归属授权；名称解析不受列表数据权限影响，避免 SELF 用户看到空名称。
             if (row.getCompanyDeptId() != null) {
-                CommonResult<DeptRespDTO> company = deptApi.getDept(row.getCompanyDeptId());
+                CommonResult<DeptRespDTO> company = DataPermissionUtils.executeIgnore(
+                        () -> deptApi.getDept(row.getCompanyDeptId()));
                 if (company != null && company.isSuccess() && company.getData() != null) {
                     vo.setCompanyName(company.getData().getName());
                 }
             }
             if (row.getDeptId() != null) {
-                CommonResult<DeptRespDTO> dept = deptApi.getDept(row.getDeptId());
+                CommonResult<DeptRespDTO> dept = DataPermissionUtils.executeIgnore(
+                        () -> deptApi.getDept(row.getDeptId()));
                 if (dept != null && dept.isSuccess() && dept.getData() != null) {
                     vo.setDeptName(dept.getData().getName());
                 }
@@ -1085,7 +1089,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (employeeIds.isEmpty()) {
             return result;
         }
-        List<EmployeeDO> employees = employeeArchiveMapper.selectBatchIds(employeeIds);
+        // 候选集已限定为本人任职公司员工；批量读取不受列表数据权限影响。
+        List<EmployeeDO> employees = DataPermissionUtils.executeIgnore(
+                () -> employeeArchiveMapper.selectBatchIds(employeeIds));
         if (CollUtil.isEmpty(employees)) {
             return result;
         }

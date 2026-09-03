@@ -1,3 +1,5 @@
+import { getMyEmployments } from '#/api/hrm/employee';
+
 import { requestClient } from '#/api/request';
 
 export namespace SystemDeptApi {
@@ -36,11 +38,39 @@ export async function getCompanyList() {
   return requestClient.get('/system/dept/company-list');
 }
 
-/** 启用公司精简列表（下拉，无额外权限） */
+/** 启用公司精简列表（下拉，无额外权限）；数据权限为空时回退为本人任职公司 */
 export async function getSimpleCompanyList() {
-  return requestClient.get<SystemDeptApi.Dept[]>(
+  const list = await requestClient.get<SystemDeptApi.Dept[]>(
     '/system/dept/company-simple-list',
   );
+  if (list && list.length > 0) {
+    return list;
+  }
+  const employments = (await getMyEmployments().catch(() => [])) ?? [];
+  const seen = new Set<number>();
+  return employments
+    .filter((employment) => {
+      if (
+        employment.companyDeptId == null ||
+        !employment.companyName ||
+        seen.has(employment.companyDeptId)
+      ) {
+        return false;
+      }
+      seen.add(employment.companyDeptId);
+      return true;
+    })
+    .map((employment) => ({
+      id: employment.companyDeptId,
+      name: employment.companyName as string,
+      status: 0,
+      sort: 0,
+      leaderUserId: 0,
+      phone: '',
+      email: '',
+      orgType: '1',
+      createTime: new Date(),
+    }));
 }
 
 /** 查询部门详情 */
