@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.framework.datasource.config;
 
+import cn.iocoder.yudao.framework.datasource.core.DruidPoolMonitor;
 import cn.iocoder.yudao.framework.datasource.core.filter.DruidAdRemoveFilter;
 import com.alibaba.druid.spring.boot3.autoconfigure.properties.DruidStatProperties;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -7,7 +8,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+import javax.sql.DataSource;
 
 /**
  * 数据库配置类
@@ -15,9 +19,15 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * @author 宇擎源码
  */
 @AutoConfiguration
+@EnableScheduling
 @EnableTransactionManagement(proxyTargetClass = true) // 启动事务管理
 @EnableConfigurationProperties(DruidStatProperties.class)
 public class YudaoDataSourceAutoConfiguration {
+
+    @Bean
+    public DruidPoolMonitor druidPoolMonitor(DataSource dataSource) {
+        return new DruidPoolMonitor(dataSource);
+    }
 
     /**
      * 创建 DruidAdRemoveFilter 过滤器，过滤 common.js 的广告
