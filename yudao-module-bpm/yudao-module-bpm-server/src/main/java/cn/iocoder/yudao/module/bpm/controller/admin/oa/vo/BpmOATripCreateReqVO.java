@@ -66,7 +66,7 @@ public class BpmOATripCreateReqVO {
     @Schema(description = "同行人员用户编号（兼容旧单选）")
     private Long companionUserId;
 
-    @Schema(description = "同行人员用户编号列表", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "同行人员用户编号列表")
     private java.util.List<Long> companionUserIds;
 
     @Schema(description = "开始时间", requiredMode = Schema.RequiredMode.REQUIRED)

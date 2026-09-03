@@ -235,6 +235,28 @@ class BpmOATripServiceTest {
     }
 
     @Test
+    void createTrip_emptyCompanion_succeeds() {
+        doAnswer(invocation -> {
+            BpmOATripDO trip = invocation.getArgument(0);
+            trip.setId(21L);
+            return 1;
+        }).when(tripMapper).insert(any(BpmOATripDO.class));
+        when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("pi-21"));
+
+        BpmOATripCreateReqVO req = validCreateReq();
+        req.setCompanionUserId(null);
+        req.setCompanionUserIds(java.util.List.of());
+        assertEquals(21L, service.createTrip(1L, req));
+
+        ArgumentCaptor<BpmOATripDO> insertCaptor = ArgumentCaptor.forClass(BpmOATripDO.class);
+        verify(tripMapper).insert(insertCaptor.capture());
+        assertNull(insertCaptor.getValue().getCompanionUserId());
+        assertTrue(insertCaptor.getValue().getCompanionUserIds() == null
+                || insertCaptor.getValue().getCompanionUserIds().isEmpty());
+    }
+
+    @Test
     void createReqVoMustNotBindServerOwnedFields() {
         Set<String> fields = Arrays.stream(BpmOATripCreateReqVO.class.getDeclaredFields())
                 .map(Field::getName)
