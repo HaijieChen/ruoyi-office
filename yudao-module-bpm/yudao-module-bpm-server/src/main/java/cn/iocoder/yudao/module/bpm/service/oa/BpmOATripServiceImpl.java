@@ -132,8 +132,7 @@ public class BpmOATripServiceImpl implements BpmOATripService {
         }
         if (Objects.equals(trip.getUserId(), userId)
                 || securityFrameworkService.hasPermission(QUERY_PERMISSION)
-                || oaBillAccessPermission.isActiveTaskCandidateOrAssignee(trip.getProcessInstanceId(), userId)
-                || oaBillAccessPermission.canReadViaAttachingBill(userId, trip.getProcessInstanceId())) {
+                || oaBillAccessPermission.canReadOaBill(trip.getProcessInstanceId(), userId)) {
             return trip;
         }
         throw exception(OA_TRIP_ACCESS_DENIED);
