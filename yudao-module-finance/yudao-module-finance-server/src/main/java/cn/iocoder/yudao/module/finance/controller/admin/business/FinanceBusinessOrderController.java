@@ -40,7 +40,6 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
-import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 @Tag(name = "管理后台 - 商务签单")
@@ -63,6 +62,7 @@ public class FinanceBusinessOrderController {
         List<FinanceBusinessOrderImportExcelVO> list = Arrays.asList(
                 FinanceBusinessOrderImportExcelVO.builder()
                         .entityCompanyName("示例主体公司")
+                        .applicantUsername("yunai")
                         .contractApplicationNo("HT-DEMO-001")
                         .orderDate(LocalDate.of(2026, 7, 20))
                         .productName("示例产品A")
@@ -76,6 +76,7 @@ public class FinanceBusinessOrderController {
                         .build(),
                 FinanceBusinessOrderImportExcelVO.builder()
                         .entityCompanyName("示例主体公司")
+                        .applicantUsername("yunai")
                         .contractApplicationNo("HT-DEMO-002")
                         .orderDate(LocalDate.of(2026, 7, 21))
                         .productName("示例产品B")
@@ -137,9 +138,20 @@ public class FinanceBusinessOrderController {
     @PreAuthorize("@ss.hasPermission('finance:business-order:export')")
     public void exportExcel(@Valid FinanceBusinessOrderPageReqVO reqVO, HttpServletResponse response)
             throws IOException {
+        List<FinanceBusinessOrderDO> orders = businessOrderService.listForExport(reqVO);
+        java.util.Set<Long> userIds = new java.util.HashSet<>();
+        for (FinanceBusinessOrderDO order : orders) {
+            if (order.getApplicantUserId() != null) {
+                userIds.add(order.getApplicantUserId());
+            }
+        }
+        Map<Long, AdminUserRespDTO> userMap = userIds.isEmpty()
+                ? java.util.Collections.emptyMap() : adminUserApi.getUserMap(userIds);
         List<FinanceBusinessOrderExportExcelVO> rows = new java.util.ArrayList<>();
-        for (FinanceBusinessOrderDO order : businessOrderService.listForExport(reqVO)) {
+        for (FinanceBusinessOrderDO order : orders) {
             FinanceBusinessOrderExportExcelVO vo = BeanUtils.toBean(order, FinanceBusinessOrderExportExcelVO.class);
+            MapUtils.findAndThen(userMap, order.getApplicantUserId(),
+                    user -> vo.setApplicantName(user.getNickname()));
             rows.add(vo);
         }
         ExcelUtils.write(response, "商务签单.xls", "商务签单", FinanceBusinessOrderExportExcelVO.class, rows);
@@ -160,7 +172,7 @@ public class FinanceBusinessOrderController {
     public CommonResult<PageResult<FinanceBusinessOrderRespVO>> getBusinessOrderPage(@Valid FinanceBusinessOrderPageReqVO pageReqVO) {
         PageResult<FinanceBusinessOrderDO> pageResult = businessOrderService.getBusinessOrderPage(pageReqVO);
         PageResult<FinanceBusinessOrderRespVO> voPage =
-                BeanUtils.toBean(pageResult, FinanceBusinessOrderRespVO.class, this::fillImporterNames);
+                BeanUtils.toBean(pageResult, FinanceBusinessOrderRespVO.class, this::fillUserNames);
         List<FinanceBusinessOrderDO> orders = pageResult.getList();
         List<FinanceBusinessOrderRespVO> vos = voPage.getList();
         if (orders != null && vos != null) {
@@ -181,17 +193,11 @@ public class FinanceBusinessOrderController {
         enrichProductType(respVO, businessOrder);
         enrichRemainingBalance(respVO);
         fillContractApplicationNos(List.of(respVO));
-        if (businessOrder.getImporterId() == null) {
-            return respVO;
-        }
-        AdminUserRespDTO importer = adminUserApi.getUser(businessOrder.getImporterId()).getCheckedData();
-        if (importer != null) {
-            respVO.setImporterName(importer.getNickname());
-        }
+        fillUserNames(respVO);
         return respVO;
     }
 
-    private void fillImporterNames(FinanceBusinessOrderRespVO respVO) {
+    private void fillUserNames(FinanceBusinessOrderRespVO respVO) {
         enrichRemainingBalance(respVO);
         // 分页：BeanUtils 不带 productTypeSnapshot；blank-aware 回退 productName（与 Mapper 一致）
         if (respVO.getProductType() == null || respVO.getProductType().isBlank()) {
@@ -199,13 +205,21 @@ public class FinanceBusinessOrderController {
                 respVO.setProductType(respVO.getProductName().trim());
             }
         }
-        if (respVO.getImporterId() == null) {
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        if (respVO.getImporterId() != null) {
+            ids.add(respVO.getImporterId());
+        }
+        if (respVO.getApplicantUserId() != null) {
+            ids.add(respVO.getApplicantUserId());
+        }
+        if (ids.isEmpty()) {
             return;
         }
-        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(
-                convertSet(List.of(respVO), FinanceBusinessOrderRespVO::getImporterId));
+        Map<Long, AdminUserRespDTO> userMap = adminUserApi.getUserMap(ids);
         MapUtils.findAndThen(userMap, respVO.getImporterId(),
                 importer -> respVO.setImporterName(importer.getNickname()));
+        MapUtils.findAndThen(userMap, respVO.getApplicantUserId(),
+                applicant -> respVO.setApplicantName(applicant.getNickname()));
     }
 
     /** 列表/详情展示正式合同业务单号（application_no） */

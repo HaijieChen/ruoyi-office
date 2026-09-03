@@ -13,6 +13,8 @@ public class FinanceBusinessOrderExportExcelVO {
     private String orderNo;
     @ExcelProperty("导入日期")
     private LocalDate importDate;
+    @ExcelProperty("提单人")
+    private String applicantName;
     @ExcelProperty("主体公司")
     private String entityCompanyName;
     @ExcelProperty("合同业务单号")

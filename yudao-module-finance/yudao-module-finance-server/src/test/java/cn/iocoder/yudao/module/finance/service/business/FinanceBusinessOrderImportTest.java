@@ -8,10 +8,14 @@ import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMa
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
 import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceBusinessOrderNoRedisDAO;
 import cn.iocoder.yudao.module.finance.enums.FinanceContractApprovalStatusEnum;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -57,6 +61,12 @@ class FinanceBusinessOrderImportTest {
         businessOrderService = new FinanceBusinessOrderServiceImpl(
                 businessOrderMapper, businessOrderNoRedisDAO, contractApplicationMapper, entityCompanyResolver,
                 related);
+        AdminUserApi adminUserApi = mock(AdminUserApi.class);
+        AdminUserRespDTO applicant = new AdminUserRespDTO();
+        applicant.setId(IMPORTER_ID);
+        applicant.setDeptId(1L);
+        when(adminUserApi.getUserByUsername("zhangsan")).thenReturn(CommonResult.success(applicant));
+        ReflectionTestUtils.setField(businessOrderService, "adminUserApi", adminUserApi);
         when(businessOrderNoRedisDAO.generate(any(LocalDate.class))).thenReturn("BO-20260723-1");
         when(contractApplicationMapper.selectByApplicationNo(anyString())).thenReturn(
                 FinanceContractApplicationDO.builder()
@@ -95,6 +105,8 @@ class FinanceBusinessOrderImportTest {
                         && CONTRACT_APP_ID.equals(order.getContractApplicationId())
                         && LocalDate.now().equals(order.getImportDate())
                         && IMPORTER_ID.equals(order.getImporterId())
+                        && IMPORTER_ID.equals(order.getApplicantUserId())
+                        && Long.valueOf(1L).equals(order.getApplicantDeptId())
                         && order.getPayerName() == null
                         && ENTITY_COMPANY_DEPT_ID.equals(order.getEntityCompanyDeptId())
                         && ENTITY_COMPANY_NAME.equals(order.getEntityCompanyName())
@@ -105,6 +117,17 @@ class FinanceBusinessOrderImportTest {
                         && new BigDecimal("900.00").compareTo(order.getSettlementAmount()) == 0
                         && "备注内容".equals(order.getRemark())
                          && order.getSourceRowHash() != null));
+    }
+
+    @Test
+    void importShouldRejectWhenApplicantMissing() {
+        FinanceBusinessOrderImportExcelVO row = validRow();
+        row.setApplicantUsername(" ");
+        FinanceBusinessOrderImportRespVO respVO = businessOrderService.importBusinessOrderList(
+                List.of(row), IMPORTER_ID);
+        assertTrue(respVO.getOrderNos().isEmpty());
+        assertTrue(respVO.getFailureRows().get(2).contains("提单人"));
+        verify(businessOrderMapper, never()).insert(any(FinanceBusinessOrderDO.class));
     }
 
     @Test
@@ -311,6 +334,7 @@ class FinanceBusinessOrderImportTest {
     private static FinanceBusinessOrderImportExcelVO validRow() {
         return FinanceBusinessOrderImportExcelVO.builder()
                 .entityCompanyName(ENTITY_COMPANY_NAME)
+                .applicantUsername("zhangsan")
                 .contractApplicationNo("CT-001")
                 .orderDate(LocalDate.of(2026, 7, 1))
                 .productName("软件") // 与合同一致或留空；写入始终取合同

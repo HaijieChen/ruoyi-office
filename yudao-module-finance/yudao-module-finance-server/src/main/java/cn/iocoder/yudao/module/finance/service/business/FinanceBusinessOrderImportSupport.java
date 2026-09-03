@@ -34,6 +34,9 @@ final class FinanceBusinessOrderImportSupport {
         if (StrUtil.isBlank(row.getEntityCompanyName())) {
             return "主体公司不能为空";
         }
+        if (StrUtil.isBlank(row.getApplicantUsername())) {
+            return "提单人不能为空";
+        }
         if (row.getOrderDate() == null) {
             return "下单日期不能为空";
         }
@@ -84,6 +87,7 @@ final class FinanceBusinessOrderImportSupport {
     }
 
     static FinanceBusinessOrderDO buildOrder(FinanceBusinessOrderImportExcelVO row, Long importerId,
+                                             Long applicantUserId, Long applicantDeptId,
                                              Long entityCompanyDeptId, String entityCompanyName,
                                              NormalizedAmounts amounts,
                                              String sourceRowHash, String orderNo, Long contractApplicationId,
@@ -91,6 +95,8 @@ final class FinanceBusinessOrderImportSupport {
         String productType = productTypeFromContract == null ? null : productTypeFromContract.trim();
         return FinanceBusinessOrderDO.builder()
                 .orderNo(orderNo).importDate(LocalDate.now()).importerId(importerId)
+                .applicantUserId(applicantUserId)
+                .applicantDeptId(applicantDeptId)
                 .entityCompanyDeptId(entityCompanyDeptId)
                 .entityCompanyName(entityCompanyName)
                 .contractProcessId(null)

@@ -60,6 +60,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     { field: 'orderNo', title: '订单编号', width: 180, fixed: 'left' },
     { field: 'importDate', title: '导入日期', width: 120, formatter: 'formatDate' },
     { field: 'importerName', title: '导入人', width: 100 },
+    { field: 'applicantName', title: '提单人', width: 100 },
     { field: 'entityCompanyName', title: '主体公司', minWidth: 160 },
     { field: 'contractApplicationNo', title: '合同业务单号', minWidth: 160 },
     { field: 'orderDate', title: '签单日期', width: 120, formatter: 'formatDate' },

@@ -37,7 +37,8 @@ public class FinanceDataPermissionConfiguration {
             rule.addUserColumn(FinanceInvoiceApplicationDO.class, "applicant_user_id");
 
             rule.addDeptColumn(FinanceBusinessOrderDO.class, "entity_company_dept_id");
-            rule.addUserColumn(FinanceBusinessOrderDO.class, "importer_id");
+            rule.addDeptColumn(FinanceBusinessOrderDO.class, "applicant_dept_id");
+            rule.addUserColumn(FinanceBusinessOrderDO.class, "applicant_user_id");
 
             rule.addDeptColumn(FinanceReceiptDO.class, "entity_company_dept_id");
             rule.addUserColumn(FinanceReceiptDO.class, "importer_id");

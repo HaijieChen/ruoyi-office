@@ -101,7 +101,7 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
                 .eqIfPresent(FinanceBusinessOrderDO::getEntityCompanyDeptId, reqVO.getEntityCompanyDeptId())
                 .likeIfPresent(FinanceBusinessOrderDO::getContractProcessId, reqVO.getContractProcessId())
                 .likeIfPresent(FinanceBusinessOrderDO::getPayerName, reqVO.getPayerName())
-                .eq(FinanceBusinessOrderDO::getImporterId, importerId)
+                .eq(FinanceBusinessOrderDO::getApplicantUserId, importerId)
                 .betweenIfPresent(FinanceBusinessOrderDO::getImportDate, reqVO.getImportDate())
                 .betweenIfPresent(FinanceBusinessOrderDO::getOrderDate, reqVO.getOrderDate());
         if (StrUtil.isNotBlank(reqVO.getProductName())) {
@@ -226,7 +226,7 @@ public interface FinanceBusinessOrderMapper extends BaseMapperX<FinanceBusinessO
             "  WHERE ca.id = #{contractId} AND ca.deleted = b'0' " +
             "    AND ca.approval_status = 'APPROVED' " +
             "    AND IFNULL(ca.voided, b'0') = b'0' " +
-            "    AND ca.applicant_user_id = finance_business_order.importer_id " +
+            "    AND ca.applicant_user_id = IFNULL(finance_business_order.applicant_user_id, finance_business_order.importer_id) " +
             "    AND ca.product_type IS NOT NULL AND TRIM(ca.product_type) <> '' " +
             "    AND TRIM(ca.product_type) = #{productTypeSnapshot}" +
             ")")
