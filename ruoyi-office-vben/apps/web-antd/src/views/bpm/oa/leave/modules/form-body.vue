@@ -8,9 +8,9 @@ import { getDictOptions } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
 
 import { DatePicker, Form, Input, Select, message } from 'ant-design-vue';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 
-import { createLeave } from '#/api/bpm/oa/leave';
+import { createLeave, getLeave } from '#/api/bpm/oa/leave';
 import { FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'BpmOALeaveFormBody' });
@@ -37,9 +37,27 @@ function applyLoginUser() {
   formData.value.deptName = (userStore.userInfo as { deptName?: string })?.deptName || '';
 }
 
-async function reset() {
+async function reset(opts?: { copyFromBusinessKey?: string }) {
   formData.value = {};
   applyLoginUser();
+  const copyId = Number(opts?.copyFromBusinessKey);
+  if (Number.isFinite(copyId) && copyId > 0) {
+    try {
+      const detail = await getLeave(copyId);
+      formData.value = {
+        ...formData.value,
+        type: detail.type,
+        reason: detail.reason,
+        range:
+          detail.startTime && detail.endTime
+            ? [dayjs(detail.startTime), dayjs(detail.endTime)]
+            : undefined,
+        attachmentUrls: detail.attachmentUrls || [],
+      };
+    } catch {
+      /* 再提带数失败仍可空白发起 */
+    }
+  }
   emit('predictChange', {});
 }
 

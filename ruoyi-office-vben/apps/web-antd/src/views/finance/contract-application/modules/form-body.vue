@@ -315,14 +315,43 @@ function getPredictVariables(): Record<string, unknown> {
   return vars;
 }
 
-async function reset(opts?: { id?: number; mode?: string }) {
+async function reset(opts?: {
+  id?: number;
+  mode?: string;
+  copyFromBusinessKey?: string;
+}) {
   const defaultStaff = await loadBusinessStaff();
   await Promise.all([loadCustomers(), loadCompanies()]);
+  const copyId = Number(opts?.copyFromBusinessKey);
   if ((opts?.mode === 'resubmit' || opts?.mode === 'edit') && opts.id) {
     const detail = await getContractApplication(opts.id);
     formData.value = {
       id: detail.id,
       mode: opts.mode === 'edit' ? 'edit' : 'resubmit',
+      counterpartyCompanyId: detail.counterpartyCompanyId,
+      amountNa: !!detail.amountNa,
+      contractAmount: detail.contractAmount,
+      currency: detail.currency || 'CNY',
+      entityCompanyDeptId: detail.entityCompanyDeptId,
+      fileName: detail.fileName,
+      fileType: detail.fileType,
+      productType: detail.productType,
+      rebateRatio: detail.rebateRatio,
+      settlementMethod: detail.settlementMethod,
+      copyCount: detail.copyCount ?? 1,
+      sealTypes: detail.sealTypes,
+      needMail: !!detail.needMail,
+      mailAddress: detail.mailAddress,
+      preProcessRef: detail.preProcessRef,
+      startDate: detail.startDate?.slice?.(0, 10) || detail.startDate,
+      endDate: detail.endDate?.slice?.(0, 10) || detail.endDate,
+      draftFileUrl: detail.draftFileUrl,
+      remark: detail.remark,
+      businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
+    };
+  } else if (Number.isFinite(copyId) && copyId > 0) {
+    const detail = await getContractApplication(copyId);
+    formData.value = {
       counterpartyCompanyId: detail.counterpartyCompanyId,
       amountNa: !!detail.amountNa,
       contractAmount: detail.contractAmount,

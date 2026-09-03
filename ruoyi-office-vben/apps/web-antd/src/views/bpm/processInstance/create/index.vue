@@ -205,7 +205,17 @@ async function handleSelect(
   }
   selectProcessDefinition.value = row;
   await nextTick();
-  processDefinitionDetailRef.value?.initProcessInfo(
+  for (let i = 0; i < 10; i++) {
+    if (processDefinitionDetailRef.value?.initProcessInfo) {
+      break;
+    }
+    await nextTick();
+  }
+  if (!processDefinitionDetailRef.value?.initProcessInfo) {
+    message.error('发起表单未就绪，请再点一次再提一单');
+    return;
+  }
+  await processDefinitionDetailRef.value.initProcessInfo(
     row,
     formVariables,
     businessKey,
