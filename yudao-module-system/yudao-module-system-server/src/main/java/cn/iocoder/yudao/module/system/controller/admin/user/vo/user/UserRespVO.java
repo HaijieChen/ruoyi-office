@@ -40,6 +40,13 @@ public class UserRespVO{
     @Schema(description = "岗位编号数组", example = "1")
     private Set<Long> postIds;
 
+    @Schema(description = "角色编号数组", example = "1")
+    private Set<Long> roleIds;
+
+    @Schema(description = "角色名称", example = "管理员,普通用户")
+    @ExcelProperty("角色")
+    private String roleNames;
+
     @Schema(description = "用户邮箱", example = "yudao@iocoder.cn")
     @ExcelProperty("用户邮箱")
     private String email;

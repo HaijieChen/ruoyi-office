@@ -81,6 +81,23 @@ export function useFormSchema(): VbenFormSchema[] {
       },
     },
     {
+      fieldName: 'roleIds',
+      label: '角色',
+      component: 'ApiSelect',
+      componentProps: {
+        api: getSimpleRoleList,
+        labelField: 'name',
+        valueField: 'id',
+        mode: 'multiple',
+        disabled: true,
+        placeholder: '请通过「分配角色」设置',
+      },
+      dependencies: {
+        triggerFields: ['id'],
+        show: (values) => !!values.id,
+      },
+    },
+    {
       fieldName: 'email',
       label: '邮箱',
       component: 'Input',
@@ -326,6 +343,11 @@ export function useGridColumns(
       field: 'deptName',
       title: '部门',
       minWidth: 120,
+    },
+    {
+      field: 'roleNames',
+      title: '角色',
+      minWidth: 160,
     },
     {
       field: 'mobile',

@@ -12,7 +12,11 @@ import cn.iocoder.yudao.module.system.convert.user.UserConvert;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
 import cn.iocoder.yudao.module.system.dal.dataobject.user.AdminUserDO;
 import cn.iocoder.yudao.module.system.enums.common.SexEnum;
+import cn.iocoder.yudao.module.system.dal.dataobject.permission.RoleDO;
+import cn.iocoder.yudao.module.system.dal.dataobject.permission.UserRoleDO;
+import cn.iocoder.yudao.module.system.dal.mysql.permission.UserRoleMapper;
 import cn.iocoder.yudao.module.system.service.dept.DeptService;
+import cn.iocoder.yudao.module.system.service.permission.RoleService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,8 +32,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
@@ -45,6 +54,10 @@ public class UserController {
     private AdminUserService userService;
     @Resource
     private DeptService deptService;
+    @Resource
+    private UserRoleMapper userRoleMapper;
+    @Resource
+    private RoleService roleService;
 
     @PostMapping("/create")
     @Operation(summary = "新增用户")
@@ -108,8 +121,9 @@ public class UserController {
         // 拼接数据
         Map<Long, DeptDO> deptMap = deptService.getDeptMap(
                 convertList(pageResult.getList(), AdminUserDO::getDeptId));
-        return success(new PageResult<>(UserConvert.INSTANCE.convertList(pageResult.getList(), deptMap),
-                pageResult.getTotal()));
+        List<UserRespVO> users = UserConvert.INSTANCE.convertList(pageResult.getList(), deptMap);
+        fillUserRoles(users);
+        return success(new PageResult<>(users, pageResult.getTotal()));
     }
 
     @GetMapping({"/list-all-simple", "/simple-list"})
@@ -133,7 +147,9 @@ public class UserController {
         }
         // 拼接数据
         DeptDO dept = deptService.getDept(user.getDeptId());
-        return success(UserConvert.INSTANCE.convert(user, dept));
+        UserRespVO userVO = UserConvert.INSTANCE.convert(user, dept);
+        fillUserRoles(Collections.singletonList(userVO));
+        return success(userVO);
     }
 
     @GetMapping("/export-excel")
@@ -147,8 +163,9 @@ public class UserController {
         // 输出 Excel
         Map<Long, DeptDO> deptMap = deptService.getDeptMap(
                 convertList(list, AdminUserDO::getDeptId));
-        ExcelUtils.write(response, "用户数据.xls", "数据", UserRespVO.class,
-                UserConvert.INSTANCE.convertList(list, deptMap));
+        List<UserRespVO> users = UserConvert.INSTANCE.convertList(list, deptMap);
+        fillUserRoles(users);
+        ExcelUtils.write(response, "用户数据.xls", "数据", UserRespVO.class, users);
     }
 
     @GetMapping("/get-import-template")
@@ -176,6 +193,30 @@ public class UserController {
                                                       @RequestParam(value = "updateSupport", required = false, defaultValue = "false") Boolean updateSupport) throws Exception {
         List<UserImportExcelVO> list = ExcelUtils.read(file, UserImportExcelVO.class);
         return success(userService.importUserList(list, updateSupport));
+    }
+
+    private void fillUserRoles(List<UserRespVO> users) {
+        if (CollUtil.isEmpty(users)) {
+            return;
+        }
+        List<UserRoleDO> userRoles = userRoleMapper.selectListByUserIds(convertList(users, UserRespVO::getId));
+        Map<Long, Set<Long>> userRoleIds = new HashMap<>();
+        Set<Long> allRoleIds = new HashSet<>();
+        for (UserRoleDO userRole : userRoles) {
+            userRoleIds.computeIfAbsent(userRole.getUserId(), ignored -> new HashSet<>()).add(userRole.getRoleId());
+            allRoleIds.add(userRole.getRoleId());
+        }
+        Map<Long, RoleDO> roleMap = roleService.getRoleList(allRoleIds).stream()
+                .collect(Collectors.toMap(RoleDO::getId, role -> role, (a, b) -> a));
+        for (UserRespVO user : users) {
+            Set<Long> roleIds = userRoleIds.getOrDefault(user.getId(), Collections.emptySet());
+            user.setRoleIds(roleIds);
+            user.setRoleNames(roleIds.stream()
+                    .map(roleMap::get)
+                    .filter(role -> role != null)
+                    .map(RoleDO::getName)
+                    .collect(Collectors.joining("、")));
+        }
     }
 
 }

@@ -18,6 +18,8 @@ export namespace SystemUserApi {
     status: number;
     remark: string;
     createTime?: Date;
+    roleIds?: number[];
+    roleNames?: string;
   }
 }
 
