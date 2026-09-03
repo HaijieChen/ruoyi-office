@@ -130,9 +130,8 @@ public class BpmOATripServiceImpl implements BpmOATripService {
         if (trip == null) {
             throw exception(OA_TRIP_NOT_EXISTS);
         }
-        if (Objects.equals(trip.getUserId(), userId)
-                || securityFrameworkService.hasPermission(QUERY_PERMISSION)
-                || oaBillAccessPermission.canReadOaBill(trip.getProcessInstanceId(), userId)) {
+        if (securityFrameworkService.hasPermission(QUERY_PERMISSION)
+                || oaBillAccessPermission.canReadOaBill(userId, trip.getUserId(), trip.getProcessInstanceId())) {
             return trip;
         }
         throw exception(OA_TRIP_ACCESS_DENIED);

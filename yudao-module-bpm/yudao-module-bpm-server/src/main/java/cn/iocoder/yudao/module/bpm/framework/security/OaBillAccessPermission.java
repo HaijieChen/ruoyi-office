@@ -13,8 +13,8 @@ import java.util.Objects;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 /**
- * OA 单据详情读权：本人或当前 process 上 active 任务候选人/办理人。
- * 抄送人不是读者。不信任客户端 taskId。
+ * OA 单据详情读权（与财务 {@code FinanceProcessParticipantSupport} 同一规则）：
+ * 发起人、当前待办办理人/候选人、历史任务办理人一直可读。抄送人不是读者。
  */
 @Component("oaBillAccess")
 public class OaBillAccessPermission {
@@ -77,7 +77,13 @@ public class OaBillAccessPermission {
         return count > 0;
     }
 
-    public boolean canReadOaBill(String processInstanceId, Long userId) {
+    public boolean canReadOaBill(Long userId, Long ownerUserId, String processInstanceId) {
+        if (userId == null) {
+            return false;
+        }
+        if (Objects.equals(userId, ownerUserId)) {
+            return true;
+        }
         return isActiveTaskCandidateOrAssignee(processInstanceId, userId)
                 || isHistoricTaskAssignee(processInstanceId, userId)
                 || canReadViaAttachingBill(userId, processInstanceId);
