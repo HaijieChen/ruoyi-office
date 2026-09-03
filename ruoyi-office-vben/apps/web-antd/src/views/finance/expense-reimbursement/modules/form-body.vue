@@ -810,13 +810,13 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
         <template v-if="lineDetailsEnabled(line)">
           <FileUpload
             :key="`${index}-${line._uploadEpoch || 0}`"
-            class="w-48"
+            class="shrink-0"
+            list-type="picture-card"
             :value="line.invoiceFileUrl ? [line.invoiceFileUrl] : []"
             :max-number="20"
             :multiple="true"
             :max-size="20"
-            :accept="['pdf', 'jpg', 'jpeg', 'png']"
-            help-text="可一次选多张，每张拆成一行并识别"
+            :accept="['pdf', 'jpg', 'jpeg', 'png', 'docx']"
             :api="(file, progress) => uploadInvoice(index, file as File, progress)"
             @update:value="(v) => onInvoiceUpload(index, v)"
           />
@@ -844,6 +844,7 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
             class="w-48"
             placeholder="超标原因"
           />
+
           <Input
             v-model:value="line.invoiceNo"
             class="w-40"

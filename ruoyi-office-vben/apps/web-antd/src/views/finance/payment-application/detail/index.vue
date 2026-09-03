@@ -321,6 +321,11 @@ watch(
           <Descriptions.Item label="依据" :span="2">
             <FilePreviewList :value="detail.evidenceFileUrls" />
           </Descriptions.Item>
+          <Descriptions.Item label="特殊说明" :span="2">
+            <span class="whitespace-pre-wrap break-words">{{
+              detail.specialNote || '—'
+            }}</span>
+          </Descriptions.Item>
         </Descriptions>
 
         <Card

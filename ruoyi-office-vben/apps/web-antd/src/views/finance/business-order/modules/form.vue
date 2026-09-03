@@ -70,6 +70,7 @@ interface FormData {
   orderNo?: string;
   importDate?: string;
   importer?: string;
+  applicant?: string;
   businessStaffUserId?: number;
 }
 
@@ -306,6 +307,7 @@ const [Modal, modalApi] = useVbenModal({
         executionEndDate: formatDateField(detail.executionEndDate),
         importDate: formatDateField(detail.importDate),
         importer: detail.importerName || String(detail.importerId ?? ''),
+        applicant: detail.applicantName || String(detail.applicantUserId ?? ''),
         // 只读产品：仅详情快照/legacy（EXP-70 复审 #2，勿用合同当前值）
         productType: resolveEditOpenProductType(detail),
       };
@@ -394,6 +396,9 @@ function onContractChange(id: unknown) {
         </Form.Item>
         <Form.Item label="导入人">
           <Input :value="formData.importer" disabled />
+        </Form.Item>
+        <Form.Item label="提单人">
+          <Input :value="formData.applicant" disabled />
         </Form.Item>
       </template>
 

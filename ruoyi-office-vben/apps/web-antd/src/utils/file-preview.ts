@@ -1,6 +1,8 @@
 import { isTenantEnable, useAppConfig } from '@vben/hooks';
 import { useAccessStore } from '@vben/stores';
 
+import { renderAsync } from 'docx-preview';
+
 import { resolveRequestTenantId } from '#/constants/tenant';
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -21,11 +23,80 @@ export function guessFileExt(nameOrUrl: string) {
   return dot >= 0 ? base.slice(dot + 1).toLowerCase() : '';
 }
 
-export function guessPreviewKind(nameOrUrl: string): 'image' | 'pdf' | null {
+export type PreviewKind = 'image' | 'pdf' | 'docx';
+
+export function guessPreviewKind(nameOrUrl: string): PreviewKind | null {
   const ext = guessFileExt(nameOrUrl);
   if (ext === 'pdf') return 'pdf';
+  if (ext === 'docx') return 'docx';
   if (MIME_BY_EXT[ext]?.startsWith('image/')) return 'image';
   return null;
+}
+
+export function resolvePreviewKind(input: {
+  name?: string;
+  originName?: string;
+  type?: string;
+  url?: string;
+}): PreviewKind | null {
+  for (const n of [input.originName, input.name, input.url]) {
+    const kind = n ? guessPreviewKind(n) : null;
+    if (kind) return kind;
+  }
+  const type = String(input.type || '').toLowerCase();
+  if (type.includes('wordprocessingml')) return 'docx';
+  if (type === 'application/pdf') return 'pdf';
+  if (type.startsWith('image/')) return 'image';
+  return null;
+}
+
+export async function sniffPreviewKind(blob: Blob): Promise<PreviewKind | null> {
+  const fromType = resolvePreviewKind({ type: blob.type });
+  if (fromType) return fromType;
+  const head = new Uint8Array(await blob.slice(0, 4096).arrayBuffer());
+  if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) {
+    return 'pdf';
+  }
+  if (head[0] === 0xff && head[1] === 0xd8) return 'image';
+  if (head[0] === 0x89 && head[1] === 0x50) return 'image';
+  if (head[0] === 0x50 && head[1] === 0x4b) {
+    const text = new TextDecoder('latin1').decode(head);
+    if (text.includes('word/')) return 'docx';
+  }
+  return null;
+}
+
+const DOCX_HOST_CLASS = 'docx-preview-host';
+const DOCX_HOST_STYLE_ID = 'docx-preview-host-style';
+
+function ensureDocxHostStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(DOCX_HOST_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = DOCX_HOST_STYLE_ID;
+  style.textContent = `
+.${DOCX_HOST_CLASS} { overflow: auto !important; overscroll-behavior: contain; }
+.${DOCX_HOST_CLASS} .docx-wrapper {
+  align-items: flex-start !important;
+  min-width: min-content;
+}
+.${DOCX_HOST_CLASS} section.docx { overflow: visible !important; }
+`;
+  document.head.appendChild(style);
+}
+
+export async function renderDocxPreview(blob: Blob, container: HTMLElement) {
+  ensureDocxHostStyle();
+  container.classList.add(DOCX_HOST_CLASS);
+  container.innerHTML = '';
+  await renderAsync(await blob.arrayBuffer(), container);
+  if (!container.innerHTML.trim()) {
+    throw new Error('docx preview produced no content');
+  }
+}
+
+export function destroyDocxPreview(container?: HTMLElement | null) {
+  if (container) container.innerHTML = '';
 }
 
 export function blobWithGuessedType(blob: Blob, nameOrUrl: string) {

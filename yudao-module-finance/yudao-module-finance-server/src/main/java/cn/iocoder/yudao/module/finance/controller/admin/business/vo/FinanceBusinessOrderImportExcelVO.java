@@ -18,6 +18,10 @@ public class FinanceBusinessOrderImportExcelVO {
     @ExcelProperty("主体公司")
     private String entityCompanyName;
 
+    /** 用户账号 */
+    @ExcelProperty("提单人")
+    private String applicantUsername;
+
     /** 正式合同业务单号（必填；导入不再暴露 legacy 合同流程 ID） */
     @ExcelProperty("合同业务单号")
     private String contractApplicationNo;

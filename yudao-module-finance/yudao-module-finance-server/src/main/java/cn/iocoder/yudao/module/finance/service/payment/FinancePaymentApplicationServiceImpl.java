@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.convert.Convert;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
@@ -40,6 +41,7 @@ import cn.iocoder.yudao.module.finance.enums.FinancePaymentReasonEnum;
 import cn.iocoder.yudao.module.finance.enums.FinancePaymentTimingEnum;
 import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
+import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
 import cn.iocoder.yudao.module.finance.service.companyaccount.FinanceCompanyBankAccountService;
 import cn.iocoder.yudao.module.finance.service.customer.FinanceCustomerCompanyService;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
@@ -52,6 +54,7 @@ import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.task.api.Task;
+import jakarta.annotation.Resource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -106,6 +109,9 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     private final FinancePaymentPayLineMapper payLineMapper;
     private final FinancePaymentSalaryLineMapper salaryLineMapper;
     private final FinancePaymentTaxLineMapper taxLineMapper;
+
+    @Resource
+    private FinanceProcessParticipantSupport processParticipantSupport;
 
     public FinancePaymentApplicationServiceImpl(FinancePaymentApplicationMapper applicationMapper,
                                                 FinancePaymentApplicationNoRedisDAO applicationNoRedisDAO,
@@ -569,6 +575,7 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     }
 
     @Override
+    @DataPermission(enable = false)
     public FinancePaymentApplicationDO getApplication(Long id) {
         FinancePaymentApplicationDO application = applicationMapper.selectById(id);
         if (application == null) {
@@ -580,8 +587,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     public FinancePaymentApplicationDO getApplicationForRead(Long id, Long userId, boolean manageAll) {
         FinancePaymentApplicationDO application = getApplication(id);
-        if (manageAll || Objects.equals(application.getApplicantUserId(), userId)
-                || isActiveTaskCandidateOrAssignee(application, userId)) {
+        if (manageAll || processParticipantSupport.canReadBill(
+                userId, application.getApplicantUserId(), application.getProcessInstanceId())) {
             return application;
         }
         throw exception(PAYMENT_APPLICATION_ACCESS_DENIED);
@@ -605,17 +612,14 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
         if (application == null) {
             return false;
         }
-        if (Objects.equals(application.getApplicantUserId(), userId)) {
-            return true;
-        }
-        return isActiveTaskCandidateOrAssignee(application, userId);
+        return processParticipantSupport.canReadBill(
+                userId, application.getApplicantUserId(), application.getProcessInstanceId());
     }
 
     @Override
     public PageResult<FinancePaymentApplicationDO> getApplicationPage(FinancePaymentApplicationPageReqVO pageReqVO,
                                                                       Long loginUserId, boolean manageAll) {
-        Long filterApplicant = manageAll ? null : loginUserId;
-        return applicationMapper.selectPage(pageReqVO, filterApplicant);
+        return applicationMapper.selectPage(pageReqVO, (Long) null);
     }
 
     @Override

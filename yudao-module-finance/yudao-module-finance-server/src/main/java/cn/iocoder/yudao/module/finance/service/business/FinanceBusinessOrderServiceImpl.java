@@ -17,6 +17,8 @@ import cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSuppor
 import cn.iocoder.yudao.module.finance.service.common.FinanceCurrencySupport;
 import cn.iocoder.yudao.module.finance.service.common.FinanceEntityCompanyResolver;
 import cn.iocoder.yudao.module.finance.service.common.FinanceRelatedProcessAccess;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +57,8 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
     private final FinanceRelatedProcessAccess relatedProcessAccess;
     @Resource
     private FinanceBusinessStaffSupport businessStaffSupport;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     public FinanceBusinessOrderServiceImpl(FinanceBusinessOrderMapper businessOrderMapper,
                                            FinanceBusinessOrderNoRedisDAO businessOrderNoRedisDAO,
@@ -78,8 +82,11 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         FinanceEntityCompanyResolver.ResolvedCompany company =
                 entityCompanyResolver.requireByDeptId(createReqVO.getEntityCompanyDeptId());
         // 新数据硬强制：必须关联已通过且本人申请的合同（C4/C18）
+        Long applicantUserId = createReqVO.getApplicantUserId() != null
+                ? createReqVO.getApplicantUserId() : importerId;
+        AdminUserRespDTO applicant = resolveApplicantUser(applicantUserId);
         FinanceContractApplicationDO contract =
-                requireSelectableContract(createReqVO.getContractApplicationId(), importerId);
+                requireSelectableContract(createReqVO.getContractApplicationId(), applicantUserId);
         String productType = requireContractProductType(contract);
         // EXP-73：交易币种 + 与合同同币种约束
         String currency = FinanceCurrencySupport.requireSupported(createReqVO.getCurrency());
@@ -92,7 +99,9 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         businessOrder.setOrderNo(businessOrderNoRedisDAO.generate(importDate));
         businessOrder.setImportDate(importDate);
         businessOrder.setImporterId(importerId);
-        businessOrder.setBusinessStaffUserId(businessStaffSupport.resolve(importerId, createReqVO.getBusinessStaffUserId()));
+        businessOrder.setApplicantUserId(applicantUserId);
+        businessOrder.setApplicantDeptId(applicant == null ? null : applicant.getDeptId());
+        businessOrder.setBusinessStaffUserId(businessStaffSupport.resolve(applicantUserId, createReqVO.getBusinessStaffUserId()));
         businessOrder.setConfirmedClaimedAmount(ZERO);
         businessOrderMapper.insert(businessOrder);
         return businessOrder.getId();
@@ -269,6 +278,11 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 response.getFailureRows().put(rowNumber, failureReason);
                 continue;
             }
+            AdminUserRespDTO applicant = resolveApplicantByUsername(row.getApplicantUsername());
+            if (applicant == null) {
+                response.getFailureRows().put(rowNumber, "提单人不存在，请填写用户账号");
+                continue;
+            }
             FinanceEntityCompanyResolver.ResolvedCompany[] companyOut =
                     new FinanceEntityCompanyResolver.ResolvedCompany[1];
             String companyError = entityCompanyResolver.matchByNameOrError(
@@ -280,7 +294,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
             FinanceEntityCompanyResolver.ResolvedCompany company = companyOut[0];
             FinanceContractApplicationDO contract;
             try {
-                contract = resolveContractByApplicationNo(row.getContractApplicationNo(), importerId);
+                contract = resolveContractByApplicationNo(row.getContractApplicationNo(), applicant.getId());
             } catch (Exception ex) {
                 response.getFailureRows().put(rowNumber, "合同业务单号无效：未找到已通过且本人申请的合同");
                 continue;
@@ -308,6 +322,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
             }
             String orderNo = businessOrderNoRedisDAO.generate(LocalDate.now());
             businessOrderMapper.insert(FinanceBusinessOrderImportSupport.buildOrder(row, importerId,
+                    applicant.getId(), applicant.getDeptId(),
                     company.deptId(), company.name(), amounts, sourceRowHash, orderNo,
                     contract.getId(), productType));
             response.getOrderNos().add(orderNo);
@@ -315,8 +330,30 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
         return response;
     }
 
+    private AdminUserRespDTO resolveApplicantUser(Long userId) {
+        if (userId == null || adminUserApi == null) {
+            return null;
+        }
+        try {
+            return adminUserApi.getUser(userId).getCheckedData();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private AdminUserRespDTO resolveApplicantByUsername(String username) {
+        if (StrUtil.isBlank(username) || adminUserApi == null) {
+            return null;
+        }
+        try {
+            return adminUserApi.getUserByUsername(username.trim()).getCheckedData();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     /**
-     * 新建/导入：合同必须 APPROVED 且申请人=当前用户。
+     * 新建/导入：合同必须 APPROVED 且申请人=提单人。
      */
     private FinanceContractApplicationDO requireSelectableContract(Long contractApplicationId, Long userId) {
         if (contractApplicationId == null) {

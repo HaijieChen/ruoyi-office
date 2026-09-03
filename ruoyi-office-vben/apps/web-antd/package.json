@@ -54,6 +54,7 @@
     "camunda-bpmn-moddle": "catalog:",
     "cropperjs": "catalog:",
     "dayjs": "catalog:",
+    "docx-preview": "^0.3.6",
     "diagram-js": "catalog:",
     "fast-xml-parser": "catalog:",
     "grid-layout-plus": "^1.1.1",

@@ -2,6 +2,7 @@ package cn.iocoder.yudao.module.finance.service.contract;
 
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
@@ -400,6 +401,7 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     }
 
     @Override
+    @DataPermission(enable = false)
     public FinanceContractApplicationDO getApplication(Long id) {
         FinanceContractApplicationDO application = applicationMapper.selectById(id);
         if (application == null) {

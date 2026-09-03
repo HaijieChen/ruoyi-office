@@ -15,6 +15,9 @@ export namespace FinanceBusinessOrderApi {
     importerId: number;
     /** 系统生成，只读 */
     importerName: string;
+    /** 提单人 */
+    applicantUserId?: number;
+    applicantName?: string;
     /** 主体公司组织部门编号 */
     entityCompanyDeptId: number;
     /** 主体公司名称快照 */

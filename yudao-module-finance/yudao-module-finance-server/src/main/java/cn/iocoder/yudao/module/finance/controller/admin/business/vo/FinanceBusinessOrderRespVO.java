@@ -28,6 +28,10 @@ public class FinanceBusinessOrderRespVO {
     private Long businessStaffUserId;
     @Schema(description = "导入人名称")
     private String importerName;
+    @Schema(description = "提单人用户编号")
+    private Long applicantUserId;
+    @Schema(description = "提单人名称")
+    private String applicantName;
     @Schema(description = "合同审批流程编号（legacy，仅兼容历史）")
     private String contractProcessId;
     @Schema(description = "合同签约申请编号（正式关联）")

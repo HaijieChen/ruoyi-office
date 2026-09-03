@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component;
 import java.util.Objects;
 
 /**
- * 财务单据详情只读：本人、当前待办、或历史办理人。不要求必须停在审批节点。
+ * 流程单据详情只读通用规则：发起人、当前待办办理人/候选人、历史任务办理人一直可读。
+ * 不要求必须停在审批节点。OA 请假/出差/外出走同等规则（OaBillAccessPermission）。
  */
 @Component
 public class FinanceProcessParticipantSupport {

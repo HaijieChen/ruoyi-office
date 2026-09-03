@@ -6,8 +6,10 @@ import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import cn.iocoder.yudao.module.bpm.dal.dataobject.oa.BpmOALeaveDO;
 import cn.iocoder.yudao.module.bpm.dal.mysql.oa.BpmOALeaveMapper;
 import cn.iocoder.yudao.module.bpm.framework.security.OaBillAccessPermission;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.TaskQuery;
+import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -27,6 +29,7 @@ class BpmOALeaveServiceTest {
     private BpmOALeaveMapper leaveMapper;
     private SecurityFrameworkService securityFrameworkService;
     private ObjectProvider<TaskService> taskServiceProvider;
+    private ObjectProvider<HistoryService> historyServiceProvider;
     private BpmOALeaveServiceImpl service;
 
     @BeforeEach
@@ -35,9 +38,12 @@ class BpmOALeaveServiceTest {
         securityFrameworkService = mock(SecurityFrameworkService.class);
         taskServiceProvider = mock(ObjectProvider.class);
         when(taskServiceProvider.getIfAvailable()).thenReturn(null);
+        historyServiceProvider = mock(ObjectProvider.class);
+        when(historyServiceProvider.getIfAvailable()).thenReturn(null);
 
         OaBillAccessPermission oaBillAccessPermission = new OaBillAccessPermission();
         ReflectionTestUtils.setField(oaBillAccessPermission, "taskServiceProvider", taskServiceProvider);
+        ReflectionTestUtils.setField(oaBillAccessPermission, "historyServiceProvider", historyServiceProvider);
         ObjectProvider<BpmFinanceAttachAccess> attachProvider = mock(ObjectProvider.class);
         when(attachProvider.getIfAvailable()).thenReturn(null);
         ReflectionTestUtils.setField(oaBillAccessPermission, "financeAttachAccessProvider", attachProvider);
@@ -78,6 +84,17 @@ class BpmOALeaveServiceTest {
     }
 
     @Test
+    void historicAssigneeGetWithoutQuerySucceeds() {
+        when(leaveMapper.selectById(10L)).thenReturn(ownedLeave(10L, 1L, "proc-1"));
+        when(securityFrameworkService.hasPermission(QUERY_PERMISSION)).thenReturn(false);
+        stubActiveAssignee("proc-1", 8L, 0L);
+        stubHistoricAssignee("proc-1", 8L, 1L);
+
+        BpmOALeaveDO leave = service.getLeave(10L, 8L);
+        assertEquals(10L, leave.getId());
+    }
+
+    @Test
     void getMappingDoesNotRequireQueryPermission() throws Exception {
         String src = java.nio.file.Files.readString(java.nio.file.Path.of(
                 "src/main/java/cn/iocoder/yudao/module/bpm/controller/admin/oa/BpmOALeaveController.java"));
@@ -95,6 +112,16 @@ class BpmOALeaveServiceTest {
                 .userId(userId)
                 .processInstanceId(processInstanceId)
                 .build();
+    }
+
+    private void stubHistoricAssignee(String processInstanceId, Long userId, long count) {
+        HistoryService historyService = mock(HistoryService.class);
+        HistoricTaskInstanceQuery query = mock(HistoricTaskInstanceQuery.class);
+        when(historyServiceProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricTaskInstanceQuery()).thenReturn(query);
+        when(query.processInstanceId(processInstanceId)).thenReturn(query);
+        when(query.taskAssignee(String.valueOf(userId))).thenReturn(query);
+        when(query.count()).thenReturn(count);
     }
 
     private void stubActiveAssignee(String processInstanceId, Long userId, long count) {

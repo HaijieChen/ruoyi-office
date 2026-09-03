@@ -6,7 +6,7 @@ import type { FileUploadProps } from './typing';
 
 import type { AxiosProgressEvent } from '#/api/infra/file';
 
-import { computed, ref, toRefs, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, toRefs, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
@@ -14,10 +14,16 @@ import { checkFileType, isFunction, isObject, isString } from '@vben/utils';
 
 import { Button, Modal, message, Upload } from 'ant-design-vue';
 
+import type { PreviewKind } from '#/utils/file-preview';
+
 import {
+  destroyDocxPreview,
   downloadAuthFile,
   fetchPreviewBlob,
   guessPreviewKind,
+  renderDocxPreview,
+  resolvePreviewKind,
+  sniffPreviewKind,
 } from '#/utils/file-preview';
 
 import { UploadResultStatus } from './typing';
@@ -32,6 +38,7 @@ const props = withDefaults(defineProps<FileUploadProps>(), {
   disabled: false,
   drag: false,
   helpText: '',
+  listType: 'text',
   maxSize: 2,
   maxNumber: 1,
   accept: () => [],
@@ -69,6 +76,36 @@ const isUsingModelValue = computed(() => {
 });
 
 const fileList = ref<UploadProps['fileList']>([]);
+const blobThumbs = new Map<string, string>();
+
+function isImageFile(file: { name?: string; type?: string; url?: string }) {
+  if (String(file.type || '').startsWith('image/')) return true;
+  return guessPreviewKind(file.url || file.name || '') === 'image';
+}
+
+async function hydrateImageThumbs(files?: UploadProps['fileList']) {
+  if (!files?.length || props.listType === 'text') return;
+  for (const file of files) {
+    const url = file.url;
+    if (!url || !isImageFile(file) || file.thumbUrl?.startsWith('blob:')) continue;
+    try {
+      const blob = await fetchPreviewBlob(url);
+      const obj = URL.createObjectURL(blob);
+      const prev = blobThumbs.get(url);
+      if (prev) URL.revokeObjectURL(prev);
+      blobThumbs.set(url, obj);
+      file.thumbUrl = obj;
+    } catch {
+      // keep original url; img may still fail without auth
+    }
+  }
+}
+
+onBeforeUnmount(() => {
+  for (const obj of blobThumbs.values()) URL.revokeObjectURL(obj);
+  blobThumbs.clear();
+});
+
 const isLtMsg = ref<boolean>(true); // 文件大小错误提示
 const isActMsg = ref<boolean>(true); // 文件类型错误提示
 const isFirstRender = ref<boolean>(true); // 是否第一次渲染
@@ -77,12 +114,18 @@ const uploadList = ref<any[]>([]); // 临时上传列表
 const previewOpen = ref(false);
 const previewTitle = ref('预览');
 const previewSrc = ref('');
-const previewKind = ref<'image' | 'pdf'>('image');
+const previewKind = ref<PreviewKind>('image');
+const previewLoading = ref(false);
+const docxContainer = ref<HTMLElement | null>(null);
 let previewObjectUrl = '';
+let previewGen = 0;
 
 function closePreview() {
+  previewGen += 1;
   previewOpen.value = false;
   previewSrc.value = '';
+  previewLoading.value = false;
+  destroyDocxPreview(docxContainer.value);
   if (previewObjectUrl) {
     URL.revokeObjectURL(previewObjectUrl);
     previewObjectUrl = '';
@@ -106,11 +149,13 @@ watch(
       fileList.value = value
         .map((item, i) => {
           if (item && isString(item)) {
+            const kind = guessPreviewKind(item);
             return {
               uid: `${-i}`,
               name: item.slice(Math.max(0, item.lastIndexOf('/') + 1)),
               status: UploadResultStatus.DONE,
               url: item,
+              type: kind === 'image' ? 'image/jpeg' : undefined,
             };
           } else if (item && isObject(item)) {
             return item;
@@ -118,6 +163,7 @@ watch(
           return null;
         })
         .filter(Boolean) as UploadProps['fileList'];
+      void hydrateImageThumbs(fileList.value);
     }
     if (!isFirstRender.value) {
       emit('change', value);
@@ -171,13 +217,53 @@ async function handleDownload(file: UploadFile) {
 /** 处理文件预览 */
 async function handlePreview(file: UploadFile) {
   emit('preview', file);
-  const nameOrUrl = file.name || file.url || '';
-  const kind = guessPreviewKind(nameOrUrl);
-  if (!kind) {
-    message.info('该文件类型不支持在线预览');
-    return;
-  }
+  let kind = resolvePreviewKind({
+    name: file.name,
+    url: file.url,
+    type: file.type,
+    originName: file.originFileObj?.name,
+  });
+  const gen = ++previewGen;
   try {
+    let blob: Blob | undefined = file.originFileObj;
+    if (!kind) {
+      if (!blob) {
+        const url = file.url || '';
+        if (!url) {
+          message.info('该文件类型不支持在线预览');
+          return;
+        }
+        blob = await fetchPreviewBlob(url);
+      }
+      kind = await sniffPreviewKind(blob);
+    }
+    if (!kind) {
+      message.info('该文件类型不支持在线预览');
+      return;
+    }
+    if (kind === 'docx') {
+      if (!blob) {
+        const url = file.url || '';
+        if (!url) {
+          message.warning('没有可预览的地址');
+          return;
+        }
+        blob = await fetchPreviewBlob(url);
+      }
+      if (gen !== previewGen) return;
+      previewKind.value = 'docx';
+      previewTitle.value = file.name || '预览';
+      previewLoading.value = true;
+      previewOpen.value = true;
+      await nextTick();
+      if (gen !== previewGen) return;
+      const el = docxContainer.value;
+      if (!el) throw new Error('docx container missing');
+      await renderDocxPreview(blob, el);
+      if (gen !== previewGen) return;
+      previewLoading.value = false;
+      return;
+    }
     if (file.originFileObj) {
       const local = URL.createObjectURL(file.originFileObj);
       previewObjectUrl = local;
@@ -187,19 +273,28 @@ async function handlePreview(file: UploadFile) {
       previewOpen.value = true;
       return;
     }
+    if (kind === 'image' && file.thumbUrl?.startsWith('blob:')) {
+      previewKind.value = 'image';
+      previewTitle.value = file.name || '预览';
+      previewSrc.value = file.thumbUrl;
+      previewOpen.value = true;
+      return;
+    }
     const url = file.url || '';
     if (!url) {
       message.warning('没有可预览的地址');
       return;
     }
-    const blob = await fetchPreviewBlob(url);
-    const obj = URL.createObjectURL(blob);
+    const remote = blob ?? (await fetchPreviewBlob(url));
+    const obj = URL.createObjectURL(remote);
     previewObjectUrl = obj;
     previewSrc.value = obj;
     previewKind.value = kind;
     previewTitle.value = file.name || '预览';
     previewOpen.value = true;
   } catch {
+    if (gen !== previewGen) return;
+    closePreview();
     message.error('无法在本页预览该文件');
   }
 }
@@ -355,7 +450,12 @@ function getValue() {
 </script>
 
 <template>
-  <div>
+  <div
+    :class="[
+      'file-upload-root',
+      listType !== 'text' ? 'file-upload-root--thumb' : '',
+    ]"
+  >
     <Upload
       v-bind="$attrs"
       v-model:file-list="fileList"
@@ -365,12 +465,12 @@ function getValue() {
       :disabled="disabled"
       :max-count="maxNumber"
       :multiple="multiple"
-      list-type="text"
+      :list-type="listType"
       :progress="{ showInfo: true }"
       :show-upload-list="{
         showPreviewIcon: true,
-        showRemoveIcon: true,
-        showDownloadIcon: true,
+        showRemoveIcon: !disabled,
+        showDownloadIcon: listType === 'text',
       }"
       @remove="handleRemove"
       @preview="handlePreview"
@@ -387,7 +487,13 @@ function getValue() {
         </p>
       </div>
       <div v-else-if="fileList && fileList.length < maxNumber">
-        <Button>
+        <div
+          v-if="listType === 'picture-card' || listType === 'picture'"
+          class="flex h-full flex-col items-center justify-center"
+        >
+          <IconifyIcon icon="lucide:plus" />
+        </div>
+        <Button v-else>
           <IconifyIcon icon="lucide:cloud-upload" />
           {{ $t('ui.upload.upload') }}
         </Button>
@@ -402,13 +508,29 @@ function getValue() {
         <div class="mx-1 font-bold text-primary">{{ accept.join('/') }}</div>
         格式文件
       </div>
+      <template v-if="listType !== 'text'" #itemRender="{ file }">
+        <button
+          type="button"
+          class="file-upload-thumb"
+          :title="file.name"
+          @click.stop="handlePreview(file)"
+        >
+          <img
+            v-if="isImageFile(file)"
+            :src="file.thumbUrl || file.url"
+            :alt="file.name"
+          />
+          <IconifyIcon v-else icon="lucide:file-text" />
+        </button>
+      </template>
     </Upload>
     <Modal
       :open="previewOpen"
       :title="previewTitle"
       :footer="null"
-      width="720px"
+      :width="previewKind === 'docx' ? 'min(96vw, 1120px)' : '720px'"
       destroy-on-close
+      :body-style="previewKind === 'docx' ? { overflow: 'auto' } : undefined"
       @cancel="closePreview"
     >
       <img
@@ -418,16 +540,78 @@ function getValue() {
         class="max-h-[70vh] w-full object-contain"
       />
       <iframe
-        v-else
+        v-else-if="previewKind === 'pdf'"
         :src="previewSrc"
         class="h-[70vh] w-full border-0"
         title="pdf-preview"
       />
+      <div v-else class="relative">
+        <div
+          v-if="previewLoading"
+          class="absolute inset-0 z-10 flex items-center justify-center bg-white/80"
+        >
+          加载中...
+        </div>
+        <div
+          ref="docxContainer"
+          role="document"
+          :aria-label="previewTitle"
+          tabindex="0"
+          class="h-[70vh] w-full overflow-auto"
+        ></div>
+      </div>
     </Modal>
   </div>
 </template>
 
 <style scoped>
+.file-upload-root--thumb :deep(.ant-upload-list-item-name) {
+  display: none;
+}
+
+.file-upload-thumb {
+  display: flex;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fafafa;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-upload-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-upload-root--thumb :deep(.ant-upload-list) {
+  display: flex;
+  margin: 0;
+  line-height: 0;
+  align-items: center;
+}
+
+.file-upload-root--thumb :deep(.ant-upload-list::after) {
+  display: none !important;
+}
+
+.file-upload-root--thumb :deep(.ant-upload-select-picture-card),
+.file-upload-root--thumb :deep(.ant-upload-list-item-container),
+.file-upload-root--thumb :deep(.ant-upload-list-picture-card-container),
+.file-upload-root--thumb :deep(.ant-upload-list-picture-card .ant-upload-list-item) {
+  width: 56px !important;
+  height: 56px !important;
+  margin: 0 8px 0 0 !important;
+  padding: 0 !important;
+  float: none !important;
+  line-height: 0 !important;
+}
+
 .upload-drag-area {
   padding: 20px;
   text-align: center;

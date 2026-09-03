@@ -101,10 +101,8 @@ public class BpmOALeaveServiceImpl implements BpmOALeaveService {
         if (leave == null) {
             throw exception(OA_LEAVE_NOT_EXISTS);
         }
-        if (java.util.Objects.equals(leave.getUserId(), userId)
-                || securityFrameworkService.hasPermission(QUERY_PERMISSION)
-                || oaBillAccessPermission.isActiveTaskCandidateOrAssignee(leave.getProcessInstanceId(), userId)
-                || oaBillAccessPermission.canReadViaAttachingBill(userId, leave.getProcessInstanceId())) {
+        if (securityFrameworkService.hasPermission(QUERY_PERMISSION)
+                || oaBillAccessPermission.canReadOaBill(userId, leave.getUserId(), leave.getProcessInstanceId())) {
             return leave;
         }
         throw exception(OA_LEAVE_ACCESS_DENIED);

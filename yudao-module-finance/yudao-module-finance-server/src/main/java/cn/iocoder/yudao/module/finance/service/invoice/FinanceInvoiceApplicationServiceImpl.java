@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.finance.service.invoice;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
@@ -555,6 +556,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
     }
 
     @Override
+    @DataPermission(enable = false)
     public FinanceInvoiceApplicationDO getApplication(Long id) {
         FinanceInvoiceApplicationDO application = applicationMapper.selectById(id);
         if (application == null) {

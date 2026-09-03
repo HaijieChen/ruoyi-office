@@ -66,7 +66,7 @@ watch(
 <template>
   <div v-if="inProcessShell">
     <Spin :spinning="loading" tip="加载中...">
-      <div v-if="!formData && !loading">无法加载前置单据</div>
+      <div v-if="!formData && !loading">无法加载请假详情</div>
       <Descriptions v-else :data="formData" />
     </Spin>
   </div>

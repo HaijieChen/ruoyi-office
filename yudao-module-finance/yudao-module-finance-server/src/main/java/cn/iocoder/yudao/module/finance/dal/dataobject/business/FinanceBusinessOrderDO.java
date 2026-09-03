@@ -28,6 +28,10 @@ public class FinanceBusinessOrderDO extends BaseDO {
     private String entityCompanyName;
     private LocalDate importDate;
     private Long importerId;
+    /** 提单人（数据权限按此人） */
+    private Long applicantUserId;
+    /** 提单人部门 */
+    private Long applicantDeptId;
     private Long businessStaffUserId;
     private String contractProcessId;
     /**

@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.bpm.framework.security;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.module.bpm.api.task.BpmFinanceAttachAccess;
 import jakarta.annotation.Resource;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -12,14 +13,16 @@ import java.util.Objects;
 import static cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
 
 /**
- * OA 单据详情读权：本人或当前 process 上 active 任务候选人/办理人。
- * 抄送人不是读者。不信任客户端 taskId。
+ * OA 单据详情读权（与财务 {@code FinanceProcessParticipantSupport} 同一规则）：
+ * 发起人、当前待办办理人/候选人、历史任务办理人一直可读。抄送人不是读者。
  */
 @Component("oaBillAccess")
 public class OaBillAccessPermission {
 
     @Resource
     private ObjectProvider<TaskService> taskServiceProvider;
+    @Resource
+    private ObjectProvider<HistoryService> historyServiceProvider;
     @Resource
     private ObjectProvider<BpmFinanceAttachAccess> financeAttachAccessProvider;
 
@@ -51,6 +54,39 @@ public class OaBillAccessPermission {
                 .taskCandidateOrAssigned(String.valueOf(userId))
                 .count();
         return count > 0;
+    }
+
+    /**
+     * 已办：流程结束后办理人仍可读详情。
+     */
+    public boolean isHistoricTaskAssignee(String processInstanceId, Long userId) {
+        if (userId == null || StrUtil.isBlank(processInstanceId)) {
+            return false;
+        }
+        if (historyServiceProvider == null) {
+            return false;
+        }
+        HistoryService historyService = historyServiceProvider.getIfAvailable();
+        if (historyService == null) {
+            return false;
+        }
+        long count = historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .taskAssignee(String.valueOf(userId))
+                .count();
+        return count > 0;
+    }
+
+    public boolean canReadOaBill(Long userId, Long ownerUserId, String processInstanceId) {
+        if (userId == null) {
+            return false;
+        }
+        if (Objects.equals(userId, ownerUserId)) {
+            return true;
+        }
+        return isActiveTaskCandidateOrAssignee(processInstanceId, userId)
+                || isHistoricTaskAssignee(processInstanceId, userId)
+                || canReadViaAttachingBill(userId, processInstanceId);
     }
 
     public boolean canReadViaAttachingBill(Long userId, String processInstanceId) {

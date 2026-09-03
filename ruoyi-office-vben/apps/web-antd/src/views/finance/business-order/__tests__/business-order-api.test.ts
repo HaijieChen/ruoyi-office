@@ -98,6 +98,11 @@ describe('Workbook fields present in columns', () => {
     expect(columns.some((c) => c.field === 'importerName')).toBe(true);
   });
 
+  it('columns include applicantName', () => {
+    const columns = useGridColumns() ?? [];
+    expect(columns.some((c) => c.field === 'applicantName')).toBe(true);
+  });
+
   it('columns include entityCompanyName', () => {
     const columns = useGridColumns() ?? [];
     expect(columns.some((c) => c.field === 'entityCompanyName')).toBe(true);
