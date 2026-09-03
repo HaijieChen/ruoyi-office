@@ -17,17 +17,17 @@ test('expense reimbursement attachments use compact picture-card thumbs', () => 
     'ruoyi-office-vben/apps/web-antd/src/views/finance/expense-reimbursement/detail.vue',
   );
 
+  const preview = read(
+    'ruoyi-office-vben/apps/web-antd/src/components/upload/file-preview-list.vue',
+  );
   assert.match(upload, /listType: 'text'/);
   assert.match(upload, /:list-type="listType"/);
-  assert.match(upload, /file-upload-root--thumb/);
+  assert.match(upload, /file-upload-thumb/);
+  assert.match(upload, /#itemRender/);
+  assert.match(preview, /list-type="picture-card"/);
   assert.match(form, /list-type="picture-card"/);
-  assert.doesNotMatch(
-    form,
-    /<FileUpload[\s\S]*?class="w-48"[\s\S]*?\/>/,
-  );
-  assert.match(detail, /list-type="picture-card"/);
-  assert.match(detail, /table-fixed/);
-  assert.match(detail, />附件</);
+  assert.match(detail, /title="附件"/);
+  assert.match(detail, /FilePreviewList :value="record.invoiceFileUrl"/);
 });
 
 test('payment application special note is visible on form and detail', () => {

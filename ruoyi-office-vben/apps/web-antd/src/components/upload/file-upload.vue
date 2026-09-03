@@ -6,7 +6,7 @@ import type { FileUploadProps } from './typing';
 
 import type { AxiosProgressEvent } from '#/api/infra/file';
 
-import { computed, nextTick, ref, toRefs, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, toRefs, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
@@ -20,6 +20,7 @@ import {
   destroyDocxPreview,
   downloadAuthFile,
   fetchPreviewBlob,
+  guessPreviewKind,
   renderDocxPreview,
   resolvePreviewKind,
   sniffPreviewKind,
@@ -75,6 +76,36 @@ const isUsingModelValue = computed(() => {
 });
 
 const fileList = ref<UploadProps['fileList']>([]);
+const blobThumbs = new Map<string, string>();
+
+function isImageFile(file: { name?: string; type?: string; url?: string }) {
+  if (String(file.type || '').startsWith('image/')) return true;
+  return guessPreviewKind(file.url || file.name || '') === 'image';
+}
+
+async function hydrateImageThumbs(files?: UploadProps['fileList']) {
+  if (!files?.length || props.listType === 'text') return;
+  for (const file of files) {
+    const url = file.url;
+    if (!url || !isImageFile(file) || file.thumbUrl?.startsWith('blob:')) continue;
+    try {
+      const blob = await fetchPreviewBlob(url);
+      const obj = URL.createObjectURL(blob);
+      const prev = blobThumbs.get(url);
+      if (prev) URL.revokeObjectURL(prev);
+      blobThumbs.set(url, obj);
+      file.thumbUrl = obj;
+    } catch {
+      // keep original url; img may still fail without auth
+    }
+  }
+}
+
+onBeforeUnmount(() => {
+  for (const obj of blobThumbs.values()) URL.revokeObjectURL(obj);
+  blobThumbs.clear();
+});
+
 const isLtMsg = ref<boolean>(true); // 文件大小错误提示
 const isActMsg = ref<boolean>(true); // 文件类型错误提示
 const isFirstRender = ref<boolean>(true); // 是否第一次渲染
@@ -118,11 +149,13 @@ watch(
       fileList.value = value
         .map((item, i) => {
           if (item && isString(item)) {
+            const kind = guessPreviewKind(item);
             return {
               uid: `${-i}`,
               name: item.slice(Math.max(0, item.lastIndexOf('/') + 1)),
               status: UploadResultStatus.DONE,
               url: item,
+              type: kind === 'image' ? 'image/jpeg' : undefined,
             };
           } else if (item && isObject(item)) {
             return item;
@@ -130,6 +163,7 @@ watch(
           return null;
         })
         .filter(Boolean) as UploadProps['fileList'];
+      void hydrateImageThumbs(fileList.value);
     }
     if (!isFirstRender.value) {
       emit('change', value);
@@ -467,6 +501,21 @@ function getValue() {
         <div class="mx-1 font-bold text-primary">{{ accept.join('/') }}</div>
         格式文件
       </div>
+      <template v-if="listType !== 'text'" #itemRender="{ file, actions }">
+        <button
+          type="button"
+          class="file-upload-thumb"
+          :title="file.name"
+          @click="actions.preview()"
+        >
+          <img
+            v-if="isImageFile(file)"
+            :src="file.thumbUrl || file.url"
+            :alt="file.name"
+          />
+          <IconifyIcon v-else icon="lucide:file-text" />
+        </button>
+      </template>
     </Upload>
     <Modal
       :open="previewOpen"
@@ -511,6 +560,26 @@ function getValue() {
 <style scoped>
 .file-upload-root--thumb :deep(.ant-upload-list-item-name) {
   display: none;
+}
+
+.file-upload-thumb {
+  display: flex;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fafafa;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-upload-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .file-upload-root--thumb :deep(.ant-upload-select-picture-card),

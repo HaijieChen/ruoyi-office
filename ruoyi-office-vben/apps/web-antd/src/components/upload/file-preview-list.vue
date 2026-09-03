@@ -35,6 +35,7 @@ function parseUrls(raw?: null | string | string[]): string[] {
     v-if="parseUrls(value).length"
     :value="parseUrls(value)"
     :max-number="Math.max(parseUrls(value).length, 1)"
+    list-type="picture-card"
     disabled
   />
   <span v-else>-</span>
