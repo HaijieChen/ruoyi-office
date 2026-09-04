@@ -191,8 +191,8 @@ public class FinanceInvoiceOcrClient {
             return labeled.group(1);
         }
         java.util.regex.Matcher eInvoice = java.util.regex.Pattern
-                .compile("(?<!\\d)(20\\d{18})(?!\\d)")
-                .matcher(compact);
+                .compile("(?<!\\d)(\\d{20})(?!\\d)")
+                .matcher(raw);
         if (eInvoice.find()) {
             return eInvoice.group(1);
         }
