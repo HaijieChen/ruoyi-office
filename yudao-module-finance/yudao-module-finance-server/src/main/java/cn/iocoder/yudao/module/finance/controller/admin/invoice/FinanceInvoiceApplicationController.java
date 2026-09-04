@@ -74,6 +74,7 @@ public class FinanceInvoiceApplicationController {
                         .issueTime("2026-01-15")
                         .businessOrderNo("BO-001")
                         .invoiceNo("12345678")
+                        .remark("历史导入示例")
                         .build()));
     }
 

@@ -125,6 +125,48 @@ class FinanceInvoiceApplicationImportTest {
         assertEquals(15, lineCap.getValue().getIssuedAt().getDayOfMonth());
     }
 
+    @Test
+    void importPersistsRemark() {
+        FinanceInvoiceApplicationImportExcelVO row = validRow();
+        row.setRemark("历史备注");
+        FinanceInvoiceApplicationImportRespVO resp = service.importHistorical(List.of(row));
+        assertEquals(List.of("INV-H-1"), resp.getCreatedNos());
+        ArgumentCaptor<FinanceInvoiceApplicationDO> cap =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
+        verify(applicationMapper).insert(cap.capture());
+        assertEquals("历史备注", cap.getValue().getRemark());
+    }
+
+    @Test
+    void importBlankRemarkDoesNotCopyInvoiceNo() {
+        FinanceInvoiceApplicationImportExcelVO row = validRow();
+        row.setInvoiceNo("12345678");
+        FinanceInvoiceApplicationImportRespVO resp = service.importHistorical(List.of(row));
+        assertEquals(List.of("INV-H-1"), resp.getCreatedNos());
+        ArgumentCaptor<FinanceInvoiceApplicationDO> appCap =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationDO.class);
+        verify(applicationMapper).insert(appCap.capture());
+        assertNull(appCap.getValue().getRemark());
+        ArgumentCaptor<FinanceInvoiceApplicationLineDO> lineCap =
+                ArgumentCaptor.forClass(FinanceInvoiceApplicationLineDO.class);
+        verify(lineMapper).insert(lineCap.capture());
+        assertEquals("12345678", lineCap.getValue().getInvoiceNo());
+    }
+
+    @Test
+    void oversizedRemarkFailsRowWithoutBlockingNeighbors() {
+        FinanceInvoiceApplicationImportExcelVO bad = validRow();
+        bad.setApplicationNo("INV-H-BAD");
+        bad.setRemark("x".repeat(501));
+        FinanceInvoiceApplicationImportExcelVO ok = validRow();
+        ok.setApplicationNo("INV-H-OK");
+        ok.setRemark("短备注");
+        FinanceInvoiceApplicationImportRespVO resp = service.importHistorical(List.of(bad, ok));
+        assertEquals(List.of("INV-H-OK"), resp.getCreatedNos());
+        assertEquals("备注长度不能超过 500", resp.getFailureRows().get(2));
+        verify(applicationMapper, times(1)).insert(any(FinanceInvoiceApplicationDO.class));
+    }
+
     private static FinanceInvoiceApplicationImportExcelVO validRow() {
         return FinanceInvoiceApplicationImportExcelVO.builder()
                 .applicationNo("INV-H-1")

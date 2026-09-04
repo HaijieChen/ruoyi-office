@@ -157,6 +157,11 @@ public class FinanceInvoiceApplicationImportServiceImpl implements FinanceInvoic
                     continue;
                 }
             }
+            String remark = StrUtil.trimToNull(row.getRemark());
+            if (remark != null && remark.length() > 500) {
+                resp.getFailureRows().put(rowNumber, "备注长度不能超过 500");
+                continue;
+            }
             String currency = StrUtil.blankToDefault(StrUtil.trim(row.getCurrency()), "CNY");
             FinanceInvoiceApplicationDO app = FinanceInvoiceApplicationDO.builder()
                     .applicationNo(no)
@@ -173,7 +178,7 @@ public class FinanceInvoiceApplicationImportServiceImpl implements FinanceInvoic
                     .taxContent(productType)
                     .voided(Boolean.FALSE)
                     .redFlushed(Boolean.FALSE)
-                    .remark(StrUtil.blankToDefault(row.getInvoiceNo(), null))
+                    .remark(remark)
                     .build();
             applicationMapper.insert(app);
             boolean needLine = boId != null
