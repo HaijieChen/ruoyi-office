@@ -16,9 +16,18 @@ public class DeptControllerDataPermissionTest {
 
     @Test
     public void testSimpleDeptListIgnoresDataPermission() throws NoSuchMethodException {
-        Method method = DeptController.class.getMethod("getSimpleDeptList");
+        assertDataPermissionDisabled("getSimpleDeptList");
+    }
+
+    @Test
+    public void testSimpleCompanyListIgnoresDataPermission() throws NoSuchMethodException {
+        assertDataPermissionDisabled("getSimpleCompanyList");
+    }
+
+    private static void assertDataPermissionDisabled(String methodName) throws NoSuchMethodException {
+        Method method = DeptController.class.getMethod(methodName);
         DataPermission annotation = method.getAnnotation(DataPermission.class);
-        assertNotNull(annotation, "getSimpleDeptList 必须豁免数据权限");
+        assertNotNull(annotation, methodName + " 必须豁免数据权限");
         assertFalse(annotation.enable());
     }
 
