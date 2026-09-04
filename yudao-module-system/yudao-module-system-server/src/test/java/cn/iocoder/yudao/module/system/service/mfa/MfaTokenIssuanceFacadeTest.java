@@ -140,6 +140,22 @@ public class MfaTokenIssuanceFacadeTest extends BaseMockitoUnitTest {
     }
 
     @Test
+    void required_imSilentAllowedWithoutChallenge() {
+        stubCreateIssuesToken();
+        realPolicy.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
+        realPolicy.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));
+
+        MfaIssuanceResult result = facade.issueAfterPrimaryAuth(
+                MfaIssuancePath.LOGIN_IM_SILENT, 10L, 1L, UserTypeEnum.ADMIN.getValue(),
+                "default", null, List.of("im"));
+
+        assertEquals(MfaIssuanceOutcome.ALLOWED, result.getOutcome());
+        assertTrue(result.hasAccessOrRefreshToken());
+        assertEquals(MfaLoginStatus.AUTHENTICATED, result.getLoginStatus());
+        verify(oauth2TokenService).createAccessToken(eq(10L), eq(UserTypeEnum.ADMIN.getValue()), eq("default"), any());
+    }
+
+    @Test
     void passwordGrantRejectWhenMfaRequired() {
         realPolicy.confirmGlobalPolicy(MfaMode.REQUIRED, Set.of("TOTP"));
         realPolicy.confirmTenantPolicy(1L, MfaMode.INHERIT, Set.of("TOTP"));

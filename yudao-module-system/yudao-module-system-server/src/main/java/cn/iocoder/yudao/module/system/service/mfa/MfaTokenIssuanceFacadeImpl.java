@@ -86,6 +86,9 @@ public class MfaTokenIssuanceFacadeImpl implements MfaTokenIssuanceFacade {
         if (!policy.isUsable() || policy.getLifecycleState() == MfaLifecycleState.DEGRADED_CLOSED) {
             return policyUnavailable();
         }
+        if (path == MfaIssuancePath.LOGIN_IM_SILENT) {
+            return allowWithDecision(userId, tenantId, clientId, scopes, amr, policy);
+        }
         DecisionNeed need = evaluateNeed(policy, tenantId, userId);
         if (need == DecisionNeed.NONE) {
             return allowWithDecision(userId, tenantId, clientId, scopes, amr, policy);

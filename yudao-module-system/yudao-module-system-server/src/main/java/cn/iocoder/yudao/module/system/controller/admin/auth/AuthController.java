@@ -184,6 +184,13 @@ public class AuthController {
         return success(authService.socialLogin(reqVO));
     }
 
+    @PostMapping("/im-silent-login")
+    @PermitAll
+    @Operation(summary = "IM 工作台免登，使用 IM 授权码；不走电脑社交登录 MFA")
+    public CommonResult<AuthLoginRespVO> imSilentLogin(@RequestBody @Valid AuthSocialLoginReqVO reqVO) {
+        return success(authService.imSilentLogin(reqVO));
+    }
+
     // ========== MFA 切片 3（ADR-MFA-v3 §7.4）==========
 
     @PostMapping("/mfa/code/send")

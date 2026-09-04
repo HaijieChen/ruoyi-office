@@ -23,6 +23,8 @@ import cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuanceOutcome;
 import cn.iocoder.yudao.module.system.service.mfa.enums.MfaLoginStatus;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
+import cn.iocoder.yudao.module.system.enums.permission.RoleCodeEnum;
+import cn.iocoder.yudao.module.system.service.permission.PermissionService;
 import cn.iocoder.yudao.module.system.service.social.SocialUserService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import com.anji.captcha.model.common.ResponseModel;
@@ -72,6 +74,8 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
     private MfaFactorService mfaFactorService;
     @MockitoBean
     private MemberService memberService;
+    @MockitoBean
+    private PermissionService permissionService;
     @MockitoBean
     private Validator validator;
 
@@ -308,6 +312,58 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
                         && o.getResult().equals(LoginResultEnum.SUCCESS.getResult())
                         && o.getUserId().equals(user.getId()))
         );
+    }
+
+    @Test
+    public void testImSilentLogin_success() {
+        AuthSocialLoginReqVO reqVO = randomPojo(AuthSocialLoginReqVO.class);
+        Long userId = 1L;
+        when(socialUserService.getSocialUserByCode(eq(UserTypeEnum.ADMIN.getValue()), eq(reqVO.getType()),
+                eq(reqVO.getCode()), eq(reqVO.getState()))).thenReturn(
+                new SocialUserRespDTO(randomString(), randomString(), randomString(), userId));
+        AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(userId)
+                .setStatus(CommonStatusEnum.ENABLE.getStatus()));
+        when(userService.getUser(eq(userId))).thenReturn(user);
+        when(permissionService.hasAnyRoles(eq(userId), eq(RoleCodeEnum.SUPER_ADMIN.getCode()))).thenReturn(false);
+        OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class, o -> o.setUserId(1L)
+                .setUserType(UserTypeEnum.ADMIN.getValue()));
+        AuthLoginRespVO facadeResp = AuthLoginRespVO.builder()
+                .userId(1L)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED.name())
+                .accessToken(accessTokenDO.getAccessToken())
+                .refreshToken(accessTokenDO.getRefreshToken())
+                .expiresTime(accessTokenDO.getExpiresTime())
+                .build();
+        when(mfaTokenIssuanceFacade.issueAfterPrimaryAuth(eq(cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuancePath.LOGIN_IM_SILENT),
+                eq(1L), any(), eq(UserTypeEnum.ADMIN.getValue()),
+                eq("default"), isNull(), any())).thenReturn(MfaIssuanceResult.builder()
+                .outcome(MfaIssuanceOutcome.ALLOWED)
+                .loginStatus(MfaLoginStatus.AUTHENTICATED)
+                .accessToken(accessTokenDO)
+                .loginResp(facadeResp)
+                .build());
+
+        AuthLoginRespVO loginRespVO = authService.imSilentLogin(reqVO);
+        assertEquals(accessTokenDO.getAccessToken(), loginRespVO.getAccessToken());
+        verify(mfaTokenIssuanceFacade).issueAfterPrimaryAuth(
+                eq(cn.iocoder.yudao.module.system.service.mfa.enums.MfaIssuancePath.LOGIN_IM_SILENT),
+                eq(1L), any(), eq(UserTypeEnum.ADMIN.getValue()), eq("default"), isNull(), any());
+    }
+
+    @Test
+    public void testImSilentLogin_superAdminForbidden() {
+        AuthSocialLoginReqVO reqVO = randomPojo(AuthSocialLoginReqVO.class);
+        Long userId = 1L;
+        when(socialUserService.getSocialUserByCode(eq(UserTypeEnum.ADMIN.getValue()), eq(reqVO.getType()),
+                eq(reqVO.getCode()), eq(reqVO.getState()))).thenReturn(
+                new SocialUserRespDTO(randomString(), randomString(), randomString(), userId));
+        AdminUserDO user = randomPojo(AdminUserDO.class, o -> o.setId(userId)
+                .setStatus(CommonStatusEnum.ENABLE.getStatus()));
+        when(userService.getUser(eq(userId))).thenReturn(user);
+        when(permissionService.hasAnyRoles(eq(userId), eq(RoleCodeEnum.SUPER_ADMIN.getCode()))).thenReturn(true);
+
+        assertServiceException(() -> authService.imSilentLogin(reqVO), AUTH_IM_SUPER_ADMIN_FORBIDDEN);
+        verify(mfaTokenIssuanceFacade, never()).issueAfterPrimaryAuth(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

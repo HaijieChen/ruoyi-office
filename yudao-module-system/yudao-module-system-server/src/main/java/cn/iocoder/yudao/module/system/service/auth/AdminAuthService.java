@@ -62,6 +62,11 @@ public interface AdminAuthService {
     AuthLoginRespVO socialLogin(@Valid AuthSocialLoginReqVO reqVO);
 
     /**
+     * IM 工作台免登。已绑定非超管跳过 MFA；超管、未绑定、停用失败。
+     */
+    AuthLoginRespVO imSilentLogin(@Valid AuthSocialLoginReqVO reqVO);
+
+    /**
      * 刷新访问令牌
      *
      * @param refreshToken 刷新令牌

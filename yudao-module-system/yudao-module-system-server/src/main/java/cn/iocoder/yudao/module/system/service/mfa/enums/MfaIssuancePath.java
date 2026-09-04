@@ -8,6 +8,7 @@ public enum MfaIssuancePath {
     LOGIN_PASSWORD,
     LOGIN_SMS,
     LOGIN_SOCIAL,
+    LOGIN_IM_SILENT,
     REGISTER,
     REFRESH_TOKEN,
     OAUTH2_AUTHORIZATION_CODE,

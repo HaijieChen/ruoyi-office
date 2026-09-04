@@ -31,6 +31,8 @@ import cn.iocoder.yudao.module.system.service.mfa.model.MfaAuthFlowRecord;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaIssuanceResult;
 import cn.iocoder.yudao.module.system.service.mfa.model.MfaPendingTotp;
 import cn.iocoder.yudao.module.system.service.oauth2.OAuth2TokenService;
+import cn.iocoder.yudao.module.system.enums.permission.RoleCodeEnum;
+import cn.iocoder.yudao.module.system.service.permission.PermissionService;
 import cn.iocoder.yudao.module.system.service.social.SocialUserService;
 import cn.iocoder.yudao.module.system.service.user.AdminUserService;
 import com.anji.captcha.model.common.ResponseModel;
@@ -75,6 +77,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private MfaFactorService mfaFactorService;
     @Resource
     private SocialUserService socialUserService;
+    @Resource
+    private PermissionService permissionService;
     @Resource
     private MemberService memberService;
     @Resource
@@ -200,6 +204,27 @@ public class AdminAuthServiceImpl implements AdminAuthService {
 
         return createTokenAfterLoginSuccess(user, user.getUsername(), LoginLogTypeEnum.LOGIN_SOCIAL,
                 MfaIssuancePath.LOGIN_SOCIAL, List.of("social"));
+    }
+
+    @Override
+    public AuthLoginRespVO imSilentLogin(AuthSocialLoginReqVO reqVO) {
+        SocialUserRespDTO socialUser = socialUserService.getSocialUserByCode(UserTypeEnum.ADMIN.getValue(),
+                reqVO.getType(), reqVO.getCode(), reqVO.getState());
+        if (socialUser == null || socialUser.getUserId() == null) {
+            throw exception(AUTH_THIRD_LOGIN_NOT_BIND);
+        }
+        AdminUserDO user = userService.getUser(socialUser.getUserId());
+        if (user == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
+        if (CommonStatusEnum.isDisable(user.getStatus())) {
+            throw exception(AUTH_LOGIN_USER_DISABLED);
+        }
+        if (permissionService.hasAnyRoles(user.getId(), RoleCodeEnum.SUPER_ADMIN.getCode())) {
+            throw exception(AUTH_IM_SUPER_ADMIN_FORBIDDEN);
+        }
+        return createTokenAfterLoginSuccess(user, user.getUsername(), LoginLogTypeEnum.LOGIN_IM_SILENT,
+                MfaIssuancePath.LOGIN_IM_SILENT, List.of("im"));
     }
 
     @VisibleForTesting
