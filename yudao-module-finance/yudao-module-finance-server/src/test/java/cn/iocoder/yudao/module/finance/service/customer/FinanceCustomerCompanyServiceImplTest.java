@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DuplicateKeyException;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static cn.iocoder.yudao.module.finance.enums.ErrorCodeConstants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -182,6 +183,16 @@ class FinanceCustomerCompanyServiceImplTest {
                 .bankName("行").bankAccount("6222").build());
         FinanceCustomerCompanyDO c = service.getEnabledSupplierCompany(6L);
         assertEquals(6L, c.getId());
+    }
+
+    @Test
+    void getEnabledAllSimpleListShouldIncludeEveryEnabledRole() {
+        List<FinanceCustomerCompanyDO> partners = List.of(
+                FinanceCustomerCompanyDO.builder().id(7L).isCustomer(false).isSupplier(true).status(0).build());
+        when(mapper.selectEnabledAllList()).thenReturn(partners);
+
+        assertSame(partners, service.getEnabledAllSimpleList());
+        verify(mapper).selectEnabledAllList();
     }
 
     @Test

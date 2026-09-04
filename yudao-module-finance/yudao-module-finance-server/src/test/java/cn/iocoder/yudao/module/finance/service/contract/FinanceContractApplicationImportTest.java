@@ -58,7 +58,7 @@ class FinanceContractApplicationImportTest {
         user.setDeptId(3L);
         when(adminUserApi.getUserByUsername("bizuser")).thenReturn(CommonResult.success(user));
 
-        when(customerCompanyService.getEnabledSimpleList()).thenReturn(List.of(
+        when(customerCompanyService.getEnabledAllSimpleList()).thenReturn(List.of(
                 FinanceCustomerCompanyDO.builder().id(7L).name("客户甲").isCustomer(true).status(0).build()));
 
         when(entityCompanyResolver.loadEnabledCompanies()).thenReturn(List.of());
@@ -108,8 +108,23 @@ class FinanceContractApplicationImportTest {
     }
 
     @Test
+    void supplierOnlyCounterpartyShouldImport() {
+        when(customerCompanyService.getEnabledAllSimpleList()).thenReturn(List.of(
+                FinanceCustomerCompanyDO.builder().id(9L).name("客户甲")
+                        .isCustomer(false).isSupplier(true).status(0).build()));
+
+        FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(validRow()));
+
+        assertTrue(resp.getFailureRows().isEmpty());
+        ArgumentCaptor<FinanceContractApplicationDO> captor =
+                ArgumentCaptor.forClass(FinanceContractApplicationDO.class);
+        verify(mapper).insert(captor.capture());
+        assertEquals(9L, captor.getValue().getCounterpartyCompanyId());
+    }
+
+    @Test
     void missingCounterpartyShouldFail() {
-        when(customerCompanyService.getEnabledSimpleList()).thenReturn(List.of());
+        when(customerCompanyService.getEnabledAllSimpleList()).thenReturn(List.of());
 
         FinanceContractApplicationImportRespVO resp = service.importApprovedList(List.of(validRow()));
 
@@ -120,7 +135,7 @@ class FinanceContractApplicationImportTest {
 
     @Test
     void duplicateCounterpartyNameShouldFail() {
-        when(customerCompanyService.getEnabledSimpleList()).thenReturn(List.of(
+        when(customerCompanyService.getEnabledAllSimpleList()).thenReturn(List.of(
                 FinanceCustomerCompanyDO.builder().id(7L).name("客户甲").build(),
                 FinanceCustomerCompanyDO.builder().id(8L).name("客户甲").build()));
 

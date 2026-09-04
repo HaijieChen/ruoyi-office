@@ -63,9 +63,9 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
             throw new IllegalArgumentException("导入合同签约数据不能为空");
         }
         List<DeptRespDTO> companies = entityCompanyResolver.loadEnabledCompanies();
-        List<FinanceCustomerCompanyDO> customers = customerCompanyService.getEnabledSimpleList();
-        if (customers == null) {
-            customers = List.of();
+        List<FinanceCustomerCompanyDO> counterparties = customerCompanyService.getEnabledAllSimpleList();
+        if (counterparties == null) {
+            counterparties = List.of();
         }
         FinanceContractApplicationImportRespVO resp = FinanceContractApplicationImportRespVO.builder()
                 .createdNos(new ArrayList<>())
@@ -109,9 +109,9 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
                 continue;
             }
             List<FinanceCustomerCompanyDO> hits = new ArrayList<>();
-            for (FinanceCustomerCompanyDO customer : customers) {
-                if (customer != null && row.counterpartyName().equals(customer.getName())) {
-                    hits.add(customer);
+            for (FinanceCustomerCompanyDO counterparty : counterparties) {
+                if (counterparty != null && row.counterpartyName().equals(counterparty.getName())) {
+                    hits.add(counterparty);
                 }
             }
             if (hits.isEmpty()) {
@@ -131,7 +131,7 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
                     continue;
                 }
             }
-            FinanceCustomerCompanyDO matchedCustomer = hits.get(0);
+            FinanceCustomerCompanyDO matchedCounterparty = hits.get(0);
             FinanceEntityCompanyResolver.ResolvedCompany company = companyOut[0];
             String applicationNo = row.applicationNo();
             if (applicationNo == null) {
@@ -146,8 +146,8 @@ public class FinanceContractApplicationImportServiceImpl implements FinanceContr
                     .applicationNo(applicationNo)
                     .applicantUserId(user.getId())
                     .applicantDeptId(user.getDeptId())
-                    .counterpartyCompanyId(matchedCustomer.getId())
-                    .counterpartyName(matchedCustomer.getName())
+                    .counterpartyCompanyId(matchedCounterparty.getId())
+                    .counterpartyName(matchedCounterparty.getName())
                     .entityCompanyDeptId(company.deptId())
                     .entityCompanyName(company.name())
                     .signCompany(company.name())

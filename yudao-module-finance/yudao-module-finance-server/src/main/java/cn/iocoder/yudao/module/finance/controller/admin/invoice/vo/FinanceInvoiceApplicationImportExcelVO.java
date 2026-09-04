@@ -43,4 +43,7 @@ public class FinanceInvoiceApplicationImportExcelVO {
 
     @ExcelProperty("发票号")
     private String invoiceNo;
+
+    @ExcelProperty("备注")
+    private String remark;
 }

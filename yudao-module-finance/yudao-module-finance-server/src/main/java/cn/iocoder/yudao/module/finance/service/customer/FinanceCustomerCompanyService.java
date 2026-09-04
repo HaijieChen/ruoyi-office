@@ -34,9 +34,14 @@ public interface FinanceCustomerCompanyService {
     PageResult<FinanceCustomerCompanyDO> getCustomerCompanyPage(FinanceCustomerCompanyPageReqVO pageReqVO);
 
     /**
-     * 默认客户角色精简列表（开票/合同兼容）。
+     * 默认客户角色精简列表（开票兼容）。
      */
     List<FinanceCustomerCompanyDO> getEnabledSimpleList();
+
+    /**
+     * 全部启用客商精简列表，不限制客户或供应商角色。
+     */
+    List<FinanceCustomerCompanyDO> getEnabledAllSimpleList();
 
     /**
      * @param role CUSTOMER（默认）或 SUPPLIER（供应商且银行齐全）

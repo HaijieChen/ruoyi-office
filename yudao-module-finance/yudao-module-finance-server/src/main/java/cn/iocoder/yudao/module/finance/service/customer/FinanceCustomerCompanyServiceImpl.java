@@ -242,6 +242,11 @@ public class FinanceCustomerCompanyServiceImpl implements FinanceCustomerCompany
     }
 
     @Override
+    public List<FinanceCustomerCompanyDO> getEnabledAllSimpleList() {
+        return customerCompanyMapper.selectEnabledAllList();
+    }
+
+    @Override
     public List<FinanceCustomerCompanyDO> getEnabledSimpleList(String role) {
         String normalized = normalizeRole(role);
         if (FinanceCustomerCompanyDO.ROLE_SUPPLIER.equals(normalized)) {

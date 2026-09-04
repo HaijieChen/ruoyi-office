@@ -7,7 +7,6 @@ import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
-import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeContractVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEducationVO;
 import cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmploymentVO;
@@ -829,7 +828,6 @@ class EmployeeServiceImplTest {
             dataPermission.verify(() -> DataPermissionUtils.executeIgnore(any(Callable.class)), atLeastOnce());
         }
     }
-
 
     @Test
     void previewNextEmployeeNoUsesGenerator() {

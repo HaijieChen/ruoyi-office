@@ -32,6 +32,12 @@ public interface FinanceCustomerCompanyMapper extends BaseMapperX<FinanceCustome
         return selectEnabledCustomerList();
     }
 
+    default List<FinanceCustomerCompanyDO> selectEnabledAllList() {
+        return selectList(new LambdaQueryWrapperX<FinanceCustomerCompanyDO>()
+                .eq(FinanceCustomerCompanyDO::getStatus, FinanceCustomerCompanyDO.STATUS_ENABLE)
+                .orderByDesc(FinanceCustomerCompanyDO::getId));
+    }
+
     default List<FinanceCustomerCompanyDO> selectEnabledCustomerList() {
         return selectList(new LambdaQueryWrapperX<FinanceCustomerCompanyDO>()
                 .eq(FinanceCustomerCompanyDO::getStatus, FinanceCustomerCompanyDO.STATUS_ENABLE)
