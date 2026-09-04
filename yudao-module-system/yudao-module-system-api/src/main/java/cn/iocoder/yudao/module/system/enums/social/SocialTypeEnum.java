@@ -59,6 +59,12 @@ public enum SocialTypeEnum implements ArrayValuable<Integer> {
      * @see <a href="https://opendocs.alipay.com/mini/05dxgc?pathHash=1a3ecb13">接入文档</a>
      */
     ALIPAY_MINI_PROGRAM(40, "ALIPAY"),
+    /**
+     * 飞书
+     *
+     * @see <a href="https://open.feishu.cn/document/common-capabilities/sso/web-application-sso/web-app-overview">接入文档</a>
+     */
+    FEISHU(50, "FEISHU"),
     ;
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(SocialTypeEnum::getType).toArray(Integer[]::new);

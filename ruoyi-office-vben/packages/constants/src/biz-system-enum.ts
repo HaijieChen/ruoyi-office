@@ -57,6 +57,12 @@ export const SystemUserSocialTypeEnum = {
     source: 'wechat_enterprise',
     img: 'https://s1.ax1x.com/2022/05/22/OzMrzn.png',
   },
+  FEISHU: {
+    title: '飞书',
+    type: 50,
+    source: 'feishu',
+    img: 'https://sf3-cn.feishucdn.com/obj/open-platform-opendoc/41c6e227d6737a348a5c81635e004c0d_7eSEqIClkg.png',
+  },
 };
 
 /**

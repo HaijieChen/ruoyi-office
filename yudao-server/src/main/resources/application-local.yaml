@@ -236,6 +236,10 @@ justauth:
       client-secret: 1wTb7hYxnpT2TUbIeHGXGo7T0odav1ic10mLdyyATOw
       agent-id: 1000004
       ignore-check-redirect-uri: true
+    FEISHU: # 飞书（工作台免登与 PC 绑定共用 open_id）
+      client-id: ${FEISHU_CLIENT_ID:}
+      client-secret: ${FEISHU_CLIENT_SECRET:}
+      ignore-check-redirect-uri: true
     # noinspection SpringBootApplicationYaml
     WECHAT_MINI_PROGRAM: # 微信小程序
       client-id: ${wx.miniapp.appid}

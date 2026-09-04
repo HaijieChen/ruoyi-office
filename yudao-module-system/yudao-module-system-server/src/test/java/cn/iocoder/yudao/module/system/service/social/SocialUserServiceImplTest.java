@@ -29,6 +29,7 @@ import static cn.iocoder.yudao.framework.test.core.util.AssertUtils.assertPojoEq
 import static cn.iocoder.yudao.framework.test.core.util.AssertUtils.assertServiceException;
 import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.randomPojo;
 import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.randomString;
+import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.SOCIAL_USER_BIND_ALREADY_BOUND;
 import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.SOCIAL_USER_NOT_FOUND;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.eq;
@@ -88,16 +89,27 @@ public class SocialUserServiceImplTest extends BaseDbUnitTest {
         // mock 数据：用户可能之前已经绑定过该社交类型
         socialUserBindMapper.insert(randomPojo(SocialUserBindDO.class).setUserId(1L).setUserType(UserTypeEnum.ADMIN.getValue())
                 .setSocialType(SocialTypeEnum.GITEE.getType()).setSocialUserId(-1L));
-        // mock 数据：社交用户可能之前绑定过别的用户
-        socialUserBindMapper.insert(randomPojo(SocialUserBindDO.class).setUserType(UserTypeEnum.ADMIN.getValue())
-                .setSocialType(SocialTypeEnum.GITEE.getType()).setSocialUserId(socialUser.getId()));
-
         // 调用
         String openid = socialUserService.bindSocialUser(reqDTO);
         // 断言
         List<SocialUserBindDO> socialUserBinds = socialUserBindMapper.selectList();
         assertEquals(1, socialUserBinds.size());
         assertEquals(socialUser.getOpenid(), openid);
+    }
+
+    @Test
+    public void testBindSocialUser_alreadyBoundToAnotherUser() {
+        SocialUserBindReqDTO reqDTO = new SocialUserBindReqDTO()
+                .setUserId(2L).setUserType(UserTypeEnum.ADMIN.getValue())
+                .setSocialType(SocialTypeEnum.FEISHU.getType()).setCode("feishu_code").setState("feishu_state");
+        SocialUserDO socialUser = randomPojo(SocialUserDO.class).setType(reqDTO.getSocialType())
+                .setCode(reqDTO.getCode()).setState(reqDTO.getState());
+        socialUserMapper.insert(socialUser);
+        socialUserBindMapper.insert(randomPojo(SocialUserBindDO.class)
+                .setUserId(1L).setUserType(UserTypeEnum.ADMIN.getValue())
+                .setSocialType(SocialTypeEnum.FEISHU.getType()).setSocialUserId(socialUser.getId()));
+
+        assertServiceException(() -> socialUserService.bindSocialUser(reqDTO), SOCIAL_USER_BIND_ALREADY_BOUND);
     }
 
     @Test

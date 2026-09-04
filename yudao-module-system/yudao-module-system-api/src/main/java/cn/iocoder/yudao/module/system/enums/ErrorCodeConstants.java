@@ -163,6 +163,7 @@ public interface ErrorCodeConstants {
     // ========== 社交用户 1-002-018-000 ==========
     ErrorCode SOCIAL_USER_AUTH_FAILURE = new ErrorCode(1_002_018_000, "社交授权失败，原因是：{}");
     ErrorCode SOCIAL_USER_NOT_FOUND = new ErrorCode(1_002_018_001, "社交授权失败，找不到对应的用户");
+    ErrorCode SOCIAL_USER_BIND_ALREADY_BOUND = new ErrorCode(1_002_018_002, "该社交账号已绑定其他用户，请先在原账号解绑");
 
     ErrorCode SOCIAL_CLIENT_WEIXIN_MINI_APP_PHONE_CODE_ERROR = new ErrorCode(1_002_018_200, "获得手机号失败");
     ErrorCode SOCIAL_CLIENT_WEIXIN_MINI_APP_QRCODE_ERROR = new ErrorCode(1_002_018_201, "获得小程序码失败");

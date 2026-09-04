@@ -26,6 +26,7 @@ import java.util.List;
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertSet;
 import static cn.iocoder.yudao.framework.common.util.json.JsonUtils.toJsonString;
+import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.SOCIAL_USER_BIND_ALREADY_BOUND;
 import static cn.iocoder.yudao.module.system.enums.ErrorCodeConstants.SOCIAL_USER_NOT_FOUND;
 
 /**
@@ -64,6 +65,12 @@ public class SocialUserServiceImpl implements SocialUserService {
         SocialUserDO socialUser = authSocialUser(reqDTO.getSocialType(), reqDTO.getUserType(),
                 reqDTO.getCode(), reqDTO.getState());
         Assert.notNull(socialUser, "社交用户不能为空");
+
+        SocialUserBindDO occupied = socialUserBindMapper.selectByUserTypeAndSocialUserId(
+                reqDTO.getUserType(), socialUser.getId());
+        if (occupied != null && !occupied.getUserId().equals(reqDTO.getUserId())) {
+            throw exception(SOCIAL_USER_BIND_ALREADY_BOUND);
+        }
 
         // 社交用户可能之前绑定过别的用户，需要进行解绑
         socialUserBindMapper.deleteByUserTypeAndSocialUserId(reqDTO.getUserType(), socialUser.getId());
