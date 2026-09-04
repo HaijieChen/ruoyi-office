@@ -108,6 +108,7 @@ public class DeptController {
 
     @GetMapping("/company-simple-list")
     @Operation(summary = "获取启用公司精简列表", description = "仅返回当前租户已启用的公司，供下拉选项使用")
+    @DataPermission(enable = false) // 下拉参考数据：SELF 数据范围用户也需要选择主体公司
     public CommonResult<List<DeptSimpleRespVO>> getSimpleCompanyList() {
         List<DeptDO> list = deptService.getCompanyList(
                 new DeptListReqVO().setStatus(CommonStatusEnum.ENABLE.getStatus()));

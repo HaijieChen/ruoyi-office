@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.system.api.dept;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
 import cn.iocoder.yudao.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
 import cn.iocoder.yudao.module.system.dal.dataobject.dept.DeptDO;
@@ -24,6 +25,7 @@ public class DeptApiImpl implements DeptApi {
     private DeptService deptService;
 
     @Override
+    @DataPermission(enable = false) // 按 ID 的内部查询用于跨模块数据校验与拼装
     public CommonResult<DeptRespDTO> getDept(Long id) {
         DeptDO dept = deptService.getDept(id);
         return success(BeanUtils.toBean(dept, DeptRespDTO.class));
@@ -48,6 +50,7 @@ public class DeptApiImpl implements DeptApi {
     }
 
     @Override
+    @DataPermission(enable = false) // 启用公司是跨模块下拉与导入的参考数据
     public CommonResult<List<DeptRespDTO>> getCompanySimpleList() {
         List<DeptDO> list = deptService.getCompanyList(
                 new DeptListReqVO().setStatus(CommonStatusEnum.ENABLE.getStatus()));
