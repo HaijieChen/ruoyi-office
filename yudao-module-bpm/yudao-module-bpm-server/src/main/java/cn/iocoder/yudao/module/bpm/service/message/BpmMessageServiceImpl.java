@@ -7,6 +7,7 @@ import cn.iocoder.yudao.module.bpm.service.message.dto.BpmMessageSendWhenProcess
 import cn.iocoder.yudao.module.bpm.service.message.dto.BpmMessageSendWhenProcessInstanceRejectReqDTO;
 import cn.iocoder.yudao.module.bpm.service.message.dto.BpmMessageSendWhenTaskCreatedReqDTO;
 import cn.iocoder.yudao.module.bpm.service.message.dto.BpmMessageSendWhenTaskTimeoutReqDTO;
+import cn.iocoder.yudao.module.bpm.framework.im.ImWorkNoticeService;
 import cn.iocoder.yudao.module.system.api.sms.SmsSendApi;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,8 @@ public class BpmMessageServiceImpl implements BpmMessageService {
 
     @Resource
     private WebProperties webProperties;
+    @Resource
+    private ImWorkNoticeService imWorkNoticeService;
 
     @Override
     public void sendMessageWhenProcessInstanceApprove(BpmMessageSendWhenProcessInstanceApproveReqDTO reqDTO) {
@@ -60,6 +63,11 @@ public class BpmMessageServiceImpl implements BpmMessageService {
         templateParams.put("detailUrl", getProcessInstanceDetailUrl(reqDTO.getProcessInstanceId()));
         smsSendApi.sendSingleSmsToAdmin(BpmMessageConvert.INSTANCE.convert(reqDTO.getAssigneeUserId(),
                 BpmMessageEnum.TASK_ASSIGNED.getSmsTemplateCode(), templateParams)).checkError();
+        try {
+            imWorkNoticeService.notifyTaskAssigned(reqDTO);
+        } catch (Exception ex) {
+            log.warn("[im-notice] task assigned notice failed, sms already sent", ex);
+        }
     }
 
     @Override
