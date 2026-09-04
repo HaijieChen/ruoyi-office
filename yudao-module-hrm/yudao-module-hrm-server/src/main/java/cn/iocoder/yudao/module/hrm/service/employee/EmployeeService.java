@@ -28,6 +28,12 @@ public interface EmployeeService {
      */
     Long createEmployeeArchive(@Valid EmployeeSaveReqVO createReqVO);
 
+    /**
+     * 新建表单预填：当前租户下一工号（数字最大 +1，保持位宽）。
+     */
+    String previewNextEmployeeNo();
+
+
     java.util.List<cn.iocoder.yudao.module.hrm.controller.admin.employee.vo.EmployeeEmploymentVO> listMyEmployments(Long userId);
 
     java.util.List<cn.iocoder.yudao.module.hrm.api.employee.dto.EmployeeColleagueRespDTO> listColleaguesByUserId(Long userId);

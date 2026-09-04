@@ -128,7 +128,7 @@ class EmployeeServiceImplTest {
             archive.setId(100L);
             return 1;
         }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-        lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(0L);
+        lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn(null);
     }
 
     @Test
@@ -828,6 +828,27 @@ class EmployeeServiceImplTest {
             assertTrue(result.stream().anyMatch(c -> Long.valueOf(705L).equals(c.getUserId())));
             dataPermission.verify(() -> DataPermissionUtils.executeIgnore(any(Callable.class)), atLeastOnce());
         }
+    }
+
+
+    @Test
+    void previewNextEmployeeNoUsesGenerator() {
+        when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("0071");
+        assertEquals("0072", employeeService.previewNextEmployeeNo());
+    }
+
+    @Test
+    void createEmptyEmployeeNoAssignsPreview() {
+        EmployeeSaveReqVO req = baseReq();
+        req.setEmployeeNo(null);
+        when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("0071");
+        try (MockedStatic<SecurityFrameworkUtils> sec = mockStatic(SecurityFrameworkUtils.class)) {
+            sec.when(SecurityFrameworkUtils::getLoginUserId).thenReturn(7L);
+            employeeService.createEmployeeArchive(req);
+        }
+        ArgumentCaptor<EmployeeDO> captor = ArgumentCaptor.forClass(EmployeeDO.class);
+        verify(employeeArchiveMapper).insert(captor.capture());
+        assertEquals("0072", captor.getValue().getEmployeeNo());
     }
 
 }

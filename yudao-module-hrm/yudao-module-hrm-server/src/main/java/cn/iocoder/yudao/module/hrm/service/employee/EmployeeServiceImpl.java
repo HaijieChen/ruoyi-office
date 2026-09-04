@@ -129,6 +129,11 @@ public class EmployeeServiceImpl implements EmployeeService {
     private ConfigApi configApi;
 
     @Override
+    public String previewNextEmployeeNo() {
+        return EmployeeNoGenerator.next(employeeArchiveMapper.selectMaxNumericEmployeeNo());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEmployeeArchive(EmployeeSaveReqVO createReqVO) {
         applySocialSecurityRules(createReqVO, null);
@@ -137,9 +142,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         // 页面新建未填工号时自动生成；花名册导入空白保持空
         if (!createReqVO.isSkipAutoEmployeeNo()
                 && (createReqVO.getEmployeeNo() == null || createReqVO.getEmployeeNo().trim().isEmpty())) {
-            Long maxEmployeeNo = employeeArchiveMapper.selectMaxEmployeeNo();
-            Long nextEmployeeNo = maxEmployeeNo + 1;
-            createReqVO.setEmployeeNo(String.format("%08d", nextEmployeeNo));
+            createReqVO.setEmployeeNo(previewNextEmployeeNo());
         }
 
         // 插入主表

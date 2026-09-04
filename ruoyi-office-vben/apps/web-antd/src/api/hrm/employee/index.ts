@@ -232,6 +232,11 @@ export function createEmployeeArchive(
   return requestClient.post<number>('/hrm/employee-archive/create', data);
 }
 
+/** 新建页预填下一工号 */
+export function getNextEmployeeNo() {
+  return requestClient.get<string>('/hrm/employee-archive/next-employee-no');
+}
+
 /** 修改员工档案 */
 export function updateEmployeeArchive(
   data: EmployeeArchiveApi.EmployeeArchive,

@@ -30,11 +30,11 @@ export function useBasicFormSchema(_isEdit?: boolean): VbenFormSchema[] {
       fieldName: 'employeeNo',
       label: '员工工号',
       component: 'Input',
-      help: '系统自动生成，无需手动输入',
+      help: _isEdit ? undefined : '默认取当前最大工号加一，可修改',
       componentProps: {
-        placeholder: '系统自动生成',
-        readonly: true,
-        disabled: true,
+        placeholder: _isEdit ? undefined : '请输入工号',
+        readonly: !!_isEdit,
+        disabled: !!_isEdit,
       },
     },
     {
