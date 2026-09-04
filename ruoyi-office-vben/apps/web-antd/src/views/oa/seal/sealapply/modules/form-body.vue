@@ -173,6 +173,7 @@ async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
       expectedUseTime: formData.value.expectedUseTime?.toDate(),
       expectedReturnTime: formData.value.expectedReturnTime?.toDate(),
       isUrgent: formData.value.isUrgent ?? 0,
+      creator: userStore.userInfo?.id,
       creatorName: formData.value.userNickname,
       companyId: formData.value.companyId || 0,
       companyName: formData.value.companyName || '',
