@@ -95,7 +95,12 @@ public class SealApplyBillServiceImpl implements SealApplyBillService, FlowBillS
         Map<String, Object> processInstanceVariables = BpmProcessVariableUtils.buildBillVariables(saveReqVO);
         // 添加用印申请单特有的流程变量
         processInstanceVariables.put(PV_SEAL_USE_MODE, saveReqVO.getUseMode());
-        String processInstanceId = processInstanceApi.submitProcessInstance(Long.valueOf(saveReqVO.getCreator()),
+        // 统一发起表单只传 creatorName；发起人取登录用户，避免 Long.valueOf(null)
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        if (userId == null && StringUtils.isNotBlank(saveReqVO.getCreator())) {
+            userId = Long.valueOf(saveReqVO.getCreator());
+        }
+        String processInstanceId = processInstanceApi.submitProcessInstance(userId,
                 new BpmProcessInstanceCreateReqDTO().setProcessDefinitionKey(OaBillTypeEnum.OA_SEAL_APPLY_BILL.getProcessDefinitionKey())
                         .setVariables(processInstanceVariables).setBusinessKey(String.valueOf(sealApplyBill.getId()))
         ).getCheckedData();
