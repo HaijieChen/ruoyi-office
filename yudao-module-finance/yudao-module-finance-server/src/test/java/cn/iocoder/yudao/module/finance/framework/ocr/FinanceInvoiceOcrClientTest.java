@@ -34,6 +34,10 @@ class FinanceInvoiceOcrClientTest {
                 FinanceInvoiceOcrClient.parseInvoiceNo("发票号码\n25317000000178817093 开票日期"));
         assertEquals("25317000000178817093",
                 FinanceInvoiceOcrClient.parseInvoiceNo("发票号码 No. 25317000000178817093"));
+        assertEquals("26312000005459012026",
+                FinanceInvoiceOcrClient.parseInvoiceNo(
+                        "发票号码：\n开票日期：\n名称：\n洪振业\n26312000005459012026\n2026年08月28日\n"
+                                + "上海岚崖网络科技有限公司 上海西郊宾馆有限公司\n91310112MAEXHX3F7D 91310000132203459C"));
         assertNull(FinanceInvoiceOcrClient.parseInvoiceNo("无号码"));
     }
 

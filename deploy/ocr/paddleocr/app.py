@@ -114,7 +114,9 @@ def parse_invoice_no(joined):
     nos = re.findall(r"发票号码[:：]?[^0-9]{0,8}([0-9]{8,20})", compact)
     if nos:
         return nos[0]
-    nos = re.findall(r"(?<!\d)(20\d{18})(?!\d)", compact)
+    nos = re.findall(r"(?<!\d)(\d{20})(?!\d)", joined)
+    if not nos:
+        nos = re.findall(r"(?<!\d)(\d{20})(?!\d)", compact)
     if nos:
         return nos[0]
     nos = re.findall(r"(?<!电子客票)号码[:：]([0-9]{8,20})", compact)
