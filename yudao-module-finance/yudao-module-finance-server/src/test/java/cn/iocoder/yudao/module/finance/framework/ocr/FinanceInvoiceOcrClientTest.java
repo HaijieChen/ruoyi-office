@@ -55,6 +55,11 @@ class FinanceInvoiceOcrClientTest {
                 FinanceInvoiceOcrClient.parseAmount("价税合计（大写）壹仟圆整（小写）¥1,234.56"));
         assertEquals(new java.math.BigDecimal("99.00"),
                 FinanceInvoiceOcrClient.parseAmount("（小写）￥99.00"));
+        // 全电发票：价税合计标签与金额不相邻，合计行未税 ¥3009.43 会先被 80 字窗口吃到
+        assertEquals(new java.math.BigDecimal("3190.00"),
+                FinanceInvoiceOcrClient.parseAmount(
+                        "价税合计（大写） （小写）\n备\n注\n开票人：\n国家税务总局全国统一发票监制章上海市税务局\n"
+                                + "¥3009.43 ¥180.57\n叁仟壹佰玖拾圆整 ¥ 3190.00"));
         assertNull(FinanceInvoiceOcrClient.parseAmount("无金额"));
     }
 
