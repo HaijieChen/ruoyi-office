@@ -25,6 +25,7 @@ import { useVbenForm } from '#/adapter/form';
 import {
   createEmployeeArchive,
   getEmployeeArchive,
+  getNextEmployeeNo,
   updateEmployeeArchive,
 } from '#/api/hrm/employee';
 import { getSimpleDeptList } from '#/api/system/dept';
@@ -620,6 +621,14 @@ const pageTitle = computed(() => {
 async function loadData(newId?: string) {
   const id = newId || (route.query.id as string);
   if (!id) {
+    try {
+      const nextNo = await getNextEmployeeNo();
+      if (nextNo) {
+        await basicFormApi.setValues({ employeeNo: nextNo });
+      }
+    } catch {
+      // 预填失败时仍可手填，保存时后端再生成
+    }
     return;
   }
 
@@ -743,7 +752,7 @@ async function handleSave() {
       ...workValues,
     } as EmployeeArchiveApi.EmployeeArchive;
 
-    // 新增时，员工工号由后端自动生成，前端不传或传空
+    // 新增未填工号时交给后端按同一规则生成
     if (!values.id && (!values.employeeNo || values.employeeNo.trim() === '')) {
       values.employeeNo = undefined;
     }
@@ -967,7 +976,7 @@ watch(
       ...item,
       componentProps: {
         ...item.componentProps,
-        disabled: isReadonly || item.fieldName === 'employeeNo', // 员工工号始终禁用
+        disabled: isReadonly || (!!formData.value.id && item.fieldName === 'employeeNo'),
       },
     }));
     basicFormApi.updateSchema(updatedBasicSchema);

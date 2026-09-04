@@ -45,6 +45,13 @@ public class EmployeeController {
         return success(employeeArchiveService.createEmployeeArchive(createReqVO));
     }
 
+    @GetMapping("/next-employee-no")
+    @Operation(summary = "预览下一员工工号（数字最大 +1，保持位宽）")
+    @PreAuthorize("@ss.hasPermission('hrm:employee-archive:create')")
+    public CommonResult<String> previewNextEmployeeNo() {
+        return success(employeeArchiveService.previewNextEmployeeNo());
+    }
+
     @PutMapping("/update")
     @Operation(summary = "更新员工档案")
     @PreAuthorize("@ss.hasPermission('hrm:employee-archive:update')")

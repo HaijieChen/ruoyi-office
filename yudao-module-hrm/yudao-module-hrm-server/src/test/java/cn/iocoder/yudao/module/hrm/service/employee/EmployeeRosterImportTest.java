@@ -236,7 +236,7 @@ class EmployeeRosterImportTest {
                 e.setId(100L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("10000000");
             lenient().when(employeeArchiveMapper.selectById(99L)).thenReturn(existing);
 
             EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(
@@ -253,7 +253,7 @@ class EmployeeRosterImportTest {
             verify(employeeArchiveMapper, atLeastOnce()).insert(insertCap.capture());
             assertEquals("新建员", insertCap.getValue().getName());
             assertNull(insertCap.getValue().getEmployeeNo());
-            verify(employeeArchiveMapper, never()).selectMaxEmployeeNo();
+            verify(employeeArchiveMapper, never()).selectMaxNumericEmployeeNo();
         }
     }
 
@@ -370,7 +370,7 @@ class EmployeeRosterImportTest {
                 e.setId(1L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("10000000");
 
             Logger logger = (Logger) LoggerFactory.getLogger(EmployeeServiceImpl.class);
             ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -519,7 +519,7 @@ class EmployeeRosterImportTest {
             when(employeeArchiveMapper.selectByIdCard(idCard))
                     .thenReturn(null)
                     .thenReturn(winner);
-            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("10000000");
             doThrow(new DuplicateKeyException("uk_hrm_employee_active_id_card"))
                     .when(employeeArchiveMapper).insert(any(EmployeeDO.class));
             when(employeeArchiveMapper.selectById(77L)).thenReturn(winner);
@@ -561,7 +561,7 @@ class EmployeeRosterImportTest {
             when(employeeArchiveMapper.selectByIdCard(idCard))
                     .thenReturn(null)
                     .thenReturn(winner);
-            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("10000000");
             // create 路径会先 default 为正式再 insert；冲突后必须恢复 null 再 update
             doThrow(new DuplicateKeyException("uk_hrm_employee_active_id_card"))
                     .when(employeeArchiveMapper).insert(any(EmployeeDO.class));
@@ -627,7 +627,7 @@ class EmployeeRosterImportTest {
                 e.setId(201L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("10000000");
 
             EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
             assertEquals(1, resp.getCreateNames().size());
@@ -747,7 +747,7 @@ class EmployeeRosterImportTest {
                 e.setId(301L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("10000000");
 
             EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
             assertEquals(List.of("消歧员"), resp.getCreateNames());
@@ -821,7 +821,7 @@ class EmployeeRosterImportTest {
                 e.setId(88L);
                 return 1;
             }).when(employeeArchiveMapper).insert(any(EmployeeDO.class));
-            lenient().when(employeeArchiveMapper.selectMaxEmployeeNo()).thenReturn(10000000L);
+            lenient().when(employeeArchiveMapper.selectMaxNumericEmployeeNo()).thenReturn("10000000");
 
             EmployeeRosterImportRespVO resp = employeeService.importEmployeeRosterList(List.of(row));
             assertEquals(List.of("多任职员"), resp.getCreateNames());
