@@ -157,6 +157,11 @@ yudao:
     refund-notify-url: http://yunai.natapp1.cc/admin-api/pay/notify/refund # 支付渠道的【退款】回调地址
     transfer-notify-url: https://yunai.natapp1.cc/admin-api/pay/notify/transfer # 支付渠道的【转账】回调地址
   demo: false # 开启演示模式
+  im:
+    wecom:
+      corp-id: ww3e8df8d05c57957f
+      secret: 4wsUFS-Z6uacaHZKg0tpA9Z5m0rJB8rkkKPvefaWV2k
+      agent-id: 1000004
   tencent-lbs-key: TVDBZ-TDILD-4ON4B-PFDZA-RNLKH-VVF6E # QQ 地图的密钥 https://lbs.qq.com/service/staticV2/staticGuide/staticDoc
   # EXP-87 Path A：RPC 服务身份共享密钥（privileged create-by-business）；fail-closed 启动校验
   rpc:
