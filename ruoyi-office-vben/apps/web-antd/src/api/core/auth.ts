@@ -205,6 +205,14 @@ export async function socialLogin(data: AuthApi.SocialLoginParams) {
   );
 }
 
+/** IM 工作台免登，不走电脑社交登录 MFA */
+export async function imSilentLogin(data: AuthApi.SocialLoginParams) {
+  return requestClient.post<AuthApi.LoginResult>(
+    '/system/auth/im-silent-login',
+    data,
+  );
+}
+
 export async function mfaVerifyApi(data: AuthApi.MfaVerifyParams) {
   return requestClient.post<AuthApi.LoginResult>('/system/auth/mfa/verify', data, {
     headers: {
