@@ -53,4 +53,15 @@ public interface SocialUserApi {
                                                         @RequestParam("code") String code,
                                                         @RequestParam("state") String state);
 
+    @GetMapping(PREFIX + "/get-by-openid")
+    @Operation(summary = "获得社交用户，基于 openid")
+    @Parameters({
+            @Parameter(name = "userType", description = "用户类型", example = "2", required = true),
+            @Parameter(name = "socialType", description = "社交平台的类型", example = "30", required = true),
+            @Parameter(name = "openid", description = "社交 openid", example = "woXXXX", required = true),
+    })
+    CommonResult<SocialUserRespDTO> getSocialUserByOpenid(@RequestParam("userType") Integer userType,
+                                                          @RequestParam("socialType") Integer socialType,
+                                                          @RequestParam("openid") String openid);
+
 }

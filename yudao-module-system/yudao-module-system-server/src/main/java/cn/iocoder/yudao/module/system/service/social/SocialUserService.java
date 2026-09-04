@@ -68,6 +68,11 @@ public interface SocialUserService {
      */
     SocialUserRespDTO getSocialUserByCode(Integer userType, Integer socialType, String code, String state);
 
+    /**
+     * 按平台 openid 反查已绑定的管理用户。未绑定返回 null。
+     */
+    SocialUserRespDTO getSocialUserByOpenid(Integer userType, Integer socialType, String openid);
+
     // ==================== 社交用户 CRUD ====================
 
     /**

@@ -307,6 +307,17 @@ yudao:
   web:
     admin-ui:
       url: http://dashboard.yudao.iocoder.cn # Admin 管理后台 UI 的地址
+  im:
+    card-secret: ${YUDAO_IM_CARD_SECRET:}
+    wecom:
+      corp-id: ${YUDAO_IM_WECOM_CORP_ID:}
+      secret: ${YUDAO_IM_WECOM_SECRET:}
+    dingtalk:
+      app-key: ${YUDAO_IM_DINGTALK_APP_KEY:}
+      app-secret: ${YUDAO_IM_DINGTALK_APP_SECRET:}
+    feishu:
+      app-id: ${YUDAO_IM_FEISHU_APP_ID:}
+      app-secret: ${YUDAO_IM_FEISHU_APP_SECRET:}
   xss:
     enable: false
     exclude-urls: # 如下两个 url，仅仅是为了演示，去掉配置也没关系

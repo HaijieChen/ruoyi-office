@@ -114,6 +114,20 @@ public class SocialUserServiceImpl implements SocialUserService {
     }
 
     @Override
+    public SocialUserRespDTO getSocialUserByOpenid(Integer userType, Integer socialType, String openid) {
+        SocialUserDO socialUser = socialUserMapper.selectByTypeAndOpenid(socialType, openid);
+        if (socialUser == null) {
+            return null;
+        }
+        SocialUserBindDO bind = socialUserBindMapper.selectByUserTypeAndSocialUserId(userType, socialUser.getId());
+        if (bind == null) {
+            return null;
+        }
+        return new SocialUserRespDTO(socialUser.getOpenid(), socialUser.getNickname(), socialUser.getAvatar(),
+                bind.getUserId());
+    }
+
+    @Override
     public SocialUserRespDTO getSocialUserByCode(Integer userType, Integer socialType, String code, String state) {
         // 获得社交用户
         SocialUserDO socialUser = authSocialUser(socialType, userType, code, state);

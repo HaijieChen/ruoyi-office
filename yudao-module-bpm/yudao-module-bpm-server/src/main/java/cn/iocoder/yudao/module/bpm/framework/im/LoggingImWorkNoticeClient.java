@@ -2,12 +2,10 @@ package cn.iocoder.yudao.module.bpm.framework.im;
 
 import cn.iocoder.yudao.module.system.enums.social.SocialTypeEnum;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 /**
- * 默认投递：记录日志。真实企微/钉钉/飞书适配器后续替换。
+ * 无 HTTP 凭证时的降级日志。正式投递见 {@link HttpImWorkNoticeClient}。
  */
-@Component
 @Slf4j
 public class LoggingImWorkNoticeClient implements ImWorkNoticeClient {
 

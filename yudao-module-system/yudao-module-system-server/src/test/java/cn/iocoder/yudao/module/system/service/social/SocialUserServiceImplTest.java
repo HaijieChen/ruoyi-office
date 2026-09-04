@@ -134,6 +134,21 @@ public class SocialUserServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
+    public void testGetSocialUserByOpenid_bound() {
+        Integer userType = UserTypeEnum.ADMIN.getValue();
+        Integer type = SocialTypeEnum.FEISHU.getType();
+        String openid = "ou_im_user";
+        SocialUserDO socialUser = randomPojo(SocialUserDO.class).setType(type).setOpenid(openid);
+        socialUserMapper.insert(socialUser);
+        socialUserBindMapper.insert(randomPojo(SocialUserBindDO.class)
+                .setUserType(userType).setUserId(88L).setSocialType(type).setSocialUserId(socialUser.getId()));
+
+        SocialUserRespDTO result = socialUserService.getSocialUserByOpenid(userType, type, openid);
+        assertEquals(88L, result.getUserId());
+        assertEquals(openid, result.getOpenid());
+    }
+
+    @Test
     public void testUnbindSocialUser_notFound() {
         // 调用，并断言
         assertServiceException(

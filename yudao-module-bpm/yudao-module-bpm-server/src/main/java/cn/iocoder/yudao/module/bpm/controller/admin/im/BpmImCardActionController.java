@@ -2,7 +2,7 @@ package cn.iocoder.yudao.module.bpm.controller.admin.im;
 
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.framework.im.ImCardActionResult;
-import cn.iocoder.yudao.module.bpm.framework.im.ImCardActionService;
+import cn.iocoder.yudao.module.bpm.framework.im.ImCardSignedActionService;
 import cn.iocoder.yudao.module.bpm.framework.im.ImCardTaskSnapshot;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,20 +27,27 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 public class BpmImCardActionController {
 
     @Resource
-    private ImCardActionService imCardActionService;
+    private ImCardSignedActionService imCardSignedActionService;
 
     @PostMapping("/action")
     @PermitAll
-    @Operation(summary = "IM 卡片通过/拒绝/撤回（无 OA cookie，调用方须已解析 IM 用户）")
+    @Operation(summary = "IM 卡片通过/拒绝/撤回。验签后按 openid 映射 OA 用户，不信任 actorUserId")
     public CommonResult<ImCardActionResult> action(@Valid @RequestBody ImCardActionReqVO reqVO) {
-        return success(imCardActionService.handle(reqVO.getActorUserId(), reqVO.getAction(),
-                reqVO.getSnapshot(), reqVO.getEventId()));
+        return success(imCardSignedActionService.handle(reqVO.getSocialType(), reqVO.getOpenid(),
+                reqVO.getTimestamp(), reqVO.getSignature(), reqVO.getAction(), reqVO.getEventId(),
+                reqVO.getSnapshot()));
     }
 
     @Data
     public static class ImCardActionReqVO {
         @NotNull
-        private Long actorUserId;
+        private Integer socialType;
+        @NotEmpty
+        private String openid;
+        @NotNull
+        private Long timestamp;
+        @NotEmpty
+        private String signature;
         @NotEmpty
         private String action;
         @NotEmpty
