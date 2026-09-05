@@ -2,6 +2,8 @@ import type { PageParam, PageResult } from '@vben/request';
 
 import type { AttachmentApi } from '#/api/common/attachment';
 
+import dayjs from 'dayjs';
+
 import { requestClient } from '#/api/request';
 
 export namespace SealApplyBillApi {
@@ -89,6 +91,23 @@ export function createSealApplyBill(data: SealApplyBillApi.SealApplyBill) {
 /** 保存用印申请单 */
 export function saveSealApplyBill(data: SealApplyBillApi.SealApplyBill) {
   return requestClient.post('/oa/seal-apply-bill/save', data);
+}
+
+/** 统一发起新单：由流程配置决定可发起范围，保留旧提交接口权限。 */
+export function createAndStartSealApplyBill(
+  data: SealApplyBillApi.SealApplyBill,
+) {
+  // LocalDateTime accepts local strings, not Date.toJSON()'s UTC ISO-Z value.
+  // Keep this normalization exclusive to new/copy-as-new initiation.
+  return requestClient.post('/oa/seal-apply-bill/create-and-start', {
+    ...data,
+    expectedUseTime: data.expectedUseTime
+      ? dayjs(data.expectedUseTime).format('YYYY-MM-DD HH:mm:ss')
+      : undefined,
+    expectedReturnTime: data.expectedReturnTime
+      ? dayjs(data.expectedReturnTime).format('YYYY-MM-DD HH:mm:ss')
+      : undefined,
+  });
 }
 
 /** 提交用印申请单 */

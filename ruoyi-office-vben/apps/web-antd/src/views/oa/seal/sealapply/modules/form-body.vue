@@ -17,7 +17,7 @@ import {
 } from 'ant-design-vue';
 import dayjs, { type Dayjs } from 'dayjs';
 
-import { getSealApplyBill, submitSealApplyBill } from '#/api/oa/seal/sealapply';
+import { getSealApplyBill, createAndStartSealApplyBill } from '#/api/oa/seal/sealapply';
 import { FileUpload } from '#/components/upload';
 
 defineOptions({ name: 'OaSealApplyFormBody' });
@@ -155,7 +155,7 @@ async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
   submitting.value = true;
   try {
     const urls = formData.value.attachmentUrls || [];
-    await submitSealApplyBill({
+    await createAndStartSealApplyBill({
       billCode: '',
       sealName,
       cause: String(formData.value.cause).trim(),
@@ -181,8 +181,6 @@ async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
       deptName: formData.value.deptName || '',
       remark: formData.value.remark,
       attachments: urls.map((url, i) => ({
-        businessType: 'oa_seal_apply_bill',
-        businessId: 0,
         fileName: url.split('/').pop() || `file-${i}`,
         filePath: url,
         fileUrl: url,

@@ -124,6 +124,13 @@
             <artifactId>yudao-spring-boot-starter-test</artifactId>
         </dependency>
 
+        <!-- 仅测试单体 OA 与真实 Flowable 共享事务，不引入生产 BPM-server 依赖。 -->
+        <dependency>
+            <groupId>org.flowable</groupId>
+            <artifactId>flowable-spring-boot-starter-process</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- 工具类相关 -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>
