@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.finance.service.business;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.finance.controller.admin.business.vo.FinanceBusinessOrderImportExcelVO;
@@ -495,6 +496,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 .discountRate(amounts.discountRate())
                 .settlementAmount(amounts.settlementAmount())
                 .currency(currency)
+                .attachmentFileUrls(reqVO.getAttachmentFileUrls() == null ? null : JsonUtils.toJsonString(reqVO.getAttachmentFileUrls()))
                 .remark(trimToNull(reqVO.getRemark()))
                 .build();
     }
@@ -517,6 +519,7 @@ public class FinanceBusinessOrderServiceImpl implements FinanceBusinessOrderServ
                 .discountRate(amounts.discountRate())
                 .settlementAmount(amounts.settlementAmount())
                 .currency(currency)
+                .attachmentFileUrls(reqVO.getAttachmentFileUrls() == null ? null : JsonUtils.toJsonString(reqVO.getAttachmentFileUrls()))
                 .remark(trimToNull(reqVO.getRemark()))
                 .build();
     }

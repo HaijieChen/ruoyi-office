@@ -67,6 +67,8 @@ public class FinanceInvoiceApplicationDO extends BaseDO {
     private BigDecimal amountExcludingTax;
     private BigDecimal taxAmount;
     private String evidenceFileUrl;
+    /** 申请附件 URL 列表（JSON），与办票文件分离 */
+    private String attachmentFileUrls;
     private String remark;
     private Boolean voided;
     /**

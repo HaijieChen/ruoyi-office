@@ -25,6 +25,8 @@ import {
 import { listSelectableContractsForBo } from '#/api/finance/contract-application';
 import { getSimpleCompanyList } from '#/api/system/dept';
 import { $t } from '#/locales';
+import { FileUpload } from '#/components/upload';
+import { parseAttachmentUrls } from '#/utils/finance-attachments';
 import { financeProductLabel } from '#/views/finance/shared/display-labels';
 import { useBusinessStaffField } from '#/views/finance/shared/use-business-staff';
 
@@ -64,6 +66,7 @@ interface FormData {
   signedExecutionAmount?: number;
   discountRate?: number;
   currency?: string;
+  attachmentFileUrls?: string[];
   remark?: string;
   // read-only server fields (displayed only, never sent)
   settlementAmount?: number;
@@ -268,6 +271,7 @@ const [Modal, modalApi] = useVbenModal({
       signedExecutionAmount: formData.value.signedExecutionAmount!,
       currency: (formData.value.currency || 'CNY').toUpperCase(),
       discountRate: formData.value.discountRate,
+      attachmentFileUrls: formData.value.attachmentFileUrls ?? [],
       remark: formData.value.remark,
       businessStaffUserId: formData.value.businessStaffUserId,
     };
@@ -301,6 +305,7 @@ const [Modal, modalApi] = useVbenModal({
       const detail = await getBusinessOrder(data.id);
       formData.value = {
         ...detail,
+        attachmentFileUrls: parseAttachmentUrls(detail.attachmentFileUrls),
         // 后端可能返回 LocalDate 数组，DatePicker 需要字符串
         orderDate: formatDateField(detail.orderDate),
         executionStartDate: formatDateField(detail.executionStartDate),
@@ -521,6 +526,15 @@ function onContractChange(id: unknown) {
         </div>
       </Form.Item>
 
+      <Form.Item label="附件" name="attachmentFileUrls">
+        <FileUpload
+          v-model:value="formData.attachmentFileUrls"
+          :max-number="10"
+          :max-size="20"
+          multiple
+          help-text="选填，最多 10 份，每份不超过 20MB"
+        />
+      </Form.Item>
       <Form.Item label="备注" name="remark">
         <Textarea v-model:value="formData.remark" placeholder="可选" :rows="3" />
       </Form.Item>

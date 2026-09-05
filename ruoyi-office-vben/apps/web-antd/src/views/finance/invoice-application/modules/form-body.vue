@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+import { FileUpload } from '#/components/upload';
+import { parseAttachmentUrls } from '#/utils/finance-attachments';
+
 import type { Rule } from 'ant-design-vue/es/form';
 
 import type { FinanceCustomerCompanyApi } from '#/api/finance/customer-company';
@@ -70,6 +73,7 @@ interface FormData {
   productType?: string;
   /** 特别开票要求（单据级，不进客户档案） */
   specialInvoiceRequirement?: string;
+  attachmentFileUrls?: string[];
   remark?: string;
   businessStaffUserId?: number;
   lines: LineItem[];
@@ -709,6 +713,7 @@ async function reset(opts?: {
       invoiceType: detail.invoiceType,
       productType: detail.taxContent,
       specialInvoiceRequirement: detail.specialInvoiceRequirement,
+      attachmentFileUrls: parseAttachmentUrls(detail.attachmentFileUrls),
       remark: detail.remark as any,
       businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
       lines: (detail.lines || []).map((l) => ({
@@ -790,6 +795,7 @@ async function reset(opts?: {
       invoiceType: detail.invoiceType,
       productType: detail.taxContent,
       specialInvoiceRequirement: detail.specialInvoiceRequirement,
+      attachmentFileUrls: parseAttachmentUrls(detail.attachmentFileUrls),
       remark: detail.remark as any,
       businessStaffUserId: detail.businessStaffUserId ?? defaultStaff,
       lines: (detail.lines || []).map((l) => ({
@@ -904,6 +910,7 @@ async function submit(ctx?: SubmitContext): Promise<void> {
       invoiceType: formData.value.invoiceType,
       taxContent: formData.value.productType as string,
       specialInvoiceRequirement: formData.value.specialInvoiceRequirement,
+      attachmentFileUrls: formData.value.attachmentFileUrls ?? [],
       remark: formData.value.remark,
       lines: formData.value.lines.map((l) => ({
         businessOrderId: brand ? l.businessOrderId : undefined,
@@ -1058,6 +1065,15 @@ defineExpose({ reset, submit, getPredictVariables, submitting });
           allow-clear
           :options="invoiceTypeOptions"
           placeholder="请选择发票类型"
+        />
+      </Form.Item>
+      <Form.Item label="附件" name="attachmentFileUrls">
+        <FileUpload
+          v-model:value="formData.attachmentFileUrls"
+          :max-number="10"
+          :max-size="20"
+          multiple
+          help-text="选填，最多 10 份，每份不超过 20MB"
         />
       </Form.Item>
       <Form.Item label="备注" name="remark">

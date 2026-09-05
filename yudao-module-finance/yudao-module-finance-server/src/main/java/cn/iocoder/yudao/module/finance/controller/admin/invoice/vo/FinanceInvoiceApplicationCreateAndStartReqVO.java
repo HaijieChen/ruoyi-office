@@ -68,6 +68,10 @@ public class FinanceInvoiceApplicationCreateAndStartReqVO {
     @Schema(description = "开票依据附件 URL")
     private String evidenceFileUrl;
 
+    @Schema(description = "申请附件 URL 列表，最多 10 份")
+    @jakarta.validation.constraints.Size(max = 10)
+    private List<@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 2048) String> attachmentFileUrls;
+
     @Schema(description = "备注/特殊情况说明")
     private String remark;
 

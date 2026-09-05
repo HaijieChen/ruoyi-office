@@ -12,6 +12,8 @@ import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceAppl
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationLineDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.business.FinanceBusinessOrderMapper;
 import cn.iocoder.yudao.module.finance.dal.mysql.contract.FinanceContractApplicationMapper;
+import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationLineMapper;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.framework.excel.core.util.ExcelUtils;
 import cn.iocoder.yudao.module.finance.framework.ocr.FinanceInvoiceOcrClient;
 import cn.iocoder.yudao.module.finance.service.invoice.FinanceInvoiceApplicationImportService;
@@ -56,6 +58,10 @@ public class FinanceInvoiceApplicationController {
     private FinanceContractApplicationMapper contractApplicationMapper;
     @Resource
     private FinanceInvoiceOcrClient invoiceOcrClient;
+    @Resource
+    private FinanceInvoiceApplicationLineMapper invoiceApplicationLineMapper;
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @GetMapping("/get-import-template")
     @Operation(summary = "获得开票申请历史导入模板")
@@ -231,6 +237,7 @@ public class FinanceInvoiceApplicationController {
                 invoiceApplicationService.getApplicationFiles(id),
                 FinanceInvoiceApplicationRespVO.FileItem.class));
         fillProcessEnded(List.of(respVO));
+        FinanceInvoiceApplicationListDisplay.fill(List.of(respVO), adminUserApi, invoiceApplicationLineMapper);
         return success(respVO);
     }
 
@@ -242,6 +249,7 @@ public class FinanceInvoiceApplicationController {
         PageResult<FinanceInvoiceApplicationDO> page = invoiceApplicationService.getApplicationPage(pageReqVO);
         PageResult<FinanceInvoiceApplicationRespVO> voPage = BeanUtils.toBean(page, FinanceInvoiceApplicationRespVO.class);
         fillProcessEnded(voPage.getList());
+        FinanceInvoiceApplicationListDisplay.fill(voPage.getList(), adminUserApi, invoiceApplicationLineMapper);
         return success(voPage);
     }
 

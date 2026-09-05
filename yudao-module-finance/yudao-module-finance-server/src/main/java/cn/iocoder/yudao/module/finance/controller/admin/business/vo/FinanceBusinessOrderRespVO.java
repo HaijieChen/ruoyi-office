@@ -60,6 +60,8 @@ public class FinanceBusinessOrderRespVO {
     private BigDecimal discountRate;
     @Schema(description = "签单结算金额")
     private BigDecimal settlementAmount;
+    @Schema(description = "申请附件 URL 列表（JSON）")
+    private String attachmentFileUrls;
     @Schema(description = "备注")
     private String remark;
     @Schema(description = "已确认认领金额")

@@ -16,6 +16,7 @@ import {
   resubmitInvoiceApplication,
 } from '#/api/finance/invoice-application';
 import { downloadFileFromBlobPart } from '@vben/utils';
+import { displayDateTime } from '#/utils/display-time';
 import { message, Modal } from 'ant-design-vue';
 
 import FormModal from './modules/form.vue';
@@ -225,6 +226,8 @@ const [Grid, gridApi] = useVbenVxeGrid({
     columns: [
       { type: 'checkbox', width: 40 },
       { field: 'applicationNo', title: '申请单号', minWidth: 140 },
+      { field: 'applicantName', title: '申请人', minWidth: 100 },
+      { field: 'invoiceCompany', title: '主体公司', minWidth: 140 },
       { field: 'buyerName', title: '购方', minWidth: 120 },
       { field: 'totalAmount', title: '价税合计', minWidth: 100 },
       {
@@ -232,6 +235,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
         title: '状态',
         minWidth: 140,
         formatter: ({ row }) => displayStatus(row),
+      },
+      { field: 'remark', title: '备注', minWidth: 140, showOverflow: true },
+      {
+        field: 'issuedAt',
+        title: '开票时间',
+        minWidth: 160,
+        formatter: ({ cellValue }) => displayDateTime(cellValue),
       },
       { field: 'processInstanceId', title: '流程实例', minWidth: 120 },
       { field: 'createTime', title: '创建时间', minWidth: 160 },

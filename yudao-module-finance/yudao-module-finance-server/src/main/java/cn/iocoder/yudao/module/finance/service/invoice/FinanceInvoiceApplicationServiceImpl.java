@@ -1,6 +1,7 @@
 package cn.iocoder.yudao.module.finance.service.invoice;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.hutool.core.util.StrUtil;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
@@ -43,6 +44,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -209,6 +211,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .taxRate(reqVO.getTaxRate())
                 .amountExcludingTax(reqVO.getAmountExcludingTax())
                 .taxAmount(reqVO.getTaxAmount())
+                .attachmentFileUrls(reqVO.getAttachmentFileUrls() == null ? null : JsonUtils.toJsonString(reqVO.getAttachmentFileUrls()))
                 .evidenceFileUrl(reqVO.getEvidenceFileUrl())
                 .remark(reqVO.getRemark())
                 .voided(Boolean.FALSE)
@@ -452,6 +455,7 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
                 .set("tax_rate", reqVO.getTaxRate())
                 .set("amount_excluding_tax", reqVO.getAmountExcludingTax())
                 .set("tax_amount", reqVO.getTaxAmount())
+                .set(reqVO.getAttachmentFileUrls() != null, "attachment_file_urls", JsonUtils.toJsonString(reqVO.getAttachmentFileUrls()))
                 .set("evidence_file_url", reqVO.getEvidenceFileUrl())
                 .set("remark", reqVO.getRemark())
                 .set("voided", Boolean.FALSE));
@@ -546,6 +550,16 @@ public class FinanceInvoiceApplicationServiceImpl implements FinanceInvoiceAppli
         appUpdate.setId(reqVO.getApplicationId());
         appUpdate.setIssueStatus(issueStatus);
         applicationMapper.updateById(appUpdate);
+        LocalDateTime issuedAt = LocalDateTime.now();
+        for (FinanceInvoiceApplicationLineDO line : lineMapper.selectListByApplicationId(reqVO.getApplicationId())) {
+            if (line.getIssuedAt() != null) {
+                continue;
+            }
+            FinanceInvoiceApplicationLineDO lineUpdate = new FinanceInvoiceApplicationLineDO();
+            lineUpdate.setId(line.getId());
+            lineUpdate.setIssuedAt(issuedAt);
+            lineMapper.updateById(lineUpdate);
+        }
     }
 
     @Override

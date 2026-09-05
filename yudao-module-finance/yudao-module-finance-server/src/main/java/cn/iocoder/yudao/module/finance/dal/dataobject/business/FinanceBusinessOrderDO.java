@@ -56,6 +56,8 @@ public class FinanceBusinessOrderDO extends BaseDO {
     private BigDecimal settlementAmount;
     /** 交易币种 CNY/USD/HKD（历史可空） */
     private String currency;
+    /** 申请附件 URL 列表（JSON） */
+    private String attachmentFileUrls;
     private String remark;
     private BigDecimal confirmedClaimedAmount;
     /**
