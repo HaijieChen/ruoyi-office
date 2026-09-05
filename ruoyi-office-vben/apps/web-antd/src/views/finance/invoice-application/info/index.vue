@@ -12,6 +12,7 @@ import { useRoute } from 'vue-router';
 
 import { Descriptions, DescriptionsItem, Spin, Table, Tag, message } from 'ant-design-vue';
 
+import { FilePreviewList } from '#/components/upload';
 import { getInvoiceApplication } from '#/api/finance/invoice-application';
 import { displayDateTime } from '#/utils/display-time';
 import { financeProductLabel } from '#/views/finance/shared/display-labels';
@@ -247,6 +248,9 @@ watch(
           </DescriptionsItem>
           <DescriptionsItem label="特别开票要求" :span="2">
             {{ detail.specialInvoiceRequirement || '-' }}
+          </DescriptionsItem>
+          <DescriptionsItem label="申请附件" :span="2">
+            <FilePreviewList :value="detail.attachmentFileUrls" />
           </DescriptionsItem>
           <DescriptionsItem label="备注" :span="2">
             {{ detail.remark || '-' }}

@@ -69,6 +69,10 @@ public class FinanceBusinessOrderSaveReqVO {
     @Schema(description = "业务人员用户编号，默认提单人")
     private Long businessStaffUserId;
 
+    @Schema(description = "申请附件 URL 列表，最多 10 份")
+    @jakarta.validation.constraints.Size(max = 10)
+    private java.util.List<@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 2048) String> attachmentFileUrls;
+
     @Schema(description = "备注")
     private String remark;
 

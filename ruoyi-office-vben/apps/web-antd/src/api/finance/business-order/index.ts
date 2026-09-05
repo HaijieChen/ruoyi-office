@@ -62,6 +62,7 @@ export namespace FinanceBusinessOrderApi {
     /** 可开余额 = 结算 - 开票占用，只读 */
     invoiceOpenableAmount?: number;
     /** 备注（可选） */
+    attachmentFileUrls?: string;
     remark?: string;
     businessStaffUserId?: number;
     /** 创建时间，只读 */
@@ -97,6 +98,7 @@ export namespace FinanceBusinessOrderApi {
     payerName?: string;
     discountRate?: number;
     currency: string;
+    attachmentFileUrls?: string[];
     remark?: string;
     businessStaffUserId?: number;
     /**

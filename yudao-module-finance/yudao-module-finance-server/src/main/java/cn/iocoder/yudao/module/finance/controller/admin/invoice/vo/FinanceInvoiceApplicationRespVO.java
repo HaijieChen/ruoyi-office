@@ -34,6 +34,8 @@ public class FinanceInvoiceApplicationRespVO {
     private BigDecimal pendingClaimedAmount;
     @Schema(description = "申请人用户编号")
     private Long applicantUserId;
+    @Schema(description = "申请人姓名")
+    private String applicantName;
     private Long businessStaffUserId;
     @Schema(description = "期望开票日")
     private LocalDate expectedInvoiceDate;
@@ -65,8 +67,12 @@ public class FinanceInvoiceApplicationRespVO {
     private BigDecimal taxAmount;
     @Schema(description = "开票依据附件")
     private String evidenceFileUrl;
+    @Schema(description = "申请附件 URL 列表（JSON），与办票文件分离")
+    private String attachmentFileUrls;
     @Schema(description = "备注")
     private String remark;
+    @Schema(description = "开票时间（明细行最晚 issuedAt）")
+    private java.time.LocalDateTime issuedAt;
     @Schema(description = "是否作废")
     private Boolean voided;
     @Schema(description = "创建时间")

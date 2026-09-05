@@ -50,6 +50,7 @@ export namespace FinanceInvoiceApplicationApi {
     /** 服务端可认领金额 */
     claimableAmount?: number;
     applicantUserId: number;
+    applicantName?: string;
     businessStaffUserId?: number;
     buyerName?: string;
     buyerTaxNo?: string;
@@ -60,6 +61,7 @@ export namespace FinanceInvoiceApplicationApi {
     specialInvoiceRequirement?: string;
     /** 产品类型（服务端字段 taxContent） */
     taxContent?: string;
+    attachmentFileUrls?: string;
     remark?: string;
     invoiceCompany?: string;
     /** 开票公司组织部门 id */
@@ -69,6 +71,7 @@ export namespace FinanceInvoiceApplicationApi {
     voided?: boolean;
     /** 审批流程已结束（无流程实例视为已结束） */
     processEnded?: boolean;
+    issuedAt?: string;
     createTime?: string;
     lines?: Line[];
     files?: IssueFile[];
@@ -94,6 +97,7 @@ export namespace FinanceInvoiceApplicationApi {
     amountExcludingTax?: number;
     taxAmount?: number;
     evidenceFileUrl?: string;
+    attachmentFileUrls?: string[];
     remark?: string;
     businessStaffUserId?: number;
     lines: Array<{
