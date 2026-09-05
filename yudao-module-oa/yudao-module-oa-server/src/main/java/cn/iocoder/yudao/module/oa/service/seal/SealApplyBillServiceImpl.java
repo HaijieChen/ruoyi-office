@@ -5,6 +5,14 @@ import cn.iocoder.yudao.framework.common.util.bill.BillCodeUtils;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.bpm.api.task.BpmProcessStartApi;
+import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
+import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
+import cn.iocoder.yudao.module.system.api.dept.DeptApi;
+import cn.iocoder.yudao.module.system.api.dept.dto.DeptRespDTO;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.annotation.Transactional;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.oa.enums.OaBillTypeEnum;
@@ -30,6 +38,7 @@ import cn.iocoder.yudao.module.oa.enums.SealUseStatusEnum;
 import cn.iocoder.yudao.module.bpm.util.BpmProcessVariableUtils;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.invalidParamException;
 import static cn.iocoder.yudao.module.oa.enums.ErrorCodeConstants.*;
 import static cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum.RUNNING;
 import static cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum.APPROVE;
@@ -53,6 +62,97 @@ public class SealApplyBillServiceImpl implements SealApplyBillService, FlowBillS
 
     @Resource
     private BpmProcessInstanceApi processInstanceApi;
+
+    @Resource
+    private BpmProcessStartApi processStartApi;
+    @Resource
+    private AdminUserApi adminUserApi;
+    @Resource
+    private DeptApi deptApi;
+
+    /**
+     * 统一新单入口。单体部署下 OA、附件与本地 BPM 共享事务；不承诺 Feign 分布式原子性。
+     * 不复用历史 insertOrUpdate / smart-submit，避免请求控制旧单及既有任务。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createAndStartSealApplyBill(SealApplyBillSaveReqVO req) {
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        if (userId == null || TenantContextHolder.getTenantId() == null) {
+            throw new AccessDeniedException("缺少发起人或租户上下文");
+        }
+        if (req.getId() != null || req.getProcessInstanceId() != null || req.getProcessStatus() != null
+                || req.getUseStatus() != null || req.getActualUseTime() != null || req.getActualReturnTime() != null
+                || StringUtils.isNotBlank(req.getBillCode())) {
+            throw invalidParamException("统一发起仅接受新单，不允许指定编号或流程/用印状态");
+        }
+        if (req.getCreator() != null && !userId.toString().equals(req.getCreator())) {
+            throw new AccessDeniedException("不允许代他人发起用印流程");
+        }
+        if (req.getAttachments() != null) {
+            req.getAttachments().forEach(attachment -> {
+                if (attachment == null || attachment.getId() != null
+                        || (attachment.getBusinessId() != null && attachment.getBusinessId() != 0)
+                        || (attachment.getBusinessType() != null
+                            && !OaBillTypeEnum.OA_SEAL_APPLY_BILL.getTypeCode().equals(attachment.getBusinessType()))) {
+                    throw invalidParamException("新单附件不得携带既有附件或单据编号");
+                }
+            });
+        }
+        if (!Boolean.TRUE.equals(processStartApi.validateStart(
+                OaBillTypeEnum.OA_SEAL_APPLY_BILL.getProcessDefinitionKey()).getCheckedData())) {
+            throw new AccessDeniedException("流程不允许发起");
+        }
+        // 仅可信当前用户的组织派生局部豁免数据范围，租户不变；finally 恢复后才进行业务写入。
+        // 与 AuthController 一致。当前单体本地调用有效；ThreadLocal 不跨 Feign，远程需专用组织 API。
+        cn.iocoder.yudao.framework.datapermission.core.util.DataPermissionUtils.executeIgnore(() -> {
+            AdminUserRespDTO user = adminUserApi.getUser(userId).getCheckedData();
+            if (user == null || user.getDeptId() == null) {
+                throw new AccessDeniedException("发起人未配置部门");
+            }
+            DeptRespDTO dept = deptApi.getDept(user.getDeptId()).getCheckedData();
+            DeptRespDTO company = dept;
+            Set<Long> visited = new HashSet<>();
+            while (company != null && !"1".equals(company.getOrgType())) {
+                if (!visited.add(company.getId()) || company.getParentId() == null || company.getParentId() == 0) {
+                    company = null;
+                    break;
+                }
+                company = deptApi.getDept(company.getParentId()).getCheckedData();
+            }
+            if (dept == null || company == null || !Objects.equals(req.getDeptId(), dept.getId())
+                    || !Objects.equals(req.getCompanyId(), company.getId())) {
+                throw new AccessDeniedException("公司与部门必须属于当前发起人的主部门");
+            }
+            req.setCreator(userId.toString());
+            req.setCreatorName(user.getNickname());
+            req.setDeptId(dept.getId());
+            req.setDeptName(dept.getName());
+            req.setCompanyId(company.getId());
+            req.setCompanyName(company.getName());
+        });
+        if (Objects.equals(req.getUseMode(), 2)) {
+            validateTimeConflict(req);
+        }
+        req.setBillCode(BillCodeUtils.generateBillCode(SystemEnum.OA, OaBillTypeEnum.OA_SEAL_APPLY_BILL));
+        SealApplyBillDO bill = BeanUtils.toBean(req, SealApplyBillDO.class)
+                .setProcessStatus(BpmTaskStatusEnum.RUNNING.getStatus());
+        sealApplyBillMapper.insert(bill);
+        Map<String, Object> variables = BpmProcessVariableUtils.buildBillVariables(req);
+        variables.put(PV_SEAL_USE_MODE, req.getUseMode());
+        String instanceId = processInstanceApi.createProcessInstance(userId,
+                new BpmProcessInstanceCreateReqDTO()
+                        .setProcessDefinitionKey(OaBillTypeEnum.OA_SEAL_APPLY_BILL.getProcessDefinitionKey())
+                        .setBusinessKey(String.valueOf(bill.getId())).setVariables(variables)).getCheckedData();
+        if (StringUtils.isBlank(instanceId)) {
+            throw new IllegalStateException("BPM 未返回流程实例编号");
+        }
+        sealApplyBillMapper.updateById(new SealApplyBillDO().setId(bill.getId()).setProcessInstanceId(instanceId));
+        if (req.getAttachments() != null) {
+            attachmentService.saveAttachmentList(OaBillTypeEnum.OA_SEAL_APPLY_BILL.getTypeCode(), bill.getId(), req.getAttachments());
+        }
+        return bill.getId();
+    }
 
     @Override
     public Long saveSealApplyBill(SealApplyBillSaveReqVO saveReqVO) {

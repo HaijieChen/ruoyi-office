@@ -13,6 +13,9 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
  */
 public interface SealApplyBillService {
 
+    /** 统一发起：只创建新单，流程配置授权，不接受既有实例。 */
+    Long createAndStartSealApplyBill(@Valid SealApplyBillSaveReqVO createReqVO);
+
     /**
      * 保存用印申请单
      *

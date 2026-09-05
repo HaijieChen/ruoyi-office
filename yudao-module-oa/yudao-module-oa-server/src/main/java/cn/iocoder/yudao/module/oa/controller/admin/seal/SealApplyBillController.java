@@ -38,6 +38,13 @@ public class SealApplyBillController {
     @Resource
     private SealApplyBillService sealApplyBillService;
 
+    @PostMapping("/create-and-start")
+    @Operation(summary = "统一发起用印新单")
+    @PreAuthorize("isAuthenticated()")
+    public CommonResult<Long> createAndStartSealApplyBill(@Valid @RequestBody SealApplyBillSaveReqVO createReqVO) {
+        return success(sealApplyBillService.createAndStartSealApplyBill(createReqVO));
+    }
+
     @PostMapping("/create")
     @Operation(summary = "创建用印申请单")
     @PreAuthorize("@ss.hasPermission('oa:seal-apply-bill:create')")
