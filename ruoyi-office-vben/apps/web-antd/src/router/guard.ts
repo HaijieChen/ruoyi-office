@@ -18,6 +18,7 @@ import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
+import { resolveLoginRedirect } from './login-redirect';
 
 /**
  * 通用守卫配置
@@ -63,10 +64,11 @@ function setupAccessGuard(router: Router) {
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        return decodeURIComponent(
-          (to.query?.redirect as string) ||
-            userStore.userInfo?.homePath ||
-            preferences.app.defaultHomePath,
+        return resolveLoginRedirect(
+          (to.query?.redirect as string) || userStore.userInfo?.homePath || '',
+          preferences.app.defaultHomePath,
+          LOGIN_PATH,
+          to.fullPath,
         );
       }
       return true;
