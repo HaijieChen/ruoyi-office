@@ -40,6 +40,19 @@ test('LGN-17 vue-router one-decode of encodeURIComponent fullPath keeps business
   assert.equal(resolve(afterVueRouter), business);
   assert.equal(new URLSearchParams(resolve(afterVueRouter).split('?')[1]).get('acc'), 'acc_wd_20260906_marker');
 });
+test('intended target is kept when current is the login page not the destination', () => {
+  const intended = '/bpm/manager/model?acc=%252F';
+  assert.equal(
+    resolveLoginRedirect(
+      intended,
+      '/home',
+      login,
+      '/auth/login?redirect=/bpm/manager/model?acc=%252F',
+    ),
+    intended,
+  );
+  assert.equal(new URLSearchParams(intended.split('?')[1]).get('acc'), '%2F');
+});
 test('LGN-17 logout does not nest login as redirect', () => {
   assert.equal(encodeLoginRedirectParam('/auth/login', login), undefined);
   assert.equal(encodeLoginRedirectParam('/auth/login?redirect=%2Fhome', login), undefined);
