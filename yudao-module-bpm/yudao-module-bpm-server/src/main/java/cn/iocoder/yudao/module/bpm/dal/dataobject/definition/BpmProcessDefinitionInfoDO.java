@@ -178,6 +178,13 @@ public class BpmProcessDefinitionInfoDO extends BaseDO {
     private Boolean allowWithdrawTask;
 
     /**
+     * 发起人撤回至发起节点：0 禁止，1 仅无人审批，2 审批中允许。
+     * null 保留旧定义兼容：allowWithdrawTask 为 false 禁止，true/null 允许。
+     * 发布快照，不回填历史定义，也不影响撤销终止或审批人撤回。
+     */
+    private Integer initiatorWithdrawMode;
+
+    /**
      * 流程 ID 规则
      */
     @TableField(typeHandler = JacksonTypeHandler.class)

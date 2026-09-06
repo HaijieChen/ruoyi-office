@@ -24,6 +24,8 @@ export namespace BpmProcessDefinitionApi {
     formCustomCreatePath?: string;
     bpmnXml?: string;
     simpleModel?: string;
+    /** 发布版本的发起人撤回策略；null/缺省为旧规则。 */
+    initiatorWithdrawMode?: 0 | 1 | 2 | null;
     formFields?: string[];
     icon?: string;
     startUsers?: BpmModelApi.UserInfo[];

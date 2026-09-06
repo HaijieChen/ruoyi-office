@@ -53,6 +53,7 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.flowable.bpmn.constants.BpmnXMLConstants;
 import org.flowable.bpmn.model.*;
+import org.flowable.common.engine.impl.identity.Authentication;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
@@ -71,6 +72,7 @@ import org.flowable.task.api.Task;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -144,6 +146,11 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     @Resource
     private BpmNotificationManager notificationManager;
 
+    @Resource
+    private PlatformTransactionManager transactionManager;
+
+    @Resource
+    private BpmInitiatorWithdrawPolicyService initiatorWithdrawPolicyService;
     // ========== Query 查询相关方法 ==========
 
     @Override
@@ -949,42 +956,56 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public String submitProcessInstance(Long userId, @Valid BpmProcessInstanceCreateReqDTO createReqDTO) {
-        return FlowableUtils.executeAuthenticatedUserId(userId, () -> {
-            // 1. 根据businessKey查找现有的流程实例
-            ProcessInstance existingInstance = findActiveProcessInstanceByBusinessKey(
+        String previousAuthenticatedUserId = Authentication.getAuthenticatedUserId();
+        FlowableUtils.setAuthenticatedUserId(userId);
+        try {
+            // 1. 只定位可信租户下的实例 ID；查询失败不能视为不存在而新建流程。
+            String existingInstanceId = initiatorWithdrawPolicyService.findActiveInstanceId(
                     createReqDTO.getProcessDefinitionKey(), createReqDTO.getBusinessKey());
 
-            if (existingInstance != null) {
-                // 2. 如果流程实例存在，查找发起人的待办任务并审批
-                log.info("[submitProcessInstance] 找到现有流程实例，processInstanceId: {}, businessKey: {}",
-                        existingInstance.getId(), createReqDTO.getBusinessKey());
-
-                // 2.1 查找发起人的待办任务
-                Task startUserTask = findStartUserTask(userId, existingInstance.getId());
-                if (startUserTask != null) {
-                    log.info("[submitProcessInstance] 找到发起人待办任务，taskId: {}, taskName: {}",
-                            startUserTask.getId(), startUserTask.getName());
-
-                    // 2.2 更新流程变量（如果有新的变量）
-                    if (createReqDTO.getVariables() != null && !createReqDTO.getVariables().isEmpty()) {
-                        updateProcessInstanceVariables(existingInstance.getId(), createReqDTO.getVariables());
+            if (existingInstanceId != null) {
+                // 必须在变量/状态写入前取得锁，并在同一业务事务内重新读取引擎状态。
+                return initiatorWithdrawPolicyService.withInstanceLock(existingInstanceId, () -> {
+                    ProcessInstance existingInstance = runtimeService.createProcessInstanceQuery()
+                            .processInstanceId(existingInstanceId)
+                            .processInstanceTenantId(FlowableUtils.getTenantId())
+                            .active()
+                            .singleResult();
+                    if (existingInstance == null) {
+                        throw exception(PROCESS_INSTANCE_NOT_EXISTS);
                     }
-                    // 更新单据状态
-                    updateProcessInstanceRunning(existingInstance);
+                    // 2. 如果流程实例存在，查找发起人的待办任务并审批
+                    log.info("[submitProcessInstance] 找到现有流程实例，processInstanceId: {}, businessKey: {}",
+                            existingInstance.getId(), createReqDTO.getBusinessKey());
 
-                    // 2.3 审批发起人任务
-                    BpmTaskApproveReqVO approveReqVO = new BpmTaskApproveReqVO()
-                            .setId(startUserTask.getId())
-                            .setReason("重新提交申请");
-                    taskService.approveTask(userId, approveReqVO);
+                    // 2.1 查找发起人的待办任务
+                    Task startUserTask = findStartUserTask(userId, existingInstance.getId());
+                    if (startUserTask != null) {
+                        log.info("[submitProcessInstance] 找到发起人待办任务，taskId: {}, taskName: {}",
+                                startUserTask.getId(), startUserTask.getName());
 
-                    return existingInstance.getId();
-                } else {
-                    log.warn("[submitProcessInstance] 未找到发起人待办任务，processInstanceId: {}, userId: {}",
-                            existingInstance.getId(), userId);
-                    throw exception(TASK_NOT_EXISTS);
-                }
+                        // 2.2 更新流程变量（如果有新的变量）
+                        if (createReqDTO.getVariables() != null && !createReqDTO.getVariables().isEmpty()) {
+                            updateProcessInstanceVariables(existingInstance.getId(), createReqDTO.getVariables());
+                        }
+                        // 更新单据状态
+                        updateProcessInstanceRunning(existingInstance);
+
+                        // 2.3 审批发起人任务
+                        BpmTaskApproveReqVO approveReqVO = new BpmTaskApproveReqVO()
+                                .setId(startUserTask.getId())
+                                .setReason("重新提交申请");
+                        taskService.approveTask(userId, approveReqVO);
+
+                        return existingInstance.getId();
+                    } else {
+                        log.warn("[submitProcessInstance] 未找到发起人待办任务，processInstanceId: {}, userId: {}",
+                                existingInstance.getId(), userId);
+                        throw exception(TASK_NOT_EXISTS);
+                    }
+                });
             } else {
                 // 3. 如果流程实例不存在，创建新的流程实例
                 log.info("[submitProcessInstance] 未找到现有流程实例，创建新流程，businessKey: {}",
@@ -997,34 +1018,8 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
                         createReqDTO.getBusinessKey(),
                         createReqDTO.getStartUserSelectAssignees(), trusted);
             }
-        });
-    }
-
-    /**
-     * 根据businessKey查找活跃的流程实例
-     *
-     * @param processDefinitionKey 流程定义Key
-     * @param businessKey 业务Key
-     * @return 流程实例，如果不存在返回null
-     */
-    private ProcessInstance findActiveProcessInstanceByBusinessKey(String processDefinitionKey, String businessKey) {
-        if (StrUtil.isBlank(businessKey)) {
-            return null;
-        }
-
-        try {
-            List<ProcessInstance> instances = runtimeService.createProcessInstanceQuery()
-                    .processDefinitionKey(processDefinitionKey)
-                    .processInstanceBusinessKey(businessKey)
-                    .active()
-                    .list();
-
-            // 返回最新的流程实例（如果有多个的话）
-            return CollUtil.isNotEmpty(instances) ? instances.get(0) : null;
-        } catch (Exception e) {
-            log.error("[findActiveProcessInstanceByBusinessKey] 查询流程实例失败，processDefinitionKey: {}, businessKey: {}",
-                    processDefinitionKey, businessKey, e);
-            return null;
+        } finally {
+            Authentication.setAuthenticatedUserId(previousAuthenticatedUserId);
         }
     }
 

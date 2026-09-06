@@ -311,13 +311,13 @@ public interface BpmTaskService {
     void processTaskCompleted(Task task);
 
     /**
-     * 处理 Task 审批超时事件，可能会处理多个当前审批中的任务
+     * 在原 TIMER_FIRED 事务中处理绑定执行上的审批任务；异常由原生 job executor 重试。
      *
-     * @param processInstanceId 流程示例编号
+     * @param job 可信引擎事件的原始 job（租户、实例和执行标识）
      * @param taskDefineKey     任务 Key
      * @param handlerType       处理类型，参见 {@link BpmUserTaskTimeoutHandlerTypeEnum}
      */
-    void processTaskTimeout(String processInstanceId, String taskDefineKey, Integer handlerType);
+    void processTaskTimeout(org.flowable.job.api.Job job, String taskDefineKey, Integer handlerType);
 
     /**
      * 处理 ChildProcess 子流程的审批超时事件
