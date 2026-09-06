@@ -85,6 +85,7 @@ const formData: any = ref({
   startDeptIds: [],
   managerUserIds: [],
   allowCancelRunningProcess: true,
+  initiatorWithdrawMode: 0, // 新建保留旧默认禁止；编辑/恢复使用原始快照
   processIdRule: {
     enable: false,
     prefix: '',
@@ -208,7 +209,11 @@ async function initData() {
 
 /** 根据类型切换流程数据（勿用 async getter，否则依赖追踪不稳定） */
 watch(
-  () => [formData.value?.type, formData.value?.bpmnXml, formData.value?.simpleModel],
+  () => [
+    formData.value?.type,
+    formData.value?.bpmnXml,
+    formData.value?.simpleModel,
+  ],
   () => {
     if (formData.value.type === BpmModelType.BPMN) {
       processData.value = formData.value.bpmnXml;

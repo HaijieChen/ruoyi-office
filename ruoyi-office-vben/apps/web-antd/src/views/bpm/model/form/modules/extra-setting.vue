@@ -36,6 +36,16 @@ import PrintTemplate from './custom-print-template.vue';
 
 const modelData = defineModel<any>();
 
+// 只计算显示值；打开旧模型、无关保存或发布均不实体化继承配置。
+const initiatorWithdrawDisplayMode = computed<number>({
+  get: () =>
+    modelData.value.initiatorWithdrawMode ??
+    (modelData.value.allowWithdrawTask === false ? 0 : 2),
+  set: (value) => {
+    modelData.value.initiatorWithdrawMode = value;
+  },
+});
+
 /** 自定义 ID 流程编码 */
 const timeOptions = ref([
   {
@@ -227,9 +237,6 @@ function initData() {
   if (modelData.value.taskAfterTriggerSetting) {
     taskAfterTriggerEnable.value = true;
   }
-  if (modelData.value.allowWithdrawTask === undefined) {
-    modelData.value.allowWithdrawTask = false;
-  }
 }
 
 /** 监听表单 ID 变化，加载表单数据 */
@@ -350,6 +357,32 @@ defineExpose({ initData, validate });
           允许撤销审批中的申请
         </Checkbox>
       </div>
+    </FormItem>
+    <FormItem class="mb-5" label="发起人撤回">
+      <RadioGroup
+        v-model:value="initiatorWithdrawDisplayMode"
+        class="flex flex-col gap-2"
+      >
+        <Radio :value="0" @click="initiatorWithdrawDisplayMode = 0">
+          不允许
+        </Radio>
+        <Radio :value="1" @click="initiatorWithdrawDisplayMode = 1">
+          仅无人审批时允许
+        </Radio>
+        <Radio :value="2" @click="initiatorWithdrawDisplayMode = 2">
+          审批中允许
+        </Radio>
+      </RadioGroup>
+      <TypographyText type="secondary" class="mt-2 block">
+        撤回到发起节点，可修改后重新提交；不终止流程。有人工通过、拒绝或退回后，“仅无人审批”不再允许撤回。
+      </TypographyText>
+      <TypographyText
+        v-if="modelData.initiatorWithdrawMode == null"
+        type="secondary"
+        class="mt-1 block"
+      >
+        当前继承旧审批人撤回设置，尚未独立配置。仅主动选择上方策略后保存并发布，才对新版本生效。
+      </TypographyText>
     </FormItem>
     <FormItem class="mb-5" label="审批人权限">
       <div class="mt-1 flex flex-col">

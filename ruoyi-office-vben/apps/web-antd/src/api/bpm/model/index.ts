@@ -20,6 +20,8 @@ export namespace BpmModelApi {
     createTime: string;
     bpmnXml: string;
     startUsers?: UserInfo[];
+    /** 发起人撤回首节点；null/缺省沿用旧 allowWithdrawTask。 */
+    initiatorWithdrawMode?: 0 | 1 | 2 | null;
   }
 
   /** 流程定义 */

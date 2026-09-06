@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.validation.InEnum;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.model.simple.BpmSimpleModelNodeVO;
 import cn.iocoder.yudao.module.bpm.enums.definition.BpmAutoApproveTypeEnum;
 import cn.iocoder.yudao.module.bpm.enums.definition.BpmModelFormTypeEnum;
+import cn.iocoder.yudao.module.bpm.enums.definition.BpmInitiatorWithdrawModeEnum;
 import cn.iocoder.yudao.module.bpm.enums.definition.BpmModelTypeEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -74,6 +75,10 @@ public class BpmModelMetaInfoVO {
 
     @Schema(description = "允许允许审批人撤回任务", example = "false")
     private Boolean allowWithdrawTask;
+
+    @Schema(description = "发起人撤回首节点策略：0不允许/1仅无人审批/2审批中允许；null沿用旧规则", example = "2")
+    @InEnum(BpmInitiatorWithdrawModeEnum.class)
+    private Integer initiatorWithdrawMode;
 
     @Schema(description = "流程 ID 规则", example = "{}")
     private ProcessIdRule processIdRule;
