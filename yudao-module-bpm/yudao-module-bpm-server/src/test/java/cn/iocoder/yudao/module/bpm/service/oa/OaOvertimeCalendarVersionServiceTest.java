@@ -105,6 +105,9 @@ class OaOvertimeCalendarVersionServiceTest {
         String first = service.fetchYear(2026);
         assertTrue(first.startsWith("pending:"));
         assertEquals(NOTICE_URL, store.get(0).getSourceUrl());
+        assertTrue(store.get(0).getFestivalsJson() != null && store.get(0).getFestivalsJson().contains("劳动节"));
+        assertTrue(store.get(0).getDiffJson() == null || store.get(0).getDiffJson().contains("legalHolidays")
+                || store.get(0).getDiffJson().contains("added"));
         String second = service.fetchYear(2026);
         assertEquals("same:1", second);
         assertEquals(1, store.size());

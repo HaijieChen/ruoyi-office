@@ -239,6 +239,7 @@ public class OaOvertimeCalendarVersionService {
         String hash = sha256(toCanonical(data));
         BpmOAOvertimeCalendarVersionDO existing = versionMapper.selectByYearAndHash(year, hash);
         if (existing != null) {
+            enrichMetadata(existing, data);
             return "same:" + existing.getId();
         }
         BpmOAOvertimeCalendarVersionDO row = newRow(data, url, excerpt(html), BpmOAOvertimeCalendarVersionDO.PENDING);
@@ -361,6 +362,27 @@ public class OaOvertimeCalendarVersionService {
             return prefix + ":" + last.getClass().getSimpleName();
         }
         return prefix + ":" + message;
+    }
+
+    /** Fill festivals and readable date diff without changing dates, hash, or status. */
+    void enrichMetadata(BpmOAOvertimeCalendarVersionDO row, OaOvertimeCalendar.YearData data) {
+        if (row == null || data == null) {
+            return;
+        }
+        boolean missingFestivals = row.getFestivalsJson() == null || row.getFestivalsJson().isBlank()
+                || "{}".equals(row.getFestivalsJson());
+        boolean hashOnlyDiff = row.getDiffJson() == null || row.getDiffJson().contains("\"from\"")
+                && row.getDiffJson().contains("\"to\"") && !row.getDiffJson().contains("legalHolidays");
+        if (!missingFestivals && !hashOnlyDiff) {
+            return;
+        }
+        if (missingFestivals && data.festivals != null && !data.festivals.isEmpty()) {
+            row.setFestivalsJson(json(data.festivals));
+        }
+        if (hashOnlyDiff) {
+            row.setDiffJson(diffAgainstActive(row.getCalendarYear(), data));
+        }
+        versionMapper.updateById(row);
     }
 
     private String diffAgainstActive(int year, OaOvertimeCalendar.YearData incoming) {

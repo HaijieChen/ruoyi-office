@@ -37,6 +37,16 @@ const routes: RouteRecordRaw[] = [
           activePath: '/bpm/oa/overtime',
         },
       },
+      {
+        path: 'calendar',
+        name: 'OAOvertimeCalendar',
+        component: () => import('#/views/bpm/oa/overtime-calendar/index.vue'),
+        meta: {
+          title: '节假日日历',
+          activePath: '/bpm/oa/overtime/calendar',
+          authority: ['bpm:oa-overtime-calendar:query'],
+        },
+      },
     ],
   },
 ];

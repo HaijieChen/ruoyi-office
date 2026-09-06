@@ -80,13 +80,21 @@ INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)
 SELECT '节假日日历', '', 2, 9,
-       (SELECT `parent_id` FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'bpm/oa/overtime/index' LIMIT 1),
-       'overtime-calendar', 'ep:calendar', 'bpm/oa/overtime-calendar/index', 'BpmOAOvertimeCalendar',
+       (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'bpm/oa/overtime/index' LIMIT 1),
+       'calendar', 'ep:calendar', 'bpm/oa/overtime-calendar/index', 'BpmOAOvertimeCalendar',
        0, b'1', b'1', b'1', 'admin', NOW(), 'admin', NOW(), b'0'
-WHERE (SELECT `parent_id` FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'bpm/oa/overtime/index' LIMIT 1) IS NOT NULL
+WHERE (SELECT `id` FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'bpm/oa/overtime/index' LIMIT 1) IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM `system_menu` WHERE `deleted` = b'0' AND `component` = 'bpm/oa/overtime-calendar/index'
 );
+
+UPDATE `system_menu` m
+JOIN (
+    SELECT `id` FROM `system_menu`
+    WHERE `deleted` = b'0' AND `component` = 'bpm/oa/overtime/index' LIMIT 1
+) overtime ON 1=1
+SET m.`parent_id` = overtime.`id`, m.`path` = 'calendar'
+WHERE m.`deleted` = b'0' AND m.`component` = 'bpm/oa/overtime-calendar/index';
 
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,

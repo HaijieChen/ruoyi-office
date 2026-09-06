@@ -56,7 +56,10 @@ public class BpmOAOvertimeCalendarController {
     @PostMapping("/fetch")
     @Operation(summary = "立即抓取")
     @PreAuthorize("@ss.hasPermission('bpm:oa-overtime-calendar:verify')")
-    public CommonResult<String> fetch() {
+    public CommonResult<String> fetch(@RequestParam(value = "year", required = false) Integer year) {
+        if (year != null) {
+            return success(calendarVersionService.fetchYear(year));
+        }
         return success(calendarVersionService.fetchDueYears());
     }
 
