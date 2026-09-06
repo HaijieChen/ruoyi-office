@@ -156,7 +156,7 @@ function setupAccessGuard(router: Router) {
           redirectPath,
           preferences.app.defaultHomePath,
           LOGIN_PATH,
-          to.fullPath,
+          from.fullPath,
         ),
       ),
       replace: true,
