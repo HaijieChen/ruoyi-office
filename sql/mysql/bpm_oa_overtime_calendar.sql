@@ -30,6 +30,19 @@ CREATE TABLE IF NOT EXISTS `bpm_oa_overtime_calendar_version` (
     KEY `idx_year_status` (`calendar_year`, `status`)
 ) ENGINE=InnoDB COMMENT='OA 加班节假日日历版本';
 
+SET @oa_festivals_exists := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'bpm_oa_overtime_calendar_version'
+      AND COLUMN_NAME = 'festivals_json'
+);
+SET @oa_festivals_sql := IF(@oa_festivals_exists = 0,
+    'ALTER TABLE `bpm_oa_overtime_calendar_version` ADD COLUMN `festivals_json` json DEFAULT NULL COMMENT ''法定日节日名称'' AFTER `weekends_json`',
+    'SELECT 1');
+PREPARE oa_festivals_stmt FROM @oa_festivals_sql;
+EXECUTE oa_festivals_stmt;
+DEALLOCATE PREPARE oa_festivals_stmt;
+
 INSERT INTO `bpm_oa_overtime_calendar_version` (
     `calendar_year`, `source`, `source_url`, `fetched_at`, `content_hash`, `status`,
     `verified_by`, `verified_at`, `parse_note`, `legal_holidays_json`, `makeup_workdays_json`,

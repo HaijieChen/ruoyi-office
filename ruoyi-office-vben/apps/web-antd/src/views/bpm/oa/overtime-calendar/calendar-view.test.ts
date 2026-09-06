@@ -11,6 +11,7 @@ import {
 describe('overtime calendar view', () => {
   it('builds 2026 legal thirteen and classifies May 3 as weekend', () => {
     const rows = buildDayRows({
+      calendarYear: 2026,
       legalHolidaysJson:
         '["2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-04-04","2026-05-01","2026-05-02","2026-06-19","2026-09-25","2026-10-01","2026-10-02","2026-10-03"]',
       makeupWorkdaysJson:
@@ -26,8 +27,21 @@ describe('overtime calendar view', () => {
     const may3 = rows.find((row) => row.date === '2026-05-03');
     expect(may3?.kind).toBe('WEEKEND');
     expect(may3?.allowed).toBe(true);
-    expect(festivalName('2026-05-01')).toBe('劳动节');
     expect(weekdayLabel('2026-05-01')).toBe('五');
+    expect(rows.filter((row) => row.kind === 'WEEKDAY').length).toBeGreaterThan(200);
+  });
+
+  it('uses year festival metadata only and keeps unknown blank', () => {
+    const festivals = {
+      '2027-02-06': '春节',
+      '2027-10-01': '中秋、国庆',
+      '2027-10-06': '中秋',
+    };
+    expect(festivalName('2027-02-06', festivals)).toBe('春节');
+    expect(festivalName('2026-02-16', festivals)).toBe('');
+    expect(festivalName('2027-10-01', festivals)).toBe('中秋、国庆');
+    expect(festivalName('2027-10-06', festivals)).toBe('中秋');
+    expect(festivalName('2027-09-15', festivals)).toBe('');
   });
 
   it('marks seed versions and failed status without calling them success', () => {

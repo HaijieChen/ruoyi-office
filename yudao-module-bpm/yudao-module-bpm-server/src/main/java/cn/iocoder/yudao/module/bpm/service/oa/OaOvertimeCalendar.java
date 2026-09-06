@@ -54,6 +54,8 @@ public final class OaOvertimeCalendar {
         public List<String> makeupWorkdays = List.of();
         public List<String> makeupRestDays = List.of();
         public List<String> weekends = List.of();
+        /** date -> official festival name from that year's notice; empty if unknown */
+        public Map<String, String> festivals = Map.of();
     }
 
     private static final Map<Integer, YearData> YEARS = load();

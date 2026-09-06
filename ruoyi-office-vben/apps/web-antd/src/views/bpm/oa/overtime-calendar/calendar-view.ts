@@ -26,21 +26,7 @@ const KIND_LABEL: Record<CalendarDayKind, string> = {
   WEEKDAY: '普通工作日',
 };
 
-const FESTIVAL_BY_MD: Record<string, string> = {
-  '01-01': '元旦',
-  '02-16': '春节',
-  '02-17': '春节',
-  '02-18': '春节',
-  '02-19': '春节',
-  '04-04': '清明',
-  '05-01': '劳动节',
-  '05-02': '劳动节',
-  '06-19': '端午',
-  '09-25': '中秋',
-  '10-01': '国庆',
-  '10-02': '国庆',
-  '10-03': '国庆',
-};
+/** Solar statutory names from 国令第795号; lunar festivals use that year's legal set. */
 
 export function parseJsonList(json?: string | null): string[] {
   if (!json) {
@@ -64,8 +50,69 @@ export function weekdayLabel(iso: string): string {
   return WEEKDAYS[new Date(year, month - 1, day).getDay()] ?? '';
 }
 
-export function festivalName(iso: string): string {
-  return FESTIVAL_BY_MD[iso.slice(5)] ?? '';
+export function parseJsonMap(json?: string | null): Record<string, string> {
+  if (!json) {
+    return {};
+  }
+  try {
+    const value = JSON.parse(json) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    const out: Record<string, string> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof item === 'string' && item) {
+        out[key] = item;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function festivalName(iso: string, festivals: Record<string, string> = {}): string {
+  return festivals[iso] || '';
+}
+
+export function classifyDate(
+  iso: string,
+  legal: Set<string>,
+  work: Set<string>,
+  rest: Set<string>,
+): CalendarDayKind {
+  if (legal.has(iso)) {
+    return 'LEGAL_HOLIDAY';
+  }
+  if (work.has(iso)) {
+    return 'MAKEUP_WORKDAY';
+  }
+  if (rest.has(iso)) {
+    return 'MAKEUP_REST';
+  }
+  const [year, month, day] = iso.split('-').map(Number);
+  const dow = new Date(year, month - 1, day).getDay();
+  if (dow === 0 || dow === 6) {
+    return 'WEEKEND';
+  }
+  return 'WEEKDAY';
+}
+
+function isoFromUtc(year: number, monthIndex: number, day: number): string {
+  const month = String(monthIndex + 1).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
+  return `${year}-${month}-${dd}`;
+}
+
+export function daysInYear(year: number): string[] {
+  const dates: string[] = [];
+  for (let month = 0; month < 12; month += 1) {
+    const count = new Date(year, month + 1, 0).getDate();
+    for (let day = 1; day <= count; day += 1) {
+      dates.push(isoFromUtc(year, month, day));
+    }
+  }
+  return dates;
 }
 
 export function kindLabel(kind: CalendarDayKind): string {
@@ -96,27 +143,20 @@ export function statusLabel(status?: string): string {
 
 export function buildDayRows(
   version: BpmOAOvertimeCalendarApi.Version,
+  year = version.calendarYear,
 ): CalendarDayRow[] {
   const legal = new Set(parseJsonList(version.legalHolidaysJson));
   const work = new Set(parseJsonList(version.makeupWorkdaysJson));
   const rest = new Set(parseJsonList(version.makeupRestDaysJson));
-  const weekends = new Set(parseJsonList(version.weekendsJson));
-  const dates = [...new Set([...legal, ...work, ...rest, ...weekends])].sort();
+  const dates = year
+    ? daysInYear(year)
+    : [...new Set([...legal, ...work, ...rest, ...parseJsonList(version.weekendsJson)])].sort();
   return dates.map((date) => {
-    let kind: CalendarDayKind = 'WEEKDAY';
-    if (legal.has(date)) {
-      kind = 'LEGAL_HOLIDAY';
-    } else if (work.has(date)) {
-      kind = 'MAKEUP_WORKDAY';
-    } else if (rest.has(date)) {
-      kind = 'MAKEUP_REST';
-    } else if (weekends.has(date)) {
-      kind = 'WEEKEND';
-    }
+    const kind = classifyDate(date, legal, work, rest);
     return {
       date,
       weekday: weekdayLabel(date),
-      festival: festivalName(date),
+      festival: festivalName(date, parseJsonMap(version.festivalsJson)),
       kind,
       kindLabel: kindLabel(kind),
       allowed: kind === 'LEGAL_HOLIDAY' || kind === 'WEEKEND',

@@ -45,4 +45,5 @@ public class BpmOAOvertimeCalendarVersionDO extends BaseDO {
     private String makeupWorkdaysJson;
     private String makeupRestDaysJson;
     private String weekendsJson;
+    private String festivalsJson;
 }

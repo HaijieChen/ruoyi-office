@@ -303,6 +303,7 @@ public class OaOvertimeCalendarVersionService {
                 .makeupWorkdaysJson(json(data.makeupWorkdays))
                 .makeupRestDaysJson(json(data.makeupRestDays))
                 .weekendsJson(json(data.weekends))
+                .festivalsJson(json(data.festivals))
                 .notifyFingerprint(sha256(toCanonical(data)))
                 .build();
     }
@@ -334,15 +335,19 @@ public class OaOvertimeCalendarVersionService {
         try {
             List<Long> roleIds = roleApi.getRoleIdListByCodes(List.of("hr_admin")).getCheckedData();
             if (roleIds == null || roleIds.isEmpty()) {
+                log.warn("[overtime-calendar] no hr_admin role ids");
                 return List.of();
             }
             Set<Long> userIds = permissionApi.getUserRoleIdListByRoleIds(roleIds).getCheckedData();
             if (userIds == null || userIds.isEmpty()) {
+                log.warn("[overtime-calendar] hr_admin role has no users");
                 return List.of();
             }
+            log.info("[overtime-calendar] notify userIds={}", userIds);
             return List.copyOf(userIds);
         } catch (Exception ex) {
-            log.warn("[overtime-calendar] resolve hr_admin userIds failed: {}", ex.getMessage());
+            log.warn("[overtime-calendar] resolve hr_admin userIds failed: {}: {}",
+                    ex.getClass().getName(), ex.getMessage(), ex);
             return List.of();
         }
     }
@@ -361,9 +366,35 @@ public class OaOvertimeCalendarVersionService {
     private String diffAgainstActive(int year, OaOvertimeCalendar.YearData incoming) {
         BpmOAOvertimeCalendarVersionDO active = versionMapper.selectActiveByYear(year);
         if (active == null) {
-            return "{\"added\":true}";
+            return json(Map.of("added", true,
+                    "legalHolidays", Map.of("added", incoming.legalHolidays, "removed", List.of()),
+                    "note", "无已生效版本"));
         }
-        return "{\"from\":\"" + active.getContentHash() + "\",\"to\":\"" + sha256(toCanonical(incoming)) + "\"}";
+        OaOvertimeCalendar.YearData current = toYearData(active);
+        Map<String, Object> diff = new LinkedHashMap<>();
+        diff.put("legalHolidays", listDiff(current.legalHolidays, incoming.legalHolidays));
+        diff.put("makeupWorkdays", listDiff(current.makeupWorkdays, incoming.makeupWorkdays));
+        diff.put("makeupRestDays", listDiff(current.makeupRestDays, incoming.makeupRestDays));
+        diff.put("weekends", listDiff(current.weekends, incoming.weekends));
+        boolean changed = ((List<?>) ((Map<?, ?>) diff.get("legalHolidays")).get("added")).size()
+                + ((List<?>) ((Map<?, ?>) diff.get("legalHolidays")).get("removed")).size()
+                + ((List<?>) ((Map<?, ?>) diff.get("makeupWorkdays")).get("added")).size()
+                + ((List<?>) ((Map<?, ?>) diff.get("makeupWorkdays")).get("removed")).size()
+                + ((List<?>) ((Map<?, ?>) diff.get("makeupRestDays")).get("added")).size()
+                + ((List<?>) ((Map<?, ?>) diff.get("makeupRestDays")).get("removed")).size()
+                + ((List<?>) ((Map<?, ?>) diff.get("weekends")).get("added")).size()
+                + ((List<?>) ((Map<?, ?>) diff.get("weekends")).get("removed")).size() > 0;
+        diff.put("unchangedDates", !changed);
+        diff.put("note", changed ? "日期或分类有变化" : "日期分类与生效版相同（指纹不同不代表业务日期变化）");
+        return json(diff);
+    }
+
+    private static Map<String, List<String>> listDiff(List<String> from, List<String> to) {
+        Set<String> oldSet = new java.util.TreeSet<>(from == null ? List.of() : from);
+        Set<String> newSet = new java.util.TreeSet<>(to == null ? List.of() : to);
+        List<String> added = newSet.stream().filter(d -> !oldSet.contains(d)).toList();
+        List<String> removed = oldSet.stream().filter(d -> !newSet.contains(d)).toList();
+        return Map.of("added", added, "removed", removed);
     }
 
     static boolean isComplete(OaOvertimeCalendar.YearData data) {
@@ -382,6 +413,7 @@ public class OaOvertimeCalendarVersionService {
         data.makeupWorkdays = readList(row.getMakeupWorkdaysJson());
         data.makeupRestDays = readList(row.getMakeupRestDaysJson());
         data.weekends = readList(row.getWeekendsJson());
+        data.festivals = readMap(row.getFestivalsJson());
         return data;
     }
 
@@ -394,6 +426,25 @@ public class OaOvertimeCalendarVersionService {
             return objectMapper.readValue(json, List.class);
         } catch (JsonProcessingException ex) {
             return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> readMap(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> raw = objectMapper.readValue(json, Map.class);
+            Map<String, String> out = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> e : raw.entrySet()) {
+                if (e.getValue() != null) {
+                    out.put(e.getKey(), String.valueOf(e.getValue()));
+                }
+            }
+            return out;
+        } catch (JsonProcessingException ex) {
+            return Map.of();
         }
     }
 

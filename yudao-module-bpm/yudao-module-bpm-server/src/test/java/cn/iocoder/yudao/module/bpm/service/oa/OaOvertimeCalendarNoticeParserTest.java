@@ -72,6 +72,17 @@ class OaOvertimeCalendarNoticeParserTest {
     }
 
     @Test
+    void festivalNames_midAutumnOnNationalDay_merges() {
+        String html = NOTICE_2026.replace(
+                "六、中秋节：9月25日（周五）至27日（周日）放假，共3天。",
+                "六、中秋节：10月1日（周四）至3日（周六）放假，共3天。");
+        var names = OaOvertimeCalendarNoticeParser.festivalNames(2026, html);
+        assertEquals("中秋、国庆", names.get("2026-10-01"));
+        assertEquals("国庆", names.get("2026-10-03"));
+        assertEquals("劳动节", names.get("2026-05-01"));
+    }
+
+    @Test
     void parse2026_officialGovHtmlFixture_legalThirteen() throws Exception {
         String html = new String(Objects.requireNonNull(
                 getClass().getResourceAsStream("/oa/overtime-notice-2026-gov.html")).readAllBytes(),

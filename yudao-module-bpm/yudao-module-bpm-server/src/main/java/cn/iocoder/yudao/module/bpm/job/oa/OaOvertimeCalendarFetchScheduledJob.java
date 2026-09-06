@@ -1,5 +1,6 @@
 package cn.iocoder.yudao.module.bpm.job.oa;
 
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.bpm.service.oa.OaOvertimeCalendarVersionService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,9 @@ public class OaOvertimeCalendarFetchScheduledJob {
 
     @Scheduled(cron = "${bpm.oa.overtime-calendar.fetch-cron:0 0 9 ? * MON}", zone = "Asia/Shanghai")
     public void execute() {
-        String result = calendarVersionService.fetchDueYears();
-        log.info("[oaOvertimeCalendarFetchScheduledJob] {}", result);
+        TenantUtils.execute(1L, () -> {
+            String result = calendarVersionService.fetchDueYears();
+            log.info("[oaOvertimeCalendarFetchScheduledJob] {}", result);
+        });
     }
 }

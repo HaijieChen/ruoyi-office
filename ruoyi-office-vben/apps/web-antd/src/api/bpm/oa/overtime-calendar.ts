@@ -19,6 +19,7 @@ export namespace BpmOAOvertimeCalendarApi {
     makeupWorkdaysJson?: string;
     makeupRestDaysJson?: string;
     weekendsJson?: string;
+    festivalsJson?: string;
   }
 }
 

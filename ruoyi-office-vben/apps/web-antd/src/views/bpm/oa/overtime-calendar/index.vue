@@ -39,7 +39,7 @@ const canVerify = computed(() =>
 const loading = ref(false);
 const rows = ref<BpmOAOvertimeCalendarApi.Version[]>([]);
 const year = ref(2026);
-const highlightLegal = ref(true);
+const kindFilter = ref<'LEGAL' | 'SPECIAL' | 'ALL'>('LEGAL');
 
 const years = computed(() => {
   const set = new Set<number>([2026, 2027, new Date().getFullYear()]);
@@ -72,12 +72,15 @@ const unpublishedRows = computed(() =>
 );
 
 const dayRows = computed(() =>
-  activeRow.value ? buildDayRows(activeRow.value) : [],
+  activeRow.value ? buildDayRows(activeRow.value, year.value) : [],
 );
 
 const visibleDays = computed(() => {
-  if (!highlightLegal.value) {
+  if (kindFilter.value === 'ALL') {
     return dayRows.value;
+  }
+  if (kindFilter.value === 'SPECIAL') {
+    return dayRows.value.filter((row) => row.kind !== 'WEEKDAY');
   }
   return dayRows.value.filter((row) => row.kind === 'LEGAL_HOLIDAY');
 });
@@ -196,10 +199,16 @@ onMounted(load);
         </div>
         <div>采集/导入时间：{{ activeRow.fetchedAt || '—' }}</div>
         <div v-if="activeRow.parseNote">说明：{{ activeRow.parseNote }}</div>
-        <label class="mt-2 inline-flex items-center gap-2">
-          <input v-model="highlightLegal" type="checkbox" />
-          默认突出法定节假日
-        </label>
+        <Select
+          v-model:value="kindFilter"
+          class="mt-2"
+          style="width: 180px"
+          :options="[
+            { label: '突出法定节假日', value: 'LEGAL' },
+            { label: '特殊日（含周末/调休）', value: 'SPECIAL' },
+            { label: '全年含普通工作日', value: 'ALL' },
+          ]"
+        />
       </div>
 
       <Table
@@ -282,7 +291,7 @@ onMounted(load);
           <pre class="mb-2 whitespace-pre-wrap text-xs">{{ pending.diffJson || '无差异 JSON' }}</pre>
           <Table
             :columns="dayColumns"
-            :data-source="buildDayRows(pending)"
+            :data-source="buildDayRows(pending, year)"
             :pagination="false"
             row-key="date"
             size="small"

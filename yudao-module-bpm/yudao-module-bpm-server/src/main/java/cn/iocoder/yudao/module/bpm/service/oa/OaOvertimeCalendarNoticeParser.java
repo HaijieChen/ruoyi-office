@@ -4,6 +4,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,7 +60,27 @@ public final class OaOvertimeCalendarNoticeParser {
         data.makeupWorkdays = List.copyOf(makeupWork);
         data.makeupRestDays = List.copyOf(makeupRest);
         data.weekends = OaOvertimeCalendar.weekendsOf(data);
+        data.festivals = Map.copyOf(festivalNames(year, text));
         return Optional.of(data);
+    }
+
+    static Map<String, String> festivalNames(int year, String html) {
+        Map<String, String> names = new java.util.LinkedHashMap<>();
+        putFestival(names, iso(year, 1, 1), "元旦");
+        springLegal(year, html).ifPresent(days -> days.forEach(d -> putFestival(names, d, "春节")));
+        festivalStart(html, "清明").ifPresent(d -> putFestival(names, d.toString(), "清明"));
+        putFestival(names, iso(year, 5, 1), "劳动节");
+        putFestival(names, iso(year, 5, 2), "劳动节");
+        festivalStart(html, "端午").ifPresent(d -> putFestival(names, d.toString(), "端午"));
+        festivalStart(html, "中秋").ifPresent(d -> putFestival(names, d.toString(), "中秋"));
+        putFestival(names, iso(year, 10, 1), "国庆");
+        putFestival(names, iso(year, 10, 2), "国庆");
+        putFestival(names, iso(year, 10, 3), "国庆");
+        return names;
+    }
+
+    private static void putFestival(Map<String, String> names, String day, String name) {
+        names.merge(day, name, (left, right) -> left.contains(right) ? left : left + "、" + right);
     }
 
     static List<String> legalDaysFrom795(int year, String html) {

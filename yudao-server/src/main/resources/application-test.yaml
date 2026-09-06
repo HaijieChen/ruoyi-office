@@ -75,11 +75,10 @@ xxl:
       addresses: http://127.0.0.1:9090/xxl-job-admin # 调度中心部署跟地址
 
 # XXL 关闭时由 Spring @Scheduled 执行；互斥见 OaOvertimeCalendarFetchScheduledJob。
-# 临时每分钟触发以取得真实调度日志，验收后恢复 0 0 9 ? * MON。
 bpm:
   oa:
     overtime-calendar:
-      fetch-cron: "0 */1 * * * ?"
+      fetch-cron: "0 0 9 ? * MON"
 
 
 --- #################### 消息队列相关 ####################
