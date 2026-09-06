@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.nio.charset.StandardCharsets;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +31,7 @@ import java.util.Set;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_CALENDAR_VERIFY_DENIED;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_CALENDAR_VERSION_NOT_PENDING;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_NOT_EXISTS;
 
 @Service
@@ -70,6 +73,15 @@ public class OaOvertimeCalendarVersionService {
 
     @PostConstruct
     public void loadActiveIntoClassifier() {
+        OaOvertimeCalendar.setLookup(year -> {
+            try {
+                BpmOAOvertimeCalendarVersionDO row = versionMapper.selectActiveByYear(year);
+                return row == null ? null : toYearData(row);
+            } catch (Exception ex) {
+                log.warn("[overtime-calendar] db lookup skipped: {}", ex.getMessage());
+                return null;
+            }
+        });
         try {
             Map<Integer, OaOvertimeCalendar.YearData> active = new LinkedHashMap<>();
             List<BpmOAOvertimeCalendarVersionDO> rows = versionMapper.selectList(
@@ -95,16 +107,24 @@ public class OaOvertimeCalendarVersionService {
         return row;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void verifyAndEnable(Long id, Long userId, boolean enable) {
         if (userId == null) {
             throw exception(OA_OVERTIME_CALENDAR_VERIFY_DENIED);
         }
-        BpmOAOvertimeCalendarVersionDO row = get(id);
+        BpmOAOvertimeCalendarVersionDO row = versionMapper.selectByIdForUpdate(id);
+        if (row == null) {
+            row = get(id);
+        }
+        if (!BpmOAOvertimeCalendarVersionDO.PENDING.equals(row.getStatus()) || !isComplete(toYearData(row))) {
+            throw exception(OA_OVERTIME_CALENDAR_VERSION_NOT_PENDING);
+        }
         if (!enable) {
             row.setStatus(BpmOAOvertimeCalendarVersionDO.REJECTED);
             row.setVerifiedBy(userId);
             row.setVerifiedAt(LocalDateTime.now(clock));
             versionMapper.updateById(row);
+            loadActiveIntoClassifier();
             return;
         }
         BpmOAOvertimeCalendarVersionDO current = versionMapper.selectActiveByYear(row.getCalendarYear());
@@ -132,23 +152,64 @@ public class OaOvertimeCalendarVersionService {
     }
 
     public String fetchYear(int year) {
-        String url = "https://www.gov.cn/zhengce/zhengceku/";
-        try {
-            String html = httpGet.get(url);
-            if (html == null || html.isBlank()) {
-                return recordFailure(year, url, "empty", "empty-body");
-            }
-            Optional<OaOvertimeCalendar.YearData> parsed = OaOvertimeCalendarNoticeParser.parse(year, html);
-            if (parsed.isEmpty()) {
-                if (!html.contains(year + "年部分节假日安排")) {
-                    return recordNotPublished(year, url, html);
-                }
-                return recordFailure(year, url, "parse", "parse-incomplete");
-            }
-            return recordParsed(year, url, html, parsed.get());
-        } catch (Exception ex) {
-            return recordFailure(year, url, "fetch", "fetch-error");
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        BpmOAOvertimeCalendarVersionDO active = versionMapper.selectActiveByYear(year);
+        if (active != null && active.getSourceUrl() != null) {
+            candidates.add(active.getSourceUrl());
         }
+        boolean listingOk = false;
+        boolean listingLooksOfficial = false;
+        Set<Integer> listingYears = new java.util.HashSet<>();
+        String lastListingUrl = OaOvertimeCalendarNoticeLocator.LISTING_URLS.get(0);
+        for (String listingUrl : OaOvertimeCalendarNoticeLocator.LISTING_URLS) {
+            lastListingUrl = listingUrl;
+            String listingHtml;
+            try {
+                listingHtml = httpGet.get(listingUrl);
+            } catch (Exception ex) {
+                continue;
+            }
+            if (listingHtml == null || listingHtml.isBlank()) {
+                continue;
+            }
+            listingOk = true;
+            listingLooksOfficial = listingLooksOfficial
+                    || OaOvertimeCalendarNoticeLocator.looksLikePolicyListing(listingHtml);
+            listingYears.addAll(OaOvertimeCalendarNoticeLocator.noticeYears(listingHtml));
+            candidates.addAll(OaOvertimeCalendarNoticeLocator.noticeUrls(year, listingHtml, listingUrl));
+        }
+        if (candidates.isEmpty()) {
+            if (!listingOk) {
+                return recordFailure(year, lastListingUrl, "listing-fetch", "listing-fetch-error");
+            }
+            if (!listingLooksOfficial) {
+                return recordFailure(year, lastListingUrl, "listing-format", "listing-format-change");
+            }
+            if (!listingYears.isEmpty() && !listingYears.contains(year)) {
+                return recordNotPublished(year, lastListingUrl, "years=" + listingYears);
+            }
+            return recordFailure(year, lastListingUrl, "listing-no-link", "listing-no-link");
+        }
+        Exception last = null;
+        for (String url : candidates) {
+            try {
+                String html = httpGet.get(url);
+                if (html == null || html.isBlank()) {
+                    last = new IllegalStateException("empty body");
+                    continue;
+                }
+                Optional<OaOvertimeCalendar.YearData> parsed = OaOvertimeCalendarNoticeParser.parse(year, html);
+                if (parsed.isEmpty()) {
+                    last = new IllegalStateException("parse-incomplete");
+                    continue;
+                }
+                return recordParsed(year, url, html, parsed.get());
+            } catch (Exception ex) {
+                last = ex;
+            }
+        }
+        return recordFailure(year, candidates.iterator().next(),
+                last == null ? "notice-fetch" : last.getClass().getSimpleName(), "notice-fetch-error");
     }
 
     public BpmOAOvertimeCalendarVersionDO importSeedActive(OaOvertimeCalendar.YearData data, String url) {
@@ -253,6 +314,13 @@ public class OaOvertimeCalendarVersionService {
         return "{\"from\":\"" + active.getContentHash() + "\",\"to\":\"" + sha256(toCanonical(incoming)) + "\"}";
     }
 
+    static boolean isComplete(OaOvertimeCalendar.YearData data) {
+        return data != null
+                && data.legalHolidays != null && data.legalHolidays.size() == 13
+                && data.makeupWorkdays != null
+                && data.makeupRestDays != null;
+    }
+
     private OaOvertimeCalendar.YearData toYearData(BpmOAOvertimeCalendarVersionDO row) {
         OaOvertimeCalendar.YearData data = new OaOvertimeCalendar.YearData();
         data.year = row.getCalendarYear();
@@ -322,6 +390,9 @@ public class OaOvertimeCalendarVersionService {
                                 .GET()
                                 .build(),
                         java.net.http.HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
+                    throw new IllegalStateException("http " + resp.statusCode());
+                }
                 return resp.body();
             } catch (Exception ex) {
                 last = ex;

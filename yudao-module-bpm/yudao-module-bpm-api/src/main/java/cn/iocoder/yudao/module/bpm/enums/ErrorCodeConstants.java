@@ -38,6 +38,8 @@ public interface ErrorCodeConstants {
             "加班类型与日期不一致：法定节假日请选「是」，普通周末请选「否」");
     ErrorCode OA_OVERTIME_CALENDAR_VERIFY_DENIED = new ErrorCode(1_009_001_023,
             "无权核验节假日日历");
+    ErrorCode OA_OVERTIME_CALENDAR_VERSION_NOT_PENDING = new ErrorCode(1_009_001_024,
+            "只能核验启用待核验且解析完整的日历版本");
 
     // ========== 流程模型 1-009-002-000 ==========
     ErrorCode MODEL_KEY_EXISTS = new ErrorCode(1_009_002_000, "已经存在流程标识为【{}】的流程");

@@ -26,6 +26,12 @@ public interface BpmOAOvertimeCalendarVersionMapper extends BaseMapperX<BpmOAOve
                 .last("LIMIT 1"));
     }
 
+    default BpmOAOvertimeCalendarVersionDO selectByIdForUpdate(Long id) {
+        return selectOne(new LambdaQueryWrapperX<BpmOAOvertimeCalendarVersionDO>()
+                .eq(BpmOAOvertimeCalendarVersionDO::getId, id)
+                .last("FOR UPDATE"));
+    }
+
     default PageResult<BpmOAOvertimeCalendarVersionDO> selectPage(BpmOAOvertimeCalendarPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<BpmOAOvertimeCalendarVersionDO>()
                 .eqIfPresent(BpmOAOvertimeCalendarVersionDO::getCalendarYear, reqVO.getCalendarYear())

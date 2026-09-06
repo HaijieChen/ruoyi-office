@@ -58,6 +58,12 @@ public final class OaOvertimeCalendar {
 
     private static final Map<Integer, YearData> YEARS = load();
     private static volatile Map<Integer, YearData> ACTIVE = Map.of();
+    private static volatile YearLookup lookup = year -> null;
+
+    @FunctionalInterface
+    public interface YearLookup {
+        YearData find(int year);
+    }
 
     private OaOvertimeCalendar() {
     }
@@ -70,11 +76,19 @@ public final class OaOvertimeCalendar {
         ACTIVE = Map.copyOf(copy);
     }
 
+    public static void setLookup(YearLookup yearLookup) {
+        lookup = yearLookup == null ? year -> null : yearLookup;
+    }
+
     public static boolean hasYear(int year) {
-        return ACTIVE.containsKey(year) || YEARS.containsKey(year);
+        return yearData(year) != null;
     }
 
     public static YearData yearData(int year) {
+        YearData fromDb = lookup.find(year);
+        if (fromDb != null) {
+            return fromDb;
+        }
         YearData overlay = ACTIVE.get(year);
         return overlay != null ? overlay : YEARS.get(year);
     }
