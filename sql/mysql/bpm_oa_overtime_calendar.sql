@@ -96,6 +96,10 @@ JOIN (
 SET m.`parent_id` = overtime.`id`, m.`path` = 'calendar'
 WHERE m.`deleted` = b'0' AND m.`component` = 'bpm/oa/overtime-calendar/index';
 
+UPDATE `bpm_oa_overtime_calendar_version`
+SET `status` = 'SUPERSEDED'
+WHERE `deleted` = b'0' AND `status` = 'REJECTED' AND `content_hash` LIKE 'seed-%';
+
 INSERT INTO `system_menu`
     (`name`, `permission`, `type`, `sort`, `parent_id`, `path`, `icon`, `component`, `component_name`,
      `status`, `visible`, `keep_alive`, `always_show`, `creator`, `create_time`, `updater`, `update_time`, `deleted`)

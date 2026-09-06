@@ -268,7 +268,9 @@ onMounted(load);
                     ? 'gold'
                     : record.status === 'FAILED'
                       ? 'red'
-                      : 'default'
+                      : record.status === 'SUPERSEDED'
+                        ? 'blue'
+                        : 'default'
               "
             >
               {{ statusLabel(record.status) }}

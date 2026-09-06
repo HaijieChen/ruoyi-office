@@ -135,7 +135,9 @@ export function statusLabel(status?: string): string {
     case 'NOT_PUBLISHED':
       return '官方尚未发布';
     case 'REJECTED':
-      return '已驳回';
+      return '已拒绝';
+    case 'SUPERSEDED':
+      return '已被替代';
     default:
       return status || '未知';
   }

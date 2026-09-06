@@ -137,7 +137,7 @@ public class OaOvertimeCalendarVersionService {
         }
         BpmOAOvertimeCalendarVersionDO current = versionMapper.selectActiveByYear(row.getCalendarYear());
         if (current != null && !current.getId().equals(row.getId())) {
-            current.setStatus(BpmOAOvertimeCalendarVersionDO.REJECTED);
+            current.setStatus(BpmOAOvertimeCalendarVersionDO.SUPERSEDED);
             versionMapper.updateById(current);
         }
         row.setStatus(BpmOAOvertimeCalendarVersionDO.ACTIVE);
@@ -190,16 +190,35 @@ public class OaOvertimeCalendarVersionService {
             listingYears.addAll(OaOvertimeCalendarNoticeLocator.noticeYears(listingHtml));
             candidates.addAll(OaOvertimeCalendarNoticeLocator.noticeUrls(year, listingHtml, listingUrl));
         }
+        BpmOAOvertimeCalendarVersionDO previous = versionMapper.selectActiveByYear(year - 1);
+        if (previous != null && previous.getSourceUrl() != null) {
+            try {
+                String html = httpGet.get(previous.getSourceUrl());
+                if (html != null && !html.isBlank()) {
+                    listingOk = true;
+                    listingLooksOfficial = listingLooksOfficial
+                            || OaOvertimeCalendarNoticeLocator.looksLikePolicyListing(html)
+                            || !OaOvertimeCalendarNoticeLocator.noticeYears(html).isEmpty();
+                    listingYears.addAll(OaOvertimeCalendarNoticeLocator.noticeYears(html));
+                    candidates.addAll(OaOvertimeCalendarNoticeLocator.noticeUrls(year, html, previous.getSourceUrl()));
+                }
+            } catch (Exception ex) {
+                lastListingError = ex;
+                log.warn("[overtime-calendar] previous-notice {} failed: {}",
+                        previous.getSourceUrl(), failureNote("notice-fetch", ex));
+            }
+        }
         if (candidates.isEmpty()) {
+            if (!listingYears.isEmpty() && !listingYears.contains(year)) {
+                return recordNotPublished(year, previous != null ? previous.getSourceUrl() : lastListingUrl,
+                        "years=" + listingYears);
+            }
             if (!listingOk) {
                 return recordFailure(year, lastListingUrl,
                         failureNote("listing-fetch", lastListingError), "listing-fetch-error");
             }
             if (!listingLooksOfficial) {
                 return recordFailure(year, lastListingUrl, "listing-format", "listing-format-change");
-            }
-            if (!listingYears.isEmpty() && !listingYears.contains(year)) {
-                return recordNotPublished(year, lastListingUrl, "years=" + listingYears);
             }
             return recordFailure(year, lastListingUrl, "listing-no-link", "listing-no-link");
         }

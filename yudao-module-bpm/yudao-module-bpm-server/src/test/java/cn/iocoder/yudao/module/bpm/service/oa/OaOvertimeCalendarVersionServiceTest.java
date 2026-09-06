@@ -189,6 +189,21 @@ class OaOvertimeCalendarVersionServiceTest {
     }
 
     @Test
+    void fetch_listing403_butPreviousOfficialNoticeLacksYear_isNotPublished() {
+        OaOvertimeCalendar.YearData seed = OaOvertimeCalendar.yearData(2026);
+        service.importSeedActive(seed, NOTICE_URL);
+        service.setHttpGet(url -> {
+            if (url.contains("content_7047091")) {
+                return OaOvertimeCalendarNoticeParserTest.NOTICE_2026;
+            }
+            throw new IllegalStateException("http 403");
+        });
+        String result = service.fetchYear(2027);
+        assertEquals("not-published", result);
+        assertEquals(BpmOAOvertimeCalendarVersionDO.NOT_PUBLISHED, store.get(store.size() - 1).getStatus());
+    }
+
+    @Test
     void fetch_listingHttp403_isFailedNotUnpublished() {
         service.setHttpGet(url -> {
             throw new IllegalStateException("http 403");

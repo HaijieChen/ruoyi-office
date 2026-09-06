@@ -24,6 +24,7 @@ public class BpmOAOvertimeCalendarVersionDO extends BaseDO {
     public static final String ACTIVE = "ACTIVE";
     public static final String PENDING = "PENDING";
     public static final String REJECTED = "REJECTED";
+    public static final String SUPERSEDED = "SUPERSEDED";
     public static final String FAILED = "FAILED";
     public static final String NOT_PUBLISHED = "NOT_PUBLISHED";
 
