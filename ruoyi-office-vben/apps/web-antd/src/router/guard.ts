@@ -151,7 +151,14 @@ function setupAccessGuard(router: Router) {
         : to.fullPath)) as string;
 
     return {
-      ...router.resolve(decodeURIComponent(redirectPath)),
+      ...router.resolve(
+        resolveLoginRedirect(
+          redirectPath,
+          preferences.app.defaultHomePath,
+          LOGIN_PATH,
+          to.fullPath,
+        ),
+      ),
       replace: true,
     };
   });

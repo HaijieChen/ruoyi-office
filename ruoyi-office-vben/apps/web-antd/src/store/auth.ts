@@ -23,6 +23,12 @@ import {
 import { FIXED_LOGIN_TENANT_ID } from '#/constants/tenant';
 import { $t } from '#/locales';
 import {
+  encodeLoginRedirectParam,
+  hashRouterFullPath,
+  isLoginRoute,
+  resolveLoginRedirect,
+} from '#/router/login-redirect';
+import {
   clearMfaFlow,
   resolveLoginNext,
   saveMfaFlow,
@@ -96,12 +102,17 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (accessStore.loginExpired) {
       accessStore.setLoginExpired(false);
+    } else if (onSuccess) {
+      await onSuccess();
     } else {
-      onSuccess
-        ? await onSuccess?.()
-        : await router.push(
-            userInfo.homePath || preferences.app.defaultHomePath,
-          );
+      await router.push(
+        resolveLoginRedirect(
+          String(router.currentRoute.value.query?.redirect || ''),
+          userInfo.homePath || preferences.app.defaultHomePath,
+          LOGIN_PATH,
+          router.currentRoute.value.fullPath,
+        ),
+      );
     }
 
     if (userInfo?.nickname) {
@@ -139,7 +150,20 @@ export const useAuthStore = defineStore('auth', () => {
     return null;
   }
 
-  async function logout(redirect: boolean = true) {
+  async function logout(redirect: boolean = true, capturedFullPath?: string) {
+    const hashPath =
+      typeof window === 'undefined'
+        ? ''
+        : hashRouterFullPath(window.location.hash);
+    const fullPath =
+      capturedFullPath || router.currentRoute.value.fullPath || hashPath;
+    const alreadyOnLogin =
+      isLoginRoute(router.currentRoute.value.fullPath, LOGIN_PATH) ||
+      isLoginRoute(hashPath, LOGIN_PATH);
+    const existingRedirect = alreadyOnLogin
+      ? (router.currentRoute.value.query?.redirect as string | undefined)
+      : undefined;
+
     try {
       const accessToken = accessStore.accessToken as string;
       if (accessToken) {
@@ -154,14 +178,19 @@ export const useAuthStore = defineStore('auth', () => {
     // OA 固定登录租户，退出后仍保持 tenant-id=1，避免回登录页请求丢租户
     accessStore.setTenantId(FIXED_LOGIN_TENANT_ID);
 
-    // 回登录页带上当前路由地址
+    if (!redirect) {
+      await router.replace({ path: LOGIN_PATH });
+      return;
+    }
+    // Late 401 after the guard already parked us on login must not replace a
+    // business redirect with /home or nested /auth/login.
+    if (alreadyOnLogin && existingRedirect) {
+      return;
+    }
+    const encoded = encodeLoginRedirectParam(fullPath, LOGIN_PATH);
     await router.replace({
       path: LOGIN_PATH,
-      query: redirect
-        ? {
-            redirect: encodeURIComponent(router.currentRoute.value.fullPath),
-          }
-        : {},
+      query: encoded ? { redirect: encoded } : {},
     });
   }
 

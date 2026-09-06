@@ -18,6 +18,7 @@ import cn.iocoder.yudao.framework.common.util.monitor.TracerUtils;
 import cn.iocoder.yudao.framework.common.util.servlet.ServletUtils;
 import cn.iocoder.yudao.framework.web.core.util.WebFrameworkUtils;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
@@ -194,6 +195,11 @@ public class GlobalExceptionHandler {
         if (ex.getCause() instanceof InvalidFormatException) {
             InvalidFormatException invalidFormatException = (InvalidFormatException) ex.getCause();
             return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", invalidFormatException.getValue()));
+        }
+        if (ex.getCause() instanceof MismatchedInputException) {
+            MismatchedInputException mismatched = (MismatchedInputException) ex.getCause();
+            String shown = StrUtil.blankToDefault(mismatched.getOriginalMessage(), "unreadable");
+            return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", shown));
         }
         if (StrUtil.startWith(ex.getMessage(), "Required request body is missing")) {
             return CommonResult.error(BAD_REQUEST.getCode(), "请求参数类型错误: request body 缺失");
