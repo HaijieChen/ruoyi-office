@@ -1,0 +1,46 @@
+{
+  "fetch2026": "same:3",
+  "fetch2027": "failed",
+  "rows": [
+    {
+      "id": 4,
+      "year": 2027,
+      "status": "FAILED",
+      "festivalsJson": null,
+      "diffJson": null,
+      "legalCount": null
+    },
+    {
+      "id": 3,
+      "year": 2026,
+      "status": "ACTIVE",
+      "festivalsJson": "{\"2026-01-01\": \"元旦\", \"2026-02-16\": \"春节\", \"2026-02-17\": \"春节\", \"2026-02-18\": \"春节\", \"2026-02-19\": \"春节\", \"2026-04-04\": \"清明\", \"2026-05-01\": \"劳动节\", \"2026-05-02\": \"劳动节\", \"2026-06-19\": \"端午\", \"2026-09-25\": \"中秋\", \"2026-10-01\": \"国庆\", \"2026-10-02\": \"国庆\", \"2026-10-03\": \"国庆\"}",
+      "diffJson": "{\"note\": \"日期分类与生效版相同（指纹不同不代表业务日期变化）\", \"weekends\": {\"added\": [], \"removed\": []}, \"legalHolidays\": {\"added\": [], \"removed\": []}, \"makeupRestDays\": {\"added\": [], \"removed\": []}, \"makeupWorkdays\": {\"added\": [], \"removed\": []}, \"unchangedDates\": true}",
+      "legalCount": 13
+    },
+    {
+      "id": 2,
+      "year": 2026,
+      "status": "FAILED",
+      "festivalsJson": null,
+      "diffJson": null,
+      "legalCount": null
+    },
+    {
+      "id": 1,
+      "year": 2026,
+      "status": "REJECTED",
+      "festivalsJson": null,
+      "diffJson": null,
+      "legalCount": 13
+    }
+  ],
+  "myPageTotal": 1,
+  "myPage": [
+    {
+      "id": 13,
+      "code": "bpm_oa_overtime_calendar",
+      "content": "加班节假日日历 2027：failed（FAILED）。请到「节假日日历」核验，通过后才会生效。"
+    }
+  ]
+}
