@@ -41,6 +41,10 @@ const coreRoutes: RouteRecordRaw[] = [
   /**
    * 兼容旧版工作台入口。后端菜单的 canonical path 是 /home，
    * 但旧部署和浏览器中可能仍保留 /workspace。
+   *
+   * 必须写死 /home：vben 默认 defaultHomePath 仍是 /workspace，本地缓存
+   * 会盖住 preferences.ts 的 /home。redirect 再用 defaultHomePath 就是
+   * /workspace → /workspace，登录页带残留 token 时 Vue Router 直接栈溢出。
    */
   {
     meta: {
@@ -51,7 +55,7 @@ const coreRoutes: RouteRecordRaw[] = [
     },
     name: 'WorkspaceCompatibility',
     path: '/workspace',
-    redirect: preferences.app.defaultHomePath,
+    redirect: '/home',
   },
   {
     component: AuthPageLayout,
