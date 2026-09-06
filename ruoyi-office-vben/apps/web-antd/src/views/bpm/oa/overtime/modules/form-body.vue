@@ -16,7 +16,6 @@ import {
   TimePicker,
   message,
 } from 'ant-design-vue';
-import dayjs from 'dayjs';
 
 import { createOvertime, getOvertime } from '#/api/bpm/oa/overtime';
 import { FileUpload } from '#/components/upload';
@@ -28,7 +27,8 @@ import {
   calcOvertimeHours,
   combineDateAndTime,
   getOvertimeRangeError,
-  previewOvertimeHours,
+  overtimeHoursField,
+  splitDateAndTime,
 } from '../overtime-hours';
 
 defineOptions({ name: 'BpmOAOvertimeFormBody' });
@@ -61,9 +61,11 @@ const startMs = computed(() =>
 const endMs = computed(() =>
   combineDateAndTime(formData.value.endDate, formData.value.endClock),
 );
-const displayHours = computed(() =>
-  previewOvertimeHours(startMs.value, endMs.value),
+const hoursField = computed(() =>
+  overtimeHoursField(startMs.value, endMs.value, formData.value.holiday),
 );
+const displayHours = computed(() => hoursField.value.hours);
+const hoursFieldError = computed(() => hoursField.value.error);
 
 function getPredictVariables(): Record<string, unknown> {
   const vars: Record<string, unknown> = {};
@@ -117,15 +119,15 @@ async function reset(opts?: { id?: number }) {
       notifyPredict();
       return;
     }
-    const start = data.startTime ? dayjs(data.startTime) : undefined;
-    const end = data.endTime ? dayjs(data.endTime) : undefined;
+    const start = data.startTime ? splitDateAndTime(data.startTime) : undefined;
+    const end = data.endTime ? splitDateAndTime(data.endTime) : undefined;
     formData.value = {
       ...emptyForm(),
       reason: data.reason,
-      startDate: start?.format('YYYY-MM-DD'),
-      startClock: start?.format('HH:mm'),
-      endDate: end?.format('YYYY-MM-DD'),
-      endClock: end?.format('HH:mm'),
+      startDate: start?.date,
+      startClock: start?.clock,
+      endDate: end?.date,
+      endClock: end?.clock,
       holiday: data.holiday,
       attachmentUrls: data.attachmentUrls || [],
     };
@@ -149,9 +151,13 @@ function onAttach(v: string | string[]) {
 
 async function submit(ctx?: { startCompanyDeptId?: number }) {
   await formRef.value.validate();
-  const rangeError = getOvertimeRangeError(startMs.value, endMs.value);
+  const rangeError = getOvertimeRangeError(
+    startMs.value,
+    endMs.value,
+    formData.value.holiday,
+  );
   if (rangeError || calcOvertimeHours(startMs.value, endMs.value) == null) {
-    message.warning(rangeError || '结束时间必须晚于开始时间，且时长至少 2 小时');
+    message.warning(rangeError || '结束时间必须晚于开始时间，且加班时长不能少于 2 小时');
     throw new Error('invalid range');
   }
   const payload: BpmOAOvertimeApi.OvertimeCreate = {
@@ -253,13 +259,17 @@ defineExpose({
         </Form.Item>
       </div>
     </Form.Item>
-    <Form.Item label="加班时长">
+    <Form.Item
+      label="加班时长"
+      :validate-status="hoursFieldError ? 'error' : undefined"
+      :help="hoursFieldError || undefined"
+    >
       <InputNumber
         :value="displayHours"
         class="w-full"
         disabled
         :precision="1"
-        placeholder="选择起止时间后自动计算"
+        placeholder="按自然日拆分，单日最多 8 小时"
       />
     </Form.Item>
     <Form.Item label="是否法定节假日" name="holiday">

@@ -32,10 +32,19 @@ public interface BpmOAOvertimeMapper extends BaseMapperX<BpmOAOvertimeDO> {
     default List<BpmOAOvertimeDO> selectByUserAndDayForUpdate(Long userId,
                                                               LocalDateTime dayStart,
                                                               LocalDateTime dayEndExclusive) {
+        return selectByUserAndOverlapForUpdate(userId, dayStart, dayEndExclusive);
+    }
+
+    /**
+     * 锁定与区间相交的加班行（含跨天行落在本日的片段）。
+     */
+    default List<BpmOAOvertimeDO> selectByUserAndOverlapForUpdate(Long userId,
+                                                                  LocalDateTime rangeStart,
+                                                                  LocalDateTime rangeEndExclusive) {
         return selectList(new LambdaQueryWrapper<BpmOAOvertimeDO>()
                 .eq(BpmOAOvertimeDO::getUserId, userId)
-                .ge(BpmOAOvertimeDO::getStartTime, dayStart)
-                .lt(BpmOAOvertimeDO::getStartTime, dayEndExclusive)
+                .lt(BpmOAOvertimeDO::getStartTime, rangeEndExclusive)
+                .gt(BpmOAOvertimeDO::getEndTime, rangeStart)
                 .last("FOR UPDATE"));
     }
 

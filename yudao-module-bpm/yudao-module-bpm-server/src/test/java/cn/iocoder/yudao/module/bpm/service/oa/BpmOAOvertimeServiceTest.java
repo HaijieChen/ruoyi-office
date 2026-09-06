@@ -47,9 +47,11 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_ACCESS_DENIED;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_CALENDAR_MISSING;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_DAY_QUOTA_EXCEEDED;
-import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_NOT_SAME_DAY;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_DAY_TYPE_MISMATCH;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_TOO_SHORT;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_WORKDAY_FORBIDDEN;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -98,7 +100,7 @@ class BpmOAOvertimeServiceTest {
     @Test
     void createOvertime_validTwoHours_startsProcessWithHolidayFalse() {
         stubInsert(5L);
-        when(overtimeMapper.selectByUserAndDayForUpdate(eq(1L), any(), any())).thenReturn(List.of());
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any())).thenReturn(List.of());
         when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenAnswer(invocation -> {
                     assertTrue(OaAttendanceBusinessStartHolder.isSet());
@@ -140,11 +142,12 @@ class BpmOAOvertimeServiceTest {
     @Test
     void createOvertime_optionalStartCompanyDeptId_isProcessVariable() {
         stubInsert(8L);
-        when(overtimeMapper.selectByUserAndDayForUpdate(eq(1L), any(), any())).thenReturn(List.of());
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any())).thenReturn(List.of());
         when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn(CommonResult.success("pi-ot-8"));
 
-        BpmOAOvertimeCreateReqVO req = validCreateReq(DAY, DAY.plusHours(2), "true");
+        LocalDateTime legal = LocalDateTime.of(2026, 10, 1, 10, 0, 0);
+        BpmOAOvertimeCreateReqVO req = validCreateReq(legal, legal.plusHours(2), "true");
         req.setStartCompanyDeptId(88L);
         service.createOvertime(1L, req);
 
@@ -157,7 +160,7 @@ class BpmOAOvertimeServiceTest {
 
     @Test
     void createOvertime_dayQuotaWouldExceed8_rejected() {
-        when(overtimeMapper.selectByUserAndDayForUpdate(eq(1L), any(), any()))
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any()))
                 .thenReturn(List.of(quotaRow(DAY, DAY.plusHours(6), new BigDecimal("6.0"),
                         BpmTaskStatusEnum.RUNNING.getStatus())));
 
@@ -170,7 +173,7 @@ class BpmOAOvertimeServiceTest {
 
     @Test
     void createOvertime_overlap_rejected() {
-        when(overtimeMapper.selectByUserAndDayForUpdate(eq(1L), any(), any()))
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any()))
                 .thenReturn(List.of(quotaRow(DAY, DAY.plusHours(4), new BigDecimal("4.0"),
                         BpmTaskStatusEnum.APPROVE.getStatus())));
 
@@ -184,7 +187,7 @@ class BpmOAOvertimeServiceTest {
     @Test
     void createOvertime_rejectedHoursDoNotOccupyQuota() {
         stubInsert(9L);
-        when(overtimeMapper.selectByUserAndDayForUpdate(eq(1L), any(), any()))
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any()))
                 .thenReturn(List.of(quotaRow(DAY, DAY.plusHours(6), new BigDecimal("6.0"),
                         BpmTaskStatusEnum.REJECT.getStatus())));
         when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
@@ -196,11 +199,78 @@ class BpmOAOvertimeServiceTest {
     }
 
     @Test
-    void createOvertime_notSameDay_rejected() {
+    void createOvertime_crossMidnightOnePlusOneWeekend_accepted() {
+        stubInsert(21L);
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any())).thenReturn(List.of());
+        when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success("pi-ot-21"));
+        LocalDateTime start = LocalDateTime.of(2026, 9, 5, 23, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 9, 6, 1, 0, 0);
+
+        Long id = service.createOvertime(1L, validCreateReq(start, end, "false"));
+        assertEquals(21L, id);
+        ArgumentCaptor<BpmOAOvertimeDO> insertCaptor = ArgumentCaptor.forClass(BpmOAOvertimeDO.class);
+        verify(overtimeMapper).insert(insertCaptor.capture());
+        assertEquals(0, new BigDecimal("2.0").compareTo(insertCaptor.getValue().getHours()));
+    }
+
+    @Test
+    void createOvertime_screenshotCrossMultiDay_rejectsWorkdaysNotTooShort() {
+        LocalDateTime start = LocalDateTime.of(2026, 9, 6, 9, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 9, 8, 19, 0, 0);
         ServiceException ex = assertThrows(ServiceException.class,
-                () -> service.createOvertime(1L, validCreateReq(DAY, DAY.plusDays(1), "false")));
-        assertEquals(OA_OVERTIME_NOT_SAME_DAY.getCode(), ex.getCode());
-        verify(overtimeMapper, never()).selectByUserAndDayForUpdate(any(), any(), any());
+                () -> service.createOvertime(1L, validCreateReq(start, end, "false")));
+        assertEquals(OA_OVERTIME_WORKDAY_FORBIDDEN.getCode(), ex.getCode());
+        assertTrue(ex.getMessage().contains("2026-09-07"));
+        assertTrue(ex.getMessage().contains("2026-09-08"));
+        assertNotEquals(OA_OVERTIME_TOO_SHORT.getCode(), ex.getCode());
+        verify(overtimeMapper, never()).insert(any(BpmOAOvertimeDO.class));
+    }
+
+    @Test
+    void createOvertime_weekday_rejected() {
+        LocalDateTime start = LocalDateTime.of(2026, 9, 7, 10, 0, 0);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createOvertime(1L, validCreateReq(start, start.plusHours(2), "false")));
+        assertEquals(OA_OVERTIME_WORKDAY_FORBIDDEN.getCode(), ex.getCode());
+        assertTrue(ex.getMessage().contains("2026-09-07"));
+    }
+
+    @Test
+    void createOvertime_makeupRest_rejected() {
+        LocalDateTime start = LocalDateTime.of(2026, 2, 20, 10, 0, 0);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createOvertime(1L, validCreateReq(start, start.plusHours(2), "false")));
+        assertEquals(OA_OVERTIME_WORKDAY_FORBIDDEN.getCode(), ex.getCode());
+    }
+
+    @Test
+    void createOvertime_weekendWithHolidayTrue_typeMismatch() {
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createOvertime(1L, validCreateReq(DAY, DAY.plusHours(2), "true")));
+        assertEquals(OA_OVERTIME_DAY_TYPE_MISMATCH.getCode(), ex.getCode());
+        verify(overtimeMapper, never()).insert(any(BpmOAOvertimeDO.class));
+    }
+
+    @Test
+    void createOvertime_missingYear_rejected() {
+        LocalDateTime start = LocalDateTime.of(2027, 1, 1, 10, 0, 0);
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createOvertime(1L, validCreateReq(start, start.plusHours(2), "true")));
+        assertEquals(OA_OVERTIME_CALENDAR_MISSING.getCode(), ex.getCode());
+        assertEquals("该年度节假日日历尚未发布或配置，请联系人事", ex.getMessage());
+    }
+
+    @Test
+    void createOvertime_crossDayExistingRowOccupiesNextDayQuota() {
+        LocalDateTime existingStart = LocalDateTime.of(2026, 9, 5, 23, 0, 0);
+        LocalDateTime existingEnd = LocalDateTime.of(2026, 9, 6, 1, 0, 0);
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any()))
+                .thenReturn(List.of(quotaRow(existingStart, existingEnd, new BigDecimal("2.0"),
+                        BpmTaskStatusEnum.RUNNING.getStatus())));
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.createOvertime(1L, validCreateReq(DAY, DAY.plusHours(8), "false")));
+        assertEquals(OA_OVERTIME_DAY_QUOTA_EXCEEDED.getCode(), ex.getCode());
         verify(overtimeMapper, never()).insert(any(BpmOAOvertimeDO.class));
     }
 
@@ -264,7 +334,7 @@ class BpmOAOvertimeServiceTest {
     @Test
     void createReconcilesImmediateNonRunningStatus() {
         stubInsert(5L);
-        when(overtimeMapper.selectByUserAndDayForUpdate(eq(1L), any(), any())).thenReturn(List.of());
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any())).thenReturn(List.of());
         when(processInstanceApi.createProcessInstance(eq(1L), any(BpmProcessInstanceCreateReqDTO.class)))
                 .thenReturn(CommonResult.success("pi-ot-1"));
         ObjectProvider<org.flowable.engine.RuntimeService> runtimeProvider = mock(ObjectProvider.class);
@@ -365,7 +435,7 @@ class BpmOAOvertimeServiceTest {
         ReentrantLock dayLock = new ReentrantLock();
         List<BpmOAOvertimeDO> store = new ArrayList<>();
         AtomicInteger idSeq = new AtomicInteger();
-        when(overtimeMapper.selectByUserAndDayForUpdate(eq(1L), any(), any())).thenAnswer(invocation -> {
+        when(overtimeMapper.selectByUserAndOverlapForUpdate(eq(1L), any(), any())).thenAnswer(invocation -> {
             dayLock.lock();
             return copyStore(store);
         });

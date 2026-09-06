@@ -34,14 +34,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.invalidParamException;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_ACCESS_DENIED;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_CALENDAR_MISSING;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_DAY_QUOTA_EXCEEDED;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_DAY_TYPE_MISMATCH;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_NOT_EXISTS;
-import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_NOT_SAME_DAY;
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_TOO_SHORT;
+import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_WORKDAY_FORBIDDEN;
 
 /**
  * OA 加班申请 Service 实现类
@@ -100,29 +104,62 @@ public class BpmOAOvertimeServiceImpl implements BpmOAOvertimeService {
         }
         LocalDateTime startTime = createReqVO.getStartTime();
         LocalDateTime endTime = createReqVO.getEndTime();
-        if (!startTime.toLocalDate().equals(endTime.toLocalDate())) {
-            throw exception(OA_OVERTIME_NOT_SAME_DAY);
-        }
+        List<OaOvertimeHours.DaySlice> slices = OaOvertimeHours.split(startTime, endTime);
         BigDecimal hours = OaOvertimeHours.calc(startTime, endTime)
                 .orElseThrow(() -> exception(OA_OVERTIME_TOO_SHORT));
+        if (slices.isEmpty()) {
+            throw exception(OA_OVERTIME_TOO_SHORT);
+        }
 
-        LocalDate day = startTime.toLocalDate();
-        OaQuotaLocks.lockOvertimeDay(quotaLockMapper, userId, day);
-        LocalDateTime dayStart = day.atStartOfDay();
-        LocalDateTime dayEndExclusive = day.plusDays(1).atStartOfDay();
-        List<BpmOAOvertimeDO> dayRows = overtimeMapper.selectByUserAndDayForUpdate(userId, dayStart, dayEndExclusive);
-        BigDecimal occupied = BigDecimal.ZERO;
+        List<LocalDate> days = slices.stream().map(OaOvertimeHours.DaySlice::day).toList();
+        try {
+            for (LocalDate day : days) {
+                OaOvertimeCalendar.kind(day);
+            }
+        } catch (OaOvertimeCalendar.CalendarMissingException ignored) {
+            throw exception(OA_OVERTIME_CALENDAR_MISSING);
+        }
+        TreeSet<LocalDate> forbidden = OaOvertimeCalendar.forbiddenDays(days);
+        if (!forbidden.isEmpty()) {
+            String listed = forbidden.stream().map(LocalDate::toString).collect(Collectors.joining("、"));
+            throw exception(OA_OVERTIME_WORKDAY_FORBIDDEN, listed);
+        }
+        boolean wantLegal = "true".equals(holiday);
+        for (LocalDate day : days) {
+            OaOvertimeCalendar.DayKind kind = OaOvertimeCalendar.kind(day);
+            if (wantLegal && kind != OaOvertimeCalendar.DayKind.LEGAL_HOLIDAY) {
+                throw exception(OA_OVERTIME_DAY_TYPE_MISMATCH);
+            }
+            if (!wantLegal && kind != OaOvertimeCalendar.DayKind.WEEKEND) {
+                throw exception(OA_OVERTIME_DAY_TYPE_MISMATCH);
+            }
+        }
+
+        OaQuotaLocks.lockOvertimeDays(quotaLockMapper, userId, days);
+        LocalDateTime rangeStart = days.get(0).atStartOfDay();
+        LocalDateTime rangeEndExclusive = days.get(days.size() - 1).plusDays(1).atStartOfDay();
+        List<BpmOAOvertimeDO> dayRows = overtimeMapper.selectByUserAndOverlapForUpdate(
+                userId, rangeStart, rangeEndExclusive);
         for (BpmOAOvertimeDO existing : dayRows) {
             if (!occupiesQuota(existing.getStatus())) {
                 continue;
             }
-            occupied = occupied.add(existing.getHours() == null ? BigDecimal.ZERO : existing.getHours());
             if (overlaps(startTime, endTime, existing.getStartTime(), existing.getEndTime())) {
                 throw invalidParamException("加班时间与已有申请重叠");
             }
         }
-        if (occupied.add(hours).compareTo(OaOvertimeHours.MAX_HOURS) > 0) {
-            throw exception(OA_OVERTIME_DAY_QUOTA_EXCEEDED);
+        for (OaOvertimeHours.DaySlice slice : slices) {
+            BigDecimal occupied = BigDecimal.ZERO;
+            for (BpmOAOvertimeDO existing : dayRows) {
+                if (!occupiesQuota(existing.getStatus())) {
+                    continue;
+                }
+                occupied = occupied.add(OaOvertimeHours.hoursOnDay(
+                        existing.getStartTime(), existing.getEndTime(), slice.day()));
+            }
+            if (occupied.add(slice.hours()).compareTo(OaOvertimeHours.MAX_HOURS) > 0) {
+                throw exception(OA_OVERTIME_DAY_QUOTA_EXCEEDED);
+            }
         }
 
         BpmOAOvertimeDO overtime = BeanUtils.toBean(createReqVO, BpmOAOvertimeDO.class)
