@@ -1,0 +1,71 @@
+# U11 disposable iso profile. Do not copy into application-local.yaml.
+server:
+  port: 48081
+  address: 0.0.0.0
+
+spring:
+  datasource:
+    dynamic:
+      primary: master
+      datasource:
+        master:
+          url: jdbc:mysql://mysql:3306/oa_u11_iso?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+          username: root
+          password: ${MYSQL_ROOT_PASSWORD:u11iso_local}
+        slave:
+          lazy: true
+          url: jdbc:mysql://mysql:3306/oa_u11_iso?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+          username: root
+          password: ${MYSQL_ROOT_PASSWORD:u11iso_local}
+  data:
+    redis:
+      host: redis
+      port: 6379
+      database: 0
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+  kafka:
+    bootstrap-servers: 127.0.0.1:9092
+
+xxl:
+  job:
+    enabled: false
+
+# Dummy placeholders so WxJava beans start. Not real credentials; outbound must still be blocked.
+wx:
+  mp:
+    app-id: u11iso-dummy
+    secret: u11iso-dummy
+    config-storage:
+      type: RedisTemplate
+      key-prefix: wx
+      http-client-type: HttpClient
+  miniapp:
+    appid: u11iso-dummy
+    secret: u11iso-dummy
+    config-storage:
+      type: RedisTemplate
+      key-prefix: wa
+      http-client-type: HttpClient
+
+justauth:
+  enabled: false
+
+yudao:
+  captcha:
+    enable: false
+  websocket:
+    enable: true
+    sender-type: local
+  security:
+    mock-enable: true
+  access-log:
+    enable: false
+  demo: false
+  rpc:
+    service-identity:
+      enabled: false
+
+rocketmq:
+  name-server: 127.0.0.1:9876

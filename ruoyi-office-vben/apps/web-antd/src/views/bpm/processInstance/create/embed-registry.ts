@@ -4,7 +4,7 @@ import type { Component } from 'vue';
  * CUSTOM 流程在「通用发起」壳内嵌的业务表单注册表。
  * key = processDefinition.key（与后端 PROCESS_KEY 一致）。
  *
- * 合同 / 付款 / 开票 / 薪税 / 出差 / 外出：壳内嵌业务 form-body。
+ * 合同 / 付款 / 开票 / 薪税 / 出差 / 外出 / 请假 / 加班 / 补卡：壳内嵌业务 form-body。
  */
 export const CREATE_SHELL_EMBED_REGISTRY: Record<
   string,
@@ -25,6 +25,8 @@ export const CREATE_SHELL_EMBED_REGISTRY: Record<
   oa_business_trip: () => import('#/views/bpm/oa/trip/modules/form-body.vue'),
   oa_outing: () => import('#/views/bpm/oa/outing/modules/form-body.vue'),
   oa_leave: () => import('#/views/bpm/oa/leave/modules/form-body.vue'),
+  oa_overtime: () => import('#/views/bpm/oa/overtime/modules/form-body.vue'),
+  oa_punch_correction: () => import('#/views/bpm/oa/punch/modules/form-body.vue'),
   oa_expense_reimbursement: () =>
     import('#/views/finance/expense-reimbursement/modules/form-body.vue'),
   oa_expense_no_invoice: () =>

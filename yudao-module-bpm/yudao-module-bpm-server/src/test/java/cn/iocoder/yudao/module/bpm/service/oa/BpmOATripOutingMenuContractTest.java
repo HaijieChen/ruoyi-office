@@ -7,7 +7,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** U7：出差/外出菜单 SQL、目录 redirect、模型 form path 契约 */
+/** 出差/外出菜单 SQL、目录 embed、模型 form path 契约；U8 加班/补卡假勤目录嵌入 */
 class BpmOATripOutingMenuContractTest {
 
     @Test
@@ -57,6 +57,32 @@ class BpmOATripOutingMenuContractTest {
         assertFalse(java.contains("oa_business_trip"));
         assertFalse(java.contains("oa_outing"));
     }
+
+    @Test
+    void catalogEmbedsOvertimeAndPunchInAttendanceStartShell() throws Exception {
+        Path fe = findRoot().resolve(
+                "ruoyi-office-vben/apps/web-antd/src/views/bpm/processInstance/create/embed-registry.ts");
+        String ts = Files.readString(fe);
+        assertTrue(ts.contains("oa_overtime: ()"));
+        assertTrue(ts.contains("oa_punch_correction: ()"));
+        assertTrue(ts.contains("bpm/oa/overtime/modules/form-body.vue"));
+        assertTrue(ts.contains("bpm/oa/punch/modules/form-body.vue"));
+        assertFalse(ts.contains("oa_overtime: '/bpm/oa/overtime/create'"));
+        assertFalse(ts.contains("oa_punch_correction: '/bpm/oa/punch/create'"));
+
+        Path registry = findRoot().resolve(
+                "yudao-module-bpm/yudao-module-bpm-server/src/main/java/cn/iocoder/yudao/module/bpm/service/definition/BpmEmbedProcessStartPermissionRegistry.java");
+        String java = Files.readString(registry);
+        assertFalse(java.contains("oa_overtime"));
+        assertFalse(java.contains("oa_punch_correction"));
+
+        Path catalog = findRoot().resolve("sql/mysql/bpm_process_start_catalog.sql");
+        String sql = Files.readString(catalog);
+        assertTrue(sql.contains("WHEN 'oa_overtime' THEN 'attendance'"));
+        assertTrue(sql.contains("WHEN 'oa_punch_correction' THEN 'attendance'"));
+        assertFalse(sql.contains("bpm_model"));
+    }
+
 
     @Test
     void modelSqlAlreadyHasFormPaths() throws Exception {

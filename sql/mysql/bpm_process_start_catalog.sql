@@ -27,6 +27,8 @@ SET i.`category` = CASE p.`KEY_`
     WHEN 'oa_business_trip' THEN 'attendance'
     WHEN 'oa_outing' THEN 'attendance'
     WHEN 'oa_leave' THEN 'attendance'
+    WHEN 'oa_overtime' THEN 'attendance'
+    WHEN 'oa_punch_correction' THEN 'attendance'
     WHEN 'finance_invoice_apply' THEN 'finance'
     WHEN 'finance_invoice_redflush_apply' THEN 'finance'
     WHEN 'oa_expense_reimbursement' THEN 'finance'

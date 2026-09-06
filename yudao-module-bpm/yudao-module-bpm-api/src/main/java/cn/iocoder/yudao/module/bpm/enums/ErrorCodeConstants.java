@@ -21,6 +21,14 @@ public interface ErrorCodeConstants {
     ErrorCode OA_LEAVE_ACCESS_DENIED = new ErrorCode(1_009_001_007, "无权查看该请假申请");
     ErrorCode OA_TRIP_FIELD_REQUIRED = new ErrorCode(1_009_001_010, "出差必填项未填完");
     ErrorCode OA_TRIP_COMPANION_INVALID = new ErrorCode(1_009_001_011, "同行人员须为组织内其他人员");
+    ErrorCode OA_OVERTIME_NOT_EXISTS = new ErrorCode(1_009_001_012, "加班申请不存在");
+    ErrorCode OA_OVERTIME_ACCESS_DENIED = new ErrorCode(1_009_001_013, "无权查看该加班申请");
+    ErrorCode OA_OVERTIME_TOO_SHORT = new ErrorCode(1_009_001_014, "加班时长不能少于 2 小时");
+    ErrorCode OA_OVERTIME_DAY_QUOTA_EXCEEDED = new ErrorCode(1_009_001_015, "当天加班合计不能超过 8 小时");
+    ErrorCode OA_OVERTIME_NOT_SAME_DAY = new ErrorCode(1_009_001_016, "加班开始与结束必须为同一自然日");
+    ErrorCode OA_PUNCH_NOT_EXISTS = new ErrorCode(1_009_001_017, "补卡申请不存在");
+    ErrorCode OA_PUNCH_ACCESS_DENIED = new ErrorCode(1_009_001_018, "无权查看该补卡申请");
+    ErrorCode OA_PUNCH_MONTH_QUOTA_EXCEEDED = new ErrorCode(1_009_001_019, "该月补卡次数已用完");
 
     // ========== 流程模型 1-009-002-000 ==========
     ErrorCode MODEL_KEY_EXISTS = new ErrorCode(1_009_002_000, "已经存在流程标识为【{}】的流程");
