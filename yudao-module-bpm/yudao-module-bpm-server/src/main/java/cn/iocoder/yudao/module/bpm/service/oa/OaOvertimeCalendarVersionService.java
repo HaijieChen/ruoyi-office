@@ -43,7 +43,7 @@ public class OaOvertimeCalendarVersionService {
 
     public static final String NOTIFY_TEMPLATE = "bpm_oa_overtime_calendar";
     public static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
-    public static final Set<String> ALLOWED_HOSTS = Set.of("www.gov.cn");
+    public static final Set<String> ALLOWED_HOSTS = Set.of("www.gov.cn", "sousuo.www.gov.cn");
 
     @Resource
     private BpmOAOvertimeCalendarVersionMapper versionMapper;
@@ -190,28 +190,42 @@ public class OaOvertimeCalendarVersionService {
             listingYears.addAll(OaOvertimeCalendarNoticeLocator.noticeYears(listingHtml));
             candidates.addAll(OaOvertimeCalendarNoticeLocator.noticeUrls(year, listingHtml, listingUrl));
         }
+        for (String query : List.of(
+                OaOvertimeCalendarNoticeLocator.yearSearchQuery(year),
+                OaOvertimeCalendarNoticeLocator.COVERAGE_QUERY)) {
+            String searchUrl = OaOvertimeCalendarNoticeLocator.officialSearchUrl(query);
+            lastListingUrl = searchUrl;
+            try {
+                String searchJson = httpGet.get(searchUrl);
+                if (!OaOvertimeCalendarNoticeLocator.looksLikeOfficialSearch(searchJson)) {
+                    lastListingError = new IllegalStateException("search-format");
+                    log.warn("[overtime-calendar] search {} format-change", searchUrl);
+                    continue;
+                }
+                listingOk = true;
+                listingLooksOfficial = true;
+                listingYears.addAll(OaOvertimeCalendarNoticeLocator.searchYears(searchJson));
+                candidates.addAll(OaOvertimeCalendarNoticeLocator.searchNoticeUrls(year, searchJson));
+            } catch (Exception ex) {
+                lastListingError = ex;
+                log.warn("[overtime-calendar] search {} failed: {}", searchUrl, failureNote("listing-fetch", ex));
+            }
+        }
         BpmOAOvertimeCalendarVersionDO previous = versionMapper.selectActiveByYear(year - 1);
         if (previous != null && previous.getSourceUrl() != null) {
             try {
                 String html = httpGet.get(previous.getSourceUrl());
                 if (html != null && !html.isBlank()) {
-                    listingOk = true;
-                    listingLooksOfficial = listingLooksOfficial
-                            || OaOvertimeCalendarNoticeLocator.looksLikePolicyListing(html)
-                            || !OaOvertimeCalendarNoticeLocator.noticeYears(html).isEmpty();
-                    listingYears.addAll(OaOvertimeCalendarNoticeLocator.noticeYears(html));
                     candidates.addAll(OaOvertimeCalendarNoticeLocator.noticeUrls(year, html, previous.getSourceUrl()));
                 }
             } catch (Exception ex) {
-                lastListingError = ex;
                 log.warn("[overtime-calendar] previous-notice {} failed: {}",
                         previous.getSourceUrl(), failureNote("notice-fetch", ex));
             }
         }
         if (candidates.isEmpty()) {
             if (!listingYears.isEmpty() && !listingYears.contains(year)) {
-                return recordNotPublished(year, previous != null ? previous.getSourceUrl() : lastListingUrl,
-                        "years=" + listingYears);
+                return recordNotPublished(year, lastListingUrl, "years=" + listingYears);
             }
             if (!listingOk) {
                 return recordFailure(year, lastListingUrl,
@@ -528,13 +542,15 @@ public class OaOvertimeCalendarVersionService {
         Exception last = null;
         for (int i = 0; i < 3; i++) {
             try {
+                java.net.http.HttpRequest.Builder req = java.net.http.HttpRequest.newBuilder(uri)
+                        .timeout(java.time.Duration.ofSeconds(10))
+                        .header("User-Agent", "Mozilla/5.0 (compatible; OAOvertimeCalendar/1.0)")
+                        .header("Accept", "application/json,text/html,application/xhtml+xml");
+                if ("sousuo.www.gov.cn".equals(uri.getHost())) {
+                    req.header("Referer", OaOvertimeCalendarNoticeLocator.SEARCH_REFERER);
+                }
                 java.net.http.HttpResponse<String> resp = client.send(
-                        java.net.http.HttpRequest.newBuilder(uri)
-                                .timeout(java.time.Duration.ofSeconds(10))
-                                .header("User-Agent", "Mozilla/5.0 (compatible; OAOvertimeCalendar/1.0)")
-                                .header("Accept", "text/html,application/xhtml+xml")
-                                .GET()
-                                .build(),
+                        req.GET().build(),
                         java.net.http.HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                 if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
                     throw new IllegalStateException("http " + resp.statusCode());

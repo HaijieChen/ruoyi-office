@@ -189,7 +189,7 @@ class OaOvertimeCalendarVersionServiceTest {
     }
 
     @Test
-    void fetch_listing403_butPreviousOfficialNoticeLacksYear_isNotPublished() {
+    void fetch_listing403_butPreviousOfficialNoticeLacksYear_isFailedNotUnpublished() {
         OaOvertimeCalendar.YearData seed = OaOvertimeCalendar.yearData(2026);
         service.importSeedActive(seed, NOTICE_URL);
         service.setHttpGet(url -> {
@@ -199,8 +199,65 @@ class OaOvertimeCalendarVersionServiceTest {
             throw new IllegalStateException("http 403");
         });
         String result = service.fetchYear(2027);
+        assertTrue(result.startsWith("failed"), result);
+        assertEquals(BpmOAOvertimeCalendarVersionDO.FAILED, store.get(store.size() - 1).getStatus());
+        assertFalse(BpmOAOvertimeCalendarVersionDO.NOT_PUBLISHED.equals(store.get(store.size() - 1).getStatus()));
+    }
+
+    @Test
+    void fetch_previousNoticeLacksYear_butTargetExistsOnOtherUrl_discoversNeverUnpublished() {
+        OaOvertimeCalendar.YearData seed = OaOvertimeCalendar.yearData(2026);
+        service.importSeedActive(seed, NOTICE_URL);
+        String notice2027 = "https://www.gov.cn/zhengce/zhengceku/202611/content_9999999.htm";
+        service.setHttpGet(url -> {
+            if (url.contains("content_7047091")) {
+                return OaOvertimeCalendarNoticeParserTest.NOTICE_2026;
+            }
+            if (url.contains("content_9999999")) {
+                return OaOvertimeCalendarNoticeParserTest.NOTICE_2026.replace("2026", "2027");
+            }
+            if (url.contains("search-gov")) {
+                return """
+                        {"code":200,"msg":"操作成功","searchVO":{"catMap":{"gongwen":{"totalCount":1,"listVO":[
+                        {"title":"国务院办公厅关于2027年部分节假日安排的通知",
+                         "url":"https://www.gov.cn/zhengce/zhengceku/202611/content_9999999.htm"}]}}}}
+                        """;
+            }
+            if (url.contains("zhengcewenjianku") || url.contains("zhengceku/") || url.contains("zuixin")) {
+                throw new IllegalStateException("http 403");
+            }
+            throw new IllegalStateException("http 403 " + url);
+        });
+        String result = service.fetchYear(2027);
+        assertTrue(result.startsWith("pending:") || result.startsWith("same:"), result);
+        assertTrue(store.stream().noneMatch(r ->
+                Integer.valueOf(2027).equals(r.getCalendarYear())
+                        && BpmOAOvertimeCalendarVersionDO.NOT_PUBLISHED.equals(r.getStatus())));
+        assertEquals(notice2027, store.stream()
+                .filter(r -> Integer.valueOf(2027).equals(r.getCalendarYear()))
+                .findFirst().orElseThrow().getSourceUrl());
+    }
+
+    @Test
+    void fetch_officialSearchCoverageMissingYear_isNotPublished() {
+        service.setHttpGet(url -> {
+            if (url.contains("search-gov") && url.contains("2027")) {
+                return OaOvertimeCalendarNoticeLocatorTest.SEARCH_EMPTY;
+            }
+            if (url.contains("search-gov")) {
+                return """
+                        {"code":200,"msg":"操作成功","searchVO":{"catMap":{"gongwen":{"totalCount":2,"listVO":[
+                        {"title":"国务院办公厅关于2026年部分节假日安排的通知",
+                         "url":"https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm"},
+                        {"title":"国务院办公厅关于2025年部分节假日安排的通知",
+                         "url":"https://www.gov.cn/zhengce/zhengceku/202411/content_6986383.htm"}]}}}}
+                        """;
+            }
+            throw new IllegalStateException("http 403");
+        });
+        String result = service.fetchYear(2027);
         assertEquals("not-published", result);
-        assertEquals(BpmOAOvertimeCalendarVersionDO.NOT_PUBLISHED, store.get(store.size() - 1).getStatus());
+        assertEquals(BpmOAOvertimeCalendarVersionDO.NOT_PUBLISHED, store.get(0).getStatus());
     }
 
     @Test

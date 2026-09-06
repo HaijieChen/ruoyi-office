@@ -4,7 +4,6 @@ import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.bpm.service.oa.OaOvertimeCalendarVersionService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -24,16 +23,10 @@ public class OaOvertimeCalendarFetchScheduledJob {
     @Resource
     private OaOvertimeCalendarVersionService calendarVersionService;
 
-    @Value("${bpm.oa.overtime-calendar.schedule-probe-year:0}")
-    private int scheduleProbeYear;
-
     @Scheduled(cron = "${bpm.oa.overtime-calendar.fetch-cron:0 0 9 ? * MON}", zone = "Asia/Shanghai")
     public void execute() {
         TenantUtils.execute(1L, () -> {
             String result = calendarVersionService.fetchDueYears();
-            if (scheduleProbeYear > 0) {
-                result += calendarVersionService.fetchYear(scheduleProbeYear);
-            }
             log.info("[oaOvertimeCalendarFetchScheduledJob] {}", result);
         });
     }

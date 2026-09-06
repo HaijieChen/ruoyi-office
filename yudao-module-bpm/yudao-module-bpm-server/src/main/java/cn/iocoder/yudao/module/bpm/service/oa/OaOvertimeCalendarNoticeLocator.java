@@ -1,6 +1,11 @@
 package cn.iocoder.yudao.module.bpm.service.oa;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -9,7 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 从国务院政策文件库页面发现「YYYY年部分节假日安排」正文链接。
+ * 从国务院政策文件库页面 / 官方搜索发现「YYYY年部分节假日安排」正文链接。
  */
 public final class OaOvertimeCalendarNoticeLocator {
 
@@ -18,6 +23,12 @@ public final class OaOvertimeCalendarNoticeLocator {
             "https://www.gov.cn/zhengce/zhengceku/",
             "https://www.gov.cn/zhengce/zuixin/"
     );
+
+    public static final String SEARCH_DATA_URL = "https://sousuo.www.gov.cn/search-gov/data";
+    public static final String SEARCH_REFERER = "https://sousuo.www.gov.cn/zcwjk/policyDocumentLibrary";
+    public static final String COVERAGE_QUERY = "节假日安排";
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     static final Pattern TITLE_YEAR = Pattern.compile("(\\d{4})年部分节假日安排");
     private static final Pattern HREF_THEN_TITLE = Pattern.compile(
@@ -68,6 +79,88 @@ public final class OaOvertimeCalendarNoticeLocator {
         }
         return html.contains("国务院") && (html.contains("节假日安排") || html.contains("政策文件库")
                 || html.contains("zhengcewenjianku") || html.contains("政府信息公开"));
+    }
+
+    public static String yearSearchQuery(int year) {
+        return year + "年部分节假日安排";
+    }
+
+    public static String officialSearchUrl(String query) {
+        String q = URLEncoder.encode(query == null ? "" : query, StandardCharsets.UTF_8);
+        return SEARCH_DATA_URL
+                + "?t=zhengcelibrary&q=" + q
+                + "&timetype=&mintime=&maxtime=&sort=score&sortType=1&searchfield=title"
+                + "&pcodeJiguan=&childtype=&subchildtype=&tsbq=&pubtimeyear=&puborg="
+                + "&pcodeYear=&pcodeNum=&filetype=&p=1&n=20&inpro=&bmfl=&dup=&orpro="
+                + "&type=gwyzcwjk";
+    }
+
+    public static boolean looksLikeOfficialSearch(String json) {
+        JsonNode root = readJson(json);
+        if (root == null) {
+            return false;
+        }
+        int code = root.path("code").asInt(0);
+        if (code == 1001) {
+            return true;
+        }
+        if (code != 200) {
+            return false;
+        }
+        return searchItems(root).iterator().hasNext();
+    }
+
+    public static Set<Integer> searchYears(String json) {
+        LinkedHashSet<Integer> years = new LinkedHashSet<>();
+        for (JsonNode item : searchItems(readJson(json))) {
+            years.addAll(noticeYears(plainTitle(item)));
+        }
+        return years;
+    }
+
+    public static List<String> searchNoticeUrls(int year, String json) {
+        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        for (JsonNode item : searchItems(readJson(json))) {
+            if (!noticeYears(plainTitle(item)).contains(year)) {
+                continue;
+            }
+            addIfAllowed(urls, resolve(item.path("url").asText(null), "https://www.gov.cn/"));
+        }
+        return new ArrayList<>(urls);
+    }
+
+    private static JsonNode readJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return JSON.readTree(json);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private static Iterable<JsonNode> searchItems(JsonNode root) {
+        ArrayList<JsonNode> items = new ArrayList<>();
+        if (root == null) {
+            return items;
+        }
+        JsonNode gongwen = root.path("searchVO").path("catMap").path("gongwen").path("listVO");
+        if (gongwen.isArray()) {
+            gongwen.forEach(items::add);
+        }
+        JsonNode top = root.path("searchVO").path("listVO");
+        if (top.isArray()) {
+            top.forEach(items::add);
+        }
+        return items;
+    }
+
+    private static String plainTitle(JsonNode item) {
+        if (item == null) {
+            return "";
+        }
+        return item.path("title").asText("").replaceAll("<[^>]+>", "");
     }
 
     public static String resolve(String href, String pageUrl) {
