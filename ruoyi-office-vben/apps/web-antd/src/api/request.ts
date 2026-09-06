@@ -17,6 +17,7 @@ import { createApiEncrypt } from '@vben/utils';
 import { message } from 'ant-design-vue';
 
 import { resolveRequestTenantId } from '#/constants/tenant';
+import { hashRouterFullPath } from '#/router/login-redirect';
 import { useAuthStore } from '#/store';
 
 import { refreshTokenApi } from './core';
@@ -37,6 +38,10 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
    */
   async function doReAuthenticate() {
     console.warn('Access token or refresh token is invalid or expired. ');
+    const pendingRedirect =
+      typeof window === 'undefined'
+        ? ''
+        : hashRouterFullPath(window.location.hash);
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
     accessStore.setAccessToken(null);
@@ -46,7 +51,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     ) {
       accessStore.setLoginExpired(true);
     } else {
-      await authStore.logout();
+      await authStore.logout(true, pendingRedirect);
     }
   }
 

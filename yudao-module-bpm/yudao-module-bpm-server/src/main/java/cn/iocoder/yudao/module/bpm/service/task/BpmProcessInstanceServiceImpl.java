@@ -1036,20 +1036,20 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
      */
     private Task findStartUserTask(Long userId, String processInstanceId) {
         try {
-            // 1. 首先查找用户直接分配的待办任务
+            // 重提只完成发起填报节点。assignee/candidate 命中普通 review 不得当作重提。
             List<Task> userTasks = taskService0.createTaskQuery()
                     .processInstanceId(processInstanceId)
                     .taskAssignee(String.valueOf(userId))
+                    .taskDefinitionKey(START_USER_NODE_ID)
                     .active()
                     .orderByTaskCreateTime().asc()
                     .list();
 
             if (CollUtil.isNotEmpty(userTasks)) {
-                log.debug("[findStartUserTask] 找到用户直接分配的待办任务，userId: {}, taskCount: {}", userId, userTasks.size());
-                return userTasks.get(0); // 返回最早创建的任务
+                log.debug("[findStartUserTask] 找到发起节点直接分配待办，userId: {}, taskCount: {}", userId, userTasks.size());
+                return userTasks.get(0);
             }
 
-            // 2. 如果没有直接分配的任务，查找开始节点的任务（适用于撤回后重新提交的场景）
             List<Task> startUserTasks = taskService0.createTaskQuery()
                     .processInstanceId(processInstanceId)
                     .taskDefinitionKey(START_USER_NODE_ID)
@@ -1058,7 +1058,6 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
                     .list();
 
             if (CollUtil.isNotEmpty(startUserTasks)) {
-                // 验证任务是否属于该用户（发起人）
                 ProcessInstance processInstance = getProcessInstance(processInstanceId);
                 if (processInstance != null && String.valueOf(userId).equals(processInstance.getStartUserId())) {
                     log.debug("[findStartUserTask] 找到开始节点任务，userId: {}, taskCount: {}", userId, startUserTasks.size());
@@ -1066,20 +1065,20 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
                 }
             }
 
-            // 3. 查找用户候选的任务（适用于候选人组的场景）
             List<Task> candidateTasks = taskService0.createTaskQuery()
                     .processInstanceId(processInstanceId)
                     .taskCandidateUser(String.valueOf(userId))
+                    .taskDefinitionKey(START_USER_NODE_ID)
                     .active()
                     .orderByTaskCreateTime().asc()
                     .list();
 
             if (CollUtil.isNotEmpty(candidateTasks)) {
-                log.debug("[findStartUserTask] 找到用户候选任务，userId: {}, taskCount: {}", userId, candidateTasks.size());
+                log.debug("[findStartUserTask] 找到发起节点候选待办，userId: {}, taskCount: {}", userId, candidateTasks.size());
                 return candidateTasks.get(0);
             }
 
-            log.debug("[findStartUserTask] 未找到用户相关的待办任务，userId: {}, processInstanceId: {}", userId, processInstanceId);
+            log.debug("[findStartUserTask] 未找到发起填报待办，userId: {}, processInstanceId: {}", userId, processInstanceId);
             return null;
 
         } catch (Exception e) {
