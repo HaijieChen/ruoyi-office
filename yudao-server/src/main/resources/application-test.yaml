@@ -78,8 +78,7 @@ xxl:
 bpm:
   oa:
     overtime-calendar:
-      fetch-cron: "0 */1 * * * ?"
-      schedule-probe-year: 2027
+      fetch-cron: "0 0 9 ? * MON"
 
 
 --- #################### 消息队列相关 ####################
