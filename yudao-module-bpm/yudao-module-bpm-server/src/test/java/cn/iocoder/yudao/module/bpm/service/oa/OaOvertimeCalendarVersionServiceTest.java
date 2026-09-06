@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants.OA_OVERTIME_CALENDAR_VERSION_NOT_PENDING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -182,5 +183,71 @@ class OaOvertimeCalendarVersionServiceTest {
         String result = service.fetchDueYears();
         assertTrue(result.contains("2026="));
         assertTrue(result.contains("2027="));
+    }
+
+    @Test
+    void fetch_listingHttp403_isFailedNotUnpublished() {
+        service.setHttpGet(url -> {
+            throw new IllegalStateException("http 403");
+        });
+        String result = service.fetchYear(2027);
+        assertTrue(result.startsWith("failed"));
+        assertEquals(BpmOAOvertimeCalendarVersionDO.FAILED, store.get(0).getStatus());
+        assertTrue(store.get(0).getParseNote().contains("http 403"));
+        assertFalse(BpmOAOvertimeCalendarVersionDO.NOT_PUBLISHED.equals(store.get(0).getStatus()));
+    }
+
+    @Test
+    void fetch_officialHtmlWithStrongTags_isPending() {
+        String html = """
+                <html><body>
+                国务院办公厅关于2026年部分节假日安排的通知
+                <p><strong>一、元旦：</strong>1月1日（周四）至3日（周六）放假调休，共3天。1月4日（周日）上班。</p>
+                <p><strong>二、春节：</strong>2月15日（农历腊月二十八、周日）至23日（农历正月初七、周一）放假调休，共9天。2月14日（周六）、2月28日（周六）上班。</p>
+                <p><strong>三、清明节：</strong>4月4日（周六）至6日（周一）放假，共3天。</p>
+                <p><strong>四、劳动节：</strong>5月1日（周五）至5日（周二）放假调休，共5天。5月9日（周六）上班。</p>
+                <p><strong>五、端午节：</strong>6月19日（周五）至21日（周日）放假，共3天。</p>
+                <p><strong>六、中秋节：</strong>9月25日（周五）至27日（周日）放假，共3天。</p>
+                <p><strong>七、国庆节：</strong>10月1日（周四）至7日（周三）放假调休，共7天。9月20日（周日）、10月10日（周六）上班。</p>
+                </body></html>
+                """;
+        service.setHttpGet(url -> {
+            if (url.contains("content_7047091")) {
+                return html;
+            }
+            throw new IllegalStateException("http 403");
+        });
+        OaOvertimeCalendar.YearData seed = OaOvertimeCalendar.yearData(2026);
+        service.importSeedActive(seed, NOTICE_URL);
+        String result = service.fetchYear(2026);
+        assertTrue(result.startsWith("pending:") || result.startsWith("same:"), result);
+        if (result.startsWith("pending:")) {
+            assertTrue(store.stream().anyMatch(r -> BpmOAOvertimeCalendarVersionDO.PENDING.equals(r.getStatus())));
+        }
+    }
+
+    @Test
+    void notify_usesHrAdminUserIdsNotUsername() {
+        cn.iocoder.yudao.module.system.api.permission.RoleApi roleApi =
+                mock(cn.iocoder.yudao.module.system.api.permission.RoleApi.class);
+        cn.iocoder.yudao.module.system.api.permission.PermissionApi permissionApi =
+                mock(cn.iocoder.yudao.module.system.api.permission.PermissionApi.class);
+        ReflectionTestUtils.setField(service, "roleApi", roleApi);
+        ReflectionTestUtils.setField(service, "permissionApi", permissionApi);
+        when(roleApi.getRoleIdListByCodes(any())).thenReturn(
+                cn.iocoder.yudao.framework.common.pojo.CommonResult.success(List.of(80L)));
+        when(permissionApi.getUserRoleIdListByRoleIds(any())).thenReturn(
+                cn.iocoder.yudao.framework.common.pojo.CommonResult.success(java.util.Set.of(218L, 300L)));
+
+        service.fetchYear(2026);
+
+        org.mockito.ArgumentCaptor<cn.iocoder.yudao.module.system.api.notify.dto.NotifySendSingleToUserReqDTO> cap =
+                org.mockito.ArgumentCaptor.forClass(
+                        cn.iocoder.yudao.module.system.api.notify.dto.NotifySendSingleToUserReqDTO.class);
+        verify(notifyApi, org.mockito.Mockito.atLeast(1)).sendSingleMessageToAdmin(cap.capture());
+        java.util.Set<Long> notified = cap.getAllValues().stream()
+                .map(cn.iocoder.yudao.module.system.api.notify.dto.NotifySendSingleToUserReqDTO::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(java.util.Set.of(218L, 300L), notified);
     }
 }

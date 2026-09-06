@@ -44,3 +44,10 @@ export function verifyOvertimeCalendar(id: number, enable: boolean) {
 export function fetchOvertimeCalendar() {
   return requestClient.post<string>('/bpm/oa/overtime-calendar/fetch');
 }
+
+export function getActiveOvertimeCalendar(year: number) {
+  return requestClient.get<BpmOAOvertimeCalendarApi.Version>(
+    '/bpm/oa/overtime-calendar/active',
+    { params: { year } },
+  );
+}

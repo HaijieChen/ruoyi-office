@@ -6,6 +6,8 @@ import cn.iocoder.yudao.module.bpm.dal.dataobject.oa.BpmOAOvertimeCalendarVersio
 import cn.iocoder.yudao.module.bpm.dal.mysql.oa.BpmOAOvertimeCalendarVersionMapper;
 import cn.iocoder.yudao.module.system.api.notify.NotifyMessageSendApi;
 import cn.iocoder.yudao.module.system.api.notify.dto.NotifySendSingleToUserReqDTO;
+import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
+import cn.iocoder.yudao.module.system.api.permission.RoleApi;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -49,10 +51,16 @@ public class OaOvertimeCalendarVersionService {
     @Resource
     private NotifyMessageSendApi notifyMessageSendApi;
 
+    @Resource
+    private RoleApi roleApi;
+
+    @Resource
+    private PermissionApi permissionApi;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private Clock clock = Clock.system(SHANGHAI);
     private HttpGet httpGet = OaOvertimeCalendarVersionService::defaultGet;
-    private Long notifyUserId = 1L;
+    private List<Long> notifyUserIds = List.of();
 
     public void setClock(Clock clock) {
         this.clock = clock;
@@ -62,8 +70,8 @@ public class OaOvertimeCalendarVersionService {
         this.httpGet = httpGet;
     }
 
-    public void setNotifyUserId(Long notifyUserId) {
-        this.notifyUserId = notifyUserId;
+    public void setNotifyUserIds(List<Long> notifyUserIds) {
+        this.notifyUserIds = notifyUserIds == null ? List.of() : List.copyOf(notifyUserIds);
     }
 
     @FunctionalInterface
@@ -139,7 +147,7 @@ public class OaOvertimeCalendarVersionService {
         loadActiveIntoClassifier();
     }
 
-    public String fetchDueYears() {
+    public synchronized String fetchDueYears() {
         LocalDate today = LocalDate.now(clock);
         StringBuilder out = new StringBuilder();
         for (Integer year : OaOvertimeCalendarSchedule.targetYears(today)) {
@@ -151,7 +159,7 @@ public class OaOvertimeCalendarVersionService {
         return out.toString();
     }
 
-    public String fetchYear(int year) {
+    public synchronized String fetchYear(int year) {
         LinkedHashSet<String> candidates = new LinkedHashSet<>();
         BpmOAOvertimeCalendarVersionDO active = versionMapper.selectActiveByYear(year);
         if (active != null && active.getSourceUrl() != null) {
@@ -161,15 +169,19 @@ public class OaOvertimeCalendarVersionService {
         boolean listingLooksOfficial = false;
         Set<Integer> listingYears = new java.util.HashSet<>();
         String lastListingUrl = OaOvertimeCalendarNoticeLocator.LISTING_URLS.get(0);
+        Exception lastListingError = null;
         for (String listingUrl : OaOvertimeCalendarNoticeLocator.LISTING_URLS) {
             lastListingUrl = listingUrl;
             String listingHtml;
             try {
                 listingHtml = httpGet.get(listingUrl);
             } catch (Exception ex) {
+                lastListingError = ex;
+                log.warn("[overtime-calendar] listing {} failed: {}", listingUrl, failureNote("listing-fetch", ex));
                 continue;
             }
             if (listingHtml == null || listingHtml.isBlank()) {
+                lastListingError = new IllegalStateException("empty body");
                 continue;
             }
             listingOk = true;
@@ -180,7 +192,8 @@ public class OaOvertimeCalendarVersionService {
         }
         if (candidates.isEmpty()) {
             if (!listingOk) {
-                return recordFailure(year, lastListingUrl, "listing-fetch", "listing-fetch-error");
+                return recordFailure(year, lastListingUrl,
+                        failureNote("listing-fetch", lastListingError), "listing-fetch-error");
             }
             if (!listingLooksOfficial) {
                 return recordFailure(year, lastListingUrl, "listing-format", "listing-format-change");
@@ -196,20 +209,23 @@ public class OaOvertimeCalendarVersionService {
                 String html = httpGet.get(url);
                 if (html == null || html.isBlank()) {
                     last = new IllegalStateException("empty body");
+                    log.warn("[overtime-calendar] notice {} empty body", url);
                     continue;
                 }
                 Optional<OaOvertimeCalendar.YearData> parsed = OaOvertimeCalendarNoticeParser.parse(year, html);
                 if (parsed.isEmpty()) {
                     last = new IllegalStateException("parse-incomplete");
+                    log.warn("[overtime-calendar] notice {} parse-incomplete", url);
                     continue;
                 }
                 return recordParsed(year, url, html, parsed.get());
             } catch (Exception ex) {
                 last = ex;
+                log.warn("[overtime-calendar] notice {} failed: {}", url, failureNote("notice-fetch", ex));
             }
         }
         return recordFailure(year, candidates.iterator().next(),
-                last == null ? "notice-fetch" : last.getClass().getSimpleName(), "notice-fetch-error");
+                failureNote("notice-fetch", last), "notice-fetch-error");
     }
 
     public BpmOAOvertimeCalendarVersionDO importSeedActive(OaOvertimeCalendar.YearData data, String url) {
@@ -292,18 +308,54 @@ public class OaOvertimeCalendarVersionService {
     }
 
     private void notifyOnce(BpmOAOvertimeCalendarVersionDO row, String event) {
-        try {
-            NotifySendSingleToUserReqDTO req = new NotifySendSingleToUserReqDTO();
-            req.setUserId(notifyUserId);
-            req.setTemplateCode(NOTIFY_TEMPLATE);
-            req.setTemplateParams(Map.of(
-                    "year", String.valueOf(row.getCalendarYear()),
-                    "event", event,
-                    "status", row.getStatus()));
-            notifyMessageSendApi.sendSingleMessageToAdmin(req);
-        } catch (Exception ignored) {
-            // template may be missing in early env
+        for (Long userId : resolveNotifyUserIds()) {
+            try {
+                NotifySendSingleToUserReqDTO req = new NotifySendSingleToUserReqDTO();
+                req.setUserId(userId);
+                req.setTemplateCode(NOTIFY_TEMPLATE);
+                req.setTemplateParams(Map.of(
+                        "year", String.valueOf(row.getCalendarYear()),
+                        "event", event,
+                        "status", row.getStatus()));
+                notifyMessageSendApi.sendSingleMessageToAdmin(req);
+            } catch (Exception ex) {
+                log.warn("[overtime-calendar] notify userId={} failed: {}", userId, ex.getMessage());
+            }
         }
+    }
+
+    private List<Long> resolveNotifyUserIds() {
+        if (notifyUserIds != null && !notifyUserIds.isEmpty()) {
+            return notifyUserIds;
+        }
+        if (roleApi == null || permissionApi == null) {
+            return List.of();
+        }
+        try {
+            List<Long> roleIds = roleApi.getRoleIdListByCodes(List.of("hr_admin")).getCheckedData();
+            if (roleIds == null || roleIds.isEmpty()) {
+                return List.of();
+            }
+            Set<Long> userIds = permissionApi.getUserRoleIdListByRoleIds(roleIds).getCheckedData();
+            if (userIds == null || userIds.isEmpty()) {
+                return List.of();
+            }
+            return List.copyOf(userIds);
+        } catch (Exception ex) {
+            log.warn("[overtime-calendar] resolve hr_admin userIds failed: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    static String failureNote(String prefix, Exception last) {
+        if (last == null) {
+            return prefix;
+        }
+        String message = last.getMessage();
+        if (message == null || message.isBlank()) {
+            return prefix + ":" + last.getClass().getSimpleName();
+        }
+        return prefix + ":" + message;
     }
 
     private String diffAgainstActive(int year, OaOvertimeCalendar.YearData incoming) {
@@ -387,9 +439,11 @@ public class OaOvertimeCalendarVersionService {
                 java.net.http.HttpResponse<String> resp = client.send(
                         java.net.http.HttpRequest.newBuilder(uri)
                                 .timeout(java.time.Duration.ofSeconds(10))
+                                .header("User-Agent", "Mozilla/5.0 (compatible; OAOvertimeCalendar/1.0)")
+                                .header("Accept", "text/html,application/xhtml+xml")
                                 .GET()
                                 .build(),
-                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                        java.net.http.HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                 if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
                     throw new IllegalStateException("http " + resp.statusCode());
                 }

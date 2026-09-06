@@ -15,7 +15,8 @@ public final class OaOvertimeCalendarNoticeLocator {
 
     public static final List<String> LISTING_URLS = List.of(
             "https://www.gov.cn/zhengce/zhengcewenjianku/",
-            "https://www.gov.cn/zhengce/zhengceku/"
+            "https://www.gov.cn/zhengce/zhengceku/",
+            "https://www.gov.cn/zhengce/zuixin/"
     );
 
     static final Pattern TITLE_YEAR = Pattern.compile("(\\d{4})年部分节假日安排");

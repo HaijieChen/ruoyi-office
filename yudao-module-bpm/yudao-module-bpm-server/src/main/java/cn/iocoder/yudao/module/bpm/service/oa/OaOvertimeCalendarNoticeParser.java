@@ -27,7 +27,8 @@ public final class OaOvertimeCalendarNoticeParser {
         if (html == null || html.isBlank()) {
             return Optional.empty();
         }
-        Matcher yearMatcher = YEAR.matcher(html);
+        String text = visibleText(html);
+        Matcher yearMatcher = YEAR.matcher(text);
         if (!yearMatcher.find()) {
             return Optional.empty();
         }
@@ -36,7 +37,7 @@ public final class OaOvertimeCalendarNoticeParser {
             return Optional.empty();
         }
         List<String> makeupWork = new ArrayList<>();
-        for (String clause : html.split("[。\\n]")) {
+        for (String clause : text.split("[。\\n]")) {
             if (!clause.contains("上班")) {
                 continue;
             }
@@ -46,11 +47,11 @@ public final class OaOvertimeCalendarNoticeParser {
                         Integer.parseInt(workMatcher.group(2))));
             }
         }
-        List<String> legal = legalDaysFrom795(year, html);
+        List<String> legal = legalDaysFrom795(year, text);
         if (legal.size() != 13) {
             return Optional.empty();
         }
-        List<String> makeupRest = makeupRestDays(year, html, legal, makeupWork);
+        List<String> makeupRest = makeupRestDays(year, text, legal, makeupWork);
         OaOvertimeCalendar.YearData data = new OaOvertimeCalendar.YearData();
         data.year = year;
         data.source = "国务院部分节假日安排公告";
@@ -149,5 +150,21 @@ public final class OaOvertimeCalendarNoticeParser {
 
     private static String iso(int year, int month, int day) {
         return LocalDate.of(year, month, day).toString();
+    }
+
+    /** Strip tags so `节日：</strong>5月1日` still matches RANGE. */
+    static String visibleText(String html) {
+        if (html == null) {
+            return "";
+        }
+        return html
+                .replaceAll("(?is)<script[^>]*>.*?</script>", " ")
+                .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</p>", "\n")
+                .replaceAll("<[^>]+>", " ")
+                .replace("&nbsp;", " ")
+                .replace('\u00a0', ' ')
+                .replaceAll("[ \\t\\x0B\\f\\r]+", " ");
     }
 }

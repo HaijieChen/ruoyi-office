@@ -4,9 +4,11 @@ import cn.iocoder.yudao.module.bpm.service.oa.OaOvertimeCalendarVersionService;
 import com.xxl.job.core.handler.annotation.XxlJob;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(prefix = "xxl.job", name = "enabled", havingValue = "true", matchIfMissing = true)
 @Slf4j
 public class OaOvertimeCalendarFetchJob {
 
