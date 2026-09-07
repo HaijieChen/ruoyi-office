@@ -411,6 +411,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     }
 
     @Override
+    // Detail authorization follows process participation; list scope must not hide the bill first.
+    @DataPermission(enable = false)
     public FinanceContractApplicationDO getApplication(Long id, Long userId, boolean manageAll) {
         FinanceContractApplicationDO application = getApplication(id);
         if (manageAll || processParticipantSupport.canReadBill(
@@ -430,6 +432,8 @@ public class FinanceContractApplicationServiceImpl implements FinanceContractApp
     }
 
     @Override
+    // Detail authorization follows process participation; list scope must not hide the bill first.
+    @DataPermission(enable = false)
     public boolean canAccessDetail(Long id, Long userId) {
         if (id == null || userId == null) {
             return false;

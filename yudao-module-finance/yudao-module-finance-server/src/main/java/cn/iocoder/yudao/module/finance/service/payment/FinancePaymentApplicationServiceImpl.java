@@ -585,6 +585,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     }
 
     @Override
+    // Detail authorization follows process participation; list scope must not hide the bill first.
+    @DataPermission(enable = false)
     public FinancePaymentApplicationDO getApplicationForRead(Long id, Long userId, boolean manageAll) {
         FinancePaymentApplicationDO application = getApplication(id);
         if (manageAll || processParticipantSupport.canReadBill(
@@ -597,6 +599,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     /**
      * 普通付款读路径类型闭合：仅 ORDINARY（历史 null 视为 ORDINARY）。
      */
+    // Detail authorization follows process participation; list scope must not hide the bill first.
+    @DataPermission(enable = false)
     public FinancePaymentApplicationDO getOrdinaryApplicationForRead(Long id, Long userId, boolean manageAll) {
         FinancePaymentApplicationDO application = getApplicationForRead(id, userId, manageAll);
         assertOrdinaryKind(application);
@@ -604,6 +608,8 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     }
 
     @Override
+    // Detail authorization follows process participation; list scope must not hide the bill first.
+    @DataPermission(enable = false)
     public boolean canAccessDetail(Long id, Long userId) {
         if (id == null || userId == null) {
             return false;

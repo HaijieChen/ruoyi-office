@@ -1,5 +1,7 @@
 package cn.iocoder.yudao.module.finance.framework.security;
 
+import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
+
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
 import cn.iocoder.yudao.module.finance.dal.mysql.invoice.FinanceInvoiceApplicationMapper;
 import jakarta.annotation.Resource;
@@ -15,6 +17,8 @@ public class FinanceInvoiceAccessPermission {
     @Resource
     private FinanceProcessParticipantSupport processParticipantSupport;
 
+    // Detail authorization follows process participation; list scope must not hide the bill first.
+    @DataPermission(enable = false)
     public boolean canTaskContextOrOwnerRead(Long id) {
         Long userId = getLoginUserId();
         if (userId == null || id == null) {
