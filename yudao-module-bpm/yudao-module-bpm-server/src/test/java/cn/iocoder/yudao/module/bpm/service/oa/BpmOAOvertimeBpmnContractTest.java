@@ -19,6 +19,10 @@ class BpmOAOvertimeBpmnContractTest {
         assertTrue(text.contains("id=\"oa_overtime\""));
         assertTrue(text.contains("candidateStrategy=\"38\""));
         assertTrue(text.contains("candidateParam=\"2\""));
+        assertTrue(text.contains("id=\"taskDeptLeaderMulti\""));
+        assertFalse(text.contains("taskDeptLeaderMulti") && text.substring(
+                text.indexOf("id=\"taskDeptLeaderMulti\""),
+                text.indexOf("id=\"taskHr\"")).contains("multiInstanceLoopCharacteristics"));
         assertTrue(text.contains("candidateStrategy=\"10\""));
         assertTrue(text.contains("candidateParam=\"hr_admin\""));
         assertTrue(text.contains("candidateParam=\"gm\""));

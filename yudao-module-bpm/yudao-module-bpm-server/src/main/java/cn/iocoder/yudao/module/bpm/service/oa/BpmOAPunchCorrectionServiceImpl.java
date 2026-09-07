@@ -202,9 +202,8 @@ public class BpmOAPunchCorrectionServiceImpl implements BpmOAPunchCorrectionServ
         if (punch == null) {
             throw exception(OA_PUNCH_NOT_EXISTS);
         }
-        if (Objects.equals(punch.getUserId(), userId)
-                || securityFrameworkService.hasPermission(QUERY_PERMISSION)
-                || oaBillAccessPermission.isActiveTaskCandidateOrAssignee(punch.getProcessInstanceId(), userId)) {
+        if (securityFrameworkService.hasPermission(QUERY_PERMISSION)
+                || oaBillAccessPermission.canReadOaBill(userId, punch.getUserId(), punch.getProcessInstanceId())) {
             return punch;
         }
         throw exception(OA_PUNCH_ACCESS_DENIED);

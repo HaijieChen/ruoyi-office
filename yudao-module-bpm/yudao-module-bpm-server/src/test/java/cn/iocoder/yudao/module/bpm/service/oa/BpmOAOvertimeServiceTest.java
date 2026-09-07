@@ -19,8 +19,10 @@ import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.bpm.framework.security.OaAttendanceBusinessStartHolder;
 import cn.iocoder.yudao.module.bpm.framework.security.OaBillAccessPermission;
 import cn.iocoder.yudao.module.bpm.service.oa.listener.BpmOAOvertimeStatusListener;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.TaskQuery;
+import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,6 +71,7 @@ class BpmOAOvertimeServiceTest {
     private BpmProcessInstanceApi processInstanceApi;
     private SecurityFrameworkService securityFrameworkService;
     private ObjectProvider<TaskService> taskServiceProvider;
+    private ObjectProvider<HistoryService> historyServiceProvider;
     private OaBillAccessPermission oaBillAccessPermission;
     private BpmOAOvertimeServiceImpl service;
 
@@ -80,9 +83,12 @@ class BpmOAOvertimeServiceTest {
         securityFrameworkService = mock(SecurityFrameworkService.class);
         taskServiceProvider = mock(ObjectProvider.class);
         when(taskServiceProvider.getIfAvailable()).thenReturn(null);
+        historyServiceProvider = mock(ObjectProvider.class);
+        when(historyServiceProvider.getIfAvailable()).thenReturn(null);
 
         oaBillAccessPermission = new OaBillAccessPermission();
         ReflectionTestUtils.setField(oaBillAccessPermission, "taskServiceProvider", taskServiceProvider);
+        ReflectionTestUtils.setField(oaBillAccessPermission, "historyServiceProvider", historyServiceProvider);
 
         service = new BpmOAOvertimeServiceImpl();
         ReflectionTestUtils.setField(service, "overtimeMapper", overtimeMapper);
@@ -431,6 +437,26 @@ class BpmOAOvertimeServiceTest {
     }
 
     @Test
+    void finishedAssigneeGetWithoutQuerySucceeds() {
+        when(overtimeMapper.selectById(10L)).thenReturn(ownedOvertime(10L, 1L, "proc-1"));
+        when(securityFrameworkService.hasPermission(QUERY_PERMISSION)).thenReturn(false);
+        stubHistoricAssignee("proc-1", 8L, 1L);
+
+        BpmOAOvertimeDO overtime = service.getOvertime(10L, 8L);
+        assertEquals(10L, overtime.getId());
+    }
+
+    @Test
+    void strangerGetAfterFinishIsAccessDenied() {
+        when(overtimeMapper.selectById(10L)).thenReturn(ownedOvertime(10L, 1L, "proc-1"));
+        when(securityFrameworkService.hasPermission(QUERY_PERMISSION)).thenReturn(false);
+        stubHistoricAssignee("proc-1", 9L, 0L);
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.getOvertime(10L, 9L));
+        assertEquals(OA_OVERTIME_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
     void createOvertime_concurrentFivePlusFive_onlyOneSucceeds() throws Exception {
         ReentrantLock dayLock = new ReentrantLock();
         List<BpmOAOvertimeDO> store = new ArrayList<>();
@@ -541,6 +567,17 @@ class BpmOAOvertimeServiceTest {
         when(taskQuery.processInstanceId(processInstanceId)).thenReturn(taskQuery);
         when(taskQuery.taskCandidateOrAssigned(String.valueOf(userId))).thenReturn(taskQuery);
         when(taskQuery.count()).thenReturn(count);
+    }
+
+    private void stubHistoricAssignee(String processInstanceId, Long userId, long count) {
+        HistoryService historyService = mock(HistoryService.class);
+        HistoricTaskInstanceQuery historyQuery = mock(HistoricTaskInstanceQuery.class);
+        when(historyServiceProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricTaskInstanceQuery()).thenReturn(historyQuery);
+        when(historyQuery.processInstanceId(processInstanceId)).thenReturn(historyQuery);
+        when(historyQuery.taskAssignee(String.valueOf(userId))).thenReturn(historyQuery);
+        when(historyQuery.taskOwner(String.valueOf(userId))).thenReturn(historyQuery);
+        when(historyQuery.count()).thenReturn(count);
     }
 
     private static List<BpmOAOvertimeDO> copyStore(List<BpmOAOvertimeDO> store) {

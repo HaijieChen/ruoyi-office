@@ -261,9 +261,8 @@ public class BpmOAOvertimeServiceImpl implements BpmOAOvertimeService {
         if (overtime == null) {
             throw exception(OA_OVERTIME_NOT_EXISTS);
         }
-        if (Objects.equals(overtime.getUserId(), userId)
-                || securityFrameworkService.hasPermission(QUERY_PERMISSION)
-                || oaBillAccessPermission.isActiveTaskCandidateOrAssignee(overtime.getProcessInstanceId(), userId)) {
+        if (securityFrameworkService.hasPermission(QUERY_PERMISSION)
+                || oaBillAccessPermission.canReadOaBill(userId, overtime.getUserId(), overtime.getProcessInstanceId())) {
             return overtime;
         }
         throw exception(OA_OVERTIME_ACCESS_DENIED);

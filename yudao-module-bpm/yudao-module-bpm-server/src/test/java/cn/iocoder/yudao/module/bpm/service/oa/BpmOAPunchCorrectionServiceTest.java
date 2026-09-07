@@ -18,8 +18,10 @@ import cn.iocoder.yudao.module.bpm.enums.OaAttendanceSyncStatusEnum;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.bpm.framework.security.OaBillAccessPermission;
 import cn.iocoder.yudao.module.bpm.service.oa.listener.BpmOAPunchCorrectionStatusListener;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.TaskQuery;
+import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,6 +67,7 @@ class BpmOAPunchCorrectionServiceTest {
     private BpmProcessInstanceApi processInstanceApi;
     private SecurityFrameworkService securityFrameworkService;
     private ObjectProvider<TaskService> taskServiceProvider;
+    private ObjectProvider<HistoryService> historyServiceProvider;
     private OaBillAccessPermission oaBillAccessPermission;
     private BpmOAPunchCorrectionServiceImpl service;
 
@@ -76,9 +79,12 @@ class BpmOAPunchCorrectionServiceTest {
         securityFrameworkService = mock(SecurityFrameworkService.class);
         taskServiceProvider = mock(ObjectProvider.class);
         when(taskServiceProvider.getIfAvailable()).thenReturn(null);
+        historyServiceProvider = mock(ObjectProvider.class);
+        when(historyServiceProvider.getIfAvailable()).thenReturn(null);
 
         oaBillAccessPermission = new OaBillAccessPermission();
         ReflectionTestUtils.setField(oaBillAccessPermission, "taskServiceProvider", taskServiceProvider);
+        ReflectionTestUtils.setField(oaBillAccessPermission, "historyServiceProvider", historyServiceProvider);
 
         service = new BpmOAPunchCorrectionServiceImpl();
         ReflectionTestUtils.setField(service, "punchCorrectionMapper", punchCorrectionMapper);
@@ -315,6 +321,26 @@ class BpmOAPunchCorrectionServiceTest {
     }
 
     @Test
+    void finishedAssigneeGetWithoutQuerySucceeds() {
+        when(punchCorrectionMapper.selectById(10L)).thenReturn(ownedPunch(10L, 1L, "proc-1"));
+        when(securityFrameworkService.hasPermission(QUERY_PERMISSION)).thenReturn(false);
+        stubHistoricAssignee("proc-1", 8L, 1L);
+
+        BpmOAPunchCorrectionDO punch = service.getPunchCorrection(10L, 8L);
+        assertEquals(10L, punch.getId());
+    }
+
+    @Test
+    void strangerGetAfterFinishIsAccessDenied() {
+        when(punchCorrectionMapper.selectById(10L)).thenReturn(ownedPunch(10L, 1L, "proc-1"));
+        when(securityFrameworkService.hasPermission(QUERY_PERMISSION)).thenReturn(false);
+        stubHistoricAssignee("proc-1", 9L, 0L);
+
+        ServiceException ex = assertThrows(ServiceException.class, () -> service.getPunchCorrection(10L, 9L));
+        assertEquals(OA_PUNCH_ACCESS_DENIED.getCode(), ex.getCode());
+    }
+
+    @Test
     void concurrentSecondAndThird_onlyQuotaSucceeds() throws Exception {
         ReentrantLock monthLock = new ReentrantLock();
         List<BpmOAPunchCorrectionDO> store = new ArrayList<>();
@@ -423,6 +449,17 @@ class BpmOAPunchCorrectionServiceTest {
         when(taskQuery.processInstanceId(processInstanceId)).thenReturn(taskQuery);
         when(taskQuery.taskCandidateOrAssigned(String.valueOf(userId))).thenReturn(taskQuery);
         when(taskQuery.count()).thenReturn(count);
+    }
+
+    private void stubHistoricAssignee(String processInstanceId, Long userId, long count) {
+        HistoryService historyService = mock(HistoryService.class);
+        HistoricTaskInstanceQuery historyQuery = mock(HistoricTaskInstanceQuery.class);
+        when(historyServiceProvider.getIfAvailable()).thenReturn(historyService);
+        when(historyService.createHistoricTaskInstanceQuery()).thenReturn(historyQuery);
+        when(historyQuery.processInstanceId(processInstanceId)).thenReturn(historyQuery);
+        when(historyQuery.taskAssignee(String.valueOf(userId))).thenReturn(historyQuery);
+        when(historyQuery.taskOwner(String.valueOf(userId))).thenReturn(historyQuery);
+        when(historyQuery.count()).thenReturn(count);
     }
 
     private static List<BpmOAPunchCorrectionDO> copyStore(List<BpmOAPunchCorrectionDO> store) {

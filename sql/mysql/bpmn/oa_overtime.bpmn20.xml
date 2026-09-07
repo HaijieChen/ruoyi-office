@@ -20,7 +20,9 @@
 
     <startEvent id="startEvent" name="开始"/>
 
-    <!-- KTD5：发起人连续多级部门负责人 strategy=38 START_USER_DEPT_LEADER_MULTI，param=部门层级 2 -->
+    <!-- KTD5：与请假/外出相同。strategy=38 param=2 向上收集至多两级部门负责人作为候选人；
+         本节点无 multiInstance，运行时责任到人只指定一人（BpmUserTaskActivityBehavior）。
+         需求 R5 第一级是「部门负责人」单节点，不是两级都要依次审批。 -->
     <userTask id="taskDeptLeaderMulti" name="部门负责人审批"
               flowable:candidateStrategy="38" flowable:candidateParam="2">
       <extensionElements>

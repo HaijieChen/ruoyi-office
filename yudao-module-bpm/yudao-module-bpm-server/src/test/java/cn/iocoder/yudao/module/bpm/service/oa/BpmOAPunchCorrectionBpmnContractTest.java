@@ -19,6 +19,10 @@ class BpmOAPunchCorrectionBpmnContractTest {
         assertTrue(text.contains("id=\"oa_punch_correction\""));
         assertTrue(text.contains("candidateStrategy=\"38\""));
         assertTrue(text.contains("candidateParam=\"2\""));
+        assertTrue(text.contains("id=\"taskDeptLeaderMulti\""));
+        assertFalse(text.substring(
+                text.indexOf("id=\"taskDeptLeaderMulti\""),
+                text.indexOf("id=\"taskHr\"")).contains("multiInstanceLoopCharacteristics"));
         assertTrue(text.contains("candidateStrategy=\"10\""));
         assertTrue(text.contains("candidateParam=\"hr_admin\""));
         assertTrue(text.contains("<flowable:approveMethod>3</flowable:approveMethod>"));

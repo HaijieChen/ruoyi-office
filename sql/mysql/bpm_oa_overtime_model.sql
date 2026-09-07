@@ -1,7 +1,7 @@
 -- OA 加班 BPM 模型 meta（幂等）。设计器导入 sql/mysql/bpmn/oa_overtime.bpmn20.xml 并部署后再执行。
 -- 不 INSERT 流程定义。清空 start_user_ids → 全员可发起；分类归 attendance；业务表单 form_type=20。
--- BPMN 抄送节点仍带测试库 userId=221。上线后在流程设计器把抄送人改成生产「王鹏」，不必要求库内 id=221。
--- 下面只查询、不失败闭合，避免生产导入被挡。
+-- BPMN 抄送 candidateParam=705（生产王鹏 username=0002 tenant_id=1）。不要改生产用户 ID。
+-- 下面按 nickname 查询仅作核对，不因 id 失败闭合。
 
 SET NAMES utf8mb4;
 
