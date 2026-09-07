@@ -106,7 +106,7 @@ class FinancePaymentApplicationServiceImplTest {
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
                 deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
                 salaryLineMapper, taxLineMapper);
-        injectBusinessStaffSupport();
+        injectProcessParticipantSupport();
         cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport participant =
                 mock(cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport.class);
         when(participant.canReadBill(any(), any(), any())).thenAnswer(inv -> {
@@ -141,11 +141,7 @@ class FinancePaymentApplicationServiceImplTest {
         when(processInstanceApi.createProcessInstanceByBusiness(anyLong(), any())).thenReturn(pi);
     }
 
-    private void injectBusinessStaffSupport() {
-        cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport staffSupport =
-                mock(cn.iocoder.yudao.module.finance.service.common.FinanceBusinessStaffSupport.class);
-        when(staffSupport.resolve(anyLong(), any())).thenAnswer(inv -> inv.getArgument(0));
-        org.springframework.test.util.ReflectionTestUtils.setField(service, "businessStaffSupport", staffSupport);
+    private void injectProcessParticipantSupport() {
         cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport participant =
                 mock(cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport.class);
         when(participant.canReadBill(any(), any(), any())).thenAnswer(inv -> {
@@ -377,7 +373,7 @@ class FinancePaymentApplicationServiceImplTest {
                 predocService, contractMapper, taskProvider, historyProvider, adminUserApi, dictDataApi,
                 deptProvider, entityCompanyResolver, companyBankAccountService, payLineMapper,
                 salaryLineMapper, taxLineMapper);
-        injectBusinessStaffSupport();
+        injectProcessParticipantSupport();
         cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport participant =
                 mock(cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport.class);
         when(participant.canReadBill(any(), any(), any())).thenReturn(true);
@@ -1085,6 +1081,29 @@ class FinancePaymentApplicationServiceImplTest {
                     .id(5L).applicationKind(kind).accountingSubject("existing").build());
             assertDoesNotThrow(() -> service.assertFinanceSubjectForComplete(5L));
         }
+    }
+
+    @Test
+    void assertFinanceSubjectRejectsUnknownKindWithoutSubject() {
+        when(mapper.selectById(5L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(5L).applicationKind("UNKNOWN").build());
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> service.assertFinanceSubjectForComplete(5L));
+        assertEquals(PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED.getCode(), ex.getCode());
+    }
+
+    @Test
+    void legacyFinanceCompleteListenerAllowsOrdinaryWithoutSubject() {
+        var listener = new cn.iocoder.yudao.module.finance.framework.bpm.FinancePaymentFinanceCompleteGuardListener();
+        org.springframework.test.util.ReflectionTestUtils.setField(listener, "paymentApplicationService", service);
+        var task = mock(org.flowable.task.service.delegate.DelegateTask.class);
+        when(task.getEventName()).thenReturn("complete");
+        when(task.getTaskDefinitionKey()).thenReturn("taskFinance");
+        when(task.getVariable("paymentApplicationId")).thenReturn("5");
+        when(mapper.selectById(5L)).thenReturn(FinancePaymentApplicationDO.builder()
+                .id(5L).applicationKind("ORDINARY").build());
+        assertDoesNotThrow(() -> listener.notify(task));
+        verify(mapper).selectById(5L);
     }
 
     @Test
