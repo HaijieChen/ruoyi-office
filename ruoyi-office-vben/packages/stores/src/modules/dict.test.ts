@@ -94,4 +94,36 @@ describe('useDictStore', () => {
       store.getDictOptions('finance_expense_subitem').map((d) => d.value),
     ).toEqual(['travel.second']);
   });
+
+  it('does not throw when a loaded dict is queried with null (prod payment cost_project)', () => {
+    const store = useDictStore();
+    store.setDictCache({
+      finance_product_type: [
+        { label: '游戏', value: 'game' },
+        { label: '广告', value: 'ads' },
+      ],
+    });
+    expect(() => store.getDictData('finance_product_type', null)).not.toThrow();
+    expect(store.getDictData('finance_product_type', null)).toBeUndefined();
+  });
+
+  it('does not throw for undefined, and still matches 0 / false / string', () => {
+    const store = useDictStore();
+    store.setDictCache({
+      demo: [
+        { label: 'zero', value: '0' },
+        { label: 'no', value: 'false' },
+        { label: 'game', value: 'game' },
+      ],
+    });
+    expect(store.getDictData('demo', undefined)).toBeUndefined();
+    expect(store.getDictData('demo', 0)?.label).toBe('zero');
+    expect(store.getDictData('demo', false)?.label).toBe('no');
+    expect(store.getDictData('demo', 'game')?.label).toBe('game');
+  });
+
+  it('returns undefined when the dict type is not loaded, even for null', () => {
+    const store = useDictStore();
+    expect(store.getDictData('missing', null)).toBeUndefined();
+  });
 });

@@ -30,9 +30,12 @@ export const useDictStore = defineStore('core-dict', {
       if (!dict) {
         return undefined;
       }
+      if (value == null) {
+        return undefined;
+      }
+      const asString = typeof value === 'string' ? value : String(value);
       return (
-        dict.find((d) => d.value === value || d.value === value.toString()) ??
-        undefined
+        dict.find((d) => d.value === value || d.value === asString) ?? undefined
       );
     },
     getDictOptions(dictType: string) {
