@@ -43,21 +43,26 @@ PREPARE oa_festivals_stmt FROM @oa_festivals_sql;
 EXECUTE oa_festivals_stmt;
 DEALLOCATE PREPARE oa_festivals_stmt;
 
+UPDATE `bpm_oa_overtime_calendar_version`
+SET `status` = 'SUPERSEDED', `updater` = 'admin', `update_time` = NOW()
+WHERE `deleted` = b'0' AND `calendar_year` = 2026 AND `status` = 'ACTIVE'
+  AND `content_hash` IN ('seed-2026-legal13-labor2');
+
 INSERT INTO `bpm_oa_overtime_calendar_version` (
     `calendar_year`, `source`, `source_url`, `fetched_at`, `content_hash`, `status`,
     `verified_by`, `verified_at`, `parse_note`, `legal_holidays_json`, `makeup_workdays_json`,
     `makeup_rest_days_json`, `creator`, `updater`, `deleted`)
 SELECT 2026, '国办发明电〔2025〕7号',
        'https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm',
-       NOW(), 'seed-2026-legal13-labor2', 'ACTIVE', 1, NOW(),
-       '国令第795号：劳动节2天（5月1、2日）。2026-05-03为普通周末。',
-       '["2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-04-04","2026-05-01","2026-05-02","2026-06-19","2026-09-25","2026-10-01","2026-10-02","2026-10-03"]',
+       NOW(), 'seed-2026-qingming-apr5', 'ACTIVE', 1, NOW(),
+       '国令第795号：清明=农历清明当日2026-04-05，不是连休起日04-04（周六普通周末）；04-06补休。劳动节2天（5月1、2日）。端午6-19、中秋9-25为当日且恰为连休起日。',
+       '["2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-04-05","2026-05-01","2026-05-02","2026-06-19","2026-09-25","2026-10-01","2026-10-02","2026-10-03"]',
        '["2026-01-04","2026-02-14","2026-02-28","2026-05-09","2026-09-20","2026-10-10"]',
        '["2026-01-02","2026-02-20","2026-02-23","2026-04-06","2026-05-04","2026-05-05","2026-10-05","2026-10-06","2026-10-07"]',
        'admin', 'admin', b'0'
 WHERE NOT EXISTS (
     SELECT 1 FROM `bpm_oa_overtime_calendar_version`
-    WHERE `calendar_year` = 2026 AND `content_hash` = 'seed-2026-legal13-labor2' AND `deleted` = b'0'
+    WHERE `calendar_year` = 2026 AND `content_hash` = 'seed-2026-qingming-apr5' AND `deleted` = b'0'
 );
 
 INSERT INTO `system_notify_template` (`name`, `code`, `nickname`, `content`, `type`, `params`, `status`, `remark`, `creator`, `deleted`)

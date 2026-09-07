@@ -80,7 +80,7 @@ class OaAttendanceU10FlowableIT {
         assertTrue(overtime.contains("candidateStrategy=\"38\""));
         assertTrue(overtime.contains("candidateParam=\"hr_admin\""));
         assertTrue(overtime.contains("candidateParam=\"gm\""));
-        assertTrue(overtime.contains("candidateParam>221") || overtime.contains("candidateParam=\"221\""));
+        assertTrue(overtime.contains("candidateParam>705") || overtime.contains("candidateParam=\"705\""));
         assertTrue(overtime.contains("${bpmCopyTaskDelegate}"));
         assertTrue(overtime.contains("flowable:collection=\"${coll_userList}\""));
         assertTrue(overtime.contains("nrOfCompletedInstances > 0"));

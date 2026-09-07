@@ -68,7 +68,7 @@ public final class OaOvertimeCalendarNoticeParser {
         Map<String, String> names = new java.util.LinkedHashMap<>();
         putFestival(names, iso(year, 1, 1), "元旦");
         springLegal(year, html).ifPresent(days -> days.forEach(d -> putFestival(names, d, "春节")));
-        festivalStart(html, "清明").ifPresent(d -> putFestival(names, d.toString(), "清明"));
+        putFestival(names, qingmingOf(year).toString(), "清明");
         putFestival(names, iso(year, 5, 1), "劳动节");
         putFestival(names, iso(year, 5, 2), "劳动节");
         festivalStart(html, "端午").ifPresent(d -> putFestival(names, d.toString(), "端午"));
@@ -87,7 +87,7 @@ public final class OaOvertimeCalendarNoticeParser {
         List<String> legal = new ArrayList<>();
         legal.add(iso(year, 1, 1));
         springLegal(year, html).ifPresent(days -> legal.addAll(days));
-        festivalStart(html, "清明").ifPresent(d -> legal.add(d.toString()));
+        legal.add(qingmingOf(year).toString());
         legal.add(iso(year, 5, 1));
         legal.add(iso(year, 5, 2));
         festivalStart(html, "端午").ifPresent(d -> legal.add(d.toString()));
@@ -120,6 +120,16 @@ public final class OaOvertimeCalendarNoticeParser {
             days.add(chuxi.plusDays(i).toString());
         }
         return Optional.of(days);
+    }
+
+    /**
+     * 清明法定日=农历清明当日（国令第795号），不是连休窗口第一天。
+     * 21 世纪近似：day = [Y*0.2422+4.81]-[Y/4]，Y=year%100。2025=4/4，2026=4/5。
+     */
+    static LocalDate qingmingOf(int year) {
+        int y = year % 100;
+        int day = (int) (y * 0.2422 + 4.81) - y / 4;
+        return LocalDate.of(year, 4, day);
     }
 
     private static Optional<LocalDate> festivalStart(String html, String name) {

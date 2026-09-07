@@ -26,8 +26,9 @@ class BpmOAOvertimeBpmnContractTest {
         assertTrue(text.contains("${holiday == false}"));
         assertTrue(text.contains("${bpmCopyTaskDelegate}"));
         assertTrue(text.contains("<flowable:candidateStrategy>30</flowable:candidateStrategy>"));
-        assertTrue(text.contains("<flowable:candidateParam>221</flowable:candidateParam>"));
-        assertTrue(text.contains("nickname=王鹏"));
+        assertTrue(text.contains("<flowable:candidateParam>705</flowable:candidateParam>"));
+        assertFalse(text.contains("<flowable:candidateParam>221</flowable:candidateParam>"));
+        assertTrue(text.contains("username=0002"));
         assertFalse(text.contains("INSERT INTO"));
     }
 

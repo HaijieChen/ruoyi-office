@@ -23,8 +23,8 @@ class OaOvertimeCalendarTest {
     private static final List<LocalDate> SPRING = List.of(
             LocalDate.of(2026, 2, 16), LocalDate.of(2026, 2, 17),
             LocalDate.of(2026, 2, 18), LocalDate.of(2026, 2, 19));
-    /** 清明 1 天：2026-04-04 */
-    private static final List<LocalDate> QINGMING = List.of(LocalDate.of(2026, 4, 4));
+    /** 清明 1 天：农历清明当日 2026-04-05，不是连休起日 04-04 */
+    private static final List<LocalDate> QINGMING = List.of(LocalDate.of(2026, 4, 5));
     /** 劳动节 2 天：5月1日、2日（不是 5月3日） */
     private static final List<LocalDate> LABOR = List.of(
             LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 2));
@@ -118,5 +118,17 @@ class OaOvertimeCalendarTest {
         assertTrue(data.weekends.contains("2026-09-06"));
         assertFalse(data.weekends.contains("2026-09-20"));
         assertFalse(data.legalHolidays.contains("2026-05-03"));
+        assertFalse(data.legalHolidays.contains("2026-04-04"));
+        assertTrue(data.legalHolidays.contains("2026-04-05"));
+    }
+
+    @Test
+    void qingming2026_saturdayIsWeekend_sundayIsLegal_mondayIsMakeupRest() {
+        assertEquals(DayKind.WEEKEND, OaOvertimeCalendar.kind(LocalDate.of(2026, 4, 4)));
+        assertEquals(DayKind.LEGAL_HOLIDAY, OaOvertimeCalendar.kind(LocalDate.of(2026, 4, 5)));
+        assertEquals(DayKind.MAKEUP_REST, OaOvertimeCalendar.kind(LocalDate.of(2026, 4, 6)));
+        assertTrue(OaOvertimeCalendar.allowed(LocalDate.of(2026, 4, 4)));
+        assertTrue(OaOvertimeCalendar.allowed(LocalDate.of(2026, 4, 5)));
+        assertFalse(OaOvertimeCalendar.allowed(LocalDate.of(2026, 4, 6)));
     }
 }

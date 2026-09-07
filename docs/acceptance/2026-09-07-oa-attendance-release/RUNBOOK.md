@@ -1,8 +1,9 @@
 # 加班 / 补卡 / 节假日日历 上线准备
 
 日期：2026-09-07  
-分支：`deploy/oa-attendance-20260907`（基线 `codeup/main` `bc42a4127` + `codeup/test` 加班补卡日历，不含 IM）  
-用户决定：王鹏 userId=221 不挡发布；流程导入后在设计器改抄送人。
+分支：`deploy/oa-attendance-20260907`（基线 `codeup/main` `ea7b434bf` + 加班补卡日历，不含 IM）  
+王鹏：生产 username=0002 / id=705；BPMN `candidateParam=705`。不要改生产用户 ID。  
+2026 清明法定日=04-05（国令第795号农历清明当日），不是连休起日 04-04。
 
 ## 范围
 
@@ -33,7 +34,7 @@
 1. 设计器导入 `sql/mysql/bpmn/oa_overtime.bpmn20.xml` 并部署。
 2. 设计器导入 `sql/mysql/bpmn/oa_punch_correction.bpmn20.xml` 并部署。
 3. 跑 `sql/mysql/bpm_oa_overtime_model.sql`、`sql/mysql/bpm_oa_punch_correction_model.sql`（不 INSERT 流程定义）。
-4. 打开加班模型，把抄送节点「抄送王鹏」从 221 改成生产王鹏用户。周末链无此节点，只有法定节假日链会抄送。
+4. 核对加班模型抄送节点 candidateParam=705（生产王鹏）。若仍为 221，发布前改成 705。周末链无此节点。
 
 ## 上线窗口只读核对
 

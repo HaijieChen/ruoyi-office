@@ -3,8 +3,8 @@
   加班申请 oa_overtime（设计师导入种子，不自动 INSERT 流程定义）
   - 语义：部门负责人(strategy=38, candidateParam=2) → 人事 hr_admin 或签(strategy=10, approveMethod=3 ANY)
           → 网关 ${holiday}：true → 分管总 gm(strategy=10) → 抄送王鹏 → end；false → end
-  - 抄送：ServiceTask bpmCopyTaskDelegate + 用户策略 30；nickname=王鹏 tenant_id=1 解析 userId=221
-    （本地 ruoyi-office 2026-09-05；找不到则 model SQL SELECT INTO 种子失败并记发布单）
+  - 抄送：ServiceTask bpmCopyTaskDelegate + 用户策略 30；生产王鹏 username=0002 tenant_id=1 userId=705
+    （2026-09-07 只读生产核对；不要改生产用户 ID。旧测试库 221 已替换）
   - 含 BPMNDiagram/DI
   - 业务表单类型由部署后 sql/mysql/bpm_oa_overtime_model.sql 写入（form_type=20）
 -->
@@ -57,12 +57,12 @@
       </multiInstanceLoopCharacteristics>
     </userTask>
 
-    <!-- KD6：抄送王鹏。userId=221 由 nickname=王鹏、tenant_id=1 唯一解析写入 -->
+    <!-- KD6：抄送王鹏。生产 userId=705（username=0002，tenant_id=1），2026-09-07 替换测试库 221 -->
     <serviceTask id="taskCopyWangPeng" name="抄送王鹏"
                  flowable:delegateExpression="${bpmCopyTaskDelegate}">
       <extensionElements>
         <flowable:candidateStrategy>30</flowable:candidateStrategy>
-        <flowable:candidateParam>221</flowable:candidateParam>
+        <flowable:candidateParam>705</flowable:candidateParam>
       </extensionElements>
     </serviceTask>
 

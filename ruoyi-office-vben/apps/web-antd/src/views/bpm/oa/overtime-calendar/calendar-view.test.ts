@@ -13,7 +13,7 @@ describe('overtime calendar view', () => {
     const rows = buildDayRows({
       calendarYear: 2026,
       legalHolidaysJson:
-        '["2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-04-04","2026-05-01","2026-05-02","2026-06-19","2026-09-25","2026-10-01","2026-10-02","2026-10-03"]',
+        '["2026-01-01","2026-02-16","2026-02-17","2026-02-18","2026-02-19","2026-04-05","2026-05-01","2026-05-02","2026-06-19","2026-09-25","2026-10-01","2026-10-02","2026-10-03"]',
       makeupWorkdaysJson:
         '["2026-01-04","2026-02-14","2026-02-28","2026-05-09","2026-09-20","2026-10-10"]',
       makeupRestDaysJson:
@@ -27,6 +27,10 @@ describe('overtime calendar view', () => {
     const may3 = rows.find((row) => row.date === '2026-05-03');
     expect(may3?.kind).toBe('WEEKEND');
     expect(may3?.allowed).toBe(true);
+    expect(rows.find((row) => row.date === '2026-04-04')?.kind).toBe('WEEKEND');
+    expect(rows.find((row) => row.date === '2026-04-05')?.kind).toBe('LEGAL_HOLIDAY');
+    expect(rows.find((row) => row.date === '2026-04-06')?.kind).toBe('MAKEUP_REST');
+    expect(legal.map((row) => row.date)).not.toContain('2026-04-04');
     expect(weekdayLabel('2026-05-01')).toBe('五');
     expect(rows.filter((row) => row.kind === 'WEEKDAY').length).toBeGreaterThan(200);
   });

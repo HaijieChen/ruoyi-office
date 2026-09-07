@@ -32,8 +32,10 @@ class OaOvertimeCalendarNoticeParserTest {
         assertEquals(13, data.legalHolidays.size());
         assertTrue(data.legalHolidays.containsAll(List.of(
                 "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19",
-                "2026-04-04", "2026-05-01", "2026-05-02", "2026-06-19", "2026-09-25",
+                "2026-04-05", "2026-05-01", "2026-05-02", "2026-06-19", "2026-09-25",
                 "2026-10-01", "2026-10-02", "2026-10-03")));
+        assertFalse(data.legalHolidays.contains("2026-04-04"));
+        assertFalse(data.legalHolidays.contains("2026-04-06"));
         assertFalse(data.legalHolidays.contains("2026-05-03"));
         assertTrue(data.makeupWorkdays.containsAll(List.of(
                 "2026-01-04", "2026-02-14", "2026-02-28", "2026-05-09", "2026-09-20", "2026-10-10")));
@@ -90,7 +92,32 @@ class OaOvertimeCalendarNoticeParserTest {
         Optional<OaOvertimeCalendar.YearData> parsed = OaOvertimeCalendarNoticeParser.parse(2026, html);
         assertTrue(parsed.isPresent());
         assertEquals(13, parsed.get().legalHolidays.size());
+        assertTrue(parsed.get().legalHolidays.contains("2026-04-05"));
+        assertFalse(parsed.get().legalHolidays.contains("2026-04-04"));
         assertTrue(parsed.get().legalHolidays.contains("2026-05-01"));
         assertFalse(parsed.get().legalHolidays.contains("2026-05-03"));
+    }
+
+    @Test
+    void qingmingOf_isSolarTermDayNotHolidayWindowStart() {
+        assertEquals(java.time.LocalDate.of(2025, 4, 4), OaOvertimeCalendarNoticeParser.qingmingOf(2025));
+        assertEquals(java.time.LocalDate.of(2026, 4, 5), OaOvertimeCalendarNoticeParser.qingmingOf(2026));
+    }
+
+    @Test
+    void parse2026_qingmingWindow_saturdayWeekend_sundayLegal_mondayMakeupRest() {
+        Optional<OaOvertimeCalendar.YearData> parsed = OaOvertimeCalendarNoticeParser.parse(2026, NOTICE_2026);
+        assertTrue(parsed.isPresent());
+        OaOvertimeCalendar.YearData data = parsed.get();
+        assertEquals(OaOvertimeCalendar.DayKind.WEEKEND,
+                OaOvertimeCalendar.classify(data, java.time.LocalDate.of(2026, 4, 4)));
+        assertEquals(OaOvertimeCalendar.DayKind.LEGAL_HOLIDAY,
+                OaOvertimeCalendar.classify(data, java.time.LocalDate.of(2026, 4, 5)));
+        assertEquals(OaOvertimeCalendar.DayKind.MAKEUP_REST,
+                OaOvertimeCalendar.classify(data, java.time.LocalDate.of(2026, 4, 6)));
+        assertTrue(data.legalHolidays.contains("2026-06-19"));
+        assertTrue(data.legalHolidays.contains("2026-09-25"));
+        assertFalse(data.legalHolidays.contains("2026-06-20"));
+        assertFalse(data.legalHolidays.contains("2026-09-26"));
     }
 }
