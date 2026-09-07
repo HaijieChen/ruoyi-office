@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  加班申请 oa_overtime（设计师导入种子，不自动 INSERT 流程定义）
+  - 语义：部门负责人(strategy=38, candidateParam=2) → 人事 hr_admin 或签(strategy=10, approveMethod=3 ANY)
+          → 网关 ${holiday}：true → 分管总 gm(strategy=10) → 抄送王鹏 → end；false → end
+  - 抄送：ServiceTask bpmCopyTaskDelegate + 用户策略 30；nickname=王鹏 tenant_id=1 解析 userId=221
+    （本地 ruoyi-office 2026-09-05；找不到则 model SQL SELECT INTO 种子失败并记发布单）
+  - 含 BPMNDiagram/DI
+  - 业务表单类型由部署后 sql/mysql/bpm_oa_overtime_model.sql 写入（form_type=20）
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://www.iocoder.cn/oa">
+
+  <process id="oa_overtime" name="加班申请" isExecutable="true">
+
+    <startEvent id="startEvent" name="开始"/>
+
+    <!-- KTD5：发起人连续多级部门负责人 strategy=38 START_USER_DEPT_LEADER_MULTI，param=部门层级 2 -->
+    <userTask id="taskDeptLeaderMulti" name="部门负责人审批"
+              flowable:candidateStrategy="38" flowable:candidateParam="2">
+      <extensionElements>
+        <flowable:candidateStrategy>38</flowable:candidateStrategy>
+        <flowable:candidateParam>2</flowable:candidateParam>
+      </extensionElements>
+    </userTask>
+
+    <!-- KTD5：人事 hr_admin ROLE 或签 ANY -->
+    <userTask id="taskHr" name="人事审批"
+              flowable:candidateStrategy="10" flowable:candidateParam="hr_admin">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>hr_admin</flowable:candidateParam>
+        <flowable:approveMethod>3</flowable:approveMethod>
+      </extensionElements>
+      <multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${coll_userList}">
+        <completionCondition xsi:type="tFormalExpression"><![CDATA[${ nrOfCompletedInstances > 0 }]]></completionCondition>
+      </multiInstanceLoopCharacteristics>
+    </userTask>
+
+    <exclusiveGateway id="gatewayHoliday" name="是否法定节假日"/>
+
+    <!-- KTD5：分管总复用请假 gm 角色或签 -->
+    <userTask id="taskGm" name="分管总审批"
+              flowable:candidateGroups="gm" flowable:candidateStrategy="10" flowable:candidateParam="gm">
+      <extensionElements>
+        <flowable:candidateStrategy>10</flowable:candidateStrategy>
+        <flowable:candidateParam>gm</flowable:candidateParam>
+        <flowable:approveMethod>3</flowable:approveMethod>
+      </extensionElements>
+      <multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${coll_userList}">
+        <completionCondition xsi:type="tFormalExpression"><![CDATA[${ nrOfCompletedInstances > 0 }]]></completionCondition>
+      </multiInstanceLoopCharacteristics>
+    </userTask>
+
+    <!-- KD6：抄送王鹏。userId=221 由 nickname=王鹏、tenant_id=1 唯一解析写入 -->
+    <serviceTask id="taskCopyWangPeng" name="抄送王鹏"
+                 flowable:delegateExpression="${bpmCopyTaskDelegate}">
+      <extensionElements>
+        <flowable:candidateStrategy>30</flowable:candidateStrategy>
+        <flowable:candidateParam>221</flowable:candidateParam>
+      </extensionElements>
+    </serviceTask>
+
+    <endEvent id="endEvent" name="结束"/>
+
+    <sequenceFlow id="flow1" sourceRef="startEvent" targetRef="taskDeptLeaderMulti"/>
+    <sequenceFlow id="flow2" sourceRef="taskDeptLeaderMulti" targetRef="taskHr"/>
+    <sequenceFlow id="flow3" sourceRef="taskHr" targetRef="gatewayHoliday"/>
+    <sequenceFlow id="flowHolidayTrue" sourceRef="gatewayHoliday" targetRef="taskGm">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${holiday == true}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flowHolidayFalse" sourceRef="gatewayHoliday" targetRef="endEvent">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${holiday == false}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flowGmCopy" sourceRef="taskGm" targetRef="taskCopyWangPeng"/>
+    <sequenceFlow id="flowCopyEnd" sourceRef="taskCopyWangPeng" targetRef="endEvent"/>
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_oa_overtime">
+    <bpmndi:BPMNPlane id="BPMNPlane_oa_overtime" bpmnElement="oa_overtime">
+      <bpmndi:BPMNShape id="shape_startEvent" bpmnElement="startEvent">
+        <omgdc:Bounds x="80" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskDeptLeaderMulti" bpmnElement="taskDeptLeaderMulti">
+        <omgdc:Bounds x="150" y="140" width="130" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskHr" bpmnElement="taskHr">
+        <omgdc:Bounds x="320" y="140" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_gatewayHoliday" bpmnElement="gatewayHoliday">
+        <omgdc:Bounds x="470" y="155" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskGm" bpmnElement="taskGm">
+        <omgdc:Bounds x="560" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_taskCopyWangPeng" bpmnElement="taskCopyWangPeng">
+        <omgdc:Bounds x="710" y="80" width="110" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_endEvent" bpmnElement="endEvent">
+        <omgdc:Bounds x="880" y="162" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow1" bpmnElement="flow1">
+        <omgdi:waypoint x="116" y="180"/><omgdi:waypoint x="150" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow2" bpmnElement="flow2">
+        <omgdi:waypoint x="280" y="180"/><omgdi:waypoint x="320" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow3" bpmnElement="flow3">
+        <omgdi:waypoint x="430" y="180"/><omgdi:waypoint x="470" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flowHolidayTrue" bpmnElement="flowHolidayTrue">
+        <omgdi:waypoint x="495" y="155"/><omgdi:waypoint x="495" y="120"/><omgdi:waypoint x="560" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flowHolidayFalse" bpmnElement="flowHolidayFalse">
+        <omgdi:waypoint x="520" y="180"/><omgdi:waypoint x="880" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flowGmCopy" bpmnElement="flowGmCopy">
+        <omgdi:waypoint x="670" y="120"/><omgdi:waypoint x="710" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flowCopyEnd" bpmnElement="flowCopyEnd">
+        <omgdi:waypoint x="820" y="120"/><omgdi:waypoint x="898" y="120"/><omgdi:waypoint x="898" y="162"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

@@ -1,0 +1,97 @@
+{
+  "at": "2026-09-06T14:30:13.074149+00:00",
+  "actorUsername": "10000080",
+  "login": {
+    "http": 200,
+    "code": 0,
+    "msg": "",
+    "status": "AUTHENTICATED",
+    "hasToken": true
+  },
+  "pageBefore": {
+    "http": 200,
+    "code": 0,
+    "total": 3,
+    "list": [
+      {
+        "id": 3,
+        "calendarYear": 2026,
+        "status": "PENDING",
+        "contentHash": "e7c4fbd51a88ac7a2729867d93a9cb5935e8ef74ec69cd75fbf4b0da5474ce9c",
+        "parseNote": null,
+        "sourceUrl": "https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm",
+        "legalCount": 13
+      },
+      {
+        "id": 2,
+        "calendarYear": 2026,
+        "status": "FAILED",
+        "contentHash": "fail-notice-fetch-error-2026",
+        "parseNote": "IllegalStateException",
+        "sourceUrl": "https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm",
+        "legalCount": null
+      },
+      {
+        "id": 1,
+        "calendarYear": 2026,
+        "status": "ACTIVE",
+        "contentHash": "seed-2026-legal13-labor2",
+        "parseNote": "国令第795号：劳动节2天（5月1、2日）。2026-05-03为普通周末。",
+        "sourceUrl": "https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm",
+        "legalCount": 13
+      }
+    ]
+  },
+  "fetch": {
+    "http": 200,
+    "code": 0,
+    "msg": "",
+    "data": "2026=same:3;"
+  },
+  "pageAfter": {
+    "http": 200,
+    "code": 0,
+    "total": 3,
+    "list": [
+      {
+        "id": 3,
+        "calendarYear": 2026,
+        "status": "PENDING",
+        "contentHash": "e7c4fbd51a88ac7a2729867d93a9cb5935e8ef74ec69cd75fbf4b0da5474ce9c",
+        "parseNote": null,
+        "diffJson": "{\"to\": \"e7c4fbd51a88ac7a2729867d93a9cb5935e8ef74ec69cd75fbf4b0da5474ce9c\", \"from\": \"seed-2026-legal13-labor2\"}",
+        "legalCount": 13
+      },
+      {
+        "id": 2,
+        "calendarYear": 2026,
+        "status": "FAILED",
+        "contentHash": "fail-notice-fetch-error-2026",
+        "parseNote": "IllegalStateException",
+        "diffJson": null,
+        "legalCount": null
+      },
+      {
+        "id": 1,
+        "calendarYear": 2026,
+        "status": "ACTIVE",
+        "contentHash": "seed-2026-legal13-labor2",
+        "parseNote": "国令第795号：劳动节2天（5月1、2日）。2026-05-03为普通周末。",
+        "diffJson": null,
+        "legalCount": 13
+      }
+    ]
+  },
+  "myPage": {
+    "http": 200,
+    "code": 0,
+    "msg": "",
+    "total": 0,
+    "calendar": []
+  },
+  "applicantPage": {
+    "http": 200,
+    "code": 403,
+    "msg": "缺少权限「日历查询」（bpm:oa-overtime-calendar:query）"
+  }
+}

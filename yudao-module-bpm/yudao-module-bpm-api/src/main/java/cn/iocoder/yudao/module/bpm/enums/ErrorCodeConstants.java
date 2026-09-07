@@ -21,6 +21,25 @@ public interface ErrorCodeConstants {
     ErrorCode OA_LEAVE_ACCESS_DENIED = new ErrorCode(1_009_001_007, "无权查看该请假申请");
     ErrorCode OA_TRIP_FIELD_REQUIRED = new ErrorCode(1_009_001_010, "出差必填项未填完");
     ErrorCode OA_TRIP_COMPANION_INVALID = new ErrorCode(1_009_001_011, "同行人员须为组织内其他人员");
+    ErrorCode OA_OVERTIME_NOT_EXISTS = new ErrorCode(1_009_001_012, "加班申请不存在");
+    ErrorCode OA_OVERTIME_ACCESS_DENIED = new ErrorCode(1_009_001_013, "无权查看该加班申请");
+    ErrorCode OA_OVERTIME_TOO_SHORT = new ErrorCode(1_009_001_014, "加班时长不能少于 2 小时");
+    ErrorCode OA_OVERTIME_DAY_QUOTA_EXCEEDED = new ErrorCode(1_009_001_015, "当天加班合计不能超过 8 小时");
+    /** @deprecated 跨天后不再使用；保留码位以免旧客户端误读 */
+    ErrorCode OA_OVERTIME_NOT_SAME_DAY = new ErrorCode(1_009_001_016, "加班开始与结束必须为同一自然日");
+    ErrorCode OA_PUNCH_NOT_EXISTS = new ErrorCode(1_009_001_017, "补卡申请不存在");
+    ErrorCode OA_PUNCH_ACCESS_DENIED = new ErrorCode(1_009_001_018, "无权查看该补卡申请");
+    ErrorCode OA_PUNCH_MONTH_QUOTA_EXCEEDED = new ErrorCode(1_009_001_019, "该月补卡次数已用完");
+    ErrorCode OA_OVERTIME_WORKDAY_FORBIDDEN = new ErrorCode(1_009_001_020,
+            "以下日期不是周末或法定节假日，不能申请加班：{}");
+    ErrorCode OA_OVERTIME_CALENDAR_MISSING = new ErrorCode(1_009_001_021,
+            "该年度节假日日历尚未发布或配置，请联系人事");
+    ErrorCode OA_OVERTIME_DAY_TYPE_MISMATCH = new ErrorCode(1_009_001_022,
+            "加班类型与日期不一致：法定节假日请选「是」，普通周末请选「否」");
+    ErrorCode OA_OVERTIME_CALENDAR_VERIFY_DENIED = new ErrorCode(1_009_001_023,
+            "无权核验节假日日历");
+    ErrorCode OA_OVERTIME_CALENDAR_VERSION_NOT_PENDING = new ErrorCode(1_009_001_024,
+            "只能核验启用待核验且解析完整的日历版本");
 
     // ========== 流程模型 1-009-002-000 ==========
     ErrorCode MODEL_KEY_EXISTS = new ErrorCode(1_009_002_000, "已经存在流程标识为【{}】的流程");

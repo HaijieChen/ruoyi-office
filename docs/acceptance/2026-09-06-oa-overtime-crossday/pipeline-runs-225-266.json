@@ -1,0 +1,28 @@
+[
+  {
+    "pipeline": 5161458,
+    "run": 225,
+    "status": "SUCCESS",
+    "startTime": null,
+    "endTime": null,
+    "commits": [
+      "1befc2a755f324213b17456ecdf4317eb7341b7a"
+    ],
+    "shaPrefix": [
+      "1befc2a75"
+    ]
+  },
+  {
+    "pipeline": 5161594,
+    "run": 266,
+    "status": "SUCCESS",
+    "startTime": null,
+    "endTime": null,
+    "commits": [
+      "1befc2a755f324213b17456ecdf4317eb7341b7a"
+    ],
+    "shaPrefix": [
+      "1befc2a75"
+    ]
+  }
+]

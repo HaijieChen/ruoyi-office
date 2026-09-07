@@ -1,0 +1,41 @@
+{
+  "rows": [
+    [
+      6,
+      2027,
+      "NOT_PUBLISHED",
+      "next-year-not-published"
+    ],
+    [
+      5,
+      2099,
+      "REJECTED",
+      "隔离验收PENDING-勿作业务"
+    ],
+    [
+      3,
+      2026,
+      "ACTIVE",
+      null
+    ],
+    [
+      2,
+      2026,
+      "FAILED",
+      "IllegalStateException"
+    ],
+    [
+      1,
+      2026,
+      "SUPERSEDED",
+      "国令第795号：劳动节2天（5月1、2日）。2026-05-03为普通周末。"
+    ]
+  ],
+  "myPage": [
+    {
+      "id": 15,
+      "content": "加班节假日日历 2027：not_published（NOT_PUBLISHED）。请到「节假日日历」核验，通过后才会生效。",
+      "time": 1788707161000
+    }
+  ]
+}

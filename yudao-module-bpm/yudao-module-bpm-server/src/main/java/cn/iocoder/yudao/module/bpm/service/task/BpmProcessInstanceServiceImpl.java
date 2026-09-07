@@ -16,7 +16,11 @@ import cn.iocoder.yudao.framework.common.util.object.ObjectUtils;
 import cn.iocoder.yudao.framework.common.util.object.PageUtils;
 import cn.iocoder.yudao.framework.datapermission.core.annotation.DataPermission;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.bpm.framework.security.OaAttendanceBusinessStartHolder;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmBusinessStartChannelHolder;
+import cn.iocoder.yudao.module.bpm.service.oa.BpmOAOvertimeService;
+import cn.iocoder.yudao.module.bpm.service.oa.BpmOAPunchCorrectionService;
+import cn.iocoder.yudao.module.bpm.service.oa.OaAttendanceTx;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.model.BpmModelMetaInfoVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.definition.vo.model.simple.BpmSimpleModelNodeVO;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.instance.*;
@@ -151,6 +155,14 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 
     @Resource
     private BpmInitiatorWithdrawPolicyService initiatorWithdrawPolicyService;
+
+    @Resource
+    @Lazy
+    private BpmOAOvertimeService oaOvertimeService;
+
+    @Resource
+    @Lazy
+    private BpmOAPunchCorrectionService oaPunchCorrectionService;
     // ========== Query 查询相关方法 ==========
 
     @Override
@@ -1112,7 +1124,11 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         // 1.2.1 嵌入式业务表单：业务 create 权限
         // 薪税：通用 createProcessInstance 恒 deny；可信业务通道（领域 API）可过；统一目录仅露出不直启
         processStartEligibilityService.validateStartOrThrow(definition.getKey(), trustedBusinessStart);
-        // 1.3 校验发起人自选审批人
+        // 1.3 加班/补卡：必须业务事务 Holder；在自选审批人与删历史之前拒绝
+        if (OaAttendanceBusinessStartHolder.mustRejectGenericStart(definition.getKey())) {
+            throw exception(PROCESS_INSTANCE_START_USER_CAN_START);
+        }
+        // 1.3.1 校验发起人自选审批人
         validateStartUserSelectAssignees(userId, definition, startUserSelectAssignees, variables);
 
         // 1.4 如果提供了BusinessKey，删除相同BusinessKey的历史流程实例
@@ -1447,8 +1463,27 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
 //        processInstanceEventPublisher.sendProcessInstanceResultEvent(
 //                BpmProcessInstanceConvert.INSTANCE.buildProcessInstanceStatusEvent(this, instance, status, reason));
 
-        // 4. 发送跨服务通知
-        notificationManager.sendProcessStatusNotification(instance, status);
+        // 4. 发送跨服务通知。加班/补卡：快照后 afterCommit + REQUIRES_NEW，禁止再进 async manager
+        if (OaAttendanceBusinessStartHolder.isAttendanceProcessKey(instance.getProcessDefinitionKey())) {
+            String processInstanceId = instance.getId();
+            String processDefinitionKey = instance.getProcessDefinitionKey();
+            String businessKey = instance.getBusinessKey();
+            String tenantRaw = instance.getTenantId();
+            Integer snapStatus = status;
+            OaAttendanceTx.dispatchAfterCommit(transactionManager, tenantRaw, () -> {
+                if (StrUtil.isBlank(businessKey)) {
+                    return;
+                }
+                long billId = Long.parseLong(businessKey);
+                if ("oa_overtime".equals(processDefinitionKey)) {
+                    oaOvertimeService.updateOvertimeStatus(billId, snapStatus, processInstanceId);
+                } else {
+                    oaPunchCorrectionService.updatePunchCorrectionStatus(billId, snapStatus, processInstanceId);
+                }
+            });
+        } else {
+            notificationManager.sendProcessStatusNotification(instance, status);
+        }
 
         // 5. 流程后置通知
         if (Objects.equals(status, BpmProcessInstanceStatusEnum.APPROVE.getStatus())) {
