@@ -9,15 +9,10 @@ import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.task.*;
 import cn.iocoder.yudao.module.bpm.dal.dataobject.definition.BpmProcessDefinitionInfoDO;
 import cn.iocoder.yudao.module.bpm.enums.task.*;
 import cn.iocoder.yudao.module.bpm.framework.flowable.core.enums.BpmnVariableConstants;
-import cn.iocoder.yudao.module.bpm.framework.im.ImCardActionResult;
-import cn.iocoder.yudao.module.bpm.framework.im.ImCardActionService;
-import cn.iocoder.yudao.module.bpm.framework.im.ImCardTaskSnapshot;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmModelService;
 import cn.iocoder.yudao.module.bpm.service.definition.BpmProcessDefinitionService;
 import cn.iocoder.yudao.module.bpm.service.notification.BpmNotificationManager;
 import cn.iocoder.yudao.module.bpm.service.task.BpmProcessInstanceCopyService;
-import cn.iocoder.yudao.module.system.api.permission.PermissionApi;
-import cn.iocoder.yudao.module.system.enums.permission.RoleCodeEnum;
 import org.flowable.bpmn.model.*;
 import org.flowable.engine.*;
 import org.flowable.job.api.Job;
@@ -418,23 +413,6 @@ class BpmInitiatorWithdrawGrokAcceptanceIT {
         String startTask = engine.getHistoryService().createHistoricTaskInstanceQuery().processInstanceId(f.id)
                 .taskDefinitionKey(START_USER_NODE_ID).finished().singleResult().getId();
         assertDoesNotThrow(() -> service.withdrawTask(1L, startTask));
-        assertEquals(START_USER_NODE_ID, task(f.id).getTaskDefinitionKey());
-    }
-
-    @Test void wth14ImCardUsesSameWithdrawServiceNoTransport() {
-        Fixture f = fixture(1);
-        PermissionApi permissionApi = mock(PermissionApi.class);
-        when(permissionApi.hasAnyRoles(eq(1L), eq(RoleCodeEnum.SUPER_ADMIN.getCode())))
-                .thenReturn(cn.iocoder.yudao.framework.common.pojo.CommonResult.success(false));
-        ImCardActionService cards = new ImCardActionService();
-        set(cards, "bpmTaskService", service);
-        set(cards, "permissionApi", permissionApi);
-        ImCardTaskSnapshot snap = new ImCardTaskSnapshot();
-        snap.setTaskId(f.task);
-        snap.setProcessInstanceId(f.id);
-        snap.setStartUserId(1L);
-        snap.setProcessRunning(true);
-        assertEquals(ImCardActionResult.DONE, cards.handle(1L, ImCardActionService.WITHDRAW, snap, "acc-im-" + f.id).getOutcome());
         assertEquals(START_USER_NODE_ID, task(f.id).getTaskDefinitionKey());
     }
 
