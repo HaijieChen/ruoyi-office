@@ -43,6 +43,7 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.*;
 import org.flowable.bpmn.model.Process;
+import org.flowable.common.engine.impl.interceptor.CommandConfig;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.ManagementService;
 import org.flowable.engine.RuntimeService;
@@ -60,6 +61,9 @@ import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
 import org.flowable.task.service.impl.persistence.entity.TaskEntityImpl;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -92,6 +96,9 @@ public class BpmTaskServiceImpl implements BpmTaskService {
     private RuntimeService runtimeService;
     @Resource
     private ManagementService managementService;
+
+    @Resource
+    private PlatformTransactionManager transactionManager;
 
     @Resource
     private BpmProcessInstanceService processInstanceService;
@@ -1699,7 +1706,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                         return;
                     }
                     if (ObjectUtil.equal(assignEmptyHandlerType, BpmUserTaskAssignEmptyHandlerTypeEnum.APPROVE.getType())) {
-                        getSelf().approveTask(null, new BpmTaskApproveReqVO()
+                        approveTaskAutomatically(null, new BpmTaskApproveReqVO()
                                 .setId(task.getId()).setReason(BpmReasonEnum.ASSIGN_EMPTY_APPROVE.getReason()));
                     } else if (ObjectUtil.equal(assignEmptyHandlerType, BpmUserTaskAssignEmptyHandlerTypeEnum.REJECT.getType())) {
                         getSelf().rejectTask(null, new BpmTaskRejectReqVO()
@@ -1708,7 +1715,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     // 特殊情况二：【自动审核】审批类型为自动通过、不通过
                 } else {
                     if (ObjectUtil.equal(approveType, BpmUserTaskApproveTypeEnum.AUTO_APPROVE.getType())) {
-                        getSelf().approveTask(null, new BpmTaskApproveReqVO()
+                        approveTaskAutomatically(null, new BpmTaskApproveReqVO()
                                 .setId(task.getId()).setReason(BpmReasonEnum.APPROVE_TYPE_AUTO_APPROVE.getReason()));
                     } else if (ObjectUtil.equal(approveType, BpmUserTaskApproveTypeEnum.AUTO_REJECT.getType())) {
                         getSelf().rejectTask(null, new BpmTaskRejectReqVO()
@@ -1789,7 +1796,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     log.error("[processTaskAssigned][taskId({}) 没有找到流程定义({})]", task.getId(), task.getProcessDefinitionId());
                     return;
                 }
-                if (processDefinitionInfo.getAutoApprovalType() != null
+                if (!requiresManualExecution(task)
+                        && processDefinitionInfo.getAutoApprovalType() != null
                         && ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
                     HistoricTaskInstanceQuery sameAssigneeQuery = historyService.createHistoricTaskInstanceQuery()
                             .processInstanceId(task.getProcessInstanceId())
@@ -1798,7 +1806,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                             .finished();
                     if (BpmAutoApproveTypeEnum.APPROVE_ALL.getType().equals(processDefinitionInfo.getAutoApprovalType())
                             && sameAssigneeQuery.count() > 0) {
-                        getSelf().approveTask(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
+                        approveTaskAutomatically(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
                                 .setReason(BpmAutoApproveTypeEnum.APPROVE_ALL.getName()));
                         return;
                     }
@@ -1812,7 +1820,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                                         BpmnModelUtils.getFlowElementById(bpmnModel, task.getTaskDefinitionKey())),
                                 SequenceFlow::getSourceRef);
                         if (sameAssigneeQuery.taskDefinitionKeys(sourceTaskIds).count() > 0) {
-                            getSelf().approveTask(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
+                            approveTaskAutomatically(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
                                     .setReason(BpmAutoApproveTypeEnum.APPROVE_SEQUENT.getName()));
                             return;
                         }
@@ -1832,20 +1840,20 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                         && (skipStartUserNodeFlag == null // 目的：一般是“主流程”，发起人节点，自动通过审核
                         || BooleanUtil.isTrue(skipStartUserNodeFlag)) // 目的：一般是“子流程”，发起人节点，按配置自动通过审核
                         && ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
-                    getSelf().approveTask(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
+                    approveTaskAutomatically(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
                             .setReason(BpmReasonEnum.ASSIGN_START_USER_APPROVE_WHEN_SKIP_START_USER_NODE.getReason()));
                     return;
                 }
                 // 当不为发起人节点时，审批人与提交人为同一人时，根据 BpmUserTaskAssignStartUserHandlerTypeEnum 策略进行处理
                 if (ObjectUtil.notEqual(userTaskElement.getId(), START_USER_NODE_ID)
                         && StrUtil.equals(task.getAssignee(), processInstance.getStartUserId())) {
-                    if (ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
+                    if (!requiresManualExecution(task) && ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
                         Integer assignStartUserHandlerType = BpmnModelUtils.parseAssignStartUserHandlerType(userTaskElement);
 
                         // 情况一：自动跳过
                         if (ObjectUtils.equalsAny(assignStartUserHandlerType,
                                 BpmUserTaskAssignStartUserHandlerTypeEnum.SKIP.getType())) {
-                            getSelf().approveTask(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
+                            approveTaskAutomatically(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
                                     .setReason(BpmReasonEnum.ASSIGN_START_USER_APPROVE_WHEN_SKIP.getReason()));
                             return;
                         }
@@ -1859,7 +1867,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                             // 找不到部门负责人的情况下，自动审批通过
                             // noinspection DataFlowIssue
                             if (dept.getLeaderUserId() == null) {
-                                getSelf().approveTask(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
+                                approveTaskAutomatically(Long.valueOf(task.getAssignee()), new BpmTaskApproveReqVO().setId(task.getId())
                                         .setReason(BpmReasonEnum.ASSIGN_START_USER_APPROVE_WHEN_DEPT_LEADER_NOT_FOUND.getReason()));
                                 return;
                             }
@@ -1983,6 +1991,42 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         // 若存在直接触发接收任务，执行后续节点
         FlowableUtils.execute(execution.getTenantId(),
                 () -> runtimeService.trigger(execution.getId()));
+    }
+
+    /** Execution-evidence listeners require a human action, even with a repeated approver. */
+    private boolean requiresManualExecution(Task task) {
+        BpmnModel model = modelService.getBpmnModelByDefinitionId(task.getProcessDefinitionId());
+        FlowElement element = BpmnModelUtils.getFlowElementById(model, task.getTaskDefinitionKey());
+        if (!(element instanceof UserTask userTask)) {
+            return false;
+        }
+        return userTask.getTaskListeners().stream().anyMatch(listener ->
+                "complete".equals(listener.getEvent())
+                        && "${financeContractExecCompleteGuardListener}".equals(listener.getImplementation()));
+    }
+
+    private void approveTaskAutomatically(Long userId, BpmTaskApproveReqVO request) {
+        runAutomaticAction(request.getId(), () -> {
+            Task current = getTask(request.getId());
+            if (current != null && !requiresManualExecution(current)) {
+                getSelf().approveTask(userId, request);
+            }
+        });
+    }
+
+    /** afterCompletion still has the completed Spring resources bound. Never join
+     * that transaction: state/reason writes and Flowable completion must roll back together. */
+    private void runAutomaticAction(String taskId, Runnable action) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transaction.executeWithoutResult(status -> managementService.executeCommand(
+                new CommandConfig().setContextReusePossible(false), context -> {
+                    Task current = getTask(taskId);
+                    if (current != null) {
+                        FlowableUtils.execute(current.getTenantId(), action);
+                    }
+                    return null;
+                }));
     }
 
     /**

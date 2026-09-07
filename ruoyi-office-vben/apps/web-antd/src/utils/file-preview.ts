@@ -1,9 +1,4 @@
-import { isTenantEnable, useAppConfig } from '@vben/hooks';
-import { useAccessStore } from '@vben/stores';
-
 import { renderAsync } from 'docx-preview';
-
-import { resolveRequestTenantId } from '#/constants/tenant';
 
 const MIME_BY_EXT: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -108,22 +103,14 @@ export function blobWithGuessedType(blob: Blob, nameOrUrl: string) {
 
 /** 走后端 /infra/file/preview，从存储器读字节，不直连 MinIO */
 export async function fetchPreviewBlob(url: string): Promise<Blob> {
-  const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
-  const accessStore = useAccessStore();
-  const base = (apiURL || '').endsWith('/') ? (apiURL || '').slice(0, -1) : (apiURL || '');
-  const preview = base + '/infra/file/preview?url=' + encodeURIComponent(url);
-  const headers: Record<string, string> = {};
-  if (accessStore.accessToken) {
-    headers.Authorization = 'Bearer ' + accessStore.accessToken;
-  }
-  if (isTenantEnable()) {
-    headers['tenant-id'] = String(resolveRequestTenantId(accessStore.tenantId));
-  }
-  const res = await fetch(preview, { method: 'GET', headers, credentials: 'include' });
-  if (!res.ok) {
-    throw new Error('预览失败 HTTP ' + res.status);
-  }
-  return blobWithGuessedType(await res.blob(), url);
+  // Lazy import avoids eagerly pulling the auth store into form bootstrap.
+  const { requestClient } = await import('#/api/request');
+  const response = await requestClient.get<{ data: Blob }>('/infra/file/preview', {
+    params: { url },
+    responseType: 'blob',
+    responseReturn: 'raw',
+  });
+  return blobWithGuessedType(response.data, url);
 }
 
 export async function previewAuthUrl(url: string) {
