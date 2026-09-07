@@ -1053,6 +1053,13 @@ public class FinancePaymentApplicationServiceImpl implements FinancePaymentAppli
     @Override
     public void assertFinanceSubjectForComplete(Long appId) {
         FinancePaymentApplicationDO application = getApplication(appId);
+        // 普通付款已移除财务科目表单；保留监听器入口，使在途旧流程同样可以完成审批。
+        // 与 assertOrdinaryKind 一致，历史空业务类型按普通付款处理；薪资、税款仍保留原校验。
+        String kind = StrUtil.blankToDefault(application.getApplicationKind(),
+                FinancePaymentApplicationKindEnum.ORDINARY.getCode());
+        if (FinancePaymentApplicationKindEnum.ORDINARY.getCode().equals(kind)) {
+            return;
+        }
         if (StrUtil.isBlank(application.getAccountingSubject())) {
             throw exception(PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED);
         }

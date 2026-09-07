@@ -9,7 +9,7 @@ import org.flowable.task.service.delegate.DelegateTask;
 import org.springframework.stereotype.Component;
 
 /**
- * 财务主管节点 complete 守卫：会计科目非空（F4 / CF-P7）。
+ * 财务节点 complete 兼容入口：普通付款不要求科目，薪资与税款保留科目非空校验。
  *
  * <pre>${financePaymentFinanceCompleteGuardListener}</pre>
  * event = complete on taskFinance

@@ -1062,12 +1062,36 @@ class FinancePaymentApplicationServiceImplTest {
     }
 
     @Test
-    void assertFinanceSubjectRejectsBlank() {
-        when(mapper.selectById(5L)).thenReturn(FinancePaymentApplicationDO.builder()
-                .id(5L).status(FinancePaymentApplicationStatusEnum.PENDING.getStatus()).build());
+    void assertFinanceSubjectAllowsOrdinaryAndLegacyWithoutSubject() {
+        for (String kind : new String[]{"ORDINARY", null, "", " "}) {
+            for (String subject : new String[]{null, "", " "}) {
+                when(mapper.selectById(5L)).thenReturn(FinancePaymentApplicationDO.builder()
+                        .id(5L).applicationKind(kind).accountingSubject(subject)
+                        .status(FinancePaymentApplicationStatusEnum.PENDING.getStatus()).build());
+                assertDoesNotThrow(() -> service.assertFinanceSubjectForComplete(5L));
+            }
+        }
+    }
+
+    @Test
+    void assertFinanceSubjectStillRequiresSubjectForSalaryAndTax() {
+        for (String kind : new String[]{"SALARY", "TAX"}) {
+            when(mapper.selectById(5L)).thenReturn(FinancePaymentApplicationDO.builder()
+                    .id(5L).applicationKind(kind).build());
+            ServiceException ex = assertThrows(ServiceException.class,
+                    () -> service.assertFinanceSubjectForComplete(5L));
+            assertEquals(PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED.getCode(), ex.getCode());
+            when(mapper.selectById(5L)).thenReturn(FinancePaymentApplicationDO.builder()
+                    .id(5L).applicationKind(kind).accountingSubject("existing").build());
+            assertDoesNotThrow(() -> service.assertFinanceSubjectForComplete(5L));
+        }
+    }
+
+    @Test
+    void assertFinanceSubjectStillRejectsMissingApplication() {
         ServiceException ex = assertThrows(ServiceException.class,
                 () -> service.assertFinanceSubjectForComplete(5L));
-        assertEquals(PAYMENT_APPLICATION_ACCOUNTING_SUBJECT_REQUIRED.getCode(), ex.getCode());
+        assertEquals(PAYMENT_APPLICATION_NOT_EXISTS.getCode(), ex.getCode());
     }
 
     @Test
