@@ -388,4 +388,32 @@ class AttachmentServiceImplTest {
         verify(fileAccessApi, never()).getFileContent(anyLong());
     }
 
+    @Test
+    void saveResolvesOmittedSizeFromUniqueUrl() {
+        when(attachmentMapper.selectListByBusiness("103", 19L)).thenReturn(List.of());
+        FileRespDTO meta = file(2493L, "20260907/weixin.jpg", "微信图片.jpg");
+        meta.setSize(106878L);
+        meta.setType("image/jpeg");
+        when(fileAccessApi.getUniqueFileByUrl("/admin-api/infra/file/1/get/20260907/weixin.jpg")).thenReturn(meta);
+
+        AttachmentSaveReqVO req = base("weixin.jpg");
+        req.setFileUrl("/admin-api/infra/file/1/get/20260907/weixin.jpg");
+        req.setFilePath("/admin-api/infra/file/1/get/20260907/weixin.jpg");
+        req.setFileSize(null);
+        req.setFileId(null);
+        req.setFileType(null);
+        req.setFileExtension(null);
+        attachmentService.saveAttachmentList("103", 19L, List.of(req));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AttachmentDO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(attachmentMapper).insertOrUpdate(captor.capture());
+        AttachmentDO saved = captor.getValue().get(0);
+        assertEquals(2493L, saved.getFileId());
+        assertEquals(106878L, saved.getFileSize());
+        assertEquals("image/jpeg", saved.getFileType());
+        assertEquals("jpg", saved.getFileExtension());
+        verify(fileAccessApi, never()).getFileContent(anyLong());
+    }
+
 }

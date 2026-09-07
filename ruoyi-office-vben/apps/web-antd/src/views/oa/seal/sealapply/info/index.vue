@@ -27,7 +27,12 @@ import { BasicForm, CardContainer } from '#/components/basic-form';
 import { $t } from '#/locales';
 
 import { useFormSchema } from './data';
-import { buildSealApprovalFields, mergeSealSavePayload } from './seal-approval-readonly';
+import {
+  actualReturnTimeError,
+  buildSealApprovalFields,
+  mergeSealSavePayload,
+  shouldRequireActualReturnTime,
+} from './seal-approval-readonly';
 import SealApprovalReadonly from './seal-approval-readonly.vue';
 
 defineOptions({ name: 'OaSealApplyBillInfo' });
@@ -248,12 +253,16 @@ async function beforeApproval(): Promise<boolean> {
   try {
     // 只有在审批状态且流程节点为"申请人归还印章"时才执行保存
     if (
-      props.isApproval &&
-      props.nodeKeyName === '申请人归还印章' &&
-      canReturnEdit.value
+      shouldRequireActualReturnTime({
+        isApproval: props.isApproval,
+        nodeKeyName: props.nodeKeyName,
+      })
     ) {
-      if (!formData.value.actualReturnTime) {
-        message.error('请选择实际归还时间');
+      const returnTimeError = actualReturnTimeError(
+        formData.value.actualReturnTime,
+      );
+      if (returnTimeError) {
+        message.error(returnTimeError);
         return false;
       }
       let formValues: Record<string, unknown> | undefined;

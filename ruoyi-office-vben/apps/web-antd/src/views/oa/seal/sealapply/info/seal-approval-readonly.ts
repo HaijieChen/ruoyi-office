@@ -52,6 +52,40 @@ function formatDate(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+export function shouldRequireActualReturnTime(opts: {
+  isApproval?: boolean;
+  nodeKeyName?: string;
+}): boolean {
+  return opts.isApproval === true && opts.nodeKeyName === '申请人归还印章';
+}
+
+export function actualReturnTimeError(value: unknown): string | null {
+  if (value == null || value === '') {
+    return '请选择实际归还时间';
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) {
+      return '请选择实际归还时间';
+    }
+    return Number.isNaN(new Date(value).getTime()) ? '请选择实际归还时间' : null;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? '请选择实际归还时间' : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === 'Invalid Date') {
+      return '请选择实际归还时间';
+    }
+    if (/^\d+$/.test(trimmed)) {
+      return actualReturnTimeError(Number(trimmed));
+    }
+    const parsed = new Date(trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T'));
+    return Number.isNaN(parsed.getTime()) ? '请选择实际归还时间' : null;
+  }
+  return '请选择实际归还时间';
+}
+
 export function mergeSealSavePayload(
   formData: Record<string, unknown>,
   formValues: Record<string, unknown> | null | undefined,

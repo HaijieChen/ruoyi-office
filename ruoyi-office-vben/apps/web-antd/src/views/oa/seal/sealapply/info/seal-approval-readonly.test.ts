@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSealApprovalFields, mergeSealSavePayload } from './seal-approval-readonly';
+import {
+  actualReturnTimeError,
+  buildSealApprovalFields,
+  mergeSealSavePayload,
+  shouldRequireActualReturnTime,
+} from './seal-approval-readonly';
 
 describe('buildSealApprovalFields', () => {
   it('shows full title, dict labels and formatted use time', () => {
@@ -46,6 +51,35 @@ describe('buildSealApprovalFields', () => {
     expect(byKey.documentType.empty).toBe(true);
     expect(byKey.expectedReturnTime.empty).toBe(true);
     expect(byKey.documentType.value).toBe('');
+  });
+
+  it('still requires return time on keeper node when isTodo is missing', () => {
+    expect(
+      shouldRequireActualReturnTime({
+        isApproval: true,
+        nodeKeyName: '申请人归还印章',
+      }),
+    ).toBe(true);
+    expect(
+      shouldRequireActualReturnTime({
+        isApproval: true,
+        nodeKeyName: '部门经理',
+      }),
+    ).toBe(false);
+  });
+
+  it('blocks empty or invalid return time even when canReturnEdit is false', () => {
+    expect(
+      shouldRequireActualReturnTime({
+        isApproval: true,
+        nodeKeyName: '申请人归还印章',
+      }),
+    ).toBe(true);
+    expect(actualReturnTimeError(undefined)).toBe('请选择实际归还时间');
+    expect(actualReturnTimeError('')).toBe('请选择实际归还时间');
+    expect(actualReturnTimeError('Invalid Date')).toBe('请选择实际归还时间');
+    expect(actualReturnTimeError(Number.NaN)).toBe('请选择实际归还时间');
+    expect(actualReturnTimeError(1_778_200_000_000)).toBeNull();
   });
 
   it('keeps DatePicker actualReturnTime over stale hidden form values', () => {

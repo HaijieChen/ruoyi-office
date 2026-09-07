@@ -20,6 +20,8 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { getSealApplyBill, createAndStartSealApplyBill } from '#/api/oa/seal/sealapply';
 import { FileUpload } from '#/components/upload';
 
+import { buildSealStartAttachments } from './seal-start-attachments';
+
 defineOptions({ name: 'OaSealApplyFormBody' });
 
 const emit = defineEmits<{
@@ -180,12 +182,7 @@ async function submit(_ctx?: { startCompanyDeptId?: number }): Promise<void> {
       deptId: formData.value.deptId || 0,
       deptName: formData.value.deptName || '',
       remark: formData.value.remark,
-      attachments: urls.map((url, i) => ({
-        fileName: url.split('/').pop() || `file-${i}`,
-        filePath: url,
-        fileUrl: url,
-        fileSize: 0,
-      })),
+      attachments: buildSealStartAttachments(urls),
     } as any);
     message.success('提交成功');
     emit('success');
