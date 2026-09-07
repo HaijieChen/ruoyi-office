@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.module.bpm.controller.admin.task.vo.task.BpmTaskApproveReqVO;
+import org.flowable.common.engine.impl.interceptor.CommandConfig;
 import org.flowable.engine.*;
 import org.flowable.engine.delegate.TaskListener;
 import org.flowable.spring.SpringProcessEngineConfiguration;
@@ -41,7 +42,6 @@ class BpmAutomaticApprovalTransactionTest {
   var raw=new BpmTaskServiceImpl();
   set(raw,"taskService",engine.getTaskService());set(raw,"runtimeService",engine.getRuntimeService());
   set(raw,"historyService",engine.getHistoryService());set(raw,"managementService",engine.getManagementService());
-  set(raw,"transactionManager",tm);
   var instances=mock(BpmProcessInstanceService.class);
   when(instances.getProcessInstance(anyString())).thenAnswer(i->engine.getRuntimeService().createProcessInstanceQuery().processInstanceId(i.getArgument(0)).includeProcessVariables().singleResult());
   set(raw,"processInstanceService",instances);
@@ -49,7 +49,14 @@ class BpmAutomaticApprovalTransactionTest {
   var defs=mock(BpmProcessDefinitionService.class);when(defs.getProcessDefinitionInfo(anyString())).thenReturn(new BpmProcessDefinitionInfoDO().setAutoApprovalType(2));set(raw,"bpmProcessDefinitionService",defs);
   set(raw,"notificationManager",mock(BpmNotificationManager.class));set(raw,"messageService",mock(BpmMessageService.class));
   var policy=mock(BpmInitiatorWithdrawPolicyService.class);
-  doAnswer(inv->{ ((Runnable)inv.getArgument(3)).run(); return null; }).when(policy).runAfterCompletion(any(), any(), any(), any());
+  doAnswer(inv->{
+    new TransactionTemplate(tm).executeWithoutResult(s ->
+        engine.getManagementService().executeCommand(new CommandConfig(false).transactionRequired(), ctx -> {
+          inv.getArgument(3, Runnable.class).run();
+          return null;
+        }));
+    return null;
+  }).when(policy).runAfterCompletion(any(), any(), any(), any());
   doAnswer(inv->{ ((Runnable)inv.getArgument(1)).run(); return null; }).when(policy).withTaskLock(any(), any());
   doNothing().when(policy).validateCurrentTask(any());
   set(raw,"initiatorWithdrawPolicyService",policy);

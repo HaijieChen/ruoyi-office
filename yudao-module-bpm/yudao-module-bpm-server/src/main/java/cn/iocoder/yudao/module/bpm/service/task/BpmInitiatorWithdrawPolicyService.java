@@ -208,10 +208,15 @@ public class BpmInitiatorWithdrawPolicyService {
     }
 
     private <T> T withLock(String instanceId, boolean withdrawal, Supplier<T> action) {
-        return withLock(instanceId, withdrawal, false, action);
+        return withLock(instanceId, withdrawal, false, false, action);
     }
 
     private <T> T withLock(String instanceId, boolean withdrawal, boolean timerCommandContext, Supplier<T> action) {
+        return withLock(instanceId, withdrawal, timerCommandContext, false, action);
+    }
+
+    private <T> T withLock(String instanceId, boolean withdrawal, boolean timerCommandContext,
+                           boolean postCompletion, Supplier<T> action) {
         long tenant = requireTenant();
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Initiator withdrawal guard requires the caller transaction");
@@ -270,7 +275,10 @@ public class BpmInitiatorWithdrawPolicyService {
         scope.set(current);
         try {
             // New Flowable entity cache, same Spring/DataSource transaction. No engine-wide isolation changes.
-            T result = guarded && !timerCommandContext ? managementService.executeCommand(new CommandConfig(false).transactionRequired(),
+            // Post-completion (all withdraw modes) and guarded mode-1 both need a fresh Flowable
+            // cache in the same Spring transaction. TIMER_FIRED keeps the original command.
+            boolean freshCommandContext = !timerCommandContext && (postCompletion || guarded);
+            T result = freshCommandContext ? managementService.executeCommand(new CommandConfig(false).transactionRequired(),
                     context -> action.get()) : action.get();
             if (guarded) {
                 for (String participant : participants) {
@@ -377,7 +385,7 @@ public class BpmInitiatorWithdrawPolicyService {
         if (ids.isEmpty()) {
             return;
         }
-        withInstanceLock(instanceId, () -> { action.run(); return null; });
+        withLock(instanceId, false, false, true, () -> { action.run(); return null; });
     }
 
     /**
