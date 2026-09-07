@@ -47,3 +47,19 @@ it.each(['application/pdf','image/png','application/vnd.openxmlformats-officedoc
  const blob=await fetchPreviewBlob('https://example.test/file');
  expect(await blob.text()).toBe('bytes');expect(blob.type).toBe(type);
 });
+
+it.each(['{"hello":"world"}', '{"code":0,"msg":"ok","data":null}', 'invalid JSON', '{"code":401,"description":"example"}'])('preserves JSON file content: %s', async content => {
+ state.responses=[new Blob([content],{type:'application/json'})];
+ expect(await (await fetchPreviewBlob('https://example.test/a.json')).text()).toBe(content);
+ expect(state.refreshes).toBe(0);
+});
+it('does not decode ordinary JSON downloads without explicit opt-in', async () => {
+ const { decodeFileResponse } = await import('../api/file-response');
+ const response = {config:{responseType:'blob'},data:error(401),headers:{}};
+ expect(await decodeFileResponse(response as any)).toBe(response);
+});
+it('preserves explicitly named JSON downloads even when they resemble business errors', async () => {
+ const { decodeFileResponse } = await import('../api/file-response');
+ const response = {config:{responseType:'blob',decodeBusinessErrorBlob:true},data:error(401),headers:{'content-disposition':'attachment; filename="example.json"'}};
+ expect(await decodeFileResponse(response as any)).toBe(response);
+});

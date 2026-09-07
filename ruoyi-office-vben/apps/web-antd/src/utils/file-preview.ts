@@ -109,6 +109,7 @@ export async function fetchPreviewBlob(url: string): Promise<Blob> {
     params: { url },
     responseType: 'blob',
     responseReturn: 'raw',
+    decodeBusinessErrorBlob: true,
   });
   return blobWithGuessedType(response.data, url);
 }
