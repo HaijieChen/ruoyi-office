@@ -22,6 +22,7 @@ import { useAuthStore } from '#/store';
 
 import { refreshTokenApi } from './core';
 import { shouldSuppressErrorToast } from './error-toast';
+import { decodeFileResponse } from './file-response';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 const tenantEnable = isTenantEnable();
@@ -132,6 +133,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       return response;
     },
   });
+
+  client.addResponseInterceptor({ fulfilled: decodeFileResponse });
 
   // 处理返回的响应数据格式
   client.addResponseInterceptor(

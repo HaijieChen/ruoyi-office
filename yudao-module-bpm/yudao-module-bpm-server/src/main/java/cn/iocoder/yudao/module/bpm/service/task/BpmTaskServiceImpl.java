@@ -43,6 +43,7 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.*;
 import org.flowable.bpmn.model.Process;
+import org.flowable.common.engine.impl.interceptor.CommandConfig;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.ManagementService;
 import org.flowable.engine.RuntimeService;
@@ -60,6 +61,9 @@ import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
 import org.flowable.task.service.impl.persistence.entity.TaskEntityImpl;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -97,6 +101,9 @@ public class BpmTaskServiceImpl implements BpmTaskService {
     private RuntimeService runtimeService;
     @Resource
     private ManagementService managementService;
+
+    @Resource
+    private PlatformTransactionManager transactionManager;
 
     @Resource
     private BpmProcessInstanceService processInstanceService;
@@ -632,7 +639,12 @@ public class BpmTaskServiceImpl implements BpmTaskService {
     }
 
     private void approveTaskAutomatically(Long userId, BpmTaskApproveReqVO reqVO) {
-        approveTask(userId, reqVO, ActionSource.AUTOMATIC);
+        runAutomaticAction(reqVO.getId(), () -> {
+            Task current = getTask(reqVO.getId());
+            if (current != null && !requiresManualExecution(current)) {
+                approveTask(userId, reqVO, ActionSource.AUTOMATIC);
+            }
+        });
     }
 
     private void approveTask(Long userId, BpmTaskApproveReqVO reqVO, ActionSource source) {
@@ -1896,7 +1908,8 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                     log.error("[processTaskAssigned][taskId({}) 没有找到流程定义({})]", task.getId(), task.getProcessDefinitionId());
                     return;
                 }
-                if (processDefinitionInfo.getAutoApprovalType() != null
+                if (!requiresManualExecution(task)
+                        && processDefinitionInfo.getAutoApprovalType() != null
                         && ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
                     HistoricTaskInstanceQuery sameAssigneeQuery = historyService.createHistoricTaskInstanceQuery()
                             .processInstanceId(task.getProcessInstanceId())
@@ -1946,7 +1959,7 @@ public class BpmTaskServiceImpl implements BpmTaskService {
                 // 当不为发起人节点时，审批人与提交人为同一人时，根据 BpmUserTaskAssignStartUserHandlerTypeEnum 策略进行处理
                 if (ObjectUtil.notEqual(userTaskElement.getId(), START_USER_NODE_ID)
                         && StrUtil.equals(task.getAssignee(), processInstance.getStartUserId())) {
-                    if (ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
+                    if (!requiresManualExecution(task) && ObjUtil.notEqual(returnTaskFlag, Boolean.TRUE)) {
                         Integer assignStartUserHandlerType = BpmnModelUtils.parseAssignStartUserHandlerType(userTaskElement);
 
                         // 情况一：自动跳过
@@ -2081,6 +2094,33 @@ public class BpmTaskServiceImpl implements BpmTaskService {
         // 若存在直接触发接收任务，执行后续节点
         FlowableUtils.execute(execution.getTenantId(),
                 () -> runtimeService.trigger(execution.getId()));
+    }
+
+    /** Execution-evidence listeners require a human action, even with a repeated approver. */
+    private boolean requiresManualExecution(Task task) {
+        BpmnModel model = modelService.getBpmnModelByDefinitionId(task.getProcessDefinitionId());
+        FlowElement element = BpmnModelUtils.getFlowElementById(model, task.getTaskDefinitionKey());
+        if (!(element instanceof UserTask userTask)) {
+            return false;
+        }
+        return userTask.getTaskListeners().stream().anyMatch(listener ->
+                "complete".equals(listener.getEvent())
+                        && "${financeContractExecCompleteGuardListener}".equals(listener.getImplementation()));
+    }
+
+    /** afterCompletion still has the completed Spring resources bound. Never join
+     * that transaction: state/reason writes and Flowable completion must roll back together. */
+    private void runAutomaticAction(String taskId, Runnable action) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transaction.executeWithoutResult(status -> managementService.executeCommand(
+                new CommandConfig().setContextReusePossible(false), context -> {
+                    Task current = getTask(taskId);
+                    if (current != null) {
+                        FlowableUtils.execute(current.getTenantId(), action);
+                    }
+                    return null;
+                }));
     }
 
     /**
