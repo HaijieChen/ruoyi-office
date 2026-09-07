@@ -13,9 +13,12 @@ import cn.iocoder.yudao.module.finance.dal.redis.no.FinanceInvoiceRedflushNoRedi
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceApprovalStatusEnum;
 import cn.iocoder.yudao.module.finance.enums.FinanceInvoiceIssueStatusEnum;
 import cn.iocoder.yudao.module.finance.framework.rpc.FinanceBpmProcessInstanceApi;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
+import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -47,6 +50,10 @@ class FinanceInvoiceRedflushServiceImplTest {
         invoiceApplicationService = mock(FinanceInvoiceApplicationService.class);
         service = new FinanceInvoiceRedflushServiceImpl(
                 redflushMapper, applicationMapper, noRedisDAO, processInstanceApi, invoiceApplicationService);
+        SecurityFrameworkService security = mock(SecurityFrameworkService.class);
+        when(security.hasPermission("finance:invoice-application:query")).thenReturn(true);
+        ReflectionTestUtils.setField(service, "securityFrameworkService", security);
+        ReflectionTestUtils.setField(service, "processParticipantSupport", mock(FinanceProcessParticipantSupport.class));
         when(noRedisDAO.generate(any(LocalDate.class))).thenReturn("IRF-20260824-1");
         when(processInstanceApi.createProcessInstance(anyLong(), any()))
                 .thenReturn(CommonResult.success("pi-1"));

@@ -1,7 +1,11 @@
 package cn.iocoder.yudao.module.finance.service.invoice;
 
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
+import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
+import cn.iocoder.yudao.module.finance.framework.security.FinanceProcessParticipantSupport;
+import jakarta.annotation.Resource;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceApplicationCompleteIssueReqVO;
 import cn.iocoder.yudao.module.finance.controller.admin.invoice.vo.FinanceInvoiceRedflushCreateAndStartReqVO;
 import cn.iocoder.yudao.module.finance.dal.dataobject.invoice.FinanceInvoiceApplicationDO;
@@ -32,6 +36,10 @@ public class FinanceInvoiceRedflushServiceImpl implements FinanceInvoiceRedflush
     private final FinanceInvoiceRedflushNoRedisDAO noRedisDAO;
     private final FinanceBpmProcessInstanceApi processInstanceApi;
     private final FinanceInvoiceApplicationService invoiceApplicationService;
+    @Resource
+    private FinanceProcessParticipantSupport processParticipantSupport;
+    @Resource
+    private SecurityFrameworkService securityFrameworkService;
 
     public FinanceInvoiceRedflushServiceImpl(FinanceInvoiceRedflushMapper redflushMapper,
                                              FinanceInvoiceApplicationMapper applicationMapper,
@@ -162,7 +170,13 @@ public class FinanceInvoiceRedflushServiceImpl implements FinanceInvoiceRedflush
         if (row == null) {
             throw exception(INVOICE_REDFUSH_NOT_EXISTS);
         }
-        return row;
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        if (securityFrameworkService.hasPermission("finance:invoice-application:query")
+                || processParticipantSupport.canReadBill(
+                userId, row.getApplicantUserId(), row.getProcessInstanceId())) {
+            return row;
+        }
+        throw exception(INVOICE_REDFUSH_ACCESS_DENIED);
     }
 
     private FinanceInvoiceApplicationDO requireSelectablePredecessor(FinanceInvoiceRedflushCreateAndStartReqVO reqVO) {

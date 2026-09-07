@@ -37,7 +37,7 @@ OA / BPM-OA / HRM。合同不改。财务其他表单不抢（仅登记现状）
 | 薪资付款 | `finance_salary_payment_apply` | salary GET | 财务 | 另协 |
 | 税金付款 | `finance_tax_payment_apply` | tax GET | 财务 | 另协 |
 | 开票 | `finance_invoice_apply` | invoice GET | query **或** `financeInvoiceAccess.canTaskContextOrOwnerRead`（065 DP disable） | **静态符合 065**；未改 |
-| 红冲 | `finance_invoice_redflush_apply` | `GET` 仍硬 `finance:invoice-application:query` | **审批人无 query 仍挡** | **未过门禁** |
+| 红冲 | `finance_invoice_redflush_apply` | `GET /finance/invoice-redflush/get` | 登录 + query 或 `canReadBill`（含 task owner）。单测：注解 + 原红冲服务 7 | 代码已改；隔离浏览器未跑本 jar |
 | 报销 | `oa_expense_reimbursement` | 登录 + `assertCanRead` + 065 `canQueryAll` | **静态符合**；保留 manageAll 语义 | 未强改 |
 | 无票报销 | `oa_expense_no_invoice` | 同上 | 同上 | 未强改 |
 | 付款/薪/税 | payment/salary/tax GET | query **或** `financePaymentAccess.canAccessDetail`；manageAll=`*:update` | **静态符合 065/db472**；未改写入口 | 未强改 |

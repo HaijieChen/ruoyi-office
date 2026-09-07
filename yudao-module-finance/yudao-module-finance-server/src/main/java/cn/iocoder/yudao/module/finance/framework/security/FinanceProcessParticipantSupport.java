@@ -33,20 +33,33 @@ public class FinanceProcessParticipantSupport {
         }
         String uid = String.valueOf(userId);
         TaskService taskService = taskServiceProvider.getIfAvailable();
-        if (taskService != null
-                && taskService.createTaskQuery()
-                .processInstanceId(processInstanceId)
-                .taskCandidateOrAssigned(uid)
-                .count() > 0) {
-            return true;
+        if (taskService != null) {
+            if (taskService.createTaskQuery()
+                    .processInstanceId(processInstanceId)
+                    .taskCandidateOrAssigned(uid)
+                    .count() > 0) {
+                return true;
+            }
+            if (taskService.createTaskQuery()
+                    .processInstanceId(processInstanceId)
+                    .taskOwner(uid)
+                    .count() > 0) {
+                return true;
+            }
         }
         HistoryService historyService = historyServiceProvider.getIfAvailable();
         if (historyService == null) {
             return false;
         }
-        return historyService.createHistoricTaskInstanceQuery()
+        if (historyService.createHistoricTaskInstanceQuery()
                 .processInstanceId(processInstanceId)
                 .taskAssignee(uid)
+                .count() > 0) {
+            return true;
+        }
+        return historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .taskOwner(uid)
                 .count() > 0;
     }
 }

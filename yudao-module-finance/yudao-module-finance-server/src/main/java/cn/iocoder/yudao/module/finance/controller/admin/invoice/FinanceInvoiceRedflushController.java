@@ -59,7 +59,7 @@ public class FinanceInvoiceRedflushController {
 
     @GetMapping("/get")
     @Operation(summary = "红冲申请详情")
-    @PreAuthorize("@ss.hasPermission('finance:invoice-application:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<FinanceInvoiceRedflushDO> get(@RequestParam("id") Long id) {
         return success(redflushService.get(id));
     }

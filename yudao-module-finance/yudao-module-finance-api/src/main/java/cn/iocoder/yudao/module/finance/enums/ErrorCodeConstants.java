@@ -359,6 +359,7 @@ public interface ErrorCodeConstants {
     ErrorCode INVOICE_REDFUSH_LOCK_FAILED = new ErrorCode(1_040_010_003,
             "原开票申请已被锁定或不可红冲，请刷新后重试");
     ErrorCode INVOICE_REDFUSH_NOT_EXISTS = new ErrorCode(1_040_010_004, "红冲申请不存在");
+    ErrorCode INVOICE_REDFUSH_ACCESS_DENIED = new ErrorCode(1_040_010_006, "无权查看该红冲申请");
     ErrorCode INVOICE_REDFUSH_STATUS_INVALID = new ErrorCode(1_040_010_005,
             "当前审批状态不允许执行该操作");
 
