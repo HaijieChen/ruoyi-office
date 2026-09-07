@@ -329,16 +329,29 @@ class BpmInitiatorWithdrawGrokAcceptanceIT {
         catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
     }
 
+    private static Path repoSql(String relative) {
+        Path dir = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+        while (dir != null) {
+            Path candidate = dir.resolve(relative);
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+            dir = dir.getParent();
+        }
+        throw new IllegalStateException("missing " + relative + " from " + System.getProperty("user.dir"));
+    }
+
     @Test void cfg11IsoRunsOriginalDdlTwiceWithoutDamagingState() throws Exception {
         jdbc.execute("CREATE TABLE IF NOT EXISTS bpm_process_definition_info ("
                 + "process_definition_id VARCHAR(64) PRIMARY KEY) ENGINE=InnoDB");
         jdbc.update("INSERT IGNORE INTO bpm_process_definition_info(process_definition_id) VALUES('iso-null-def')");
         jdbc.update("INSERT IGNORE INTO bpm_initiator_withdraw_state(tenant_id,process_instance_id,human_result,generation) VALUES(1,'iso-keep',1,7)");
-        Path policy = Path.of("/tmp/oa-withdraw-login-test-20260906/sql/mysql/bpm_initiator_withdraw_policy.sql");
-        Path state = Path.of("/tmp/oa-withdraw-login-test-20260906/sql/mysql/bpm_initiator_withdraw_state.sql");
+        Path policy = repoSql("sql/mysql/bpm_initiator_withdraw_policy.sql");
+        Path state = repoSql("sql/mysql/bpm_initiator_withdraw_state.sql");
         String sql = Files.readString(policy) + "\n" + Files.readString(state);
+        String container = System.getProperty("bpm.u2.mysql.container", "bpm-initiator-withdraw-u2-test-7080");
         for (int i = 0; i < 2; i++) {
-            ProcessBuilder pb = new ProcessBuilder("docker", "exec", "-i", "oa-mi-timeout-regression",
+            ProcessBuilder pb = new ProcessBuilder("docker", "exec", "-i", container,
                     "bash", "-lc", "export MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\"; mysql -uroot bpm_u2_test");
             pb.redirectErrorStream(true);
             java.lang.Process proc = pb.start();
