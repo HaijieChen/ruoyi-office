@@ -77,6 +77,10 @@ public class SealApplyBillRespVO {
     @ExcelProperty("文件标题")
     private String documentTitle;
 
+    @Schema(description = "文件类型", example = "合同")
+    @ExcelProperty("文件类型")
+    private String documentType;
+
     @Schema(description = "文件份数", requiredMode = Schema.RequiredMode.REQUIRED, example = "3")
     @ExcelProperty("文件份数")
     private Integer documentCount;
@@ -84,6 +88,10 @@ public class SealApplyBillRespVO {
     @Schema(description = "合同金额", example = "100000.00")
     @ExcelProperty("合同金额")
     private java.math.BigDecimal contractAmount;
+
+    @Schema(description = "合同对方", example = "ABC公司")
+    @ExcelProperty("合同对方")
+    private String contractParty;
 
     @Schema(description = "预计用印时间")
     @ExcelProperty("预计用印时间")
