@@ -88,7 +88,7 @@ public class EmployeeResignationBillController {
     @GetMapping("/get")
     @Operation(summary = "获得员工离职申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('hrm:employee-resignation-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<EmployeeResignationBillRespVO> getEmployeeResignationBill(@RequestParam("id") Long id) {
         EmployeeResignationBillRespVO respVO = employeeResignationBillService.getEmployeeResignationBillInfo(id);
         return success(respVO);

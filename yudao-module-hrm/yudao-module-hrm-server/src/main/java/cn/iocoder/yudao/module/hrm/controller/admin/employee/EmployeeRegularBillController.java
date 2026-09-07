@@ -88,7 +88,7 @@ public class EmployeeRegularBillController {
     @GetMapping("/get")
     @Operation(summary = "获得员工转正申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('hrm:employee-regular-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<EmployeeRegularBillRespVO> getEmployeeRegularBill(@RequestParam("id") Long id) {
         EmployeeRegularBillRespVO respVO = employeeRegularBillService.getEmployeeRegularBillInfo(id);
         return success(respVO);

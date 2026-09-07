@@ -8,7 +8,10 @@ import cn.iocoder.yudao.framework.security.core.LoginUser;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.bpm.api.task.BpmProcessParticipantApi;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessStartApi;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
+import cn.iocoder.yudao.module.oa.framework.security.OaProcessBillReadSupport;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.oa.controller.admin.seal.SealApplyBillController;
 import cn.iocoder.yudao.module.oa.controller.admin.seal.vo.SealApplyBillSaveReqVO;
@@ -73,6 +76,9 @@ class SealApplyBillStartTest {
         @Bean AttachmentService attachmentService() { return mock(AttachmentService.class); }
         @Bean BpmProcessInstanceApi processInstanceApi() { return mock(BpmProcessInstanceApi.class); }
         @Bean BpmProcessStartApi processStartApi() { return mock(BpmProcessStartApi.class); }
+        @Bean BpmProcessParticipantApi processParticipantApi() { return mock(BpmProcessParticipantApi.class); }
+        @Bean SecurityFrameworkService securityFrameworkService() { return mock(SecurityFrameworkService.class); }
+        @Bean OaProcessBillReadSupport processBillReadSupport() { return new OaProcessBillReadSupport(); }
         @Bean AdminUserApi adminUserApi() { return mock(AdminUserApi.class); }
         @Bean DeptApi deptApi() { return mock(DeptApi.class); }
         @Bean DriverManagerDataSource dataSource() {

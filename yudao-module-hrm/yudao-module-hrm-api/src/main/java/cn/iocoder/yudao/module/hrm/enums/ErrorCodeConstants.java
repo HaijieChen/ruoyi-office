@@ -39,15 +39,19 @@ public interface ErrorCodeConstants {
     ErrorCode EMPLOYEE_ENTRY_BILL_NOT_EXISTS = new ErrorCode(1_050_002_001, "员工入职申请单不存在");
     ErrorCode EMPLOYEE_ENTRY_BILL_MOBILE_EXISTS = new ErrorCode(1_050_002_002, "手机号已存在，无法重复录入");
     ErrorCode EMPLOYEE_ENTRY_BILL_ID_CARD_EXISTS = new ErrorCode(1_050_002_003, "身份证号已存在，无法重复录入");
+    ErrorCode EMPLOYEE_ENTRY_BILL_ACCESS_DENIED = new ErrorCode(1_050_002_004, "无权查看该入职申请单");
 
     // ========== 员工转正申请单 1-050-003-000 ==========
     ErrorCode EMPLOYEE_REGULAR_BILL_NOT_EXISTS = new ErrorCode(1_050_003_001, "员工转正申请单不存在");
+    ErrorCode EMPLOYEE_REGULAR_BILL_ACCESS_DENIED = new ErrorCode(1_050_003_002, "无权查看该转正申请单");
 
     // ========== 人事调动申请单 1-050-004-000 ==========
     ErrorCode EMPLOYEE_TRANSFER_BILL_NOT_EXISTS = new ErrorCode(1_050_004_001, "人事调动申请单不存在");
+    ErrorCode EMPLOYEE_TRANSFER_BILL_ACCESS_DENIED = new ErrorCode(1_050_004_002, "无权查看该调动申请单");
 
     // ========== 员工离职申请单 1-050-005-000 ==========
     ErrorCode EMPLOYEE_RESIGNATION_BILL_NOT_EXISTS = new ErrorCode(1_050_005_001, "员工离职申请单不存在");
+    ErrorCode EMPLOYEE_RESIGNATION_BILL_ACCESS_DENIED = new ErrorCode(1_050_005_002, "无权查看该离职申请单");
 
 }
 

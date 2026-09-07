@@ -81,7 +81,7 @@ public class CarApplyBillController {
     @GetMapping("/get")
     @Operation(summary = "获得用车申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('oa:car-apply-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<CarApplyBillRespVO> getCarApplyBill(@RequestParam("id") Long id) {
         CarApplyBillRespVO respVO = carApplyBillService.getCarApplyBillInfo(id);
         return success(respVO);

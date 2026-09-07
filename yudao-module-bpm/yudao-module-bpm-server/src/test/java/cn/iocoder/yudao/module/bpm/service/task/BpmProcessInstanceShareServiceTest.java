@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.bpm.dal.mysql.task.BpmProcessInstanceShareMapper;
 import cn.iocoder.yudao.module.bpm.enums.ErrorCodeConstants;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.yudao.module.bpm.framework.flowable.core.enums.BpmnVariableConstants;
+import cn.iocoder.yudao.module.bpm.framework.security.OaBillAccessPermission;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import org.flowable.engine.history.HistoricProcessInstance;
@@ -40,6 +41,8 @@ class BpmProcessInstanceShareServiceTest {
     private BpmProcessInstanceService processInstanceService;
     @Mock
     private AdminUserApi adminUserApi;
+    @Mock
+    private OaBillAccessPermission oaBillAccessPermission;
 
     @InjectMocks
     private BpmProcessInstanceShareServiceImpl shareService;

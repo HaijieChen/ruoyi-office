@@ -12,6 +12,7 @@ import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.bpm.util.BpmProcessVariableUtils;
 import cn.iocoder.yudao.module.hrm.enums.HrmBillTypeEnum;
+import cn.iocoder.yudao.module.hrm.framework.security.HrmProcessBillReadSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ import java.util.stream.Collectors;
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_ID_CARD_EXISTS;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_MOBILE_EXISTS;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_ACCESS_DENIED;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ENTRY_BILL_NOT_EXISTS;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_INVALID;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_ROSTER_ATTACHMENT_LIMIT;
@@ -65,6 +67,8 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
 
     @Resource
     private EmployeeEntryBillMapper employeeEntryBillMapper;
+    @Resource
+    private HrmProcessBillReadSupport processBillReadSupport;
 
     @Resource
     private AttachmentService attachmentService;
@@ -283,7 +287,10 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
     @Override
     public void downloadEntryBillAttachment(Long billId, Long attachmentId, HttpServletResponse response)
             throws Exception {
-        validateEmployeeEntryBillExists(billId);
+        processBillReadSupport.loadForRead(billId, "hrm:employee-entry-bill:query",
+                employeeEntryBillMapper::selectById, EmployeeEntryBillDO::getCreator,
+                EmployeeEntryBillDO::getProcessInstanceId,
+                EMPLOYEE_ENTRY_BILL_NOT_EXISTS, EMPLOYEE_ENTRY_BILL_ACCESS_DENIED);
         AttachmentDO att = attachmentService.getAttachmentInternal(attachmentId);
         String typeCode = HrmBillTypeEnum.HRM_EMPLOYEE_ENTRY_BILL.getTypeCode();
         if (att == null
@@ -378,10 +385,10 @@ public class EmployeeEntryBillServiceImpl implements EmployeeEntryBillService, F
 
     @Override
     public EmployeeEntryBillRespVO getEmployeeEntryBillInfo(Long id) {
-        EmployeeEntryBillDO entryBill = employeeEntryBillMapper.selectById(id);
-        if (entryBill == null) {
-            return null;
-        }
+        EmployeeEntryBillDO entryBill = processBillReadSupport.loadForRead(id, "hrm:employee-entry-bill:query",
+                employeeEntryBillMapper::selectById, EmployeeEntryBillDO::getCreator,
+                EmployeeEntryBillDO::getProcessInstanceId,
+                EMPLOYEE_ENTRY_BILL_NOT_EXISTS, EMPLOYEE_ENTRY_BILL_ACCESS_DENIED);
         
         EmployeeEntryBillRespVO respVO = BeanUtils.toBean(entryBill, EmployeeEntryBillRespVO.class);
         

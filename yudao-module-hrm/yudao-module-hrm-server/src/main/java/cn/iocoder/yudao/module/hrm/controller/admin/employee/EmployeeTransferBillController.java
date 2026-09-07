@@ -88,7 +88,7 @@ public class EmployeeTransferBillController {
     @GetMapping("/get")
     @Operation(summary = "获得人事调动申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('hrm:employee-transfer-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<EmployeeTransferBillRespVO> getEmployeeTransferBill(@RequestParam("id") Long id) {
         EmployeeTransferBillRespVO respVO = employeeTransferBillService.getEmployeeTransferBillInfo(id);
         return success(respVO);

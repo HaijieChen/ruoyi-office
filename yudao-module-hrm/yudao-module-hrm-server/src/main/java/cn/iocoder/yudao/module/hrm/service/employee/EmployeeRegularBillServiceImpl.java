@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.bpm.util.BpmProcessVariableUtils;
 import cn.iocoder.yudao.module.hrm.enums.HrmBillTypeEnum;
+import cn.iocoder.yudao.module.hrm.framework.security.HrmProcessBillReadSupport;
 import cn.iocoder.yudao.module.hrm.enums.EmployeeStatusEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -32,6 +33,7 @@ import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
 import cn.iocoder.yudao.framework.common.service.FlowBillService;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_REGULAR_BILL_ACCESS_DENIED;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_REGULAR_BILL_NOT_EXISTS;
 import static cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum.APPROVE;
 
@@ -47,6 +49,8 @@ public class EmployeeRegularBillServiceImpl implements EmployeeRegularBillServic
 
     @Resource
     private EmployeeRegularBillMapper employeeRegularBillMapper;
+    @Resource
+    private HrmProcessBillReadSupport processBillReadSupport;
 
     @Resource
     private AttachmentService attachmentService;
@@ -180,10 +184,10 @@ public class EmployeeRegularBillServiceImpl implements EmployeeRegularBillServic
 
     @Override
     public EmployeeRegularBillRespVO getEmployeeRegularBillInfo(Long id) {
-        EmployeeRegularBillDO regularBill = employeeRegularBillMapper.selectById(id);
-        if (regularBill == null) {
-            return null;
-        }
+        EmployeeRegularBillDO regularBill = processBillReadSupport.loadForRead(id, "hrm:employee-regular-bill:query",
+                employeeRegularBillMapper::selectById, EmployeeRegularBillDO::getCreator,
+                EmployeeRegularBillDO::getProcessInstanceId,
+                EMPLOYEE_REGULAR_BILL_NOT_EXISTS, EMPLOYEE_REGULAR_BILL_ACCESS_DENIED);
         
         EmployeeRegularBillRespVO respVO = BeanUtils.toBean(regularBill, EmployeeRegularBillRespVO.class);
         

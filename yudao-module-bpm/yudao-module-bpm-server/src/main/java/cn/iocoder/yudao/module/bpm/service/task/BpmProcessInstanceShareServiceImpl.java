@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.bpm.dal.mysql.task.BpmProcessInstanceCopyMapper;
 import cn.iocoder.yudao.module.bpm.dal.mysql.task.BpmProcessInstanceShareMapper;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum;
 import cn.iocoder.yudao.module.bpm.framework.flowable.core.util.FlowableUtils;
+import cn.iocoder.yudao.module.bpm.framework.security.OaBillAccessPermission;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import jakarta.annotation.Resource;
@@ -48,6 +49,8 @@ public class BpmProcessInstanceShareServiceImpl implements BpmProcessInstanceSha
     private BpmTaskService taskService;
     @Resource
     private AdminUserApi adminUserApi;
+    @Resource
+    private OaBillAccessPermission oaBillAccessPermission;
     @Resource
     private SecurityFrameworkService securityFrameworkService;
 
@@ -168,6 +171,10 @@ public class BpmProcessInstanceShareServiceImpl implements BpmProcessInstanceSha
             return true;
         }
         if (copyMapper.existsByInstanceAndUser(processInstanceId, userId)) {
+            return true;
+        }
+        if (oaBillAccessPermission.isActiveTaskCandidateOrAssignee(processInstanceId, userId)
+                || oaBillAccessPermission.isHistoricTaskAssignee(processInstanceId, userId)) {
             return true;
         }
         List<HistoricTaskInstance> tasks = taskService.getTaskListByProcessInstanceId(processInstanceId, true);

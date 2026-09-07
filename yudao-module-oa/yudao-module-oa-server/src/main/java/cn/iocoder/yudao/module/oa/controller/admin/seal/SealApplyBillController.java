@@ -95,7 +95,7 @@ public class SealApplyBillController {
     @GetMapping("/get")
     @Operation(summary = "获得用印申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('oa:seal-apply-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<SealApplyBillRespVO> getSealApplyBill(@RequestParam("id") Long id) {
         SealApplyBillRespVO respVO = sealApplyBillService.getSealApplyBillInfo(id);
         return success(respVO);

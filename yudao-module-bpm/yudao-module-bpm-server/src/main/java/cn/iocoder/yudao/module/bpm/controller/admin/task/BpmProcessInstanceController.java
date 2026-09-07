@@ -31,6 +31,8 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.beans.factory.ObjectProvider;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -68,6 +70,8 @@ public class BpmProcessInstanceController {
     private DeptApi deptApi;
     @Resource
     private ObjectProvider<BpmFinanceAttachAccess> financeAttachAccessProvider;
+    @Resource
+    private SecurityFrameworkService securityFrameworkService;
 
     @GetMapping("/my-page")
     @Operation(summary = "获得我的实例分页列表", description = "在【我的流程】菜单中，进行调用")
@@ -181,12 +185,10 @@ public class BpmProcessInstanceController {
     @GetMapping("/get-approval-detail")
     @Operation(summary = "获得审批详情")
     @Parameter(name = "id", description = "流程实例的编号", required = true)
-    @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+    @PreAuthorize("isAuthenticated()")
     @SuppressWarnings("unchecked")
     public CommonResult<BpmApprovalDetailRespVO> getApprovalDetail(@Valid BpmApprovalDetailReqVO reqVO) {
-        if (StrUtil.isNotEmpty(reqVO.getProcessInstanceId())) {
-            processInstanceShareService.assertCanViewDetail(getLoginUserId(), reqVO.getProcessInstanceId());
-        }
+        assertCanPreviewOrViewApproval(reqVO.getProcessInstanceId());
         if (StrUtil.isNotEmpty(reqVO.getProcessVariablesStr())) {
             reqVO.setProcessVariables(JsonUtils.parseObject(reqVO.getProcessVariablesStr(), Map.class));
         }
@@ -195,12 +197,10 @@ public class BpmProcessInstanceController {
 
     @GetMapping("/get-next-approval-nodes")
     @Operation(summary = "获取下一个执行的流程节点")
-    @PreAuthorize("@ss.hasPermission('bpm:process-instance:query')")
+    @PreAuthorize("isAuthenticated()")
     @SuppressWarnings("unchecked")
     public CommonResult<List<BpmApprovalDetailRespVO.ActivityNode>> getNextApprovalNodes(@Valid BpmApprovalDetailReqVO reqVO) {
-        if (StrUtil.isNotEmpty(reqVO.getProcessInstanceId())) {
-            processInstanceShareService.assertCanViewDetail(getLoginUserId(), reqVO.getProcessInstanceId());
-        }
+        assertCanPreviewOrViewApproval(reqVO.getProcessInstanceId());
         if (StrUtil.isNotEmpty(reqVO.getProcessVariablesStr())) {
             reqVO.setProcessVariables(JsonUtils.parseObject(reqVO.getProcessVariablesStr(), Map.class));
         }
@@ -236,6 +236,16 @@ public class BpmProcessInstanceController {
                 processDefinitionService.getProcessDefinitionInfo(historicProcessInstance.getProcessDefinitionId()),
                 tasks, userMap,
                 new UserSimpleBaseVO().setNickname(startUser.getNickname()).setDeptName(dept.getName())));
+    }
+
+    private void assertCanPreviewOrViewApproval(String processInstanceId) {
+        if (StrUtil.isEmpty(processInstanceId)) {
+            if (!securityFrameworkService.hasPermission("bpm:process-instance:query")) {
+                throw new AccessDeniedException("定义预览需要流程查询权限");
+            }
+            return;
+        }
+        processInstanceShareService.assertCanViewDetail(getLoginUserId(), processInstanceId);
     }
 
     private void assertCanGetProcessInstance(String id) {

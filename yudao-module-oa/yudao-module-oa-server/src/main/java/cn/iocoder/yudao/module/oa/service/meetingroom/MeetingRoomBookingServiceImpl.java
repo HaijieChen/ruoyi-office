@@ -7,6 +7,7 @@ import cn.iocoder.yudao.framework.common.util.bill.BillCodeUtils;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.oa.framework.security.OaProcessBillReadSupport;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.oa.enums.OaBillTypeEnum;
@@ -48,6 +49,8 @@ public class MeetingRoomBookingServiceImpl implements MeetingRoomBookingService,
 
     @Resource
     private BpmProcessInstanceApi processInstanceApi;
+    @Resource
+    private OaProcessBillReadSupport processBillReadSupport;
 
     @Resource
     private AttachmentService attachmentService;
@@ -195,10 +198,11 @@ public class MeetingRoomBookingServiceImpl implements MeetingRoomBookingService,
 
     @Override
     public MeetingRoomBookingRespVO getMeetingRoomBooking(Long id) {
-        MeetingRoomBookingDO meetingRoomBooking = meetingRoomBookingMapper.selectById(id);
-        if (meetingRoomBooking == null) {
-            return null;
-        }
+        MeetingRoomBookingDO meetingRoomBooking = processBillReadSupport.loadForRead(id,
+                "oa:meeting-room-booking:query",
+                meetingRoomBookingMapper::selectById, MeetingRoomBookingDO::getCreator,
+                MeetingRoomBookingDO::getProcessInstanceId,
+                MEETING_ROOM_BOOKING_NOT_EXISTS, MEETING_ROOM_BOOKING_ACCESS_DENIED);
 
         MeetingRoomBookingRespVO respVO = BeanUtils.toBean(meetingRoomBooking, MeetingRoomBookingRespVO.class);
 

@@ -38,8 +38,8 @@ public class OaBillAccessPermission {
     }
 
     /**
-     * 用户是否为该 process 上任意 active 任务的候选人或办理人。
-     * 仅用于详情读权，不扩大列表。
+     * 用户是否为该 process 上任意 active 任务的候选人、办理人或 task owner（委托前原办理人）。
+     * 不是业务单据 creator。仅用于详情读权，不扩大列表。
      */
     public boolean isActiveTaskCandidateOrAssignee(String processInstanceId, Long userId) {
         if (userId == null || StrUtil.isBlank(processInstanceId)) {
@@ -49,15 +49,22 @@ public class OaBillAccessPermission {
         if (taskService == null) {
             return false;
         }
+        String uid = String.valueOf(userId);
         long count = taskService.createTaskQuery()
                 .processInstanceId(processInstanceId)
-                .taskCandidateOrAssigned(String.valueOf(userId))
+                .taskCandidateOrAssigned(uid)
                 .count();
-        return count > 0;
+        if (count > 0) {
+            return true;
+        }
+        return taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .taskOwner(uid)
+                .count() > 0;
     }
 
     /**
-     * 已办：流程结束后办理人仍可读详情。
+     * 已办：流程结束后 historic assignee 或 historic task owner 仍可读详情。
      */
     public boolean isHistoricTaskAssignee(String processInstanceId, Long userId) {
         if (userId == null || StrUtil.isBlank(processInstanceId)) {
@@ -70,11 +77,18 @@ public class OaBillAccessPermission {
         if (historyService == null) {
             return false;
         }
-        long count = historyService.createHistoricTaskInstanceQuery()
+        String uid = String.valueOf(userId);
+        long assignee = historyService.createHistoricTaskInstanceQuery()
                 .processInstanceId(processInstanceId)
-                .taskAssignee(String.valueOf(userId))
+                .taskAssignee(uid)
                 .count();
-        return count > 0;
+        if (assignee > 0) {
+            return true;
+        }
+        return historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .taskOwner(uid)
+                .count() > 0;
     }
 
     public boolean canReadOaBill(Long userId, Long ownerUserId, String processInstanceId) {

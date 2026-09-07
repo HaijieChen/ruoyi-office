@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.common.util.bill.BillCodeUtils;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.oa.framework.security.OaProcessBillReadSupport;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.oa.enums.OaBillTypeEnum;
@@ -53,6 +54,8 @@ public class CarApplyBillServiceImpl implements CarApplyBillService, FlowBillSer
 
     @Resource
     private BpmProcessInstanceApi processInstanceApi;
+    @Resource
+    private OaProcessBillReadSupport processBillReadSupport;
 
 
     @Override
@@ -163,10 +166,9 @@ public class CarApplyBillServiceImpl implements CarApplyBillService, FlowBillSer
 
     @Override
     public CarApplyBillRespVO getCarApplyBillInfo(Long id) {
-        CarApplyBillDO carApplyBill = carApplyBillMapper.selectById(id);
-        if (carApplyBill == null) {
-            return null;
-        }
+        CarApplyBillDO carApplyBill = processBillReadSupport.loadForRead(id, "oa:car-apply-bill:query",
+                carApplyBillMapper::selectById, CarApplyBillDO::getCreator, CarApplyBillDO::getProcessInstanceId,
+                CAR_APPLY_BILL_NOT_EXISTS, CAR_APPLY_BILL_ACCESS_DENIED);
         
         CarApplyBillRespVO respVO = BeanUtils.toBean(carApplyBill, CarApplyBillRespVO.class);
         

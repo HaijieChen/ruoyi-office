@@ -64,7 +64,7 @@ public class MeetingRoomBookingController {
     @GetMapping("/get")
     @Operation(summary = "获得会议室预定申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('oa:meeting-room-booking:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<MeetingRoomBookingRespVO> getMeetingRoomBooking(@RequestParam("id") Long id) {
         MeetingRoomBookingRespVO meetingRoomBooking = meetingRoomBookingService.getMeetingRoomBooking(id);
         return success(meetingRoomBooking);

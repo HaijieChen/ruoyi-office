@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.bpm.util.BpmProcessVariableUtils;
 import cn.iocoder.yudao.module.hrm.enums.HrmBillTypeEnum;
+import cn.iocoder.yudao.module.hrm.framework.security.HrmProcessBillReadSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
 import cn.iocoder.yudao.framework.common.service.FlowBillService;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_TRANSFER_BILL_ACCESS_DENIED;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_TRANSFER_BILL_NOT_EXISTS;
 import static cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum.APPROVE;
 
@@ -46,6 +48,8 @@ public class EmployeeTransferBillServiceImpl implements EmployeeTransferBillServ
 
     @Resource
     private EmployeeTransferBillMapper employeeTransferBillMapper;
+    @Resource
+    private HrmProcessBillReadSupport processBillReadSupport;
 
     @Resource
     private AttachmentService attachmentService;
@@ -179,10 +183,10 @@ public class EmployeeTransferBillServiceImpl implements EmployeeTransferBillServ
 
     @Override
     public EmployeeTransferBillRespVO getEmployeeTransferBillInfo(Long id) {
-        EmployeeTransferBillDO transferBill = employeeTransferBillMapper.selectById(id);
-        if (transferBill == null) {
-            return null;
-        }
+        EmployeeTransferBillDO transferBill = processBillReadSupport.loadForRead(id, "hrm:employee-transfer-bill:query",
+                employeeTransferBillMapper::selectById, EmployeeTransferBillDO::getCreator,
+                EmployeeTransferBillDO::getProcessInstanceId,
+                EMPLOYEE_TRANSFER_BILL_NOT_EXISTS, EMPLOYEE_TRANSFER_BILL_ACCESS_DENIED);
         
         EmployeeTransferBillRespVO respVO = BeanUtils.toBean(transferBill, EmployeeTransferBillRespVO.class);
         

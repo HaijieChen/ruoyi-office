@@ -88,7 +88,7 @@ public class CarReturnBillController {
     @GetMapping("/get")
     @Operation(summary = "获得还车申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('oa:car-return-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<CarReturnBillRespVO> getCarReturnBill(@RequestParam("id") Long id) {
         CarReturnBillRespVO respVO = carReturnBillService.getCarReturnBillInfo(id);
         return success(respVO);

@@ -19,6 +19,8 @@ public interface ErrorCodeConstants {
     ErrorCode CAR_RETURN_BILL_NOT_EXISTS = new ErrorCode(1_101_000_003, "还车申请单不存在");
     ErrorCode CAR_APPLY_BILL_ALREADY_RETURNED = new ErrorCode(1_101_000_004, "用车申请单已还车，不能重复还车");
     ErrorCode CAR_TIME_CONFLICT = new ErrorCode(1_101_000_005, "车辆使用时间冲突，该时间段已有其他申请单");
+    ErrorCode CAR_APPLY_BILL_ACCESS_DENIED = new ErrorCode(1_101_000_006, "无权查看该用车申请单");
+    ErrorCode CAR_RETURN_BILL_ACCESS_DENIED = new ErrorCode(1_101_000_007, "无权查看该还车申请单");
 
     // ========== 印章管理 1-101-001-000 ============
     ErrorCode SEAL_NOT_EXISTS = new ErrorCode(1_101_001_000, "印章信息不存在");
@@ -31,6 +33,7 @@ public interface ErrorCodeConstants {
     ErrorCode SEAL_APPLY_BILL_ALREADY_USED = new ErrorCode(1_101_001_103, "用印申请单已使用，不能重复使用");
     ErrorCode SEAL_APPLY_BILL_NOT_APPROVED = new ErrorCode(1_101_001_104, "用印申请单未审批通过，不能使用");
     ErrorCode SEAL_APPLY_BILL_OVERDUE = new ErrorCode(1_101_001_105, "印章借用已逾期，请及时归还");
+    ErrorCode SEAL_APPLY_BILL_ACCESS_DENIED = new ErrorCode(1_101_001_106, "无权查看该用印申请单");
 
     // ========== 通用附件 1-101-002-000 ============
     ErrorCode ATTACHMENT_NOT_EXISTS = new ErrorCode(1_101_002_000, "附件不存在");
@@ -50,4 +53,5 @@ public interface ErrorCodeConstants {
     ErrorCode MEETING_ROOM_BOOKING_TIME_PAST = new ErrorCode(1_101_005_002, "会议开始时间不能是过去时间");
     ErrorCode MEETING_ROOM_BOOKING_TIME_CONFLICT = new ErrorCode(1_101_005_003, "该时间段会议室已被预定，请选择其他时间");
     ErrorCode MEETING_ROOM_BOOKING_CANNOT_DELETE = new ErrorCode(1_101_005_004, "只能删除草稿状态的预定申请单");
+    ErrorCode MEETING_ROOM_BOOKING_ACCESS_DENIED = new ErrorCode(1_101_005_005, "无权查看该会议室预定申请单");
 }

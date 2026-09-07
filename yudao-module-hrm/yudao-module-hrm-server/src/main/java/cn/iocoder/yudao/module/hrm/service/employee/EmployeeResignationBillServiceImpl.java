@@ -10,6 +10,7 @@ import cn.iocoder.yudao.module.bpm.enums.BpmProcessVariableConstants;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.bpm.util.BpmProcessVariableUtils;
 import cn.iocoder.yudao.module.hrm.enums.HrmBillTypeEnum;
+import cn.iocoder.yudao.module.hrm.framework.security.HrmProcessBillReadSupport;
 import cn.iocoder.yudao.module.hrm.enums.EmployeeStatusEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -32,6 +33,7 @@ import cn.iocoder.yudao.common.server.attachment.controller.vo.AttachmentRespVO;
 import cn.iocoder.yudao.framework.common.service.FlowBillService;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_RESIGNATION_BILL_ACCESS_DENIED;
 import static cn.iocoder.yudao.module.hrm.enums.ErrorCodeConstants.EMPLOYEE_RESIGNATION_BILL_NOT_EXISTS;
 import static cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum.APPROVE;
 
@@ -47,6 +49,8 @@ public class EmployeeResignationBillServiceImpl implements EmployeeResignationBi
 
     @Resource
     private EmployeeResignationBillMapper employeeResignationBillMapper;
+    @Resource
+    private HrmProcessBillReadSupport processBillReadSupport;
 
     @Resource
     private AttachmentService attachmentService;
@@ -179,10 +183,11 @@ public class EmployeeResignationBillServiceImpl implements EmployeeResignationBi
 
     @Override
     public EmployeeResignationBillRespVO getEmployeeResignationBillInfo(Long id) {
-        EmployeeResignationBillDO resignationBill = employeeResignationBillMapper.selectById(id);
-        if (resignationBill == null) {
-            return null;
-        }
+        EmployeeResignationBillDO resignationBill = processBillReadSupport.loadForRead(id,
+                "hrm:employee-resignation-bill:query",
+                employeeResignationBillMapper::selectById, EmployeeResignationBillDO::getCreator,
+                EmployeeResignationBillDO::getProcessInstanceId,
+                EMPLOYEE_RESIGNATION_BILL_NOT_EXISTS, EMPLOYEE_RESIGNATION_BILL_ACCESS_DENIED);
         
         EmployeeResignationBillRespVO respVO = BeanUtils.toBean(resignationBill, EmployeeResignationBillRespVO.class);
         

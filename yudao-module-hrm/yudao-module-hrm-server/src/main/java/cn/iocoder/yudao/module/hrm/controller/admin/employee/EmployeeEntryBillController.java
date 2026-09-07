@@ -88,7 +88,7 @@ public class EmployeeEntryBillController {
     @GetMapping("/get")
     @Operation(summary = "获得员工入职申请单")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
-    @PreAuthorize("@ss.hasPermission('hrm:employee-entry-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<EmployeeEntryBillRespVO> getEmployeeEntryBill(@RequestParam("id") Long id) {
         EmployeeEntryBillRespVO respVO = employeeEntryBillService.getEmployeeEntryBillInfo(id);
         return success(respVO);
@@ -126,7 +126,7 @@ public class EmployeeEntryBillController {
 
     @GetMapping("/attachment/download")
     @Operation(summary = "下载入职单附件（鉴权；不走匿名直链）")
-    @PreAuthorize("@ss.hasPermission('hrm:employee-entry-bill:query')")
+    @PreAuthorize("isAuthenticated()")
     public void downloadEntryBillAttachment(@RequestParam("billId") Long billId,
                                             @RequestParam("attachmentId") Long attachmentId,
                                             HttpServletResponse response) throws Exception {

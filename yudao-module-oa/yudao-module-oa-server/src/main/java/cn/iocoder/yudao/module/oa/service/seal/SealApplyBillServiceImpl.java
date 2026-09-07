@@ -1,11 +1,15 @@
 package cn.iocoder.yudao.module.oa.service.seal;
 
 import cn.iocoder.yudao.framework.common.enums.SystemEnum;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.bill.BillCodeUtils;
+import cn.iocoder.yudao.framework.datapermission.core.util.DataPermissionUtils;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
+import cn.iocoder.yudao.framework.security.core.service.SecurityFrameworkService;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessStartApi;
+import cn.iocoder.yudao.module.oa.framework.security.OaProcessBillReadSupport;
 import cn.iocoder.yudao.module.system.api.user.AdminUserApi;
 import cn.iocoder.yudao.module.system.api.user.dto.AdminUserRespDTO;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
@@ -65,6 +69,8 @@ public class SealApplyBillServiceImpl implements SealApplyBillService, FlowBillS
 
     @Resource
     private BpmProcessStartApi processStartApi;
+    @Resource
+    private OaProcessBillReadSupport processBillReadSupport;
     @Resource
     private AdminUserApi adminUserApi;
     @Resource
@@ -266,22 +272,21 @@ public class SealApplyBillServiceImpl implements SealApplyBillService, FlowBillS
 
     @Override
     public SealApplyBillRespVO getSealApplyBillInfo(Long id) {
-        SealApplyBillDO sealApplyBill = sealApplyBillMapper.selectById(id);
-        if (sealApplyBill == null) {
-            return null;
-        }
-        
+        SealApplyBillDO bill = processBillReadSupport.loadForRead(id, "oa:seal-apply-bill:query",
+                sealApplyBillMapper::selectById, SealApplyBillDO::getCreator, SealApplyBillDO::getProcessInstanceId,
+                SEAL_APPLY_BILL_NOT_EXISTS, SEAL_APPLY_BILL_ACCESS_DENIED);
+        return toSealApplyBillResp(bill);
+    }
+
+    private SealApplyBillRespVO toSealApplyBillResp(SealApplyBillDO sealApplyBill) {
         SealApplyBillRespVO respVO = BeanUtils.toBean(sealApplyBill, SealApplyBillRespVO.class);
-        
-        // 获取附件信息
         respVO.setAttachments(BeanUtils.toBean(
-            attachmentService.getAttachmentListByBusiness(OaBillTypeEnum.OA_SEAL_APPLY_BILL.getTypeCode(), id),
-            AttachmentRespVO.class
-        ));
-        
+                attachmentService.getAttachmentListByBusiness(
+                        OaBillTypeEnum.OA_SEAL_APPLY_BILL.getTypeCode(), sealApplyBill.getId()),
+                AttachmentRespVO.class));
         return respVO;
     }
-    
+
     @Override
     public SealApplyBillDO getSealApplyBillByCode(String code) {
         return sealApplyBillMapper.selectOne(new LambdaQueryWrapperX<SealApplyBillDO>().eq(SealApplyBillDO::getBillCode, code));

@@ -4,6 +4,7 @@ import cn.iocoder.yudao.framework.common.enums.SystemEnum;
 import cn.iocoder.yudao.framework.common.util.bill.BillCodeUtils;
 import cn.iocoder.yudao.framework.security.core.util.SecurityFrameworkUtils;
 import cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi;
+import cn.iocoder.yudao.module.oa.framework.security.OaProcessBillReadSupport;
 import cn.iocoder.yudao.module.bpm.api.task.dto.BpmProcessInstanceCreateReqDTO;
 import cn.iocoder.yudao.module.bpm.enums.task.BpmTaskStatusEnum;
 import cn.iocoder.yudao.module.oa.dal.dataobject.car.CarApplyBillDO;
@@ -48,6 +49,8 @@ public class CarReturnBillServiceImpl implements CarReturnBillService, FlowBillS
 
     @Resource
     private BpmProcessInstanceApi processInstanceApi;
+    @Resource
+    private OaProcessBillReadSupport processBillReadSupport;
 
     @Resource
     private CarApplyBillService carApplyBillService;
@@ -165,10 +168,9 @@ public class CarReturnBillServiceImpl implements CarReturnBillService, FlowBillS
 
     @Override
     public CarReturnBillRespVO getCarReturnBillInfo(Long id) {
-        CarReturnBillDO carReturnBill = carReturnBillMapper.selectById(id);
-        if (carReturnBill == null) {
-            return null;
-        }
+        CarReturnBillDO carReturnBill = processBillReadSupport.loadForRead(id, "oa:car-return-bill:query",
+                carReturnBillMapper::selectById, CarReturnBillDO::getCreator, CarReturnBillDO::getProcessInstanceId,
+                CAR_RETURN_BILL_NOT_EXISTS, CAR_RETURN_BILL_ACCESS_DENIED);
         
         CarReturnBillRespVO respVO = BeanUtils.toBean(carReturnBill, CarReturnBillRespVO.class);
         
