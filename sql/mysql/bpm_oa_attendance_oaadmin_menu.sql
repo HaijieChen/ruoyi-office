@@ -1,6 +1,6 @@
 -- 把加班/补卡/节假日日历菜单授给 oaadmin 当前角色和 tenant_admin（幂等）。
 -- 查询/核验按钮，不含 create。员工发起走假勤目录，不依赖这些查询菜单。
--- 节假日日历仍挂在「加班查询」下，地址 /bpm/oa/overtime/calendar。
+-- 节假日日历与加班查询同级，地址 /bpm/oa/overtime/calendar。不要挂在加班查询页面下。
 
 SET NAMES utf8mb4;
 

@@ -44,6 +44,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '节假日日历',
           activePath: '/bpm/oa/overtime/calendar',
+          hideInMenu: true,
           authority: ['bpm:oa-overtime-calendar:query'],
         },
       },

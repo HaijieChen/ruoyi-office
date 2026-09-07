@@ -13,8 +13,8 @@
 
 侧边栏：
 
-- 工作流程 → OA 示例 → 加班查询 → 节假日日历（`/bpm/oa/overtime/calendar`）
-- 同级：补卡查询
+- 工作流程 → OA 示例 → 节假日日历（`/bpm/oa/overtime/calendar`，与加班查询同级，不要挂在加班查询页面下）
+- 同级：加班查询、补卡查询
 
 ## SQL 顺序（均幂等）
 
@@ -29,6 +29,8 @@
 7. `sql/mysql/bpm_oa_overtime_calendar.sql`（含 2026 ACTIVE 种子、站内信模板、周一 09:00 抓取任务）
 8. `sql/mysql/bpm_oa_attendance_oaadmin_menu.sql`（oaadmin 当前角色 + `tenant_admin` 可见查询/核验）
 9. `sql/mysql/bpm_oa_attendance_catalog.sql`（假勤分类补 overtime/punch）
+
+已上线后若节假日日历 404：只跑 `sql/mysql/bpm_oa_overtime_calendar_menu_sibling.sql`，管理员重新登录，不必切应用。
 
 ## 流程导入
 

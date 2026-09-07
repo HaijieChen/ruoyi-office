@@ -258,4 +258,75 @@ describe('convertServerMenuToRouteRecordStringComponent', () => {
 
     expect(routes[0]?.children?.[0]?.path).toBe('/workspace');
   });
+
+  it('keeps overtime as a leaf when calendar is a sibling under OA', () => {
+    const routes = convertServerMenuToRouteRecordStringComponent([
+      {
+        id: 100,
+        name: 'OA示例',
+        parentId: 5,
+        path: '/bpm/oa',
+        children: [
+          {
+            id: 101,
+            name: '加班查询',
+            parentId: 100,
+            path: 'overtime',
+            component: 'bpm/oa/overtime/index',
+            componentName: 'BpmOAOvertime',
+          },
+          {
+            id: 102,
+            name: '节假日日历',
+            parentId: 100,
+            path: 'overtime/calendar',
+            component: 'bpm/oa/overtime-calendar/index',
+            componentName: 'BpmOAOvertimeCalendar',
+          },
+        ],
+      },
+    ] as any);
+
+    const overtime = routes[0]?.children?.[0];
+    const calendar = routes[0]?.children?.[1];
+    expect(overtime?.component).toBe('bpm/oa/overtime/index');
+    expect(overtime?.path).toBe('/bpm/oa/overtime');
+    expect(calendar?.component).toBe('bpm/oa/overtime-calendar/index');
+    expect(calendar?.path).toBe('/bpm/oa/overtime/calendar');
+  });
+
+  it('clears overtime page component when calendar is nested under it', () => {
+    const routes = convertServerMenuToRouteRecordStringComponent([
+      {
+        id: 100,
+        name: 'OA示例',
+        parentId: 5,
+        path: '/bpm/oa',
+        children: [
+          {
+            id: 101,
+            name: '加班查询',
+            parentId: 100,
+            path: 'overtime',
+            component: 'bpm/oa/overtime/index',
+            componentName: 'BpmOAOvertime',
+            children: [
+              {
+                id: 102,
+                name: '节假日日历',
+                parentId: 101,
+                path: 'calendar',
+                component: 'bpm/oa/overtime-calendar/index',
+                componentName: 'BpmOAOvertimeCalendar',
+              },
+            ],
+          },
+        ],
+      },
+    ] as any);
+
+    const overtime = routes[0]?.children?.[0];
+    expect(overtime?.component).toBe('');
+    expect(overtime?.children?.[0]?.path).toBe('/bpm/oa/overtime/calendar');
+  });
 });

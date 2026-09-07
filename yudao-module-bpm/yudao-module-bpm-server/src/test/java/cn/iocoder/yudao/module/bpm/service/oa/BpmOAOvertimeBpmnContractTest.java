@@ -71,6 +71,23 @@ class BpmOAOvertimeBpmnContractTest {
         assertFalse(grantBlock(text).contains("bpm:oa-overtime:create"));
     }
 
+    @Test
+    void calendarMenuIsSiblingOfOvertimeNotNestedUnderOvertimePage() throws Exception {
+        Path sql = findRoot().resolve("sql/mysql/bpm_oa_overtime_calendar.sql");
+        assertTrue(Files.exists(sql));
+        String text = Files.readString(sql);
+
+        assertTrue(text.contains("bpm/oa/overtime-calendar/index"));
+        assertTrue(text.contains("'overtime/calendar'"));
+        assertTrue(text.contains("bpm/oa/leave/index"));
+        assertFalse(text.contains("m.`parent_id` = overtime.`id`"));
+        assertFalse(text.contains("m.`path` = 'calendar'"));
+        int insertIdx = text.indexOf("SELECT '节假日日历'");
+        assertTrue(insertIdx >= 0);
+        String insert = text.substring(insertIdx, text.indexOf("WHERE", insertIdx));
+        assertFalse(insert.contains("bpm/oa/overtime/index"));
+    }
+
     private static String grantBlock(String text) {
         int idx = text.indexOf("INSERT INTO `system_role_menu`");
         assertTrue(idx >= 0);
