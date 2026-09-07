@@ -2,18 +2,19 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { SealApplyBillApi } from '#/api/oa/seal/sealapply';
 
-import { nextTick, onMounted, ref, shallowRef } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { Loading } from '@vben/common-ui';
 import {
   BpmProcessInstanceStatus,
   BpmProcessInstanceStatusEditValue,
+  DICT_TYPE,
 } from '@vben/constants';
-import { useTabs } from '@vben/hooks';
+import { getDictOptions, useTabs } from '@vben/hooks';
 import { useUserStore } from '@vben/stores';
 
-import { Button, message } from 'ant-design-vue';
+import { Button, DatePicker, message } from 'ant-design-vue';
 
 import { withdrawProcessToStart } from '#/api/bpm/task';
 import {
@@ -26,6 +27,8 @@ import { BasicForm, CardContainer } from '#/components/basic-form';
 import { $t } from '#/locales';
 
 import { useFormSchema } from './data';
+import { buildSealApprovalFields, mergeSealSavePayload } from './seal-approval-readonly';
+import SealApprovalReadonly from './seal-approval-readonly.vue';
 
 defineOptions({ name: 'OaSealApplyBillInfo' });
 
@@ -59,6 +62,19 @@ const attachmentListRef = ref();
 
 // 表单schema - 使用shallowRef避免深度响应式
 const formSchema = shallowRef<VbenFormSchema[]>([]);
+
+const approvalFields = computed(() => {
+  const rows = buildSealApprovalFields({
+    ...formData.value,
+    useTypeOptions: getDictOptions(DICT_TYPE.OA_SEAL_USE_TYPE, 'number'),
+    useModeOptions: getDictOptions(DICT_TYPE.OA_SEAL_USE_MODE, 'number'),
+    urgentOptions: getDictOptions(DICT_TYPE.COMMON_STATUS, 'number'),
+  });
+  if (canReturnEdit.value) {
+    return rows.filter((row) => row.key !== 'actualReturnTime');
+  }
+  return rows;
+});
 
 // 初始化表单schema
 function initFormSchema() {
@@ -234,23 +250,28 @@ async function beforeApproval(): Promise<boolean> {
     if (
       props.isApproval &&
       props.nodeKeyName === '申请人归还印章' &&
-      basicFormRef.value
+      canReturnEdit.value
     ) {
-      // 校验表单
-      const { valid } = await basicFormRef.value.validateForm();
-      if (!valid) {
-        message.error('表单校验不通过，请先完善表单信息');
+      if (!formData.value.actualReturnTime) {
+        message.error('请选择实际归还时间');
         return false;
       }
-
-      // 获取表单值并保存
-      const formValues = await basicFormRef.value.getFormValues();
-      const data = {
-        ...formData.value,
-        ...formValues,
-      };
+      let formValues: Record<string, unknown> | undefined;
+      if (!readonly.value && basicFormRef.value) {
+        const { valid } = await basicFormRef.value.validateForm();
+        if (!valid) {
+          message.error('表单校验不通过，请先完善表单信息');
+          return false;
+        }
+        formValues = await basicFormRef.value.getFormValues();
+      }
+      const data = mergeSealSavePayload(
+        formData.value as Record<string, unknown>,
+        formValues,
+        true,
+      );
       // 保存表单数据
-      await saveSealApplyBill(data);
+      await saveSealApplyBill(data as any);
     }
     return true;
   } catch {
@@ -291,6 +312,20 @@ onMounted(() => {
       :hide-footer="props.isApproval"
       :activity-nodes="props.activityNodes"
     >
+      <template v-if="readonly" #base-form-fields>
+        <SealApprovalReadonly :fields="approvalFields" />
+        <div v-if="canReturnEdit" class="mt-4" data-field="actualReturnTime-edit">
+          <div class="mb-1 text-sm text-black/45">实际归还时间</div>
+          <DatePicker
+            v-model:value="formData.actualReturnTime"
+            class="w-full max-w-md"
+            show-time
+            format="YYYY-MM-DD HH:mm:ss"
+            value-format="x"
+            placeholder="请选择实际归还时间"
+          />
+        </div>
+      </template>
       <!-- 扩展插槽，用于明细表格等 -->
       <template #form-extension>
         <!-- 附件列表 -->

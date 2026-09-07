@@ -4,17 +4,9 @@ import type { AttachmentApi } from '#/api/common/attachment';
 import { ACTION_ICON } from '#/adapter/vxe-table';
 
 import { createAttachmentFromOnboardingClaim } from './onboarding-claim';
+import { formatFileSize } from './format-file-size';
 
-/**
- * 格式化文件大小
- * @param size 文件大小（字节）
- * @returns 格式化后的文件大小字符串
- */
-export function formatFileSize(size: number): string {
-  if (size < 1024) return `${size}B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)}KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)}MB`;
-}
+export { formatFileSize };
 
 /**
  * 附件列表表格列配置
@@ -38,15 +30,21 @@ export function useAttachmentColumns(readonly: boolean = false): VxeTableGridOpt
       title: '文件大小',
       width: 120,
       formatter: ({ cellValue }) => {
-        return formatFileSize(cellValue || 0);
+        return formatFileSize(cellValue);
       },
     },
     {
       field: 'fileExtension',
       title: '文件类型',
       width: 100,
-      formatter: ({ cellValue }) => {
-        return cellValue ? cellValue.toUpperCase() : '';
+      formatter: ({ cellValue, row }) => {
+        if (cellValue) return String(cellValue).toUpperCase();
+        const type = String(row?.fileType || '').toLowerCase();
+        if (type.includes('jpeg') || type.includes('jpg')) return 'JPG';
+        if (type.includes('png')) return 'PNG';
+        if (type.includes('pdf')) return 'PDF';
+        if (type.includes('/')) return type.slice(type.lastIndexOf('/') + 1).toUpperCase();
+        return '';
       },
     },
     {

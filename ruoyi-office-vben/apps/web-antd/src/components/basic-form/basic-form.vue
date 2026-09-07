@@ -300,10 +300,12 @@ defineExpose({
             <div class="form-content flex flex-col bg-white">
               <!-- 基本信息 -->
               <CardContainer :title="$t('common.baseInfo')">
-                <!-- 如果有formSchema则渲染内置表单 -->
-                <component v-if="formApi" :is="FormComponent" ref="formRef" />
-                <!-- 否则使用插槽 -->
-                <slot v-else name="base-form"></slot>
+                <slot name="base-form-fields">
+                  <!-- 如果有formSchema则渲染内置表单 -->
+                  <component v-if="formApi" :is="FormComponent" ref="formRef" />
+                  <!-- 否则使用插槽 -->
+                  <slot v-else name="base-form"></slot>
+                </slot>
               </CardContainer>
 
               <!-- 扩展插槽，用于明细表格等 -->

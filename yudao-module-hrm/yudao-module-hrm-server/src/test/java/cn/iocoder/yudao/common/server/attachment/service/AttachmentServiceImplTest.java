@@ -297,4 +297,95 @@ class AttachmentServiceImplTest {
                 AttachmentServiceImpl.RESERVED_ONBOARDING_BUSINESS_TYPE, 1L).size());
     }
 
+    @Test
+    void listFillsMissingSizeFromUniqueFileUrlWithoutDownloading() {
+        AttachmentDO row = new AttachmentDO();
+        row.setId(27L);
+        row.setBusinessType("103");
+        row.setBusinessId(19L);
+        row.setFileId(null);
+        row.setFileUrl("http://files/weixin.jpg");
+        row.setFilePath("20260907/weixin.jpg");
+        row.setFileSize(0L);
+        row.setFileType(null);
+        when(attachmentMapper.selectListByBusiness("103", 19L)).thenReturn(List.of(row));
+        FileRespDTO meta = file(2493L, "20260907/weixin.jpg", "微信图片.jpg");
+        meta.setSize(106878L);
+        meta.setType("image/jpeg");
+        when(fileAccessApi.getUniqueFileByUrl("http://files/weixin.jpg")).thenReturn(meta);
+
+        List<AttachmentDO> listed = attachmentService.getAttachmentListByBusiness("103", 19L);
+
+        assertEquals(1, listed.size());
+        assertEquals(2493L, listed.get(0).getFileId());
+        assertEquals(106878L, listed.get(0).getFileSize());
+        assertEquals("image/jpeg", listed.get(0).getFileType());
+        assertEquals("jpg", listed.get(0).getFileExtension());
+        verify(fileAccessApi, never()).getFileContent(anyLong());
+        verify(attachmentMapper, never()).insertOrUpdate(anyList());
+        verify(attachmentMapper, never()).updateById(any(AttachmentDO.class));
+    }
+
+    @Test
+    void listLeavesUnknownWhenNoUniqueFileMetadata() {
+        AttachmentDO row = new AttachmentDO();
+        row.setId(28L);
+        row.setBusinessType("103");
+        row.setBusinessId(19L);
+        row.setFileUrl("http://files/missing.jpg");
+        row.setFilePath("missing.jpg");
+        row.setFileSize(0L);
+        when(attachmentMapper.selectListByBusiness("103", 19L)).thenReturn(List.of(row));
+        when(fileAccessApi.getUniqueFileByUrl("http://files/missing.jpg")).thenReturn(null);
+        when(fileAccessApi.getUniqueFileByPath("missing.jpg")).thenReturn(null);
+
+        List<AttachmentDO> listed = attachmentService.getAttachmentListByBusiness("103", 19L);
+
+        assertNull(listed.get(0).getFileSize());
+        verify(fileAccessApi, never()).getFileContent(anyLong());
+    }
+
+    @Test
+    void listDoesNotOverwriteAuthoritativeNonZeroSize() {
+        AttachmentDO row = new AttachmentDO();
+        row.setId(29L);
+        row.setBusinessType("103");
+        row.setBusinessId(19L);
+        row.setFileId(9L);
+        row.setFileSize(12L);
+        row.setFileType("application/pdf");
+        when(attachmentMapper.selectListByBusiness("103", 19L)).thenReturn(List.of(row));
+
+        List<AttachmentDO> listed = attachmentService.getAttachmentListByBusiness("103", 19L);
+
+        assertEquals(12L, listed.get(0).getFileSize());
+        verify(fileAccessApi, never()).getUniqueFileByUrl(any());
+        verify(fileAccessApi, never()).getUniqueFileByPath(any());
+    }
+
+    @Test
+    void saveResolvesZeroSizeFromUniqueUrl() {
+        when(attachmentMapper.selectListByBusiness("103", 19L)).thenReturn(List.of());
+        FileRespDTO meta = file(2493L, "20260907/weixin.jpg", "微信图片.jpg");
+        meta.setSize(106878L);
+        meta.setType("image/jpeg");
+        when(fileAccessApi.getUniqueFileByUrl("http://files/weixin.jpg")).thenReturn(meta);
+
+        AttachmentSaveReqVO req = base("weixin.jpg");
+        req.setFileUrl("http://files/weixin.jpg");
+        req.setFilePath("http://files/weixin.jpg");
+        req.setFileSize(0L);
+        req.setFileId(null);
+        attachmentService.saveAttachmentList("103", 19L, List.of(req));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AttachmentDO>> captor = ArgumentCaptor.forClass(List.class);
+        verify(attachmentMapper).insertOrUpdate(captor.capture());
+        AttachmentDO saved = captor.getValue().get(0);
+        assertEquals(2493L, saved.getFileId());
+        assertEquals(106878L, saved.getFileSize());
+        assertEquals("image/jpeg", saved.getFileType());
+        verify(fileAccessApi, never()).getFileContent(anyLong());
+    }
+
 }

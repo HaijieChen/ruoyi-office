@@ -122,7 +122,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     @Override
     public List<AttachmentDO> getAttachmentListByBusiness(String businessType, Long businessId) {
         rejectReservedBusinessType(businessType);
-        return attachmentMapper.selectListByBusiness(businessType, businessId);
+        return enrichFileMetadata(attachmentMapper.selectListByBusiness(businessType, businessId));
     }
 
     @Override
@@ -255,11 +255,154 @@ public class AttachmentServiceImpl implements AttachmentService {
         if (isReservedBusinessType(businessType)) {
             // 权威派生后强制不落公开 URL
             attachmentDO.setFileUrl("");
+        } else {
+            applyPublicFileMetadata(attachmentDO);
         }
         if (attachmentDO.getUploadTime() == null) {
             attachmentDO.setUploadTime(LocalDateTime.now());
         }
         return attachmentDO;
+    }
+
+    /**
+     * 列表只读补齐：按 fileId / 精确 url / 精确 path 命中权威 FileDO。
+     * 不写库、不读文件字节。0 条或 &gt;1 条不猜；无法确认时把 0 显示为未知。
+     */
+    private List<AttachmentDO> enrichFileMetadata(List<AttachmentDO> rows) {
+        if (CollUtil.isEmpty(rows)) {
+            return rows;
+        }
+        for (AttachmentDO row : rows) {
+            if (!needsFileMetadata(row)) {
+                continue;
+            }
+            FileRespDTO file = resolveUniqueFile(row);
+            if (file != null && file.getId() != null) {
+                applyFileMetadata(row, file);
+            } else if (row.getFileSize() != null && row.getFileSize() == 0L) {
+                row.setFileSize(null);
+            }
+        }
+        return rows;
+    }
+
+    private void applyPublicFileMetadata(AttachmentDO row) {
+        if (!needsFileMetadata(row)) {
+            return;
+        }
+        FileRespDTO file = resolveUniqueFile(row);
+        if (file != null && file.getId() != null) {
+            applyFileMetadata(row, file);
+        } else if (row.getFileSize() != null && row.getFileSize() == 0L) {
+            row.setFileSize(null);
+        }
+    }
+
+    private boolean needsFileMetadata(AttachmentDO row) {
+        return row.getFileId() == null
+                || row.getFileSize() == null
+                || row.getFileSize() == 0L
+                || StrUtil.isBlank(row.getFileType())
+                || StrUtil.isBlank(row.getFileExtension());
+    }
+
+    private FileRespDTO resolveUniqueFile(AttachmentDO row) {
+        if (fileAccessApi == null) {
+            return null;
+        }
+        FileRespDTO file = null;
+        if (row.getFileId() != null) {
+            file = fileAccessApi.getFile(row.getFileId());
+            if (file != null && !sameFileIdentity(row, file)) {
+                file = null;
+            }
+        }
+        if (file == null && StrUtil.isNotBlank(row.getFileUrl())) {
+            file = fileAccessApi.getUniqueFileByUrl(row.getFileUrl());
+        }
+        if (file == null && StrUtil.isNotBlank(row.getFilePath())) {
+            file = fileAccessApi.getUniqueFileByPath(row.getFilePath());
+        }
+        return file;
+    }
+
+    private static boolean sameFileIdentity(AttachmentDO row, FileRespDTO file) {
+        if (StrUtil.isNotBlank(row.getFilePath()) && StrUtil.isNotBlank(file.getPath())
+                && !Objects.equals(row.getFilePath(), file.getPath())) {
+            return false;
+        }
+        if (StrUtil.isNotBlank(row.getFileUrl()) && StrUtil.isNotBlank(file.getUrl())
+                && !Objects.equals(row.getFileUrl(), file.getUrl())) {
+            return false;
+        }
+        return true;
+    }
+
+    private void applyFileMetadata(AttachmentDO row, FileRespDTO file) {
+        if (row.getFileId() == null) {
+            row.setFileId(file.getId());
+        }
+        if (StrUtil.isBlank(row.getFilePath()) && StrUtil.isNotBlank(file.getPath())) {
+            row.setFilePath(file.getPath());
+        }
+        if (StrUtil.isBlank(row.getFileName()) && StrUtil.isNotBlank(file.getName())) {
+            row.setFileName(file.getName());
+        }
+        if (file.getSize() != null && (row.getFileSize() == null || row.getFileSize() == 0L)) {
+            row.setFileSize(file.getSize());
+        }
+        if (StrUtil.isBlank(row.getFileType()) && StrUtil.isNotBlank(file.getType())) {
+            row.setFileType(file.getType());
+        }
+        if (StrUtil.isBlank(row.getFileExtension())) {
+            row.setFileExtension(extensionOf(file.getType(), row.getFileName(), file.getName(), row.getFilePath(), file.getPath()));
+        }
+    }
+
+    private static String extensionOf(String type, String... names) {
+        for (String name : names) {
+            String ext = shortExtension(name);
+            if (ext != null) {
+                return ext;
+            }
+        }
+        if (StrUtil.isNotBlank(type)) {
+            String mime = type.toLowerCase(Locale.ROOT);
+            if (mime.contains("jpeg")) {
+                return "jpg";
+            }
+            if (mime.contains("png")) {
+                return "png";
+            }
+            if (mime.contains("pdf")) {
+                return "pdf";
+            }
+            if (mime.contains("gif")) {
+                return "gif";
+            }
+        }
+        return null;
+    }
+
+    private static String shortExtension(String name) {
+        if (StrUtil.isBlank(name)) {
+            return null;
+        }
+        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        String base = slash >= 0 ? name.substring(slash + 1) : name;
+        int query = base.indexOf('?');
+        if (query >= 0) {
+            base = base.substring(0, query);
+        }
+        int dot = base.lastIndexOf('.');
+        if (dot < 0 || dot == base.length() - 1) {
+            return null;
+        }
+        String ext = base.substring(dot + 1).toLowerCase(Locale.ROOT);
+        if (ext.length() > 8 || ext.contains("/") || ext.contains(".")) {
+            return null;
+        }
+        return ext;
     }
 
     /**
