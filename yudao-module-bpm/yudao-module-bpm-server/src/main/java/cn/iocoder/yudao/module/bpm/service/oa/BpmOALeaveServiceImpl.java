@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -52,6 +54,12 @@ public class BpmOALeaveServiceImpl implements BpmOALeaveService {
 
     @Resource
     private OaBillAccessPermission oaBillAccessPermission;
+
+    @Resource
+    private PermissionApi permissionApi;
+
+    @Resource
+    private AdminUserApi adminUserApi;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -111,6 +119,26 @@ public class BpmOALeaveServiceImpl implements BpmOALeaveService {
     @Override
     public PageResult<BpmOALeaveDO> getLeavePage(Long userId, BpmOALeavePageReqVO pageReqVO) {
         return leaveMapper.selectPage(userId, pageReqVO);
+    }
+
+    @Override
+    public PageResult<BpmOALeaveDO> getLeaveReportPage(Long userId, BpmOALeavePageReqVO pageReqVO) {
+        java.util.Objects.requireNonNull(userId, "login user required");
+        DeptDataPermissionRespDTO scope = permissionApi.getDeptDataPermission(userId).getCheckedData();
+        if (scope != null && Boolean.TRUE.equals(scope.getAll())) {
+            return leaveMapper.selectPageByUsers(null, pageReqVO);
+        }
+        Set<Long> userIds = new HashSet<>();
+        if (scope != null) {
+            if (Boolean.TRUE.equals(scope.getSelf())) {
+                userIds.add(userId);
+            }
+            if (scope.getDeptIds() != null && !scope.getDeptIds().isEmpty()) {
+                adminUserApi.getUserListByDeptIds(scope.getDeptIds()).getCheckedData()
+                        .forEach(user -> userIds.add(user.getId()));
+            }
+        }
+        return leaveMapper.selectPageByUsers(userIds, pageReqVO);
     }
 
 }

@@ -6,16 +6,19 @@ import { h, onActivated } from 'vue';
 
 import { DocAlert, Page, prompt } from '@vben/common-ui';
 import { BpmProcessInstanceStatus } from '@vben/constants';
+import { useUserStore } from '@vben/stores';
 
 import { message, Textarea } from 'ant-design-vue';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getLeavePage } from '#/api/bpm/oa/leave';
+import { getLeaveReportPage } from '#/api/bpm/oa/leave';
 import { cancelProcessInstanceByStartUser } from '#/api/bpm/processInstance';
 import { $t } from '#/locales';
 import { router } from '#/router';
 
 import { useGridColumns, useGridFormSchema } from './data';
+
+const userStore = useUserStore();
 
 /** 刷新表格 */
 function handleRefresh() {
@@ -69,7 +72,7 @@ function handleCancel(row: BpmOALeaveApi.Leave) {
         duration: 0,
       });
       try {
-        await cancelProcessInstanceByStartUser(row.id, scope.value);
+        await cancelProcessInstanceByStartUser(row.processInstanceId, scope.value);
         message.success('取消成功');
         handleRefresh();
       } catch {
@@ -108,7 +111,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     proxyConfig: {
       ajax: {
         query: async ({ page }, formValues) => {
-          return await getLeavePage({
+          return await getLeaveReportPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
@@ -175,14 +178,18 @@ onActivated(() => {
               type: 'link',
               danger: true,
               icon: ACTION_ICON.DELETE,
-              ifShow: row.status === BpmProcessInstanceStatus.RUNNING,
+              ifShow:
+                row.userId === userStore.userInfo?.id &&
+                row.status === BpmProcessInstanceStatus.RUNNING,
               onClick: handleCancel.bind(null, row),
             },
             {
               label: '重新发起',
               type: 'link',
               icon: ACTION_ICON.ADD,
-              ifShow: row.status !== BpmProcessInstanceStatus.RUNNING,
+              ifShow:
+                row.userId === userStore.userInfo?.id &&
+                row.status !== BpmProcessInstanceStatus.RUNNING,
               onClick: handleReCreate.bind(null, row),
             },
           ]"

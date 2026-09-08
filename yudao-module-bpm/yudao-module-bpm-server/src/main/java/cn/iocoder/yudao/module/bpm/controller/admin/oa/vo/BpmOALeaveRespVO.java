@@ -13,6 +13,9 @@ public class BpmOALeaveRespVO {
     @Schema(description = "请假表单主键", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
 
+    @Schema(description = "申请人用户编号")
+    private Long userId;
+
     @Schema(description = "请假类型，参见 bpm_oa_type 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     private Integer type;
 

@@ -1,0 +1,106 @@
+[
+  {
+    "id": "e305e0e6-a788-11f1-a923-0242ac120004",
+    "businessKey": "10",
+    "definition": "oa_business_trip:5:8f2074a6-a1fe-11f1-ac71-469fa1a325ed",
+    "deletedAt": "#260904 13:35:11",
+    "binlog": "binlog.000002",
+    "transaction": "# at 13924784"
+  },
+  {
+    "id": "325d1603-a7b0-11f1-a0dc-0242ac120004",
+    "businessKey": "11",
+    "definition": "oa_business_trip:5:8f2074a6-a1fe-11f1-ac71-469fa1a325ed",
+    "deletedAt": "#260904 17:27:25",
+    "binlog": "binlog.000002",
+    "transaction": "# at 14873032"
+  },
+  {
+    "id": "d49e5dc6-a829-11f1-a33a-0242ac120004",
+    "businessKey": "11",
+    "definition": "oa_seal_apply_bill:6:9f3ce34a-a545-11f1-a7c4-469fa1a325ed",
+    "deletedAt": "#260904 17:27:25",
+    "binlog": "binlog.000002",
+    "transaction": "# at 14873032"
+  },
+  {
+    "id": "ed6320bd-a82c-11f1-a33a-0242ac120004",
+    "businessKey": "12",
+    "definition": "oa_business_trip:5:8f2074a6-a1fe-11f1-ac71-469fa1a325ed",
+    "deletedAt": "#260907 10:05:35",
+    "binlog": "binlog.000002",
+    "transaction": "# at 18018536"
+  },
+  {
+    "id": "6f9eda90-a75b-11f1-834a-0242ac120004",
+    "businessKey": "14",
+    "definition": "oa_leave:7:b18d7382-a5ef-11f1-8925-469fa1a325ed",
+    "deletedAt": "#260907 13:39:17",
+    "binlog": "binlog.000002",
+    "transaction": "# at 19441595"
+  },
+  {
+    "id": "3e61f526-a8da-11f1-8478-0242ac120004",
+    "businessKey": "48",
+    "definition": "finance_invoice_apply:18:51516140-a5b4-11f1-a8b7-469fa1a325ed",
+    "deletedAt": "#260907 13:48:48",
+    "binlog": "binlog.000002",
+    "transaction": "# at 19654421"
+  },
+  {
+    "id": "a0f4e126-a76e-11f1-8072-0242ac120004",
+    "businessKey": "15",
+    "definition": "oa_leave:7:b18d7382-a5ef-11f1-8925-469fa1a325ed",
+    "deletedAt": "#260907 14:06:33",
+    "binlog": "binlog.000002",
+    "transaction": "# at 20026007"
+  },
+  {
+    "id": "5a789ee9-aa61-11f1-b502-0242ac120004",
+    "businessKey": "13",
+    "definition": "oa_seal_apply_bill:6:9f3ce34a-a545-11f1-a7c4-469fa1a325ed",
+    "deletedAt": "#260907 14:26:51",
+    "binlog": "binlog.000002",
+    "transaction": "# at 20164712"
+  },
+  {
+    "id": "f0568002-a7ac-11f1-a0dc-0242ac120004",
+    "businessKey": "16",
+    "definition": "oa_leave:7:b18d7382-a5ef-11f1-8925-469fa1a325ed",
+    "deletedAt": "#260907 15:18:59",
+    "binlog": "binlog.000002",
+    "transaction": "# at 20852396"
+  },
+  {
+    "id": "0a107de9-a80d-11f1-aea7-0242ac120004",
+    "businessKey": "17",
+    "definition": "oa_leave:7:b18d7382-a5ef-11f1-8925-469fa1a325ed",
+    "deletedAt": "#260907 15:34:44",
+    "binlog": "binlog.000002",
+    "transaction": "# at 20991254"
+  },
+  {
+    "id": "4dc987c7-a827-11f1-aea7-0242ac120004",
+    "businessKey": "18",
+    "definition": "oa_leave:7:b18d7382-a5ef-11f1-8925-469fa1a325ed",
+    "deletedAt": "#260907 15:57:27",
+    "binlog": "binlog.000002",
+    "transaction": "# at 21358334"
+  },
+  {
+    "id": "6489c0c7-a852-11f1-a33a-0242ac120004",
+    "businessKey": "19",
+    "definition": "oa_leave:7:b18d7382-a5ef-11f1-8925-469fa1a325ed",
+    "deletedAt": "#260907 16:24:53",
+    "binlog": "binlog.000002",
+    "transaction": "# at 21800685"
+  },
+  {
+    "id": "779ec192-aa7e-11f1-8dab-0242ac120004",
+    "businessKey": "14",
+    "definition": "oa_seal_apply_bill:6:9f3ce34a-a545-11f1-a7c4-469fa1a325ed",
+    "deletedAt": "#260907 17:02:00",
+    "binlog": "binlog.000002",
+    "transaction": "# at 22141677"
+  }
+]

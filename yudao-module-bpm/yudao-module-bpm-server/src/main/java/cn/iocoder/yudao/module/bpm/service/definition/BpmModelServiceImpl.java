@@ -295,14 +295,19 @@ public class BpmModelServiceImpl implements BpmModelService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void cleanModel(Long userId, String id) {
         // 1. 校验流程模型存在
         Model model = validateModelManager(id, userId);
 
-        // 2. 清理所有流程数据
+        if (!java.util.Objects.equals(model.getTenantId(), FlowableUtils.getTenantId())) {
+            throw exception(MODEL_NOT_EXISTS);
+        }
+
+        // 2. 清理当前租户的流程数据
         // 2.1 先取消所有正在运行的流程
         List<ProcessInstance> processInstances = runtimeService.createProcessInstanceQuery()
-                .processDefinitionKey(model.getKey()).list();
+                .processDefinitionKey(model.getKey()).processInstanceTenantId(FlowableUtils.getTenantId()).list();
         processInstances.forEach(processInstance -> {
             runtimeService.deleteProcessInstance(processInstance.getId(),
                     BpmReasonEnum.CANCEL_BY_SYSTEM.getReason());
@@ -311,14 +316,14 @@ public class BpmModelServiceImpl implements BpmModelService {
         });
         // 2.2 再从历史中删除所有相关的流程数据
         List<HistoricProcessInstance> historicProcessInstances = historyService.createHistoricProcessInstanceQuery()
-                .processDefinitionKey(model.getKey()).list();
+                .processDefinitionKey(model.getKey()).processInstanceTenantId(FlowableUtils.getTenantId()).list();
         historicProcessInstances.forEach(historicProcessInstance -> {
             historyService.deleteHistoricProcessInstance(historicProcessInstance.getId());
             processInstanceCopyService.deleteProcessInstanceCopy(historicProcessInstance.getId());
         });
         // 2.3 清理所有 Task
         List<Task> tasks = taskService.createTaskQuery()
-                .processDefinitionKey(model.getKey()).list();
+                .processDefinitionKey(model.getKey()).taskTenantId(FlowableUtils.getTenantId()).list();
         tasks.forEach(task -> taskService.deleteTask(task.getId(),BpmReasonEnum.CANCEL_BY_PROCESS_CLEAN.getReason()));
     }
 

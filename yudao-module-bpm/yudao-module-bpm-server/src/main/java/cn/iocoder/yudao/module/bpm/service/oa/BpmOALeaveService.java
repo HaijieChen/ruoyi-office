@@ -50,4 +50,6 @@ public interface BpmOALeaveService {
      */
     PageResult<BpmOALeaveDO> getLeavePage(Long userId, BpmOALeavePageReqVO pageReqVO);
 
+    PageResult<BpmOALeaveDO> getLeaveReportPage(Long userId, BpmOALeavePageReqVO pageReqVO);
+
 }

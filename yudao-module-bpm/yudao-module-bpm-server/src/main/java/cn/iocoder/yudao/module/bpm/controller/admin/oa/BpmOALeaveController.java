@@ -59,4 +59,12 @@ public class BpmOALeaveController {
         return success(BeanUtils.toBean(pageResult, BpmOALeaveRespVO.class));
     }
 
+    @GetMapping("/report-page")
+    @PreAuthorize("@ss.hasPermission('bpm:oa-leave:query')")
+    @Operation(summary = "按数据权限获得请假报表")
+    public CommonResult<PageResult<BpmOALeaveRespVO>> getLeaveReportPage(@Valid BpmOALeavePageReqVO pageVO) {
+        return success(BeanUtils.toBean(leaveService.getLeaveReportPage(getLoginUserId(), pageVO),
+                BpmOALeaveRespVO.class));
+    }
+
 }

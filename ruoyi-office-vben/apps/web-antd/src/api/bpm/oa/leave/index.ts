@@ -5,6 +5,7 @@ import { requestClient } from '#/api/request';
 export namespace BpmOALeaveApi {
   export interface Leave {
     id: number;
+    userId: number;
     status: number;
     type: number;
     reason: string;
@@ -36,6 +37,14 @@ export async function getLeave(id: number) {
 export async function getLeavePage(params: PageParam) {
   return requestClient.get<PageResult<BpmOALeaveApi.Leave>>(
     '/bpm/oa/leave/page',
+    { params },
+  );
+}
+
+/** 按组织数据范围查询请假报表 */
+export async function getLeaveReportPage(params: PageParam) {
+  return requestClient.get<PageResult<BpmOALeaveApi.Leave>>(
+    '/bpm/oa/leave/report-page',
     { params },
   );
 }

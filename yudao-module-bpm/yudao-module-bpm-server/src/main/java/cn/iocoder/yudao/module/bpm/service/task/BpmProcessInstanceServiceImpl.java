@@ -1131,10 +1131,7 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         // 1.3.1 校验发起人自选审批人
         validateStartUserSelectAssignees(userId, definition, startUserSelectAssignees, variables);
 
-        // 1.4 如果提供了BusinessKey，删除相同BusinessKey的历史流程实例
-        if (StrUtil.isNotEmpty(businessKey)) {
-            deleteHistoricalProcessInstancesByBusinessKey(businessKey);
-        }
+        // businessKey 仅在业务类型内唯一；重提也必须保留原审批历史。
 
         // 2. 创建流程实例
         if (variables == null) {
@@ -1166,50 +1163,6 @@ public class BpmProcessInstanceServiceImpl implements BpmProcessInstanceService 
         // 3.3 发起流程实例
         ProcessInstance instance = processInstanceBuilder.start();
         return instance.getId();
-    }
-
-    /**
-     * 根据BusinessKey删除历史流程实例
-     * 当重新提交相同单据时，删除之前的历史流程实例，避免重复显示
-     *
-     * @param businessKey 业务键（通常是单据ID）
-     */
-    private void deleteHistoricalProcessInstancesByBusinessKey(String businessKey) {
-        try {
-            // 查询相同BusinessKey的所有历史流程实例
-            List<HistoricProcessInstance> historicalInstances = historyService.createHistoricProcessInstanceQuery()
-                    .processInstanceTenantId(FlowableUtils.getTenantId())
-                    .processInstanceBusinessKey(businessKey)
-                    .list();
-
-            if (CollUtil.isEmpty(historicalInstances)) {
-                log.debug("[deleteHistoricalProcessInstancesByBusinessKey] 未找到BusinessKey为 {} 的历史流程实例", businessKey);
-                return;
-            }
-
-            int deletedCount = 0;
-            for (HistoricProcessInstance historicalInstance : historicalInstances) {
-                try {
-                    // 删除历史流程实例
-                    historyService.deleteHistoricProcessInstance(historicalInstance.getId());
-                    deletedCount++;
-
-                    log.debug("[deleteHistoricalProcessInstancesByBusinessKey] 删除历史流程实例: {}, BusinessKey: {}",
-                             historicalInstance.getId(), businessKey);
-                } catch (Exception e) {
-                    log.warn("[deleteHistoricalProcessInstancesByBusinessKey] 删除历史流程实例失败: {}, BusinessKey: {}, 错误: {}",
-                            historicalInstance.getId(), businessKey, e.getMessage());
-                }
-            }
-
-            log.info("[deleteHistoricalProcessInstancesByBusinessKey] 成功删除 {} 个历史流程实例，BusinessKey: {}",
-                    deletedCount, businessKey);
-
-        } catch (Exception e) {
-            log.error("[deleteHistoricalProcessInstancesByBusinessKey] 删除历史流程实例失败，BusinessKey: {}, 错误: {}",
-                     businessKey, e.getMessage(), e);
-            // 不抛出异常，避免影响新流程实例的创建
-        }
     }
 
     private void validateStartUserSelectAssignees(Long userId, ProcessDefinition definition,
