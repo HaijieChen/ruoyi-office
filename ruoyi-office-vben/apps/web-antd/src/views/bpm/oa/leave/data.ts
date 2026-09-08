@@ -6,10 +6,12 @@ import { h } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
-import { formatDate } from '@vben/utils';
+import { formatDateTime } from '@vben/utils';
 
 import { DictTag } from '#/components/dict-tag';
 import { getRangePickerDefaultProps } from '#/utils';
+
+import { formatLeaveDuration } from './leave-duration';
 
 /** 新增/修改的表单 */
 export function useFormSchema(): VbenFormSchema[] {
@@ -201,12 +203,18 @@ export function useDetailFormSchema(): DescriptionItemSchema[] {
     {
       label: '开始时间',
       field: 'startTime',
-      render: (val) => formatDate(val) as string,
+      render: (val) => formatDateTime(val) as string,
     },
     {
       label: '结束时间',
       field: 'endTime',
-      render: (val) => formatDate(val) as string,
+      render: (val) => formatDateTime(val) as string,
+    },
+    {
+      label: '请假总时长（按起止时间）',
+      field: 'duration',
+      render: (_val, data) =>
+        formatLeaveDuration(data?.startTime, data?.endTime),
     },
     {
       label: '原因',
